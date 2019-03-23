@@ -1,0 +1,6 @@
+[workspace]
+members = [
+  "vss",
+  "vss-desktop",
+  #"vss-mobile"
+]

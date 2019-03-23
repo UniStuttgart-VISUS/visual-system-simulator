@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:showIn="navigation_view">
+
+    <item
+        android:id="@+id/nav_start_simulation"
+        android:icon="@android:drawable/ic_media_play"
+        android:title="@string/start_simulation" />
+
+    <item android:title="@string/simulation"
+        android:id="@+id/nav_settings">
+        <menu>
+            <item
+                android:id="@+id/nav_eyediseases_settings"
+                android:icon="@drawable/ic_menu_manage"
+                android:title="@string/eyediseases_settings" />
+            <item
+                android:id="@+id/nav_eyediseases_settings_reset"
+                android:icon="@android:drawable/ic_menu_revert"
+                android:title="@string/eyediseases_settings_reset" />
+            <item
+                android:id="@+id/nav_splitscreen_simulation"
+                android:title="@string/splitscreen_simulation"
+                app:actionLayout="@layout/nav_splitscreen_simulation_switch" />
+        </menu>
+    </item>
+    <item android:title="@string/knowledgebase">
+        <menu>
+            <item
+                android:id="@+id/nav_knowledgebase_overview"
+                android:icon="@drawable/ic_menu_gallery"
+                android:title="@string/knowledgebase_overview" />
+            <item
+                android:id="@+id/nav_readme"
+                android:icon="@android:drawable/ic_menu_help"
+                android:title="@string/readme" />
+
+        </menu>
+    </item>
+    <item android:title="@string/webui"
+        android:id="@+id/nav_webui">
+        <menu>
+            <item
+                android:id="@+id/nav_webui_onoff"
+                android:title="@string/webui_onoff"
+                app:actionLayout="@layout/nav_webui_onoff_switch" />
+            <item
+                android:id="@+id/nav_webui_server"
+                android:icon="@drawable/ic_menu_manage"
+                android:title="@string/webui_server"
+                app:actionLayout="@layout/nav_webui_connection_indicator" />
+            <item
+                android:id="@+id/nav_webui_channel"
+                android:icon="@drawable/ic_menu_manage"
+                android:title="@string/webui_channel"
+                app:actionLayout="@layout/nav_webui_channel_indicator" />
+        </menu>
+    </item>
+    <item android:title="@string/app_settings">
+        <menu>
+            <item
+                android:id="@+id/nav_app_feedback"
+                android:icon="@drawable/ic_chat_black_24dp"
+                android:title="@string/feedback" />
+        </menu>
+    </item>
+</menu>

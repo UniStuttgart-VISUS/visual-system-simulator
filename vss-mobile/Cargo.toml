@@ -1,0 +1,17 @@
+[package]
+name = "vss-mobile"
+edition = "2018"
+version = "1.0.0"
+authors = ["The Visual System Simulator Developers"]
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["rlib", "dylib"]
+
+[dependencies]
+vss = { path = "../vss" }
+
+[target.'cfg(target_os="android")'.dependencies]
+jni = { version = "0.5", default-features = false }
+android_glue="0.2.3"
+android_injected_glue = "0.2.2"

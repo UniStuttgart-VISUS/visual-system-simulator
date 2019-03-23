@@ -1,0 +1,23 @@
+{
+  "name": "vss-web",
+  "version": "0.0.0",
+  "scripts": {
+    "watch": "webpack -d --watch --progress",
+    "build": "webpack -p"
+  },
+  "devDependencies": {
+    "css-loader": "^2.0.2",
+    "html-loader": "^0.5.5",
+    "html-webpack-inline-source-plugin": "0.0.10",
+    "html-webpack-plugin": "^3.2.0",
+    "mini-css-extract-plugin": "^0.5.0",
+    "webpack": "^4.28.2",
+    "webpack-cli": "^3.1.2"
+  },
+  "dependencies": {
+    "bootstrap": "^4.3.1",
+    "drawingboard.js": "^0.5.0",
+    "jquery": "^3.3.1"
+  },
+  "private": true
+}
