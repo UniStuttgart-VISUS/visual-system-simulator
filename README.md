@@ -125,9 +125,11 @@ The retina map can be used to describe the distribution and sensitivity of cone 
 ```bibtex
 @InProceedings{Schulz2019Framework,
   author    = {Schulz, Christoph and Rodrigues, Nils and Amann, Marco and Baumgartner, Daniel and Mielke, Arman and Christian, Baumann and Sedlmair, Michael and Weiskopf, Daniel},
+  booktitle = {IEEE Conference on Virtual Reality and 3D User Interfaces (VR)},
   title     = {A Framework for Pervasive Visual Deficiency Simulation},
-  booktitle = {IEEE Virtual Reality Joint Workshops on Perception-driven Graphics and Displays for VR and AR},
   year      = {2019},
+  pages     = {1-6},
+  doi       = {10.1109/VR44988.2019.9044164},
 }
 ```
 
