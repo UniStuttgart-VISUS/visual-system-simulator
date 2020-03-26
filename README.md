@@ -1,12 +1,24 @@
 # Visual System Simulator (VSS)
 
-VSS is a cross-platform framework for simulating various aspects of the [human visual system](https://en.wikipedia.org/wiki/Visual_system) such as [eye diseases](https://en.wikipedia.org/wiki/Eye_disease). This project is maintained by the [Visualization Research Center](https://visus.uni-stuttgart.de/) at the [University of Stuttgart](https://www.uni-stuttgart.de/).
+VSS is a cross-platform framework for simulating various aspects of the [human visual system](https://en.wikipedia.org/wiki/Visual_system). This project is maintained by the [Visualization Research Center](https://visus.uni-stuttgart.de/) at the [University of Stuttgart](https://www.uni-stuttgart.de/).
 
 <p align="center">
 	<img src="doc/teaser-android-marcular.jpg" alt="Marcular Degeneration" height="150px"> 
 	<img src="doc/teaser-nyctalopia.jpg" alt="Nyctalopia" height="150px"> 
 </p>
-Android app running simulation of marcular degeneration (left) and desktop app running simulation of nyctalopia, also known as night-blindness (right).
+Android app running simulation of marcular degeneration (left) and desktop app running simulation of nyctalopia, also known as night-blindness (right). 
+
+## Features
+
+The simulation models physical aspects of light (scattering, refraction, etc.) and biological aspects of the human visual system (lens, retina, etc.). Thus, it is possible to simulate several [eye diseases](https://en.wikipedia.org/wiki/Eye_disease), such as:
+
+- Degenerated lenses (cataracts)
+- Congenital and age-related near- and farsightedness (myopia, hyperopia, presbyopia)
+- Night blindness (nyctalopia)
+- Color blindness (protanopsia, deuteranopsia, tritanopsia, achromatopsia)
+- Gaps in the field of vision (macular degeneration)
+- Optical nerve damage (glaucoma)
+
 
 ## Contents
 
