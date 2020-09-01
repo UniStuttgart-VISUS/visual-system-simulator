@@ -8,10 +8,11 @@ extern crate image;
 extern crate serde_json;
 extern crate ws;
 
+#[macro_use]
+mod pipeline;
 mod config;
 mod devices;
 mod passes;
-mod pipeline;
 
 pub use crate::config::*;
 pub use crate::devices::*;

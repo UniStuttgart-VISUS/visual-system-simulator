@@ -1,6 +1,3 @@
-#version 300 es
-precision mediump float;
-
 uniform vec2 u_resolution_in;
 uniform sampler2D s_y;
 uniform sampler2D s_u;

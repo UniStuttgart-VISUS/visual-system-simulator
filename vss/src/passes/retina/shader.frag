@@ -1,6 +1,3 @@
-#version 300 es
-precision mediump float;
-
 #define BLUR_SIZE 9
 #define GLAUCOMA_COLOR vec4(0.02, 0.02, 0.02, 1.0);
 

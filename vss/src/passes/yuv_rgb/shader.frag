@@ -1,6 +1,3 @@
-#version 300 es
-precision mediump float;
-
 uniform sampler2D s_y;
 uniform sampler2D s_u;
 uniform sampler2D s_v;

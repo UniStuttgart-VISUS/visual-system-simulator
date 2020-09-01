@@ -59,8 +59,8 @@ impl Lens {
     pub fn new(factory: &mut gfx_device_gl::Factory) -> Self {
         let pso = factory
             .create_pipeline_simple(
-                include_bytes!("../shader.vert"),
-                include_bytes!("shader.frag"),
+                &include_glsl!("../shader.vert"),
+                &include_glsl!("shader.frag"),
                 pipe::new(),
             )
             .unwrap();

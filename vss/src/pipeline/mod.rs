@@ -1,5 +1,6 @@
 mod pass;
 mod texture;
+#[macro_use]
 mod utils;
 
 pub use self::pass::*;

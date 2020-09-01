@@ -1,6 +1,3 @@
-#version 300 es
-precision mediump float;
-
 #define BLUR_SIZE 9
 
 uniform int u_active;

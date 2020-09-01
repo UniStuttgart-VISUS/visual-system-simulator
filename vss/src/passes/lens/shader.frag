@@ -1,6 +1,3 @@
-#version 300 es
-precision highp float;
-
 // plane in front of the eye
 #define TEXTURE_SCALE 2.0
 

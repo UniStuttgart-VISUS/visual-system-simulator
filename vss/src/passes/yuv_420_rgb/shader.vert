@@ -1,6 +1,3 @@
-#version 300 es
-precision mediump float;
-
 uniform float u_rotation;
 uniform vec2 u_resolution_in;
 uniform vec2 u_resolution_out;

@@ -46,7 +46,7 @@ impl WindowDevice {
 
         let gl_version = GlRequest::GlThenGles {
             opengles_version: (3, 2),
-            opengl_version: (3, 3),
+            opengl_version: (4, 1),
         };
 
         let window_builder = glutin::WindowBuilder::new()

@@ -41,8 +41,8 @@ impl Cataract {
     pub fn new<F: gfx::Factory<Resources>>(factory: &mut F) -> Cataract {
         let pso = factory
             .create_pipeline_simple(
-                include_bytes!("../shader.vert"),
-                include_bytes!("shader.frag"),
+                &include_glsl!("../shader.vert"),
+                &include_glsl!("shader.frag"),
                 pipe::new(),
             )
             .unwrap();
