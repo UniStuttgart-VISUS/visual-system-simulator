@@ -37,7 +37,7 @@ pub struct WindowDevice {
 }
 
 impl WindowDevice {
-    pub fn new(config: &Config) -> Self {
+    pub fn new(config: &Config, visible: bool) -> Self {
         let events_loop = glutin::EventsLoop::new();
 
         let gl_version = GlRequest::GlThenGles {
@@ -47,7 +47,8 @@ impl WindowDevice {
 
         let window_builder = glutin::WindowBuilder::new()
             .with_title(format!("Visual System Simulator - {}", config.input))
-            .with_min_dimensions(LogicalSize::new(320.0, 200.0));
+            .with_min_dimensions(LogicalSize::new(320.0, 200.0))
+            .with_visibility(visible);
 
         let context_builder = glutin::ContextBuilder::new()
             .with_vsync(true)

@@ -32,7 +32,7 @@ impl VideoDevice {
         let dummy_height = 1;
         let dummy_pixels = vec![128; dummy_width * dummy_height].into_boxed_slice();
 
-        let window = WindowDevice::new(&config);
+        let window = WindowDevice::new(&config, true);
         let (input_y, y) = load_single_channel_texture_from_bytes(
             &mut window.factory().borrow_mut(),
             dummy_pixels.clone(),

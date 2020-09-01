@@ -275,6 +275,7 @@ impl Device for AvDevice {
         self.video.end_frame(done);
         if self.output.is_some() {
             self.write_frame();
+            *done = true;
         }
     }
 }

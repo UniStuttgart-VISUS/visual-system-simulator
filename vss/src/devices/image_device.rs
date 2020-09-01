@@ -15,7 +15,7 @@ pub struct ImageDevice {
 
 impl ImageDevice {
     pub fn new(config: &Config) -> Self {
-        let window = WindowDevice::new(&config);
+        let window = WindowDevice::new(&config, config.output.is_empty());
         let (input_rgba, rgba) =
             load_texture(&mut window.factory().borrow_mut(), load(&config.input)).unwrap();
 
@@ -95,6 +95,7 @@ impl Device for ImageDevice {
             let mut file = File::create(&self.output).expect("Unable to create file");
             file.write_all(&image_data).unwrap();
             println!("[image] writing to {}", self.output);
+            *done = true;
         }
     }
 }
