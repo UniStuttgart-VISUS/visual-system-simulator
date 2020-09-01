@@ -57,7 +57,11 @@ impl RemoteDevice {
         // Start publishing thread.
         let clients = device.clients.clone();
         thread::spawn(move || loop {
-            let subscriber_msg = rx.recv().unwrap();
+            let subscriber_msg = rx.recv();
+            if !subscriber_msg.is_ok() {
+                break;
+            }
+            let subscriber_msg = subscriber_msg.unwrap();
             let clients = clients.read().unwrap();
             match subscriber_msg {
                 RemoteMessage::Frame {
