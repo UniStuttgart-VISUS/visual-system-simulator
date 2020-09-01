@@ -89,12 +89,12 @@ impl Device for ImageDevice {
             let rgb_data = self.window.download_rgb();
 
             let mut image_data: Vec<u8> = Vec::new();
-            let encoder = image::png::PNGEncoder::new(&mut image_data);
+            let encoder = image::png::PngEncoder::new(&mut image_data);
             let _res = encoder.encode(
                 &rgb_data.pixels_rgb,
                 rgb_data.width as u32,
                 rgb_data.height as u32,
-                image::ColorType::RGB(8),
+                image::ColorType::Rgb8,
             );
             use std::io::Write;
             let mut file = File::create(&self.output).expect("Unable to create file");

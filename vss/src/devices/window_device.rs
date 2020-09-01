@@ -21,7 +21,7 @@ pub type DepthFormat = gfx::format::DepthStencil;
 
 /// A device for window and context creation.
 pub struct WindowDevice {
-    window: glutin::GlWindow,
+    windowed_context: glutin::WindowedContext<glutin::PossiblyCurrent>,
     events_loop: RefCell<glutin::EventsLoop>,
     device: RefCell<gfx_device_gl::Device>,
     factory: RefCell<gfx_device_gl::Factory>,
@@ -57,7 +57,7 @@ impl WindowDevice {
             .with_vsync(true)
             .with_gl(gl_version);
 
-        let (window, mut device, mut factory, render_target, main_depth) =
+        let (windowed_context, mut device, mut factory, render_target, main_depth) =
             gfx_window_glutin::init::<ColorFormat, DepthFormat>(
                 window_builder,
                 context_builder,
@@ -73,7 +73,7 @@ impl WindowDevice {
             device.with_gl(|gl| gl.Disable(gfx_gl::FRAMEBUFFER_SRGB));
         }
 
-        let window_size = window.get_inner_size().unwrap();
+        let window_size = windowed_context.window().get_inner_size().unwrap();
         let fallback_gaze = if let Some(ref gaze) = config.gaze {
             DeviceGaze {
                 x: gaze.x,
@@ -87,7 +87,7 @@ impl WindowDevice {
         };
 
         WindowDevice {
-            window,
+            windowed_context,
             events_loop: RefCell::new(events_loop),
             device: RefCell::new(device),
             factory: RefCell::new(factory),
@@ -202,16 +202,16 @@ impl Device for WindowDevice {
                     | glutin::WindowEvent::CloseRequested
                     | glutin::WindowEvent::Destroyed => *done = true,
                     glutin::WindowEvent::Resized(size) => {
-                        let window = &self.window;
+                        let windowed_context = &self.windowed_context;
                         let mut rt = self.render_target.borrow_mut();
                         let mut md = self.main_depth.borrow_mut();
-                        let dpi_factor = window.get_hidpi_factor();
-                        window.resize(size.to_physical(dpi_factor));
-                        gfx_window_glutin::update_views(&window, &mut rt, &mut md);
+                        let dpi_factor = windowed_context.window().get_hidpi_factor();
+                        windowed_context.resize(size.to_physical(dpi_factor));
+                        gfx_window_glutin::update_views(&windowed_context, &mut rt, &mut md);
                     }
                     glutin::WindowEvent::CursorMoved { position, .. } => {
                         if *self.active.borrow() {
-                            let window_size = &self.window.get_inner_size().unwrap();
+                            let window_size = &self.windowed_context.window().get_inner_size().unwrap();
                             self.gaze.replace(DeviceGaze {
                                 x: position.x as f32,
                                 y: (window_size.height - position.y) as f32,
@@ -238,7 +238,7 @@ impl Device for WindowDevice {
             use std::ops::DerefMut;
             let mut device = self.device.borrow_mut();
             self.encoder.borrow_mut().flush(device.deref_mut());
-            self.window.swap_buffers().unwrap();
+            self.windowed_context.swap_buffers().unwrap();
             device.cleanup();
         }
     }

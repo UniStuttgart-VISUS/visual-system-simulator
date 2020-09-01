@@ -104,5 +104,5 @@ fn merge_maps(
         }
     }
 
-    image::ImageRgba8(merged).raw_pixels().into_boxed_slice()
+    merged.into_raw().into_boxed_slice()
 }

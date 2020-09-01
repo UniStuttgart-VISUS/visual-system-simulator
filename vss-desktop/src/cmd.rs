@@ -1,10 +1,10 @@
 use serde_json;
 
 use std::fs::File;
-use std::io::{self, prelude::*};
+use std::io::prelude::*;
 use vss::*;
 
-fn from_json(arg: &str) -> io::Result<serde_json::Value> {
+fn from_json(arg: &str) -> Result<serde_json::Value, serde_json::Error> {
     if let Ok(json) = serde_json::from_str(&arg) {
         Ok(json)
     } else {
@@ -17,7 +17,7 @@ fn from_json(arg: &str) -> io::Result<serde_json::Value> {
     }
 }
 
-fn from_json_obj(arg: &str) -> io::Result<ValueMap> {
+fn from_json_obj(arg: &str) -> Result<ValueMap, serde_json::Error> {
     let mut map = ValueMap::new();
     let json = from_json(arg)?;
     let object = json.as_object().unwrap();

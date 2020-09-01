@@ -61,7 +61,7 @@ pub fn load_texture(
     ),
     String,
 > {
-    let img = image::load(data, image::PNG).unwrap().flipv().to_rgba();
+    let img = image::load(data, image::ImageFormat::Png).unwrap().flipv().to_rgba();
     let (width, height) = img.dimensions();
     let data = img.into_raw();
 
@@ -216,7 +216,7 @@ pub fn load_highres_normalmap(
     ),
     String,
 > {
-    let img = image::load(data, image::PNG).unwrap().flipv().to_rgba();
+    let img = image::load(data, image::ImageFormat::Png).unwrap().flipv().to_rgba();
     let (width, height) = img.dimensions();
     let data_raw = img.into_raw();
 

@@ -76,7 +76,7 @@ impl RemoteDevice {
                     let mut data = Vec::new();
                     let mut encoder = JPEGEncoder::new_with_quality(&mut data, 50);
                     encoder
-                        .encode(&rgba8, width, height, ColorType::RGBA(8))
+                        .encode(&rgba8, width, height, ColorType::Rgba8)
                         .unwrap();
                     // Send to subscribed clients.
                     for client in clients.iter().filter(|client| client.subscribed_frames) {
@@ -157,7 +157,7 @@ impl RemoteClient {
             ref mut rgba8,
         }) = self.msg
         {
-            match image::load(Cursor::new(data), image::PNG) {
+            match image::load(Cursor::new(data), image::ImageFormat::Png) {
                 Ok(img) => {
                     let img = img.flipv().to_rgba();
                     let (img_w, img_h) = img.dimensions();
