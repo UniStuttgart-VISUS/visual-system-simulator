@@ -19,16 +19,16 @@ pub enum ConfigError {
 }
 
 impl Config {
-    pub fn build<F>(self, resolve_device_fn: F) -> Result<(Box<Device>, Pipeline), ConfigError>
+    pub fn build<F>(self, resolve_device_fn: F) -> Result<(Box<dyn Device>, Pipeline), ConfigError>
     where
-        F: Fn(&Config) -> Option<Box<Device>>,
+        F: Fn(&Config) -> Option<Box<dyn Device>>,
     {
         // Resolve device name to instance.
         let mut device = if let Some(device) = resolve_device_fn(&self) {
             Ok(device)
         } else {
             match self.device.as_ref() {
-                "image" | "still" => Ok(Box::new(ImageDevice::new(&self)) as Box<Device>),
+                "image" | "still" => Ok(Box::new(ImageDevice::new(&self)) as Box<dyn Device>),
                 _ => Err(ConfigError::UnknownDevice),
             }
         }?;

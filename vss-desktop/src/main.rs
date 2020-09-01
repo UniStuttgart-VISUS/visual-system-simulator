@@ -9,12 +9,12 @@ use vss::*;
 
 use crate::cmd::*;
 
-fn resolve_desktop_devices(config: &Config) -> Option<Box<Device>> {
+fn resolve_desktop_devices(config: &Config) -> Option<Box<dyn Device>> {
     #[cfg(feature = "video")]
     use crate::devices::*;
     match config.device.as_ref() as &str {
         #[cfg(feature = "video")]
-        "video" => Some(Box::new(AvDevice::new(&config)) as Box<Device>),
+        "video" => Some(Box::new(AvDevice::new(&config)) as Box<dyn Device>),
         _ => None,
     }
 }

@@ -9,7 +9,6 @@ use ws::{listen, CloseCode, Handler, Message, Result, Sender};
 use serde_json;
 
 use image;
-use image::jpeg::JPEGEncoder;
 use image::ColorType;
 
 use super::*;
@@ -30,11 +29,11 @@ enum RemoteMessage {
 pub struct RemoteDevice {
     publisher: mpsc::Sender<RemoteMessage>,
     clients: Arc<RwLock<Vec<RemoteClient>>>,
-    device: Box<Device>,
+    device: Box<dyn Device>,
 }
 
 impl RemoteDevice {
-    pub fn new(config: &Config, device: Box<Device>) -> Self {
+    pub fn new(config: &Config, device: Box<dyn Device>) -> Self {
         let (tx, rx) = mpsc::channel();
         let device = RemoteDevice {
             publisher: tx,
@@ -74,7 +73,7 @@ impl RemoteDevice {
                 } => {
                     // Encode image.
                     let mut data = Vec::new();
-                    let mut encoder = JPEGEncoder::new_with_quality(&mut data, 50);
+                    let mut encoder = image::jpeg::JpegEncoder::new_with_quality(&mut data, 50);
                     encoder
                         .encode(&rgba8, width, height, ColorType::Rgba8)
                         .unwrap();

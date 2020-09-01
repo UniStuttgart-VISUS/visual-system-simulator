@@ -137,7 +137,7 @@ impl Pass for Cataract {
         }
     }
 
-    fn render(&mut self, encoder: &mut gfx::Encoder<Resources, CommandBuffer>, gaze: &DeviceGaze) {
+    fn render(&mut self, encoder: &mut gfx::Encoder<Resources, CommandBuffer>, _: &DeviceGaze) {
         encoder.draw(&self.slice, &self.pso, &self.pso_data);
     }
 }

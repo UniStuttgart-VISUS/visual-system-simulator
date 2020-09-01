@@ -211,7 +211,8 @@ impl Device for WindowDevice {
                     }
                     glutin::WindowEvent::CursorMoved { position, .. } => {
                         if *self.active.borrow() {
-                            let window_size = &self.windowed_context.window().get_inner_size().unwrap();
+                            let window_size =
+                                &self.windowed_context.window().get_inner_size().unwrap();
                             self.gaze.replace(DeviceGaze {
                                 x: position.x as f32,
                                 y: (window_size.height - position.y) as f32,

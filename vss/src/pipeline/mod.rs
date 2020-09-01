@@ -17,13 +17,13 @@ use crate::passes::*;
 
 /// The pipeline encapsulates the simulation and rendering system, i.e., all rendering passes.
 pub struct Pipeline {
-    passes: Vec<Box<Pass>>,
+    passes: Vec<Box<dyn Pass>>,
     targets: Vec<gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat>>,
     params: ValueMap,
 }
 
 impl Pipeline {
-    pub fn new(device: &mut Box<Device>, params: ValueMap) -> Self {
+    pub fn new(device: &mut Box<dyn Device>, params: ValueMap) -> Self {
         Pipeline {
             passes: Vec::new(),
             targets: Vec::new(),
@@ -33,7 +33,7 @@ impl Pipeline {
         .create_intermediate_buffers(device)
     }
 
-    fn create_passes(mut self, device: &mut Box<Device>) -> Self {
+    fn create_passes(mut self, device: &mut Box<dyn Device>) -> Self {
         let factory = &mut device.factory().borrow_mut() as &mut gfx_device_gl::Factory;
 
         //XXX: some more unification would be nice.
@@ -62,7 +62,7 @@ impl Pipeline {
         self
     }
 
-    fn create_intermediate_buffers(mut self, device: &mut Box<Device>) -> Self {
+    fn create_intermediate_buffers(mut self, device: &mut Box<dyn Device>) -> Self {
         let mut factory = device.factory().borrow_mut();
 
         let device_source = device.source().borrow_mut();
@@ -157,7 +157,7 @@ impl Pipeline {
         self
     }
 
-    pub fn update_params(&mut self, device: &mut Box<Device>) {
+    pub fn update_params(&mut self, device: &mut Box<dyn Device>) {
         let mut factory = device.factory().borrow_mut();
 
         // Propagate to passes.
@@ -166,7 +166,7 @@ impl Pipeline {
         }
     }
 
-    pub fn render(&mut self, device: &mut Box<Device>) {
+    pub fn render(&mut self, device: &mut Box<dyn Device>) {
         let mut factory = device.factory().borrow_mut();
 
         //XXX: do this only on demand
