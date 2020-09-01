@@ -1,11 +1,6 @@
 use std::cell::RefCell;
 use std::fs::File;
 
-use gfx;
-use gfx_device_gl;
-
-use image;
-
 use super::*;
 use crate::config::*;
 use crate::pipeline::*;
@@ -32,14 +27,14 @@ impl ImageDevice {
         }
     }
 
-    pub fn upload_rgba(&mut self, rgba8: &Box<[u8]>, width: usize, height: usize) {
+    pub fn upload_rgba(&mut self, rgba8: &[u8], width: usize, height: usize) {
         let factory = &mut self.factory().borrow_mut() as &mut gfx_device_gl::Factory;
         let encoder = &mut self.encoder().borrow_mut();
 
         // Test if texture size should change.
         let info = self.input_rgba.borrow().get_info().to_image_info(0);
         if width != info.width as usize || height != info.height as usize {
-            let data = Box::from(vec![0; width * height * 4].into_boxed_slice());
+            let data = vec![0; width * height * 4].into_boxed_slice();
             let (input_rgba, rgba) =
                 load_texture_from_bytes(factory, data, width as u32, height as u32).unwrap();
             self.input_rgba.replace(input_rgba);
@@ -49,7 +44,7 @@ impl ImageDevice {
         // Update texture pixels.
         update_texture(
             encoder,
-            &mut self.input_rgba.borrow_mut(),
+            &self.input_rgba.borrow(),
             [width as u16, height as u16],
             [0, 0],
             &*rgba8,
@@ -98,7 +93,7 @@ impl Device for ImageDevice {
             );
             use std::io::Write;
             let mut file = File::create(&self.output).expect("Unable to create file");
-            file.write(&image_data).unwrap();
+            file.write_all(&image_data).unwrap();
             println!("[image] writing to {}", self.output);
         }
     }

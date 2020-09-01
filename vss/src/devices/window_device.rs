@@ -1,9 +1,5 @@
 use std::cell::RefCell;
 
-use gfx;
-use gfx_device_gl;
-use gfx_window_glutin;
-use glutin;
 use glutin::dpi::*;
 use glutin::GlRequest;
 

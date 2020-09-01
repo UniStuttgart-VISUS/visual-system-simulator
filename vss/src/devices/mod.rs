@@ -10,9 +10,6 @@ pub use self::window_device::*;
 
 use std::cell::RefCell;
 
-use gfx;
-use gfx_device_gl;
-
 use crate::*;
 
 /// A factory to create pipeline objects from.

@@ -1,7 +1,5 @@
 use std::cell::RefCell;
 
-use gfx;
-use gfx_device_gl;
 use gfx_device_gl::Resources;
 
 use super::*;
@@ -37,21 +35,21 @@ impl VideoDevice {
         let window = WindowDevice::new(&config);
         let (input_y, y) = load_single_channel_texture_from_bytes(
             &mut window.factory().borrow_mut(),
-            Box::from(dummy_pixels.clone()),
+            dummy_pixels.clone(),
             dummy_width as u32,
             dummy_height as u32,
         )
         .unwrap();
         let (input_u, u) = load_single_channel_texture_from_bytes(
             &mut window.factory().borrow_mut(),
-            Box::from(dummy_pixels.clone()),
+            dummy_pixels.clone(),
             dummy_width as u32,
             dummy_height as u32,
         )
         .unwrap();
         let (input_v, v) = load_single_channel_texture_from_bytes(
             &mut window.factory().borrow_mut(),
-            Box::from(dummy_pixels),
+            dummy_pixels,
             dummy_width as u32,
             dummy_height as u32,
         )
@@ -62,7 +60,7 @@ impl VideoDevice {
             input_y: RefCell::new(input_y),
             input_u: RefCell::new(input_u),
             input_v: RefCell::new(input_v),
-            input_view: RefCell::new(DeviceSource::Yuv { y: y, u: u, v: v }),
+            input_view: RefCell::new(DeviceSource::Yuv { y, u, v }),
         }
     }
 
@@ -108,21 +106,21 @@ impl VideoDevice {
         let offset = [0, 0];
         update_single_channel_texture(
             encoder,
-            &mut self.input_y.borrow_mut(),
+            &self.input_y.borrow(),
             size,
             offset,
             &buffer.pixels_y,
         );
         update_single_channel_texture(
             encoder,
-            &mut self.input_u.borrow_mut(),
+            &self.input_u.borrow(),
             half_size,
             offset,
             &buffer.pixels_u,
         );
         update_single_channel_texture(
             encoder,
-            &mut self.input_v.borrow_mut(),
+            &self.input_v.borrow(),
             half_size,
             offset,
             &buffer.pixels_v,

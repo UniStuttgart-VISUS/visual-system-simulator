@@ -7,10 +7,8 @@ pub use self::pass::*;
 pub use self::texture::*;
 pub use self::utils::*;
 
-use gfx;
 use gfx::traits::FactoryExt;
 use gfx::Factory;
-use gfx_device_gl;
 
 use crate::devices::*;
 use crate::passes::*;
@@ -27,7 +25,7 @@ impl Pipeline {
         Pipeline {
             passes: Vec::new(),
             targets: Vec::new(),
-            params: params,
+            params,
         }
         .create_passes(device)
         .create_intermediate_buffers(device)
@@ -134,12 +132,10 @@ impl Pipeline {
             };
             let target = if count == amount {
                 &(device_target)
+            } else if count % 2 == 0 {
+                &intermediate2.target
             } else {
-                if count % 2 == 0 {
-                    &intermediate2.target
-                } else {
-                    &intermediate1.target
-                }
+                &intermediate1.target
             };
             pass.update_io(
                 target,

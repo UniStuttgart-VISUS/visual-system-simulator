@@ -4,14 +4,13 @@ use std::io::Cursor;
 use gfx;
 use gfx::traits::FactoryExt;
 use gfx::Factory;
-use gfx_device_gl;
 use gfx_device_gl::CommandBuffer;
 use gfx_device_gl::Resources;
 
 use crate::devices::*;
 use crate::pipeline::*;
 
-const DIOPTRES_SCALING: f32 = 0.332763369417523;
+const DIOPTRES_SCALING: f32 = 0.332_763_369_417_523 as f32;
 
 gfx_defines! {
     vertex Vertex {
@@ -104,12 +103,12 @@ impl Lens {
                 u_far_point: f32::INFINITY,
                 u_near_vision_factor: 0.0,
                 u_far_vision_factor: 0.0,
-                s_color: (src.clone(), sampler.clone()),
-                s_depth: (srv.clone(), sampler.clone()),
-                s_normal: (normal_view.clone(), sampler.clone()),
-                s_cornea: (cornea_view.clone(), sampler.clone()),
-                rt_color: dst.clone(),
-                vbuf: vertex_buffer.clone(),
+                s_color: (src, sampler.clone()),
+                s_depth: (srv, sampler.clone()),
+                s_normal: (normal_view, sampler.clone()),
+                s_cornea: (cornea_view, sampler),
+                rt_color: dst,
+                vbuf: vertex_buffer,
             },
         }
     }
@@ -117,22 +116,19 @@ impl Lens {
 
 impl Pass for Lens {
     fn build(&mut self, factory: &mut gfx_device_gl::Factory, vertex_data: Option<[f32; 48]>) {
-        match vertex_data {
-            Some(raw_data) => {
-                let mut vertex_data = [Vertex::new([0.0, 0.0], [0.0, 0.0]); 12];
-                for i in 0..12 {
-                    vertex_data[i] = Vertex::new(
-                        [raw_data[i * 4], raw_data[i * 4 + 1]],
-                        [raw_data[i * 4 + 2], raw_data[i * 4 + 3]],
-                    );
-                }
-                let (vertex_buffer, slice) =
-                    factory.create_vertex_buffer_with_slice(&vertex_data, ());
-                self.vertex_buffer = vertex_buffer.clone();
-                self.pso_data.vbuf = vertex_buffer.clone();
-                self.slice = slice;
+        if let Some(raw_data) = vertex_data {
+            let mut vertex_data = [Vertex::new([0.0, 0.0], [0.0, 0.0]); 12];
+            for i in 0..12 {
+                vertex_data[i] = Vertex::new(
+                    [raw_data[i * 4], raw_data[i * 4 + 1]],
+                    [raw_data[i * 4 + 2], raw_data[i * 4 + 3]],
+                );
             }
-            None => {}
+            let (vertex_buffer, slice) =
+                factory.create_vertex_buffer_with_slice(&vertex_data, ());
+            self.vertex_buffer = vertex_buffer.clone();
+            self.pso_data.vbuf = vertex_buffer;
+            self.slice = slice;
         }
     }
 

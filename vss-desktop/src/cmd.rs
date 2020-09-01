@@ -1,5 +1,3 @@
-use serde_json;
-
 use std::fs::File;
 use std::io::prelude::*;
 use vss::*;
@@ -107,7 +105,7 @@ pub fn cmd_parse() -> Config {
 
     let gaze = if let Some(gaze_str) = matches.value_of("gaze") {
         let numbers = gaze_str
-            .split(",")
+            .split(',')
             .map(|t| t.trim().parse::<u32>().unwrap())
             .collect::<Vec<u32>>();
         Some(DeviceGaze {

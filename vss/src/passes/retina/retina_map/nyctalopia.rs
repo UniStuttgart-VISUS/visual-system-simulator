@@ -1,5 +1,3 @@
-use image;
-
 ///
 /// Creates a retina map that can be used to simulate nyctalopia.
 ///

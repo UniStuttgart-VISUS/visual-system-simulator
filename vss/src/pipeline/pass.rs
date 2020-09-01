@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use gfx;
-use gfx_device_gl;
 use gfx_device_gl::CommandBuffer;
 use gfx_device_gl::Resources;
 

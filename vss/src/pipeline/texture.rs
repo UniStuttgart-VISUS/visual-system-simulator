@@ -1,13 +1,8 @@
 use std::io::Cursor;
-use std::mem::transmute;
 
-use gfx;
 use gfx::Factory;
-use gfx_device_gl;
 use gfx_device_gl::CommandBuffer;
 use gfx_device_gl::Resources;
-
-use image;
 
 pub type RgbSurfaceFormat = gfx::format::R8_G8_B8_A8;
 pub type YuvSurfaceFormat = gfx::format::R8;
@@ -230,23 +225,16 @@ pub fn load_highres_normalmap(
 
     for i in 0..(data_raw.len() / 4) {
         let n = ((data_raw[i * 4 + 3] as u32) << 24)
-            | ((data_raw[i * 4 + 0] as u32) << 16)
+            | ((data_raw[i * 4] as u32) << 16)
             | ((data_raw[i * 4 + 1] as u32) << 8)
             | (data_raw[i * 4 + 2] as u32);
         data_float.push((n as f32) / (<u32>::max_value() as f32));
     }
 
-    let mut data_rearranged = Vec::new();
-
-    for i in 0..data_float.len() {
-        let raw_bytes: [u8; 4] = unsafe { transmute(data_float[i]) };
-        data_rearranged.push(raw_bytes[0]);
-        data_rearranged.push(raw_bytes[1]);
-        data_rearranged.push(raw_bytes[2]);
-        data_rearranged.push(raw_bytes[3]);
-    }
-
-    let data = data_rearranged.into_boxed_slice();
+    let data = unsafe {
+        std::slice::from_raw_parts(data_float.as_mut_ptr() as *const u8,
+            data_float.len() * 4)
+    };
 
     let kind = texture::Kind::D2(
         (width / 3) as texture::Size,
@@ -273,7 +261,7 @@ pub fn load_highres_normalmap(
         .create_texture_raw(
             desc,
             Some(cty),
-            Some((&[&data], gfx::texture::Mipmap::Allocated)),
+            Some((&[data], gfx::texture::Mipmap::Allocated)),
         )
         .unwrap();
     let levels = (0, raw.get_info().levels - 1);

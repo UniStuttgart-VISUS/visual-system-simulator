@@ -6,11 +6,6 @@ use std::thread;
 
 use ws::{listen, CloseCode, Handler, Message, Result, Sender};
 
-use serde_json;
-
-use image;
-use image::ColorType;
-
 use super::*;
 use crate::Config;
 
@@ -38,7 +33,7 @@ impl RemoteDevice {
         let device = RemoteDevice {
             publisher: tx,
             clients: Arc::new(RwLock::new(Vec::new())),
-            device: device,
+            device,
         };
 
         // Start listening thread.
@@ -75,7 +70,7 @@ impl RemoteDevice {
                     let mut data = Vec::new();
                     let mut encoder = image::jpeg::JpegEncoder::new_with_quality(&mut data, 50);
                     encoder
-                        .encode(&rgba8, width, height, ColorType::Rgba8)
+                        .encode(&rgba8, width, height, image::ColorType::Rgba8)
                         .unwrap();
                     // Send to subscribed clients.
                     for client in clients.iter().filter(|client| client.subscribed_frames) {
@@ -179,7 +174,7 @@ impl Handler for RemoteClient {
         match msg {
             Message::Text(ref text) => {
                 let text = text.trim();
-                if text.starts_with("{") {
+                if text.starts_with('{') {
                     // JSON syntax implies config.
                     // TODO: ...
                     let _value: serde_json::Value = serde_json::from_str(text).unwrap();

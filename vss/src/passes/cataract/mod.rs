@@ -1,6 +1,5 @@
 use gfx;
 use gfx::traits::FactoryExt;
-use gfx_device_gl;
 use gfx_device_gl::CommandBuffer;
 use gfx_device_gl::Resources;
 
@@ -69,9 +68,9 @@ impl Cataract {
                 u_resolution: [1.0, 1.0],
                 u_blur_factor: 0.0,
                 u_contrast_factor: 0.0,
-                s_color: (src.clone(), sampler.clone()),
-                rt_color: dst.clone(),
-                vbuf: vertex_buffer.clone(),
+                s_color: (src, sampler),
+                rt_color: dst,
+                vbuf: vertex_buffer,
             },
         }
     }
@@ -79,22 +78,19 @@ impl Cataract {
 
 impl Pass for Cataract {
     fn build(&mut self, factory: &mut gfx_device_gl::Factory, vertex_data: Option<[f32; 48]>) {
-        match vertex_data {
-            Some(raw_data) => {
-                let mut vertex_data = [Vertex::new([0.0, 0.0], [0.0, 0.0]); 12];
-                for i in 0..12 {
-                    vertex_data[i] = Vertex::new(
-                        [raw_data[i * 4], raw_data[i * 4 + 1]],
-                        [raw_data[i * 4 + 2], raw_data[i * 4 + 3]],
-                    );
-                }
-                let (vertex_buffer, slice) =
-                    factory.create_vertex_buffer_with_slice(&vertex_data, ());
-                self.vertex_buffer = vertex_buffer.clone();
-                self.pso_data.vbuf = vertex_buffer.clone();
-                self.slice = slice;
+        if let Some(raw_data) =  vertex_data {
+            let mut vertex_data = [Vertex::new([0.0, 0.0], [0.0, 0.0]); 12];
+            for i in 0..12 {
+                vertex_data[i] = Vertex::new(
+                    [raw_data[i * 4], raw_data[i * 4 + 1]],
+                    [raw_data[i * 4 + 2], raw_data[i * 4 + 3]],
+                );
             }
-            None => {}
+            let (vertex_buffer, slice) =
+                factory.create_vertex_buffer_with_slice(&vertex_data, ());
+            self.vertex_buffer = vertex_buffer.clone();
+            self.pso_data.vbuf = vertex_buffer;
+            self.slice = slice;
         }
     }
 

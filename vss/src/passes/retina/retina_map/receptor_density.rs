@@ -1,5 +1,3 @@
-use image;
-
 use super::osterberg::*;
 
 /// Gaussian apodization function

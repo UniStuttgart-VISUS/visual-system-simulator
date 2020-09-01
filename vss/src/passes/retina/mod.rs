@@ -5,7 +5,6 @@ use self::retina_map::generate_retina_map;
 use gfx;
 use gfx::traits::FactoryExt;
 use gfx::Factory;
-use gfx_device_gl;
 use gfx_device_gl::CommandBuffer;
 use gfx_device_gl::Resources;
 
@@ -75,10 +74,10 @@ impl Retina {
             pso_data: pipe::Data {
                 u_resolution: [1.0, 1.0],
                 u_gaze: [0.0, 0.0],
-                s_source: (src.clone(), sampler.clone()),
-                s_retina: (mask_view.clone(), sampler.clone()),
-                rt_color: dst.clone(),
-                vbuf: vertex_buffer.clone(),
+                s_source: (src, sampler.clone()),
+                s_retina: (mask_view, sampler),
+                rt_color: dst,
+                vbuf: vertex_buffer,
             },
         }
     }
@@ -86,22 +85,19 @@ impl Retina {
 
 impl Pass for Retina {
     fn build(&mut self, factory: &mut gfx_device_gl::Factory, vertex_data: Option<[f32; 48]>) {
-        match vertex_data {
-            Some(raw_data) => {
-                let mut vertex_data = [Vertex::new([0.0, 0.0], [0.0, 0.0]); 12];
-                for i in 0..12 {
-                    vertex_data[i] = Vertex::new(
-                        [raw_data[i * 4], raw_data[i * 4 + 1]],
-                        [raw_data[i * 4 + 2], raw_data[i * 4 + 3]],
-                    );
-                }
-                let (vertex_buffer, slice) =
-                    factory.create_vertex_buffer_with_slice(&vertex_data, ());
-                self.vertex_buffer = vertex_buffer.clone();
-                self.pso_data.vbuf = vertex_buffer.clone();
-                self.slice = slice;
+        if let Some(raw_data) = vertex_data {
+            let mut vertex_data = [Vertex::new([0.0, 0.0], [0.0, 0.0]); 12];
+            for i in 0..12 {
+                vertex_data[i] = Vertex::new(
+                    [raw_data[i * 4], raw_data[i * 4 + 1]],
+                    [raw_data[i * 4 + 2], raw_data[i * 4 + 3]],
+                );
             }
-            None => {}
+            let (vertex_buffer, slice) =
+                factory.create_vertex_buffer_with_slice(&vertex_data, ());
+            self.vertex_buffer = vertex_buffer.clone();
+            self.pso_data.vbuf = vertex_buffer;
+            self.slice = slice;
         }
     }
 
@@ -133,7 +129,7 @@ impl Pass for Retina {
                 println!("[retina] using map {:?}", retina_map_path);
                 let (_, retinamap_view) = load_texture(factory, load(retina_map_path)).unwrap();
                 let sampler = self.pso_data.s_retina.clone().1;
-                (retinamap_view.clone(), sampler.clone())
+                (retinamap_view, sampler)
             } else {
                 println!("[retina] generating map");
                 let retina_resolution = (
