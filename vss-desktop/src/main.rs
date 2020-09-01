@@ -15,7 +15,7 @@ fn resolve_desktop_devices(config: &Config) -> Option<Box<dyn Device>> {
         "video" => {
             use crate::devices::*;
             Some(Box::new(AvDevice::new(&config)) as Box<dyn Device>)
-        },
+        }
         _ => None,
     }
 }

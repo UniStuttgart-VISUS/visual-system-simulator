@@ -41,15 +41,11 @@ fn from_json_obj(arg: &str) -> Result<ValueMap, serde_json::Error> {
 
 pub fn cmd_parse() -> Config {
     use clap::{App, Arg};
-    let version = "1.0.0";
-    let title = "Visual System Simulator (VSS)";
-    let description = "Simulates various aspects of the human visual system";
-    let authors = "The Visual System Simulator Developers";
 
-    let matches = App::new(title)
-        .version(version)
-        .author(authors)
-        .about(description)
+    let matches = App::new("Visual System Simulator (VSS)")
+        .version("1.1.0")
+        .author("The Visual System Simulator Developers")
+        .about("Simulates various aspects of the human visual system")
         .arg(
             Arg::with_name("port")
                 .long("port")

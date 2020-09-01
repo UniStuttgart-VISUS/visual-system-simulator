@@ -78,7 +78,7 @@ impl Cataract {
 
 impl Pass for Cataract {
     fn build(&mut self, factory: &mut gfx_device_gl::Factory, vertex_data: Option<[f32; 48]>) {
-        if let Some(raw_data) =  vertex_data {
+        if let Some(raw_data) = vertex_data {
             let mut vertex_data = [Vertex::new([0.0, 0.0], [0.0, 0.0]); 12];
             for i in 0..12 {
                 vertex_data[i] = Vertex::new(
@@ -86,8 +86,7 @@ impl Pass for Cataract {
                     [raw_data[i * 4 + 2], raw_data[i * 4 + 3]],
                 );
             }
-            let (vertex_buffer, slice) =
-                factory.create_vertex_buffer_with_slice(&vertex_data, ());
+            let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, ());
             self.vertex_buffer = vertex_buffer.clone();
             self.pso_data.vbuf = vertex_buffer;
             self.slice = slice;

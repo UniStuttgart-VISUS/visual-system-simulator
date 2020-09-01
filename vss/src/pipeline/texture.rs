@@ -232,8 +232,7 @@ pub fn load_highres_normalmap(
     }
 
     let data = unsafe {
-        std::slice::from_raw_parts(data_float.as_mut_ptr() as *const u8,
-            data_float.len() * 4)
+        std::slice::from_raw_parts(data_float.as_mut_ptr() as *const u8, data_float.len() * 4)
     };
 
     let kind = texture::Kind::D2(
