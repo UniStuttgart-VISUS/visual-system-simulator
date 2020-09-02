@@ -92,31 +92,6 @@ impl Pipeline {
         for (idx, pass) in &mut self.passes.iter_mut().enumerate() {
             let count = idx + 1;
 
-            // Build it.
-            let vertex_data = if count == amount {
-                if let Some(Value::Bool(true)) = self.params.get("split_screen_switch") {
-                    Some([
-                        -0.5, -1.0, 0.0, 0.0, //v0
-                        0.5, -1.0, 1.0, 0.0, //v1
-                        -0.5, 0.0, 0.0, 1.0, //v2
-                        0.5, -1.0, 1.0, 0.0, //v3
-                        0.5, 0.0, 1.0, 1.0, //v4
-                        -0.5, 0.0, 0.0, 1.0, //v5
-                        -0.5, 0.0, 0.0, 0.0, //v6
-                        0.5, 0.0, 1.0, 0.0, //v7
-                        -0.5, 1.0, 0.0, 1.0, //v8
-                        0.5, 0.0, 1.0, 0.0, //v9
-                        0.5, 1.0, 1.0, 1.0, //v10
-                        -0.5, 1.0, 0.0, 1.0, //v11
-                    ])
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
-            pass.build(&mut factory, vertex_data);
-
             // Update its source and target.
             let source = if count == 1 {
                 device_source.clone()
@@ -137,12 +112,20 @@ impl Pipeline {
             } else {
                 &intermediate1.target
             };
+            let stereo = (count == amount)
+                && self
+                    .params
+                    .get("split_screen_switch")
+                    .unwrap_or(&Value::Bool(false))
+                    .as_bool()
+                    .unwrap_or(false);
             pass.update_io(
                 target,
                 (width as u32, height as u32),
                 &source,
                 &source_sampler,
                 (width as u32, height as u32),
+                stereo,
             );
             self.targets.push(target.clone());
 
@@ -176,6 +159,7 @@ impl Pipeline {
             &source,
             &source_sampler,
             (width as u32, height as u32),
+            false,
         );
 
         // Render all passes.

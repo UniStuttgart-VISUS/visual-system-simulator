@@ -13,12 +13,8 @@ use crate::pipeline::*;
 const DIOPTRES_SCALING: f32 = 0.332_763_369_417_523 as f32;
 
 gfx_defines! {
-    vertex Vertex {
-        pos: [f32; 2] = "a_pos",
-        tex: [f32; 2] = "a_tex",
-    }
-
     pipeline pipe {
+        u_stereo: gfx::Global<i32> = "u_stereo",
         u_active: gfx::Global<i32> = "u_active",
         u_samplecount: gfx::Global<i32> = "u_samplecount",
         u_depth_min: gfx::Global<f32> = "u_depth_min",
@@ -38,20 +34,12 @@ gfx_defines! {
         s_normal: gfx::TextureSampler<[f32; 4]> = "s_normal",
         s_cornea: gfx::TextureSampler<[f32; 4]> = "s_cornea",
         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
-        vbuf: gfx::VertexBuffer<Vertex> = (),
-    }
-}
-impl Vertex {
-    fn new(p: [f32; 2], u: [f32; 2]) -> Vertex {
-        Vertex { pos: p, tex: u }
     }
 }
 
 pub struct Lens {
     pso: gfx::PipelineState<Resources, pipe::Meta>,
     pso_data: pipe::Data<Resources>,
-    slice: gfx::Slice<Resources>,
-    vertex_buffer: gfx::handle::Buffer<Resources, Vertex>,
 }
 
 impl Lens {
@@ -64,23 +52,13 @@ impl Lens {
             )
             .unwrap();
 
-        let vertex_data = [
-            Vertex::new([-1.0, -1.0], [0.0, 0.0]),
-            Vertex::new([1.0, -1.0], [1.0, 0.0]),
-            Vertex::new([1.0, 1.0], [1.0, 1.0]),
-            Vertex::new([-1.0, -1.0], [0.0, 0.0]),
-            Vertex::new([1.0, 1.0], [1.0, 1.0]),
-            Vertex::new([-1.0, 1.0], [0.0, 1.0]),
-        ];
-
-        //TODO: this is one stupid hack!!! pre-compute this properly
+        //TODO: this is one stupid and slow hack!!! pre-compute this properly
         let filename_normal = Cursor::new(include_bytes!("normal.png").to_vec());
         let (_, normal_view) = load_highres_normalmap(factory, filename_normal).unwrap();
 
         let rgba_cornea = vec![127; 4].into_boxed_slice();
         let (_, cornea_view) = load_texture_from_bytes(factory, rgba_cornea, 1, 1).unwrap();
 
-        let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, ());
         let sampler = factory.create_sampler_linear();
         let (_, src, dst) = factory.create_render_target(1, 1).unwrap();
 
@@ -92,9 +70,8 @@ impl Lens {
 
         Lens {
             pso,
-            slice,
-            vertex_buffer: vertex_buffer.clone(),
             pso_data: pipe::Data {
+                u_stereo: 0,
                 u_active: 0,
                 u_samplecount: 4,
                 u_depth_min: 200.0,  //XXX: was 1000.0 - 300.0,
@@ -108,29 +85,12 @@ impl Lens {
                 s_normal: (normal_view, sampler.clone()),
                 s_cornea: (cornea_view, sampler),
                 rt_color: dst,
-                vbuf: vertex_buffer,
             },
         }
     }
 }
 
 impl Pass for Lens {
-    fn build(&mut self, factory: &mut gfx_device_gl::Factory, vertex_data: Option<[f32; 48]>) {
-        if let Some(raw_data) = vertex_data {
-            let mut vertex_data = [Vertex::new([0.0, 0.0], [0.0, 0.0]); 12];
-            for i in 0..12 {
-                vertex_data[i] = Vertex::new(
-                    [raw_data[i * 4], raw_data[i * 4 + 1]],
-                    [raw_data[i * 4 + 2], raw_data[i * 4 + 3]],
-                );
-            }
-            let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, ());
-            self.vertex_buffer = vertex_buffer.clone();
-            self.pso_data.vbuf = vertex_buffer;
-            self.slice = slice;
-        }
-    }
-
     fn update_io(
         &mut self,
         target: &DeviceTarget,
@@ -138,7 +98,9 @@ impl Pass for Lens {
         source: &DeviceSource,
         source_sampler: &gfx::handle::Sampler<Resources>,
         _source_size: (u32, u32),
+        stereo: bool,
     ) {
+        self.pso_data.u_stereo = if stereo { 1 } else { 0 };
         self.pso_data.rt_color = target.clone();
         match source {
             DeviceSource::Rgb { rgba8 } => {
@@ -198,6 +160,6 @@ impl Pass for Lens {
     }
 
     fn render(&mut self, encoder: &mut gfx::Encoder<Resources, CommandBuffer>, _: &DeviceGaze) {
-        encoder.draw(&self.slice, &self.pso, &self.pso_data);
+        encoder.draw(&gfx::Slice::from_vertex_count(6), &self.pso, &self.pso_data);
     }
 }

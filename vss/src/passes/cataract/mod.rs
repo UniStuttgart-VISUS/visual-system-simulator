@@ -7,33 +7,20 @@ use crate::devices::*;
 use crate::pipeline::*;
 
 gfx_defines! {
-    vertex Vertex {
-        pos: [f32; 2] = "a_pos",
-        tex: [f32; 2] = "a_tex",
-    }
-
     pipeline pipe {
+        u_stereo: gfx::Global<i32> = "u_stereo",
         u_active: gfx::Global<i32> = "u_active",
         u_resolution: gfx::Global<[f32; 2]> = "u_resolution",
         u_blur_factor: gfx::Global<f32> = "u_blur_factor",
         u_contrast_factor: gfx::Global<f32> = "u_contrast_factor",
         s_color: gfx::TextureSampler<[f32; 4]> = "s_color",
         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
-        vbuf: gfx::VertexBuffer<Vertex> = (),
-    }
-}
-
-impl Vertex {
-    fn new(p: [f32; 2], u: [f32; 2]) -> Vertex {
-        Vertex { pos: p, tex: u }
     }
 }
 
 pub struct Cataract {
     pso: gfx::PipelineState<Resources, pipe::Meta>,
     pso_data: pipe::Data<Resources>,
-    slice: gfx::Slice<Resources>,
-    vertex_buffer: gfx::handle::Buffer<Resources, Vertex>,
 }
 
 impl Cataract {
@@ -45,54 +32,25 @@ impl Cataract {
                 pipe::new(),
             )
             .unwrap();
-
-        let vertex_data = [
-            Vertex::new([-1.0, -1.0], [0.0, 0.0]),
-            Vertex::new([1.0, -1.0], [1.0, 0.0]),
-            Vertex::new([1.0, 1.0], [1.0, 1.0]),
-            Vertex::new([-1.0, -1.0], [0.0, 0.0]),
-            Vertex::new([1.0, 1.0], [1.0, 1.0]),
-            Vertex::new([-1.0, 1.0], [0.0, 1.0]),
-        ];
-
-        let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, ());
         let (_, src, dst) = factory.create_render_target(1, 1).unwrap();
         let sampler = factory.create_sampler_linear();
 
         Cataract {
             pso,
-            slice,
-            vertex_buffer: vertex_buffer.clone(),
             pso_data: pipe::Data {
+                u_stereo: 0,
                 u_active: 0,
                 u_resolution: [1.0, 1.0],
                 u_blur_factor: 0.0,
                 u_contrast_factor: 0.0,
                 s_color: (src, sampler),
                 rt_color: dst,
-                vbuf: vertex_buffer,
             },
         }
     }
 }
 
 impl Pass for Cataract {
-    fn build(&mut self, factory: &mut gfx_device_gl::Factory, vertex_data: Option<[f32; 48]>) {
-        if let Some(raw_data) = vertex_data {
-            let mut vertex_data = [Vertex::new([0.0, 0.0], [0.0, 0.0]); 12];
-            for i in 0..12 {
-                vertex_data[i] = Vertex::new(
-                    [raw_data[i * 4], raw_data[i * 4 + 1]],
-                    [raw_data[i * 4 + 2], raw_data[i * 4 + 3]],
-                );
-            }
-            let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, ());
-            self.vertex_buffer = vertex_buffer.clone();
-            self.pso_data.vbuf = vertex_buffer;
-            self.slice = slice;
-        }
-    }
-
     fn update_io(
         &mut self,
         target: &DeviceTarget,
@@ -100,7 +58,9 @@ impl Pass for Cataract {
         source: &DeviceSource,
         source_sampler: &gfx::handle::Sampler<Resources>,
         source_size: (u32, u32),
+        stereo: bool,
     ) {
+        self.pso_data.u_stereo = if stereo { 1 } else { 0 };
         self.pso_data.rt_color = target.clone();
         match source {
             DeviceSource::Rgb { rgba8 } => {
@@ -133,6 +93,6 @@ impl Pass for Cataract {
     }
 
     fn render(&mut self, encoder: &mut gfx::Encoder<Resources, CommandBuffer>, _: &DeviceGaze) {
-        encoder.draw(&self.slice, &self.pso, &self.pso_data);
+        encoder.draw(&gfx::Slice::from_vertex_count(6), &self.pso, &self.pso_data);
     }
 }
