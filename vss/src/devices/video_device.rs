@@ -133,6 +133,10 @@ impl VideoDevice {
 }
 
 impl Device for VideoDevice {
+    fn pipeline(&self) -> &RefCell<Pipeline> {
+        self.window.pipeline()
+    }
+
     fn factory(&self) -> &RefCell<DeviceFactory> {
         self.window.factory()
     }
@@ -153,11 +157,7 @@ impl Device for VideoDevice {
         self.window.target()
     }
 
-    fn begin_frame(&self) {
-        self.window.begin_frame();
-    }
-
-    fn end_frame(&self, done: &mut bool) {
-        self.window.end_frame(done);
+    fn render(&self) -> bool {
+        self.window.render()
     }
 }

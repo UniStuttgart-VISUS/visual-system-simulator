@@ -46,6 +46,10 @@ pub type ValueMap = HashMap<String, Value>;
 /// The texture this pass is applied to and where the output will be written
 /// is determined by the RenderContext passed to `build(...)`.
 pub trait Pass {
+    fn build(factory: &mut gfx_device_gl::Factory) -> Self
+    where
+        Self: Sized;
+
     /// Replaces the output (render target) and input (source texture).
     fn update_io(
         &mut self,
@@ -54,7 +58,6 @@ pub trait Pass {
         source: &DeviceSource,
         source_sampler: &gfx::handle::Sampler<Resources>,
         source_size: (u32, u32),
-        stereo: bool,
     );
 
     /// Set new parameters for this effect

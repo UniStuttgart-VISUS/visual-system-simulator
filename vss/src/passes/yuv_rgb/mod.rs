@@ -1,5 +1,6 @@
 use gfx;
 use gfx::traits::FactoryExt;
+use gfx::Factory;
 use gfx_device_gl::CommandBuffer;
 use gfx_device_gl::Resources;
 
@@ -8,7 +9,6 @@ use crate::pipeline::*;
 
 gfx_defines! {
     pipeline pipe {
-        u_stereo: gfx::Global<i32> = "u_stereo",
         s_y: gfx::TextureSampler<f32> = "s_y",
         s_u: gfx::TextureSampler<f32> = "s_u",
         s_v: gfx::TextureSampler<f32> = "s_v",
@@ -21,8 +21,8 @@ pub struct YuvRgb {
     pso_data: pipe::Data<Resources>,
 }
 
-impl YuvRgb {
-    pub fn new<F: gfx::Factory<Resources>>(factory: &mut F) -> Self {
+impl Pass for YuvRgb {
+    fn build(factory: &mut gfx_device_gl::Factory) -> Self {
         let pso = factory
             .create_pipeline_simple(
                 &include_glsl!("../shader.vert"),
@@ -42,7 +42,6 @@ impl YuvRgb {
         YuvRgb {
             pso,
             pso_data: pipe::Data {
-                u_stereo: 0,
                 s_y: (srv.clone(), sampler.clone()),
                 s_u: (srv.clone(), sampler.clone()),
                 s_v: (srv, sampler),
@@ -50,9 +49,7 @@ impl YuvRgb {
             },
         }
     }
-}
 
-impl Pass for YuvRgb {
     fn update_io(
         &mut self,
         target: &DeviceTarget,
@@ -60,9 +57,7 @@ impl Pass for YuvRgb {
         source: &DeviceSource,
         source_sampler: &gfx::handle::Sampler<Resources>,
         _source_size: (u32, u32),
-        stereo: bool,
     ) {
-        self.pso_data.u_stereo = if stereo { 1 } else { 0 };
         self.pso_data.rt_color = target.clone();
         match source {
             DeviceSource::Rgb { .. } => panic!("Unsupported source"),

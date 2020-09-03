@@ -43,7 +43,8 @@ pub fn generate(
         let spot_factor = 1.78;
         // ensures the outer areas are zero.
         let tail_factor = 0.72;
-        let relative_falloff = 1.0 - (radius.powi(2) - distance_squared as f64).max(0.0) / radius.powi(2);
+        let relative_falloff =
+            1.0 - (radius.powi(2) - distance_squared as f64).max(0.0) / radius.powi(2);
         let x = spot_factor * (-relative_falloff).exp() - tail_factor;
         let cells = 255 - (255.0 * x * intensity).max(0.0).min(255.0) as u8;
         *pixel = image::Rgba([cells, cells, cells, cells]);

@@ -1,7 +1,3 @@
-#[cfg(feature = "video")]
-extern crate av;
-extern crate clap;
-
 mod cmd;
 mod devices;
 
@@ -23,12 +19,18 @@ fn resolve_desktop_devices(config: &Config) -> Option<Box<dyn Device>> {
 pub fn main() {
     let config = cmd_parse();
 
-    let (mut device, mut pipeline) = config.build(&resolve_desktop_devices).unwrap();
+    let device = config.build(&resolve_desktop_devices).unwrap();
+
+    //XXX: this is a bit out of place, but ok for now.
+    device.pipeline().borrow().update_io(&*device);
+    device
+        .pipeline()
+        .borrow()
+        .update_params(&*device, &config.parameters);
 
     let mut done = false;
     while !done {
-        device.begin_frame();
-        pipeline.render(&mut device);
-        device.end_frame(&mut done);
+        device.pipeline().borrow().render(&*device);
+        done = device.render();        
     }
 }

@@ -1,5 +1,6 @@
 use gfx;
 use gfx::traits::FactoryExt;
+use gfx::Factory;
 use gfx_device_gl::CommandBuffer;
 use gfx_device_gl::Resources;
 
@@ -8,7 +9,6 @@ use crate::pipeline::*;
 
 gfx_defines! {
     pipeline pipe {
-        u_stereo: gfx::Global<i32> = "u_stereo",
         u_active: gfx::Global<i32> = "u_active",
         u_resolution: gfx::Global<[f32; 2]> = "u_resolution",
         u_blur_factor: gfx::Global<f32> = "u_blur_factor",
@@ -23,8 +23,8 @@ pub struct Cataract {
     pso_data: pipe::Data<Resources>,
 }
 
-impl Cataract {
-    pub fn new<F: gfx::Factory<Resources>>(factory: &mut F) -> Cataract {
+impl Pass for Cataract {
+    fn build(factory: &mut gfx_device_gl::Factory) -> Self {
         let pso = factory
             .create_pipeline_simple(
                 &include_glsl!("../shader.vert"),
@@ -38,7 +38,6 @@ impl Cataract {
         Cataract {
             pso,
             pso_data: pipe::Data {
-                u_stereo: 0,
                 u_active: 0,
                 u_resolution: [1.0, 1.0],
                 u_blur_factor: 0.0,
@@ -48,9 +47,7 @@ impl Cataract {
             },
         }
     }
-}
 
-impl Pass for Cataract {
     fn update_io(
         &mut self,
         target: &DeviceTarget,
@@ -58,9 +55,7 @@ impl Pass for Cataract {
         source: &DeviceSource,
         source_sampler: &gfx::handle::Sampler<Resources>,
         source_size: (u32, u32),
-        stereo: bool,
     ) {
-        self.pso_data.u_stereo = if stereo { 1 } else { 0 };
         self.pso_data.rt_color = target.clone();
         match source {
             DeviceSource::Rgb { rgba8 } => {

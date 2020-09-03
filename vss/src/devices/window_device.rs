@@ -17,6 +17,8 @@ pub type DepthFormat = gfx::format::DepthStencil;
 
 /// A device for window and context creation.
 pub struct WindowDevice {
+    pipeline: RefCell<Pipeline>,
+
     windowed_context: glutin::WindowedContext<glutin::PossiblyCurrent>,
     events_loop: RefCell<glutin::EventsLoop>,
     device: RefCell<gfx_device_gl::Device>,
@@ -84,6 +86,7 @@ impl WindowDevice {
         };
 
         WindowDevice {
+            pipeline: RefCell::new(Pipeline::new()),
             windowed_context,
             events_loop: RefCell::new(events_loop),
             device: RefCell::new(device),
@@ -161,6 +164,10 @@ impl WindowDevice {
 }
 
 impl Device for WindowDevice {
+    fn pipeline(&self) -> &RefCell<Pipeline> {
+        &self.pipeline
+    }
+
     fn factory(&self) -> &RefCell<DeviceFactory> {
         &self.factory
     }
@@ -181,9 +188,9 @@ impl Device for WindowDevice {
         &self.render_target
     }
 
-    fn begin_frame(&self) {}
+    fn render(&self) -> bool {
+        let mut done = false;
 
-    fn end_frame(&self, done: &mut bool) {
         // Poll for window events.
         self.events_loop.borrow_mut().poll_events(|event| {
             if let glutin::Event::WindowEvent { event, .. } = event {
@@ -197,7 +204,7 @@ impl Device for WindowDevice {
                         ..
                     }
                     | glutin::WindowEvent::CloseRequested
-                    | glutin::WindowEvent::Destroyed => *done = true,
+                    | glutin::WindowEvent::Destroyed => done = true,
                     glutin::WindowEvent::Resized(size) => {
                         let windowed_context = &self.windowed_context;
                         let mut rt = self.render_target.borrow_mut();
@@ -239,5 +246,7 @@ impl Device for WindowDevice {
             self.windowed_context.swap_buffers().unwrap();
             device.cleanup();
         }
+
+        return done;
     }
 }

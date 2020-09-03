@@ -1,5 +1,6 @@
 use gfx;
 use gfx::traits::FactoryExt;
+use gfx::Factory;
 use gfx_device_gl::CommandBuffer;
 use gfx_device_gl::Resources;
 
@@ -8,7 +9,6 @@ use crate::pipeline::*;
 
 gfx_defines! {
     pipeline pipe {
-        u_stereo: gfx::Global<i32> = "u_stereo",
         u_resolution_in: gfx::Global<[f32;2]> = "u_resolution_in",
         u_resolution_out: gfx::Global<[f32;2]> = "u_resolution_out",
         u_rotation: gfx::Global<f32> = "u_rotation",
@@ -24,8 +24,8 @@ pub struct Yuv420Rgb {
     pso_data: pipe::Data<Resources>,
 }
 
-impl Yuv420Rgb {
-    pub fn new<F: gfx::Factory<Resources>>(factory: &mut F) -> Self {
+impl Pass for Yuv420Rgb {
+    fn build(factory: &mut gfx_device_gl::Factory) -> Self {
         let pso = factory
             .create_pipeline_simple(
                 &include_glsl!("shader.vert"),
@@ -45,7 +45,6 @@ impl Yuv420Rgb {
         Yuv420Rgb {
             pso,
             pso_data: pipe::Data {
-                u_stereo: 0,
                 u_resolution_in: [1.0 as f32, 1.0 as f32],
                 u_resolution_out: [1.0 as f32, 1.0 as f32],
                 u_rotation: 0.0 as f32,
@@ -56,9 +55,7 @@ impl Yuv420Rgb {
             },
         }
     }
-}
 
-impl Pass for Yuv420Rgb {
     fn update_io(
         &mut self,
         target: &DeviceTarget,
@@ -66,9 +63,7 @@ impl Pass for Yuv420Rgb {
         source: &DeviceSource,
         source_sampler: &gfx::handle::Sampler<Resources>,
         source_size: (u32, u32),
-        stereo: bool,
     ) {
-        self.pso_data.u_stereo = if stereo { 1 } else { 0 };
         self.pso_data.rt_color = target.clone();
         self.pso_data.u_resolution_out = [target_size.0 as f32, target_size.1 as f32];
         match source {

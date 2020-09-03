@@ -1,12 +1,3 @@
-extern crate vss;
-
-#[cfg(target_os = "android")]
-extern crate jni;
-#[cfg(target_os = "android")]
-extern crate android_glue;
-#[cfg(target_os = "android")]
-extern crate android_injected_glue;
-
 #[cfg(target_os="android")]
 mod camera_ffi;
  

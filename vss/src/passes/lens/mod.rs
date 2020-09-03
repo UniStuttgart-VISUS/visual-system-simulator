@@ -14,7 +14,6 @@ const DIOPTRES_SCALING: f32 = 0.332_763_369_417_523 as f32;
 
 gfx_defines! {
     pipeline pipe {
-        u_stereo: gfx::Global<i32> = "u_stereo",
         u_active: gfx::Global<i32> = "u_active",
         u_samplecount: gfx::Global<i32> = "u_samplecount",
         u_depth_min: gfx::Global<f32> = "u_depth_min",
@@ -42,8 +41,8 @@ pub struct Lens {
     pso_data: pipe::Data<Resources>,
 }
 
-impl Lens {
-    pub fn new(factory: &mut gfx_device_gl::Factory) -> Self {
+impl Pass for Lens {
+    fn build(factory: &mut gfx_device_gl::Factory) -> Self {
         let pso = factory
             .create_pipeline_simple(
                 &include_glsl!("../shader.vert"),
@@ -71,7 +70,6 @@ impl Lens {
         Lens {
             pso,
             pso_data: pipe::Data {
-                u_stereo: 0,
                 u_active: 0,
                 u_samplecount: 4,
                 u_depth_min: 200.0,  //XXX: was 1000.0 - 300.0,
@@ -88,9 +86,7 @@ impl Lens {
             },
         }
     }
-}
 
-impl Pass for Lens {
     fn update_io(
         &mut self,
         target: &DeviceTarget,
@@ -98,9 +94,7 @@ impl Pass for Lens {
         source: &DeviceSource,
         source_sampler: &gfx::handle::Sampler<Resources>,
         _source_size: (u32, u32),
-        stereo: bool,
     ) {
-        self.pso_data.u_stereo = if stereo { 1 } else { 0 };
         self.pso_data.rt_color = target.clone();
         match source {
             DeviceSource::Rgb { rgba8 } => {

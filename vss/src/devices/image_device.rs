@@ -53,6 +53,10 @@ impl ImageDevice {
 }
 
 impl Device for ImageDevice {
+    fn pipeline(&self) -> &RefCell<Pipeline> {
+        self.window.pipeline()
+    }
+
     fn factory(&self) -> &RefCell<DeviceFactory> {
         self.window.factory()
     }
@@ -73,12 +77,8 @@ impl Device for ImageDevice {
         self.window.target()
     }
 
-    fn begin_frame(&self) {
-        self.window.begin_frame();
-    }
-
-    fn end_frame(&self, done: &mut bool) {
-        self.window.end_frame(done);
+    fn render(&self) -> bool {
+        let mut done = self.window.render();
 
         if !self.output.is_empty() {
             let rgb_data = self.window.download_rgb();
@@ -95,7 +95,9 @@ impl Device for ImageDevice {
             let mut file = File::create(&self.output).expect("Unable to create file");
             file.write_all(&image_data).unwrap();
             println!("[image] writing to {}", self.output);
-            *done = true;
+            done = true;
         }
+
+        done
     }
 }

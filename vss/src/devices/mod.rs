@@ -46,6 +46,8 @@ pub type DeviceTarget = gfx::handle::RenderTargetView<gfx_device_gl::Resources, 
 
 /// An input-output simulation device (image, video, camera, ...).
 pub trait Device {
+    fn pipeline(&self) -> &RefCell<Pipeline>;
+
     fn factory(&self) -> &RefCell<DeviceFactory>;
 
     fn encoder(&self) -> &RefCell<DeviceEncoder>;
@@ -56,7 +58,5 @@ pub trait Device {
 
     fn target(&self) -> &RefCell<DeviceTarget>;
 
-    fn begin_frame(&self);
-
-    fn end_frame(&self, done: &mut bool);
+    fn render(&self) -> bool;
 }

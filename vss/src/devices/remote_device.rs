@@ -101,6 +101,10 @@ impl RemoteDevice {
 }
 
 impl Device for RemoteDevice {
+    fn pipeline(&self) -> &RefCell<Pipeline> {
+        self.device.pipeline()
+    }
+
     fn factory(&self) -> &RefCell<DeviceFactory> {
         self.device.factory()
     }
@@ -121,12 +125,8 @@ impl Device for RemoteDevice {
         self.device.target()
     }
 
-    fn begin_frame(&self) {
-        self.device.begin_frame();
-    }
-
-    fn end_frame(&self, done: &mut bool) {
-        self.device.end_frame(done);
+    fn render(&self) -> bool {
+        self.device.render()
     }
 }
 

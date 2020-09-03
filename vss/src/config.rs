@@ -1,4 +1,5 @@
 use crate::devices::*;
+use crate::passes::*;
 use crate::pipeline::*;
 
 pub use std::collections::HashMap;
@@ -19,7 +20,7 @@ pub enum ConfigError {
 }
 
 impl Config {
-    pub fn build<F>(self, resolve_device_fn: F) -> Result<(Box<dyn Device>, Pipeline), ConfigError>
+    pub fn build<F>(&self, resolve_device_fn: F) -> Result<Box<dyn Device>, ConfigError>
     where
         F: Fn(&Config) -> Option<Box<dyn Device>>,
     {
@@ -40,8 +41,33 @@ impl Config {
             device
         };
 
-        let pipeline = Pipeline::new(&mut device, self.parameters);
-        Ok((device, pipeline))
+        let is_yuv = |device: &dyn Device| -> bool {
+            let source: &DeviceSource = &device.source().borrow();
+            if let DeviceSource::Yuv { .. } = &source {
+                true
+            } else {
+                false
+            }
+        };
+
+        // Input conversion pass.
+        if is_yuv(&*device) {
+            if cfg!(target_os = "android") {
+                device.pipeline().borrow_mut().add::<Yuv420Rgb>(&*device);
+            } else {
+                device.pipeline().borrow_mut().add::<YuvRgb>(&*device);
+            }
+        }
+
+        // Visual system passes.
+        device.pipeline().borrow_mut().add::<Cataract>(&*device);
+        device.pipeline().borrow_mut().add::<Lens>(&*device);
+        device.pipeline().borrow_mut().add::<Retina>(&*device);
+
+        // Output conversion pass.
+        device.pipeline().borrow_mut().add::<RgbDisplay>(&*device);
+
+        Ok(device)
     }
 }
 

@@ -3,12 +3,13 @@ use std::path::Path;
 
 macro_rules! include_glsl {
     ($file: expr) => {{
-        #[cfg(target_os = "android")]
-        let mut version = "#version 300 es\nprecision mediump float;\n"
-            .as_bytes()
-            .to_vec();
-        #[cfg(not(target_os = "android"))]
-        let mut version = "#version 410\n".as_bytes().to_vec();
+        let mut version = if cfg!(target_os = "android") {
+            "#version 300 es\nprecision mediump float;\n"
+        } else {
+            "#version 410\n"
+        }
+        .as_bytes()
+        .to_vec();
         let mut code = include_bytes!($file).to_vec();
         version.append(&mut code);
         version
