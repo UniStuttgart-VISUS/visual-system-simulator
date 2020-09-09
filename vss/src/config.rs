@@ -29,7 +29,7 @@ impl Config {
             Ok(device)
         } else {
             match self.device.as_ref() {
-                "image" | "still" => Ok(Box::new(ImageDevice::new(&self)) as Box<dyn Device>),
+                "image" | "still" => Ok(Box::new(RgbDevice::new(&self)) as Box<dyn Device>),
                 _ => Err(ConfigError::UnknownDevice),
             }
         }?;

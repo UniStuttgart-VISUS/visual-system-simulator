@@ -18,7 +18,7 @@ pub struct YUVBuffer {
 }
 
 // A device for dynamic YUV video data.
-pub struct VideoDevice {
+pub struct YuvDevice {
     window: WindowDevice,
     input_y: RefCell<gfx::handle::Texture<Resources, YuvSurfaceFormat>>,
     input_u: RefCell<gfx::handle::Texture<Resources, YuvSurfaceFormat>>,
@@ -26,7 +26,7 @@ pub struct VideoDevice {
     input_view: RefCell<DeviceSource>,
 }
 
-impl VideoDevice {
+impl YuvDevice {
     pub fn new(config: &Config) -> Self {
         let dummy_width = 1;
         let dummy_height = 1;
@@ -55,7 +55,7 @@ impl VideoDevice {
         )
         .unwrap();
 
-        VideoDevice {
+        YuvDevice {
             window,
             input_y: RefCell::new(input_y),
             input_u: RefCell::new(input_u),
@@ -132,7 +132,7 @@ impl VideoDevice {
     }
 }
 
-impl Device for VideoDevice {
+impl Device for YuvDevice {
     fn pipeline(&self) -> &RefCell<Pipeline> {
         self.window.pipeline()
     }

@@ -6,20 +6,20 @@ use crate::config::*;
 use crate::pipeline::*;
 
 /// A device for static RGBA image data.
-pub struct ImageDevice {
+pub struct RgbDevice {
     window: WindowDevice,
     input_rgba: RefCell<gfx::handle::Texture<gfx_device_gl::Resources, RgbSurfaceFormat>>,
     input_view: RefCell<DeviceSource>,
     output: String,
 }
 
-impl ImageDevice {
+impl RgbDevice {
     pub fn new(config: &Config) -> Self {
         let window = WindowDevice::new(&config, config.output.is_empty());
         let (input_rgba, rgba) =
             load_texture(&mut window.factory().borrow_mut(), load(&config.input)).unwrap();
 
-        ImageDevice {
+        RgbDevice {
             window,
             input_rgba: RefCell::new(input_rgba),
             input_view: RefCell::new(DeviceSource::Rgb { rgba8: rgba }),
@@ -52,7 +52,7 @@ impl ImageDevice {
     }
 }
 
-impl Device for ImageDevice {
+impl Device for RgbDevice {
     fn pipeline(&self) -> &RefCell<Pipeline> {
         self.window.pipeline()
     }

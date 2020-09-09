@@ -1,12 +1,12 @@
-mod image_device;
-mod remote_device;
-mod video_device;
 mod window_device;
+mod remote_device;
+mod rgb_device;
+mod yuv_device;
 
-pub use self::image_device::*;
-pub use self::remote_device::*;
-pub use self::video_device::*;
 pub use self::window_device::*;
+pub use self::remote_device::*;
+pub use self::rgb_device::*;
+pub use self::yuv_device::*;
 
 use std::cell::RefCell;
 
