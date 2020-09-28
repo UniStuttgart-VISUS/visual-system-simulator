@@ -8,6 +8,7 @@ license = "Apache-2.0"
 [dependencies]
 vss = { path = "../vss" }
 clap = "2"
+itertools = "0.9"
 serde_json = "*"
 av = { git = "https://github.com/unpatched/rust-av.git", branch = "master", optional = true }
 

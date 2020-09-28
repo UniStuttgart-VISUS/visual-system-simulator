@@ -1,13 +1,11 @@
 #[macro_use]
-extern crate gfx;
+pub extern crate gfx;
 
 #[macro_use]
 mod pipeline;
-mod config;
-mod devices;
-mod passes;
+mod nodes;
+mod window;
 
-pub use crate::config::*;
-pub use crate::devices::*;
-pub use crate::passes::*;
+pub use crate::nodes::*;
 pub use crate::pipeline::*;
+pub use crate::window::*;

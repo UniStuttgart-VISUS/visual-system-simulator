@@ -1,12 +1,9 @@
 use std::io::Cursor;
 
+use super::*;
 use gfx::Factory;
 use gfx_device_gl::CommandBuffer;
 use gfx_device_gl::Resources;
-
-pub type RgbSurfaceFormat = gfx::format::R8_G8_B8_A8;
-pub type YuvSurfaceFormat = gfx::format::R8;
-pub type ColorFormat = (RgbSurfaceFormat, gfx::format::Unorm);
 
 ///
 /// Can be used to replace parts of or a whole texture.
@@ -273,4 +270,60 @@ pub fn load_highres_normalmap(
         )
         .unwrap();
     Ok((tex, view))
+}
+
+pub fn download_rgb(window: &Window, target: &DeviceTarget) -> RGBBuffer {
+    use gfx::format::Formatted;
+    use gfx::memory::Typed;
+
+    std::thread::sleep(std::time::Duration::from_millis(1000));
+
+    let factory = &mut window.factory().borrow_mut();
+    let encoder = &mut window.encoder().borrow_mut();
+    let (width, height, _, _) = target.get_dimensions();
+    let width = width as usize;
+    let height = height as usize;
+
+    // Schedule download.
+    let download = factory
+        .create_download_buffer::<[u8; 4]>(width * height)
+        .unwrap();
+    encoder
+        .copy_texture_to_buffer_raw(
+            target.raw().get_texture(),
+            None,
+            gfx::texture::RawImageInfo {
+                xoffset: 0,
+                yoffset: 0,
+                zoffset: 0,
+                width: width as u16,
+                height: height as u16,
+                depth: 0,
+                format: ColorFormat::get_format(),
+                mipmap: 0,
+            },
+            download.raw(),
+            0,
+        )
+        .unwrap();
+
+    // Flush before reading the buffers to prevent panics.
+    window.flush(encoder);
+
+    // Copy to buffers.
+    let mut pixels_rgb = Vec::with_capacity(width * height * 3);
+    let reader = factory.read_mapping(&download).unwrap();
+    for row in reader.chunks(width as usize).rev() {
+        for pixel in row.iter() {
+            pixels_rgb.push(pixel[0]);
+            pixels_rgb.push(pixel[1]);
+            pixels_rgb.push(pixel[2]);
+        }
+    }
+
+    RGBBuffer {
+        pixels_rgb: pixels_rgb.into_boxed_slice(),
+        width,
+        height,
+    }
 }

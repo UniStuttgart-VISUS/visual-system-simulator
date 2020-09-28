@@ -1,8 +1,27 @@
+use itertools::Itertools;
+use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
 use vss::*;
 
-fn from_json(arg: &str) -> Result<serde_json::Value, serde_json::Error> {
+#[derive(Debug)]
+pub struct Config {
+    pub port: u16,
+    pub ios: Vec<(String, String)>,
+    pub parameters: ValueMap,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            port: 9009,
+            ios: Vec::new(),
+            parameters: std::collections::HashMap::new(),
+        }
+    }
+}
+
+fn from_json(arg: &str) -> Result<serde_json::Value, Box<dyn Error>> {
     if let Ok(json) = serde_json::from_str(&arg) {
         Ok(json)
     } else {
@@ -15,7 +34,7 @@ fn from_json(arg: &str) -> Result<serde_json::Value, serde_json::Error> {
     }
 }
 
-fn from_json_obj(arg: &str) -> Result<ValueMap, serde_json::Error> {
+fn from_json_obj(arg: &str) -> Result<ValueMap, Box<dyn Error>> {
     let mut map = ValueMap::new();
     let json = from_json(arg)?;
     let object = json.as_object().unwrap();
@@ -40,7 +59,7 @@ fn from_json_obj(arg: &str) -> Result<ValueMap, serde_json::Error> {
 }
 
 pub fn cmd_parse() -> Config {
-    use clap::{App, Arg};
+    use clap::{App, AppSettings, Arg};
 
     let matches = App::new("Visual System Simulator (VSS)")
         .version("1.1.0")
@@ -52,43 +71,38 @@ pub fn cmd_parse() -> Config {
                 .short("p")
                 .value_name("PORT")
                 .help("Specifies the port on which the server listens for connections")
-                .takes_value(true),
         )
         .arg(
             Arg::with_name("config")
                 .long("config")
                 .short("c")
                 .value_name("FILE|JSON")
+                .number_of_values(1)
                 .help("Sets the configuration parameters for simulation"),
         )
         .arg(
             Arg::with_name("gaze")
                 .long("gaze")
                 .short("g")
-                .value_name("X,Y")
+                .value_names(&["X", "Y"])
+                .number_of_values(2)
                 .help("Sets the fallback gaze position"),
         )
         .arg(
-            Arg::with_name("device")
-                .value_name("DEVICE")
-                .possible_values(&["image", "video", "camera"])
-                .help("Sets the device type")
+            Arg::with_name("INPUT_OUTPUT")
+                .value_names(&["INPUT", "OUTPUT"])
+                .help(
+                    "Input and output identifiers in pairs of two, e.g.:\n\
+                    \x20\x20input1.png\x20\x20(automatically chosen output)\n\
+                    \x20\x20input1.png output1.png\n\
+                    \x20\x20input1.png output1.png input2.png output2.png ...",
+                )
                 .required(true)
+                .multiple(true)
                 .index(1),
         )
-        .arg(
-            Arg::with_name("input")
-                .value_name("SOURCE")
-                .help("Sets a device-dependent data source, e.g., a file or device identifier")
-                .required(true)
-                .index(2),
-        )
-        .arg(
-            Arg::with_name("output")
-                .value_name("SINK")
-                .help("Sets a device-dependent data sink, e.g., a file or device identifier")
-                .index(3),
-        )
+        .setting(AppSettings::ArgRequiredElseHelp)
+        .setting(AppSettings::UnifiedHelpMessage)
         .get_matches();
 
     let default = Config::default();
@@ -99,44 +113,38 @@ pub fn cmd_parse() -> Config {
         default.port
     };
 
-    let gaze = if let Some(gaze_str) = matches.value_of("gaze") {
-        let numbers = gaze_str
-            .split(',')
-            .map(|t| t.trim().parse::<u32>().unwrap())
-            .collect::<Vec<u32>>();
-        Some(DeviceGaze {
-            x: numbers[0] as f32,
-            y: numbers[1] as f32,
-        })
-    } else {
-        default.gaze
-    };
-
-    let parameters = if let Some(config_str) = matches.value_of("config") {
+    let mut parameters = if let Some(config_str) = matches.value_of("config") {
         from_json_obj(config_str).expect("Invalid JSON")
     } else {
         default.parameters
     };
 
-    let device = matches
-        .value_of("device")
-        .unwrap_or(default.device.as_str())
-        .to_string();
-    let input = matches
-        .value_of("input")
-        .unwrap_or(default.input.as_str())
-        .to_string();
-    let output = matches
-        .value_of("output")
-        .unwrap_or(default.output.as_str())
-        .to_string();
+    if let Some(gaze) = matches.values_of("gaze") {
+        let gaze = gaze
+            .map(|t| t.trim().parse::<f64>().unwrap())
+            .collect::<Vec<f64>>();
+        parameters.insert("gaze_x".to_string(), Value::Number(gaze[0]));
+        parameters.insert("gaze_y".to_string(), Value::Number(gaze[1]));
+    };
+
+    let mut io_tuples = matches
+        .values_of("INPUT_OUTPUT")
+        .unwrap()
+        .map(|id| id.to_string())
+        .tuples();
+    let mut ios = Vec::new();
+    for (input, output) in io_tuples.by_ref() {
+        ios.push((input, output));
+    }
+    if ios.is_empty() {
+    for input in io_tuples.into_buffer() {
+        ios.push((input, String::new()));
+    }
+}
 
     Config {
         port,
-        device,
-        input,
-        output,
-        gaze,
+        ios,
         parameters,
     }
 }
