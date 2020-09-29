@@ -5,6 +5,13 @@ use gfx::Factory;
 use gfx_device_gl::CommandBuffer;
 use gfx_device_gl::Resources;
 
+// A buffer representing color information.
+pub struct RGBBuffer {
+    pub pixels_rgb: Box<[u8]>,
+    pub width: usize,
+    pub height: usize,
+}
+
 ///
 /// Can be used to replace parts of or a whole texture.
 ///
@@ -275,8 +282,6 @@ pub fn load_highres_normalmap(
 pub fn download_rgb(window: &Window, target: &DeviceTarget) -> RGBBuffer {
     use gfx::format::Formatted;
     use gfx::memory::Typed;
-
-    std::thread::sleep(std::time::Duration::from_millis(1000));
 
     let factory = &mut window.factory().borrow_mut();
     let encoder = &mut window.encoder().borrow_mut();

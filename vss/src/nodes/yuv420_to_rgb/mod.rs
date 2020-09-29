@@ -1,7 +1,4 @@
 use gfx;
-use gfx::traits::FactoryExt;
-use gfx::Factory;
-use gfx_device_gl::CommandBuffer;
 use gfx_device_gl::Resources;
 
 use crate::pipeline::*;
@@ -24,7 +21,8 @@ pub struct Yuv420ToRgb {
 }
 
 impl Node for Yuv420ToRgb {
-    fn new(factory: &mut gfx_device_gl::Factory) -> Self {
+    fn new(window: &Window) -> Self {
+        let mut factory = window.factory().borrow_mut();
         let pso = factory
             .create_pipeline_simple(
                 &include_glsl!("shader.vert"),
@@ -57,11 +55,13 @@ impl Node for Yuv420ToRgb {
 
     fn update_io(
         &mut self,
-        factory: &mut gfx_device_gl::Factory,
-        source: Option<DeviceSource>,
+
+        window: &Window,
+        source: (Option<DeviceSource>, Option<DeviceTarget>),
         target_candidate: (Option<DeviceSource>, Option<DeviceTarget>),
     ) -> (Option<DeviceSource>, Option<DeviceTarget>) {
-        let source = source.expect("Source expected");
+        let mut factory = window.factory().borrow_mut();
+        let source = source.0.expect("Source expected");
         let target = target_candidate.1.expect("Render target expected");
         let target_size = target.get_dimensions();
         self.pso_data.rt_color = target.clone();
@@ -86,13 +86,15 @@ impl Node for Yuv420ToRgb {
         (target_candidate.0, Some(target))
     }
 
-    fn update_values(&mut self, _factory: &mut gfx_device_gl::Factory, values: &ValueMap) {
+    fn update_values(&mut self, _window: &Window, values: &ValueMap) {
         if let Some(Value::Number(rotation)) = values.get("rotation") {
             self.pso_data.u_rotation = -rotation.to_radians() as f32;
         }
     }
 
-    fn render(&mut self, encoder: &mut gfx::Encoder<Resources, CommandBuffer>) {
+    fn render(&mut self, window: &Window) {
+        let mut encoder = window.encoder().borrow_mut();
+
         encoder.draw(&gfx::Slice::from_vertex_count(6), &self.pso, &self.pso_data);
     }
 }

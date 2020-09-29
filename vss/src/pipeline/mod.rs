@@ -9,11 +9,11 @@ pub use self::texture::*;
 pub use self::utils::*;
 pub use self::value::*;
 
-use gfx::traits::FactoryExt;
-use gfx::Factory;
-use std::cell::RefCell;
+pub use crate::window::Window;
+pub use gfx::traits::FactoryExt;
+pub use gfx::Factory;
 
-use crate::window::*;
+use std::cell::RefCell;
 
 /// A factory to create pipeline objects from.
 pub type DeviceFactory = gfx_device_gl::Factory;
@@ -57,13 +57,6 @@ pub type ColorFormat = (RgbSurfaceFormat, gfx::format::Unorm);
 
 pub type DeviceTarget = gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat>;
 
-// A buffer representing color information.
-pub struct RGBBuffer {
-    pub pixels_rgb: Box<[u8]>,
-    pub width: usize,
-    pub height: usize,
-}
-
 /// The pipeline encapsulates the simulation and rendering system, i.e., all rendering nodes.
 pub struct Pipeline {
     nodes: RefCell<Vec<Box<dyn Node>>>,
@@ -85,13 +78,12 @@ impl Pipeline {
     }
 
     pub fn update_io(&self, window: &Window) {
-        let mut factory = window.factory().borrow_mut();
         let mut last_targets: [(Option<DeviceSource>, Option<DeviceTarget>); 2] =
             [(None, None), (None, None)];
         let nodes_len = self.nodes.borrow().len();
         for (idx, node) in self.nodes.borrow_mut().iter_mut().enumerate() {
             // Determine source.
-            let source = last_targets[0].0.clone();
+            let source = last_targets[0].clone();
             let target_candidate = if idx + 1 == nodes_len {
                 // Suggest window as final target.
                 (None, Some(window.target().clone()))
@@ -99,7 +91,7 @@ impl Pipeline {
                 if let (Some(source), Some(target)) = &last_targets[1] {
                     // Suggest reusing the pre-predecessor's target.
                     (Some(source.clone()), Some(target.clone()))
-                } else if let Some(source) = &source {
+                } else if let Some(source) = &source.0 {
                     // Guess target, based on source.
                     let (width, height) = match *source {
                         DeviceSource::Rgb { width, height, .. } => (width, height),
@@ -107,8 +99,30 @@ impl Pipeline {
                         DeviceSource::Yuv { width, height, .. } => (width, height),
                     };
 
-                    let (_, source, target) = factory
-                        .create_render_target(width as u16, height as u16)
+                    let mut factory = window.factory().borrow_mut();
+
+                    let texture = factory
+                        .create_texture(
+                            gfx::texture::Kind::D2(
+                                width as u16,
+                                height as u16,
+                                gfx::texture::AaMode::Single,
+                            ),
+                            1,
+                            gfx::memory::Bind::RENDER_TARGET | gfx::memory::Bind::SHADER_RESOURCE | gfx::memory::Bind::TRANSFER_SRC,
+                            gfx::memory::Usage::Dynamic,
+                            Some( <<ColorFormat as gfx::format::Formatted>::Channel as gfx::format::ChannelTyped>::get_channel_type() ),
+                        )
+                        .unwrap();
+                    let source = factory
+                        .view_texture_as_shader_resource::<ColorFormat>(
+                            &texture,
+                            (0, 0),
+                            gfx::format::Swizzle::new(),
+                        )
+                        .unwrap();
+                    let target = factory
+                        .view_texture_as_render_target::<ColorFormat>(&texture, 0, None)
                         .unwrap();
                     (
                         Some(DeviceSource::Rgb {
@@ -125,16 +139,14 @@ impl Pipeline {
             };
             // Chain targets and update.
             last_targets.swap(1, 0);
-            last_targets[0] = node.update_io(&mut factory, source, target_candidate);
+            last_targets[0] = node.update_io(window, source, target_candidate);
         }
     }
 
     pub fn update_values(&self, window: &Window, values: &ValueMap) {
-        let mut factory = window.factory().borrow_mut();
-
         // Propagate to nodes.
         for node in self.nodes.borrow_mut().iter_mut() {
-            node.update_values(&mut factory, &values);
+            node.update_values(window, &values);
         }
     }
 
@@ -147,11 +159,9 @@ impl Pipeline {
     }
 
     pub fn render(&self, window: &Window) {
-        let mut encoder = window.encoder().borrow_mut();
-
         // Render all nodes.
         for node in self.nodes.borrow_mut().iter_mut() {
-            node.render(&mut encoder);
+            node.render(window);
         }
     }
 }

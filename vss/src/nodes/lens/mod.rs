@@ -2,9 +2,6 @@ use std::f32;
 use std::io::Cursor;
 
 use gfx;
-use gfx::traits::FactoryExt;
-use gfx::Factory;
-use gfx_device_gl::CommandBuffer;
 use gfx_device_gl::Resources;
 
 use crate::pipeline::*;
@@ -41,7 +38,8 @@ pub struct Lens {
 }
 
 impl Node for Lens {
-    fn new(factory: &mut gfx_device_gl::Factory) -> Self {
+    fn new(window: &Window) -> Self {
+        let mut factory = window.factory().borrow_mut();
         let pso = factory
             .create_pipeline_simple(
                 &include_glsl!("../shader.vert"),
@@ -52,10 +50,10 @@ impl Node for Lens {
 
         //TODO: this is one stupid and slow hack!!! pre-compute this properly
         let filename_normal = Cursor::new(include_bytes!("normal.png").to_vec());
-        let (_, normal_view) = load_highres_normalmap(factory, filename_normal).unwrap();
+        let (_, normal_view) = load_highres_normalmap(&mut factory, filename_normal).unwrap();
 
         let rgba_cornea = vec![127; 4].into_boxed_slice();
-        let (_, cornea_view) = load_texture_from_bytes(factory, rgba_cornea, 1, 1).unwrap();
+        let (_, cornea_view) = load_texture_from_bytes(&mut factory, rgba_cornea, 1, 1).unwrap();
 
         let sampler = factory.create_sampler_linear();
         let (_, src, dst) = factory.create_render_target(1, 1).unwrap();
@@ -88,13 +86,14 @@ impl Node for Lens {
 
     fn update_io(
         &mut self,
-        factory: &mut gfx_device_gl::Factory,
-        source: Option<DeviceSource>,
+        window: &Window,
+        source: (Option<DeviceSource>, Option<DeviceTarget>),
         target_candidate: (Option<DeviceSource>, Option<DeviceTarget>),
     ) -> (Option<DeviceSource>, Option<DeviceTarget>) {
+        let mut factory = window.factory().borrow_mut();
         let target = target_candidate.1.expect("Render target expected");
         self.pso_data.rt_color = target.clone();
-        match source.expect("Source expected") {
+        match source.0.expect("Source expected") {
             DeviceSource::Rgb { rgba8, .. } => {
                 self.pso_data.s_color = (rgba8.clone(), factory.create_sampler_linear());
             }
@@ -107,7 +106,7 @@ impl Node for Lens {
         (target_candidate.0, Some(target))
     }
 
-    fn update_values(&mut self, _factory: &mut gfx_device_gl::Factory, values: &ValueMap) {
+    fn update_values(&mut self, _window: &Window, values: &ValueMap) {
         // default values
         self.pso_data.u_near_point = 0.0;
         self.pso_data.u_far_point = f32::INFINITY;
@@ -152,7 +151,8 @@ impl Node for Lens {
         }
     }
 
-    fn render(&mut self, encoder: &mut gfx::Encoder<Resources, CommandBuffer>) {
+    fn render(&mut self, window: &Window) {
+        let mut encoder = window.encoder().borrow_mut();
         encoder.draw(&gfx::Slice::from_vertex_count(6), &self.pso, &self.pso_data);
     }
 }

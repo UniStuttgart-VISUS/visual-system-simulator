@@ -1,13 +1,8 @@
 mod retina_map;
 
-use self::retina_map::generate_retina_map;
-
 use gfx;
-use gfx::traits::FactoryExt;
-use gfx::Factory;
-use gfx_device_gl::CommandBuffer;
-use gfx_device_gl::Resources;
 
+use self::retina_map::generate_retina_map;
 use crate::pipeline::*;
 
 gfx_defines! {
@@ -26,7 +21,8 @@ pub struct Retina {
 }
 
 impl Node for Retina {
-    fn new(factory: &mut gfx_device_gl::Factory) -> Self {
+    fn new(window: &Window) -> Self {
+        let mut factory = window.factory().borrow_mut();
         let pso = factory
             .create_pipeline_simple(
                 &include_glsl!("../shader.vert"),
@@ -36,7 +32,7 @@ impl Node for Retina {
             .unwrap();
 
         let rgba_white = vec![255; 4].into_boxed_slice();
-        let (_, mask_view) = load_texture_from_bytes(factory, rgba_white, 1, 1).unwrap();
+        let (_, mask_view) = load_texture_from_bytes(&mut factory, rgba_white, 1, 1).unwrap();
         let sampler = factory.create_sampler_linear();
 
         let (_, src, dst) = factory.create_render_target(1, 1).unwrap();
@@ -55,15 +51,16 @@ impl Node for Retina {
 
     fn update_io(
         &mut self,
-        factory: &mut gfx_device_gl::Factory,
-        source: Option<DeviceSource>,
+        window: &Window,
+        source: (Option<DeviceSource>, Option<DeviceTarget>),
         target_candidate: (Option<DeviceSource>, Option<DeviceTarget>),
     ) -> (Option<DeviceSource>, Option<DeviceTarget>) {
+        let mut factory = window.factory().borrow_mut();
         let target = target_candidate.1.expect("Render target expected");
         let target_size = target.get_dimensions();
         self.pso_data.u_resolution = [target_size.0 as f32, target_size.1 as f32];
         self.pso_data.rt_color = target.clone();
-        match source.expect("Source expected") {
+        match source.0.expect("Source expected") {
             DeviceSource::Rgb { rgba8, .. } => {
                 self.pso_data.s_source = (rgba8.clone(), factory.create_sampler_linear());
             }
@@ -75,9 +72,10 @@ impl Node for Retina {
         (target_candidate.0, Some(target))
     }
 
-    fn update_values(&mut self, factory: &mut gfx_device_gl::Factory, values: &ValueMap) {
+    fn update_values(&mut self, window: &Window, values: &ValueMap) {
+        let mut factory = window.factory().borrow_mut();
         if let Some(Value::Image(retina_map_path)) = values.get("retina_map_path") {
-            let (_, retinamap_view) = load_texture(factory, load(retina_map_path)).unwrap();
+            let (_, retinamap_view) = load_texture(&mut factory, load(retina_map_path)).unwrap();
             let sampler = self.pso_data.s_retina.clone().1;
             //XXX: check resolution!
 
@@ -89,7 +87,7 @@ impl Node for Retina {
             );
             let retina_map = generate_retina_map(target_resolution, &values);
             let (_, retinamap_view) = load_texture_from_bytes(
-                factory,
+                &mut factory,
                 retina_map,
                 target_resolution.0,
                 target_resolution.1,
@@ -108,7 +106,8 @@ impl Node for Retina {
         gaze.clone()
     }
 
-    fn render(&mut self, encoder: &mut gfx::Encoder<Resources, CommandBuffer>) {
+    fn render(&mut self, window: &Window) {
+        let mut encoder = window.encoder().borrow_mut();
         encoder.draw(&gfx::Slice::from_vertex_count(6), &self.pso, &self.pso_data);
     }
 }

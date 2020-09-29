@@ -7,6 +7,7 @@ use vss::*;
 #[derive(Debug)]
 pub struct Config {
     pub port: u16,
+    pub visible: bool,
     pub ios: Vec<(String, String)>,
     pub parameters: ValueMap,
 }
@@ -15,6 +16,7 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             port: 9009,
+            visible: false,
             ios: Vec::new(),
             parameters: std::collections::HashMap::new(),
         }
@@ -70,7 +72,7 @@ pub fn cmd_parse() -> Config {
                 .long("port")
                 .short("p")
                 .value_name("PORT")
-                .help("Specifies the port on which the server listens for connections")
+                .help("Specifies the port on which the server listens for connections"),
         )
         .arg(
             Arg::with_name("config")
@@ -87,6 +89,13 @@ pub fn cmd_parse() -> Config {
                 .value_names(&["X", "Y"])
                 .number_of_values(2)
                 .help("Sets the fallback gaze position"),
+        )
+        .arg(
+            Arg::with_name("show")
+                .long("show")
+                .short("s")
+                .takes_value(false)
+                .help("Forces window visibility"),
         )
         .arg(
             Arg::with_name("INPUT_OUTPUT")
@@ -127,6 +136,11 @@ pub fn cmd_parse() -> Config {
         parameters.insert("gaze_y".to_string(), Value::Number(gaze[1]));
     };
 
+    let mut visible = default.visible;
+    if matches.is_present("show") {
+        visible = true;
+    }
+
     let mut io_tuples = matches
         .values_of("INPUT_OUTPUT")
         .unwrap()
@@ -137,13 +151,15 @@ pub fn cmd_parse() -> Config {
         ios.push((input, output));
     }
     if ios.is_empty() {
-    for input in io_tuples.into_buffer() {
-        ios.push((input, String::new()));
+        for input in io_tuples.into_buffer() {
+            ios.push((input, String::new()));
+        }
+        visible = true;
     }
-}
 
     Config {
         port,
+        visible,
         ios,
         parameters,
     }

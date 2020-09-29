@@ -1,9 +1,3 @@
-use gfx;
-use gfx::traits::FactoryExt;
-use gfx::Factory;
-use gfx_device_gl::CommandBuffer;
-use gfx_device_gl::Resources;
-
 use crate::pipeline::*;
 
 gfx_defines! {
@@ -21,7 +15,9 @@ pub struct YuvToRgb {
 }
 
 impl Node for YuvToRgb {
-    fn new(factory: &mut gfx_device_gl::Factory) -> Self {
+    fn new(window: &Window) -> Self {
+        let mut factory = window.factory().borrow_mut();
+
         let pso = factory
             .create_pipeline_simple(
                 &include_glsl!("../shader.vert"),
@@ -51,13 +47,15 @@ impl Node for YuvToRgb {
 
     fn update_io(
         &mut self,
-        factory: &mut gfx_device_gl::Factory,
-        source: Option<DeviceSource>,
+        window: &Window,
+        source: (Option<DeviceSource>, Option<DeviceTarget>),
         target_candidate: (Option<DeviceSource>, Option<DeviceTarget>),
     ) -> (Option<DeviceSource>, Option<DeviceTarget>) {
+        let mut factory = window.factory().borrow_mut();
+
         let target = target_candidate.1.expect("Render target expected");
         self.pso_data.rt_color = target.clone();
-        match source.expect("Source expected") {
+        match source.0.expect("Source expected") {
             DeviceSource::Rgb { .. } => panic!("Unsupported source"),
             DeviceSource::RgbDepth { .. } => panic!("Unsupported source"),
             DeviceSource::Yuv { y, u, v, .. } => {
@@ -69,7 +67,9 @@ impl Node for YuvToRgb {
         (target_candidate.0, Some(target))
     }
 
-    fn render(&mut self, encoder: &mut gfx::Encoder<Resources, CommandBuffer>) {
+    fn render(&mut self, window: &Window) {
+        let mut encoder = window.encoder().borrow_mut();
+
         encoder.draw(&gfx::Slice::from_vertex_count(6), &self.pso, &self.pso_data);
     }
 }

@@ -12,21 +12,21 @@ use super::*;
 /// The texture this pass is applied to and where the output will be written
 /// is determined by the RenderContext passed to `build(...)`.
 pub trait Node {
-    fn new(factory: &mut gfx_device_gl::Factory) -> Self
+    fn new(window: &Window) -> Self
     where
         Self: Sized;
 
     /// Replaces the render target (output) and source texture (input).
     fn update_io(
         &mut self,
-        factory: &mut gfx_device_gl::Factory,
-        source: Option<DeviceSource>,
+        window: &Window,
+        source: (Option<DeviceSource>, Option<DeviceTarget>),
         target_candidate: (Option<DeviceSource>, Option<DeviceTarget>),
     ) -> (Option<DeviceSource>, Option<DeviceTarget>);
 
     /// Set new parameters for this effect
     #[allow(unused_variables)]
-    fn update_values(&mut self, factory: &mut gfx_device_gl::Factory, values: &ValueMap) {}
+    fn update_values(&mut self, window: &Window, values: &ValueMap) {}
 
     /// Handle input.
     fn input(&mut self, gaze: &DeviceGaze) -> DeviceGaze {
@@ -34,7 +34,7 @@ pub trait Node {
     }
 
     /// Render the node.
-    fn render(&mut self, encoder: &mut gfx::Encoder<Resources, CommandBuffer>);
+    fn render(&mut self, window: &Window);
 }
 
 #[macro_export]
@@ -45,24 +45,28 @@ macro_rules! unimplemented_node {
         pub struct $name;
 
         impl Node for $name {
-            fn new(_factory: &mut gfx_device_gl::Factory) -> Self {
+            fn new(_window: &Window) -> Self {
                 unimplemented!();
             }
 
             fn update_io(
                 &mut self,
-                _factory: &mut gfx_device_gl::Factory,
-                _source: Option<DeviceSource>,
+                _window: &Window,
+                _source: (Option<DeviceSource>, Option<DeviceTarget>),
                 _target_candidate: (Option<DeviceSource>, Option<DeviceTarget>),
             ) -> (Option<DeviceSource>, Option<DeviceTarget>) {
                 unimplemented!();
             }
 
-            fn update_values(&mut self, _factory: &mut gfx_device_gl::Factory, _values: &ValueMap) {
+            fn update_values(&mut self, _window: &Window, _values: &ValueMap) {
                 unimplemented!();
             }
 
-            fn render(&mut self, _encoder: &mut gfx::Encoder<Resources, CommandBuffer>) {
+            fn input(&mut self, gaze: &DeviceGaze) -> DeviceGaze {
+                unimplemented!();
+            }
+
+            fn render(&mut self, _window: &Window) {
                 unimplemented!();
             }
         }

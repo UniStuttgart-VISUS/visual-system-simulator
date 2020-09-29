@@ -1,8 +1,7 @@
-use gfx_device_gl::CommandBuffer;
-use gfx_device_gl::Resources;
 use std::io::Cursor;
 
 use crate::pipeline::*;
+use crate::window::Window;
 
 /// A device for static RGBA image data.
 pub struct BufferToRgb {
@@ -37,7 +36,7 @@ impl BufferToRgb {
 }
 
 impl Node for BufferToRgb {
-    fn new(_factory: &mut gfx_device_gl::Factory) -> Self {
+    fn new(_window: &Window) -> Self {
         BufferToRgb {
             buffer_next: None,
             texture: None,
@@ -47,15 +46,20 @@ impl Node for BufferToRgb {
 
     fn update_io(
         &mut self,
-        factory: &mut gfx_device_gl::Factory,
-        _source: Option<DeviceSource>,
+        window: &Window,
+        _source: (Option<DeviceSource>, Option<DeviceTarget>),
         _target_candidate: (Option<DeviceSource>, Option<DeviceTarget>),
     ) -> (Option<DeviceSource>, Option<DeviceTarget>) {
+        let mut factory = window.factory().borrow_mut();
         if let Some(buffer) = &self.buffer_next {
             let data = vec![0; buffer.width * buffer.height * 4].into_boxed_slice();
-            let (texture, view) =
-                load_texture_from_bytes(factory, data, buffer.width as u32, buffer.height as u32)
-                    .unwrap();
+            let (texture, view) = load_texture_from_bytes(
+                &mut factory,
+                data,
+                buffer.width as u32,
+                buffer.height as u32,
+            )
+            .unwrap();
             self.texture = Some(texture);
             self.view = Some(DeviceSource::Rgb {
                 width: buffer.width as u32,
@@ -67,11 +71,13 @@ impl Node for BufferToRgb {
         (self.view.clone(), None)
     }
 
-    fn render(&mut self, encoder: &mut gfx::Encoder<Resources, CommandBuffer>) {
+    fn render(&mut self, window: &Window) {
+        let mut encoder = window.encoder().borrow_mut();
+
         if let Some(texture) = &self.texture {
             if let Some(buffer) = self.buffer_next.take() {
                 update_texture(
-                    encoder,
+                    &mut encoder,
                     &texture,
                     [buffer.width as u16, buffer.height as u16],
                     [0, 0],
