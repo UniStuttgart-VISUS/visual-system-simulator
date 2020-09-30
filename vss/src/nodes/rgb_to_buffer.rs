@@ -1,6 +1,6 @@
 use crate::pipeline::*;
 
-pub type RgbBufferCb = Box<dyn FnMut(RGBBuffer) + Send>;
+pub type RgbBufferCb = Box<dyn FnOnce(RGBBuffer) + Send>;
 
 enum Message {
     Buffer(RGBBuffer),
@@ -17,7 +17,11 @@ impl RgbToBuffer {
         self.tx.send(Message::Callback(cb)).unwrap();
     }
 
-    pub fn set_output_png(&mut self, path: String) {
+    pub fn set_output_png(
+        &mut self,
+        path: String,
+        processed: std::sync::Arc<std::sync::RwLock<bool>>,
+    ) {
         let cb = Box::new(move |rgb_buffer: RGBBuffer| {
             let mut image_data: Vec<u8> = Vec::new();
             let encoder = image::png::PngEncoder::new(&mut image_data);
@@ -31,7 +35,11 @@ impl RgbToBuffer {
             use std::io::Write;
             let mut file = File::create(&path).expect("Unable to create file");
             file.write_all(&image_data).unwrap();
-            println!("[image] writing to {}", &path);
+            {
+                let mut processed = processed.write().unwrap();
+                *processed = true;
+            }
+            println!("[image] written to {}", &path);
         });
         self.set_output_cb(Some(cb));
     }
@@ -45,7 +53,7 @@ impl Node for RgbToBuffer {
             while let Ok(message) = rx.recv() {
                 match message {
                     Message::Buffer(rgb_buffer) => {
-                        if let Some(cb) = &mut callback {
+                        if let Some(cb) = callback.take() {
                             (cb)(rgb_buffer);
                         }
                     }

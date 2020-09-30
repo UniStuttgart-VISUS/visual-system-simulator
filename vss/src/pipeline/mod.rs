@@ -73,8 +73,12 @@ impl Pipeline {
         self.nodes.borrow_mut().push(node);
     }
 
-    pub fn replace_at(&mut self, index: usize, node: Box<dyn Node>) {
+    pub fn replace_node(&mut self, index: usize, node: Box<dyn Node>) {
         self.nodes.borrow_mut()[index] = node;
+    }
+
+    pub fn nodes_len(&self) -> usize {
+        self.nodes.borrow().len()
     }
 
     pub fn update_io(&self, window: &Window) {

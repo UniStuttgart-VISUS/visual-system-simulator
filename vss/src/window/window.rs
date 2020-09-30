@@ -83,8 +83,15 @@ impl Window {
         self.pipeline.add_node(node);
     }
 
-    pub fn replace_node_at(&mut self, index: usize, node: Box<dyn Node>) {
-        self.pipeline.replace_at(index, node);
+    pub fn replace_node(&mut self, index: usize, node: Box<dyn Node>) {
+        self.pipeline.replace_node(index, node);
+    }
+
+    pub fn nodes_len(&self) -> usize {
+        self.pipeline.nodes_len()
+    }
+
+    pub fn update_nodes(&mut self) {
         self.pipeline.update_io(&self);
         self.pipeline.update_values(&self, &self.values.borrow());
     }
@@ -108,14 +115,15 @@ impl Window {
         encoder.flush(device.deref_mut());
     }
 
-    fn fallback_gaze(values: &ValueMap) -> DeviceGaze {
+    fn override_gaze(gaze: DeviceGaze, values: &ValueMap) -> DeviceGaze {
         if let (Some(gaze_x), Some(gaze_y)) = (values.get("gaze_x"), values.get("gaze_y")) {
             DeviceGaze {
                 x: gaze_x.as_f64().unwrap_or(0.0) as f32,
                 y: gaze_y.as_f64().unwrap_or(0.0) as f32,
             }
         } else {
-            DeviceGaze { x: 0.5, y: 0.5 }
+            gaze
+          
         }
     }
 
@@ -126,7 +134,7 @@ impl Window {
     pub fn poll_events(&self) -> bool {
         let mut done = false;
         let mut deferred_size = None;
-        let mut deferred_gaze = None;
+        let mut deferred_gaze = Self::override_gaze(  DeviceGaze { x: 0.5, y: 0.5 },&self.values.borrow());
 
         // Poll for window events.
         self.events_loop.borrow_mut().poll_events(|event| {
@@ -152,15 +160,15 @@ impl Window {
                         if *self.active.borrow() {
                             let window_size =
                                 &self.windowed_context.window().get_inner_size().unwrap();
-                            deferred_gaze = Some(DeviceGaze {
+                            deferred_gaze =   Self::override_gaze(DeviceGaze {
                                 x: position.x as f32 / window_size.width as f32,
                                 y: 1.0 - (position.y as f32 / window_size.height as f32),
-                            });
+                            },&self.values.borrow());
                         }
                     }
                     glutin::WindowEvent::CursorLeft { .. } => {
                         if *self.active.borrow() {
-                            deferred_gaze = Some(Self::fallback_gaze(&self.values.borrow()));
+                            deferred_gaze =  Self::override_gaze(  DeviceGaze { x: 0.5, y: 0.5 },&self.values.borrow());
                         }
                     }
                     _ => (),
@@ -182,10 +190,10 @@ impl Window {
             self.pipeline.update_values(&self, &self.values.borrow());
         }
 
-        if let Some(gaze) = deferred_gaze {
+        
             // Update input.
-            self.pipeline.input(&gaze);
-        }
+            self.pipeline.input(&deferred_gaze);
+        
 
         self.encoder
             .borrow_mut()

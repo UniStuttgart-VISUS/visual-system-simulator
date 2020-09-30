@@ -1,23 +1,39 @@
-use itertools::Itertools;
+use glob::glob;
+use mustache;
+use serde::Serialize;
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
 use vss::*;
 
+#[derive(Serialize)]
+pub struct InputInfo {
+    /// Path without basename, e.g., `path/to` (drops suffix after last `/`).
+    pub dirname: String,
+    /// Path without dirname, e.g., `image.png` (drops prefix up to last `/`).
+    pub basename: String,
+    /// Basename without file extension, e.g., `image` (excluding dot).
+    pub stem: String,
+    // Basename without stem, e.g., `png` (excluding dot).
+    pub extension: String,
+}
+
 #[derive(Debug)]
 pub struct Config {
-    pub port: u16,
+    pub port: Option<u16>,
     pub visible: bool,
-    pub ios: Vec<(String, String)>,
+    pub output: Option<mustache::Template>,
+    pub inputs: Vec<String>,
     pub parameters: ValueMap,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Config {
-            port: 9009,
+            port: Some(9009),
             visible: false,
-            ios: Vec::new(),
+            output: None,
+            inputs: Vec::new(),
             parameters: std::collections::HashMap::new(),
         }
     }
@@ -98,13 +114,25 @@ pub fn cmd_parse() -> Config {
                 .help("Forces window visibility"),
         )
         .arg(
-            Arg::with_name("INPUT_OUTPUT")
-                .value_names(&["INPUT", "OUTPUT"])
+            Arg::with_name("output")
+                .long("output")
+                .short("o")
+                .value_name("MUSTACHE_PATTERN?")
+                .min_values(0)
+                .max_values(1)
                 .help(
-                    "Input and output identifiers in pairs of two, e.g.:\n\
-                    \x20\x20input1.png\x20\x20(automatically chosen output)\n\
-                    \x20\x20input1.png output1.png\n\
-                    \x20\x20input1.png output1.png input2.png output2.png ...",
+                    "Enables output with optional mustache-style pattern, e.g.:\n\
+                    \x20\x20\"{{dirname}}/{{stem}}_out.{{extension}}\"  (default)\n\
+                    \x20\x20\"{{dirname}}/out_{{basename}}\"",
+                ),
+        )
+        .arg(
+            Arg::with_name("input")
+                .value_name("INPUT|GLOB_PATTERN")
+                .help(
+                    "Input identifier or glob-style patterns, e.g.:\n\
+                    \x20\x20image.png\n\
+                    \x20\x20**/*.png video.avi",
                 )
                 .required(true)
                 .multiple(true)
@@ -117,7 +145,7 @@ pub fn cmd_parse() -> Config {
     let default = Config::default();
 
     let port = if let Some(port_str) = matches.value_of("port") {
-        port_str.parse::<u16>().expect("Invalid port")
+        Some(port_str.parse::<u16>().expect("Invalid port"))
     } else {
         default.port
     };
@@ -141,26 +169,37 @@ pub fn cmd_parse() -> Config {
         visible = true;
     }
 
-    let mut io_tuples = matches
-        .values_of("INPUT_OUTPUT")
-        .unwrap()
-        .map(|id| id.to_string())
-        .tuples();
-    let mut ios = Vec::new();
-    for (input, output) in io_tuples.by_ref() {
-        ios.push((input, output));
-    }
-    if ios.is_empty() {
-        for input in io_tuples.into_buffer() {
-            ios.push((input, String::new()));
-        }
+    let output = if matches.is_present("output") {
+        let output = if let Some(output) = matches.value_of("output") {
+            output
+        } else {
+            "{{dirname}}/{{stem}}_out.{{extension}}"
+        };
+        Some(mustache::compile_str(output).unwrap())
+    } else {
         visible = true;
-    }
+        default.output
+    };
+
+    let inputs = matches
+        .values_of("input")
+        .unwrap()
+        .flat_map(|pattern| {
+            if let Ok(entries) = glob(pattern) {
+                entries
+                    .map(|entry| entry.unwrap().into_os_string().into_string().unwrap())
+                    .collect::<Vec<String>>()
+            } else {
+                vec![pattern.to_string()]
+            }
+        })
+        .collect();
 
     Config {
         port,
         visible,
-        ios,
+        output,
+        inputs,
         parameters,
     }
 }

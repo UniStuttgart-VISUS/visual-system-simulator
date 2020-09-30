@@ -6,31 +6,99 @@ use vss::*;
 use crate::cmd::*;
 use crate::nodes::*;
 
-fn node_from_input(input: &str, window: &Window) -> Box<dyn Node> {
-    // Resolve input to node.
-    if input.ends_with(".png") {
-        let mut node = BufferToRgb::new(&window);
-        node.enqueue_buffer(load(input));
-        Box::new(node)
-    } else if input.ends_with(".avi") {
-        Box::new(AvToRgb::new(&window))
-    } else {
-        panic!("Unknown file extension");
+type IoNodePair = (Box<dyn Node>, Option<Box<dyn Node>>);
+
+struct IoGenerator {
+    inputs: Vec<String>,
+    output: Option<mustache::Template>,
+    input_idx: usize,
+    input_processed: std::sync::Arc<std::sync::RwLock<bool>>,
+}
+
+impl IoGenerator {
+    fn new(inputs: Vec<String>, output: Option<mustache::Template>) -> Self {
+        Self {
+            inputs,
+            output,
+            input_idx: 0,
+            input_processed: std::sync::Arc::new(std::sync::RwLock::new(false)),
+        }
+    }
+
+    fn is_ready(&self) -> bool {
+        *self.input_processed.read().unwrap()
+    }
+
+    fn next(&mut self, window: &Window) -> Option<IoNodePair> {
+        if self.input_idx >= self.inputs.len() {
+            None
+        } else {
+            let input = &self.inputs[self.input_idx];
+            self.input_idx += 1;
+            if input.ends_with(".png") {
+                let input_path = std::path::Path::new(input);
+                let mut input_node = BufferToRgb::new(&window);
+                input_node.enqueue_buffer(load(input_path));
+                let output_node = if let Some(output) = &self.output {
+                    let mut output_node = RgbToBuffer::new(&window);
+                    let input_info = InputInfo {
+                        dirname: input_path
+                            .parent()
+                            .unwrap()
+                            .to_path_buf()
+                            .into_os_string()
+                            .into_string()
+                            .unwrap(),
+                        basename: input_path
+                            .file_name()
+                            .unwrap()
+                            .to_os_string()
+                            .into_string()
+                            .unwrap(),
+                        stem: input_path
+                            .file_stem()
+                            .unwrap()
+                            .to_os_string()
+                            .into_string()
+                            .unwrap(),
+                        extension: input_path
+                            .extension()
+                            .unwrap()
+                            .to_os_string()
+                            .into_string()
+                            .unwrap(),
+                    };
+                    let output_path = output.render_to_string(&input_info).unwrap();
+                    output_node.set_output_png(output_path, self.input_processed.clone());
+                    Some(Box::new(output_node) as Box<dyn Node>)
+                } else {
+                    None
+                };
+                Some((Box::new(input_node), output_node))
+            } else if input.ends_with(".avi") {
+                Some((Box::new(AvToRgb::new(&window)), None))
+            } else {
+                panic!("Unknown file extension");
+            }
+        }
     }
 }
 
 pub fn main() {
     let config = cmd_parse();
 
-    let remote = if config.port != 0 {
-        Some(Remote::new(config.port))
+    let remote = if let Some(port) = config.port {
+        Some(Remote::new(port))
     } else {
         None
     };
     let mut window = Window::new(config.visible, remote, config.parameters);
 
-    // Resolve input to node.
-    window.add_node(node_from_input(&config.ios.first().unwrap().0, &window));
+    let mut io_generator = IoGenerator::new(config.inputs, config.output);
+    let (input_node, output_node) = io_generator.next(&window).unwrap();
+
+    // Add input node.
+    window.add_node(input_node);
 
     // Visual system passes.
     let node = Cataract::new(&window);
@@ -40,19 +108,37 @@ pub fn main() {
     let node = Retina::new(&window);
     window.add_node(Box::new(node));
 
-    // Inject screenshooting node, if required.
-    if !config.ios.first().unwrap().1.is_empty() {
-        let mut node = RgbToBuffer::new(&window);
-        node.set_output_png(config.ios.first().unwrap().1.clone());
-        window.add_node(Box::new(node));
+    // Add output node, if present.
+    if let Some(output_node) = output_node {
+        window.add_node(output_node);
+    } else {
+        window.add_node(Box::new(Passthrough::new(&window)))
     }
 
-    // Output node.
+    // Display node.
     let node = RgbToDisplay::new(&window);
     window.add_node(Box::new(node));
 
     let mut done = false;
     while !done {
         done = window.poll_events();
+
+        if io_generator.is_ready() {
+            if let Some((input_node, output_node)) = io_generator.next(&window) {
+                window.replace_node(0, input_node);
+                let output_node = if let Some(output_node) = output_node {
+                    output_node
+                } else {
+                    Box::new(Passthrough::new(&window))
+                };
+                window.replace_node(window.nodes_len() - 2, output_node);
+                window.update_nodes();
+            } else {
+                if !config.visible {
+                    // Exit once all inputs have been processed, unless visible.
+                    done = true;
+                }
+            }
+        }
     }
 }

@@ -6,6 +6,7 @@ mod buffer_to_rgb;
 //XXX: mod buffer_to_yuv;
 mod cataract;
 mod lens;
+mod passthrough;
 mod retina;
 mod rgb_to_buffer;
 mod rgb_to_display;
@@ -14,11 +15,11 @@ mod yuv_to_rgb;
 
 pub use self::buffer_to_rgb::BufferToRgb;
 //XXX: pub use self::buffer_to_yuv::BufferToYuv;
-pub use self::rgb_to_buffer::RgbToBuffer;
-
 pub use self::cataract::Cataract;
 pub use self::lens::Lens;
+pub use self::passthrough::Passthrough;
 pub use self::retina::Retina;
+pub use self::rgb_to_buffer::RgbToBuffer;
 pub use self::rgb_to_display::RgbToDisplay;
 pub use self::yuv420_to_rgb::Yuv420ToRgb;
 pub use self::yuv_to_rgb::YuvToRgb;
