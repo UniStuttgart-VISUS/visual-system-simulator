@@ -35,7 +35,7 @@ impl IoGenerator {
         } else {
             let input = &self.inputs[self.input_idx];
             self.input_idx += 1;
-            if input.ends_with(".png") {
+            if BufferToRgb::has_image_extension(&input) {
                 let input_path = std::path::Path::new(input);
                 let mut input_node = BufferToRgb::new(&window);
                 input_node.enqueue_buffer(load(input_path));

@@ -1,4 +1,5 @@
 use std::io::Cursor;
+use std::path::Path;
 
 use crate::pipeline::*;
 use crate::window::Window;
@@ -11,6 +12,13 @@ pub struct BufferToRgb {
 }
 
 impl BufferToRgb {
+    pub fn has_image_extension<P>(path: P) -> bool
+    where
+        P: AsRef<Path>,
+    {
+        image::ImageFormat::from_path(path).is_ok()
+    }
+
     pub fn enqueue_buffer(&mut self, cursor: Cursor<Vec<u8>>) {
         let reader = image::io::Reader::new(cursor)
             .with_guessed_format()
