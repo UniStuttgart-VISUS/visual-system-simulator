@@ -23,18 +23,14 @@ impl RgbToBuffer {
         processed: std::sync::Arc<std::sync::RwLock<bool>>,
     ) {
         let cb = Box::new(move |rgb_buffer: RGBBuffer| {
-            let mut image_data: Vec<u8> = Vec::new();
-            let encoder = image::png::PngEncoder::new(&mut image_data);
-            let _res = encoder.encode(
+            image::save_buffer(
+                &path,
                 &rgb_buffer.pixels_rgb,
                 rgb_buffer.width as u32,
                 rgb_buffer.height as u32,
                 image::ColorType::Rgb8,
-            );
-            use std::fs::File;
-            use std::io::Write;
-            let mut file = File::create(&path).expect("Unable to create file");
-            file.write_all(&image_data).unwrap();
+            )
+            .expect("Unable to create file");
             {
                 let mut processed = processed.write().unwrap();
                 *processed = true;

@@ -11,11 +11,11 @@ pub struct BufferToRgb {
 }
 
 impl BufferToRgb {
-    pub fn enqueue_buffer(&mut self, data: Cursor<Vec<u8>>) {
-        let img = image::load(data, image::ImageFormat::Png)
-            .unwrap()
-            .flipv()
-            .to_rgba();
+    pub fn enqueue_buffer(&mut self, cursor: Cursor<Vec<u8>>) {
+        let reader = image::io::Reader::new(cursor)
+            .with_guessed_format()
+            .expect("Cursor io never fails");
+        let img = reader.decode().unwrap().flipv().to_rgba();
         let (width, height) = img.dimensions();
 
         // Test if we have to invalidate the texture.

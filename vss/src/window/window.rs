@@ -123,7 +123,6 @@ impl Window {
             }
         } else {
             gaze
-          
         }
     }
 
@@ -134,7 +133,8 @@ impl Window {
     pub fn poll_events(&self) -> bool {
         let mut done = false;
         let mut deferred_size = None;
-        let mut deferred_gaze = Self::override_gaze(  DeviceGaze { x: 0.5, y: 0.5 },&self.values.borrow());
+        let mut deferred_gaze =
+            Self::override_gaze(DeviceGaze { x: 0.5, y: 0.5 }, &self.values.borrow());
 
         // Poll for window events.
         self.events_loop.borrow_mut().poll_events(|event| {
@@ -160,15 +160,21 @@ impl Window {
                         if *self.active.borrow() {
                             let window_size =
                                 &self.windowed_context.window().get_inner_size().unwrap();
-                            deferred_gaze =   Self::override_gaze(DeviceGaze {
-                                x: position.x as f32 / window_size.width as f32,
-                                y: 1.0 - (position.y as f32 / window_size.height as f32),
-                            },&self.values.borrow());
+                            deferred_gaze = Self::override_gaze(
+                                DeviceGaze {
+                                    x: position.x as f32 / window_size.width as f32,
+                                    y: 1.0 - (position.y as f32 / window_size.height as f32),
+                                },
+                                &self.values.borrow(),
+                            );
                         }
                     }
                     glutin::WindowEvent::CursorLeft { .. } => {
                         if *self.active.borrow() {
-                            deferred_gaze =  Self::override_gaze(  DeviceGaze { x: 0.5, y: 0.5 },&self.values.borrow());
+                            deferred_gaze = Self::override_gaze(
+                                DeviceGaze { x: 0.5, y: 0.5 },
+                                &self.values.borrow(),
+                            );
                         }
                     }
                     _ => (),
@@ -190,10 +196,8 @@ impl Window {
             self.pipeline.update_values(&self, &self.values.borrow());
         }
 
-        
-            // Update input.
-            self.pipeline.input(&deferred_gaze);
-        
+        // Update input.
+        self.pipeline.input(&deferred_gaze);
 
         self.encoder
             .borrow_mut()
