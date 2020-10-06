@@ -69,7 +69,7 @@ impl IoGenerator {
                             .unwrap(),
                     };
                     let output_path = output.render_to_string(&input_info).unwrap();
-                    output_node.set_output_png(output_path, self.input_processed.clone());
+                    output_node.set_output_path(output_path, self.input_processed.clone());
                     Some(Box::new(output_node) as Box<dyn Node>)
                 } else {
                     None

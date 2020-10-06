@@ -1,4 +1,5 @@
 use crate::pipeline::*;
+use std::path::Path;
 
 pub type RgbBufferCb = Box<dyn FnOnce(RGBBuffer) + Send>;
 
@@ -17,12 +18,16 @@ impl RgbToBuffer {
         self.tx.send(Message::Callback(cb)).unwrap();
     }
 
-    pub fn set_output_png(
+    pub fn set_output_path<P>(
         &mut self,
-        path: String,
+        path: P,
         processed: std::sync::Arc<std::sync::RwLock<bool>>,
-    ) {
+    ) where
+        P: 'static + std::fmt::Debug + Send + AsRef<Path>,
+    {
         let cb = Box::new(move |rgb_buffer: RGBBuffer| {
+            let dir = path.as_ref().parent().unwrap();
+            std::fs::create_dir_all(dir).expect("Unable to create directory");
             image::save_buffer(
                 &path,
                 &rgb_buffer.pixels_rgb,
@@ -35,7 +40,7 @@ impl RgbToBuffer {
                 let mut processed = processed.write().unwrap();
                 *processed = true;
             }
-            println!("[image] written to {}", &path);
+            println!("[image] written to {:?}", path);
         });
         self.set_output_cb(Some(cb));
     }
