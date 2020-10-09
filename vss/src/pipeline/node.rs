@@ -36,39 +36,3 @@ pub trait Node {
     /// Render the node.
     fn render(&mut self, window: &Window);
 }
-
-#[macro_export]
-macro_rules! unimplemented_node {
-    ($name:ident) => {
-        use $crate::*;
-
-        pub struct $name;
-
-        impl Node for $name {
-            fn new(_window: &Window) -> Self {
-                unimplemented!();
-            }
-
-            fn update_io(
-                &mut self,
-                _window: &Window,
-                _source: (Option<DeviceSource>, Option<DeviceTarget>),
-                _target_candidate: (Option<DeviceSource>, Option<DeviceTarget>),
-            ) -> (Option<DeviceSource>, Option<DeviceTarget>) {
-                unimplemented!();
-            }
-
-            fn update_values(&mut self, _window: &Window, _values: &ValueMap) {
-                unimplemented!();
-            }
-
-            fn input(&mut self, gaze: &DeviceGaze) -> DeviceGaze {
-                unimplemented!();
-            }
-
-            fn render(&mut self, _window: &Window) {
-                unimplemented!();
-            }
-        }
-    };
-}

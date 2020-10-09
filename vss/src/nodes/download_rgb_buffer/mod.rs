@@ -1,31 +1,28 @@
 use crate::pipeline::*;
 use std::path::Path;
 
-pub type RgbBufferCb = Box<dyn FnOnce(RGBBuffer) + Send>;
+pub type RgbBufferCb = Box<dyn FnOnce(RgbBuffer) + Send>;
 
 enum Message {
-    Buffer(RGBBuffer),
+    Buffer(RgbBuffer),
     Callback(Option<RgbBufferCb>),
 }
 /// A node that downloads RGB buffers.
-pub struct RgbToBuffer {
+pub struct DownloadRgbBuffer {
     target: Option<DeviceTarget>,
     tx: std::sync::mpsc::Sender<Message>,
 }
 
-impl RgbToBuffer {
-    pub fn set_output_cb(&mut self, cb: Option<RgbBufferCb>) {
+impl DownloadRgbBuffer {
+    pub fn set_buffer_cb(&mut self, cb: Option<RgbBufferCb>) {
         self.tx.send(Message::Callback(cb)).unwrap();
     }
 
-    pub fn set_output_path<P>(
-        &mut self,
-        path: P,
-        processed: std::sync::Arc<std::sync::RwLock<bool>>,
-    ) where
+    pub fn set_image_path<P>(&mut self, path: P, processed: std::sync::Arc<std::sync::RwLock<bool>>)
+    where
         P: 'static + std::fmt::Debug + Send + AsRef<Path>,
     {
-        let cb = Box::new(move |rgb_buffer: RGBBuffer| {
+        let cb = Box::new(move |rgb_buffer: RgbBuffer| {
             let dir = path.as_ref().parent().unwrap();
             std::fs::create_dir_all(dir).expect("Unable to create directory");
             image::save_buffer(
@@ -42,11 +39,11 @@ impl RgbToBuffer {
             }
             println!("[image] written to {:?}", path);
         });
-        self.set_output_cb(Some(cb));
+        self.set_buffer_cb(Some(cb));
     }
 }
 
-impl Node for RgbToBuffer {
+impl Node for DownloadRgbBuffer {
     fn new(_window: &Window) -> Self {
         let (tx, rx) = std::sync::mpsc::channel::<Message>();
         std::thread::spawn(move || {
@@ -65,7 +62,7 @@ impl Node for RgbToBuffer {
             }
         });
 
-        RgbToBuffer { target: None, tx }
+        DownloadRgbBuffer { target: None, tx }
     }
 
     fn update_io(

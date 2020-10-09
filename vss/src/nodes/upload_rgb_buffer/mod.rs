@@ -5,13 +5,13 @@ use crate::pipeline::*;
 use crate::window::Window;
 
 /// A device for static RGBA image data.
-pub struct BufferToRgb {
-    buffer_next: Option<RGBBuffer>,
+pub struct UploadRgbBuffer {
+    buffer_next: Option<RgbBuffer>,
     texture: Option<gfx::handle::Texture<gfx_device_gl::Resources, RgbSurfaceFormat>>,
     view: Option<DeviceSource>,
 }
 
-impl BufferToRgb {
+impl UploadRgbBuffer {
     pub fn has_image_extension<P>(path: P) -> bool
     where
         P: AsRef<Path>,
@@ -19,33 +19,37 @@ impl BufferToRgb {
         image::ImageFormat::from_path(path).is_ok()
     }
 
-    pub fn enqueue_buffer(&mut self, cursor: Cursor<Vec<u8>>) {
+    pub fn enqueue_image(&mut self, cursor: Cursor<Vec<u8>>) {
         let reader = image::io::Reader::new(cursor)
             .with_guessed_format()
             .expect("Cursor io never fails");
         let img = reader.decode().unwrap().flipv().to_rgba();
         let (width, height) = img.dimensions();
 
+        self.enqueue_buffer(RgbBuffer {
+            width: width,
+            height: height,
+            pixels_rgb: img.into_raw().into_boxed_slice(),
+        });
+    }
+
+    pub fn enqueue_buffer(&mut self, buffer: RgbBuffer) {
         // Test if we have to invalidate the texture.
         if let Some(texture) = &self.texture {
             let info = texture.get_info().to_image_info(0);
-            if width != info.width as u32 || height != info.height as u32 {
+            if buffer.width != info.width as u32 || buffer.height != info.height as u32 {
                 self.texture = None;
                 self.view = None;
             }
         }
 
-        self.buffer_next = Some(RGBBuffer {
-            width: width as usize,
-            height: height as usize,
-            pixels_rgb: img.into_raw().into_boxed_slice(),
-        });
+        self.buffer_next = Some(buffer);
     }
 }
 
-impl Node for BufferToRgb {
+impl Node for UploadRgbBuffer {
     fn new(_window: &Window) -> Self {
-        BufferToRgb {
+        UploadRgbBuffer {
             buffer_next: None,
             texture: None,
             view: None,
@@ -60,10 +64,9 @@ impl Node for BufferToRgb {
     ) -> (Option<DeviceSource>, Option<DeviceTarget>) {
         let mut factory = window.factory().borrow_mut();
         if let Some(buffer) = &self.buffer_next {
-            let data = vec![0; buffer.width * buffer.height * 4].into_boxed_slice();
             let (texture, view) = load_texture_from_bytes(
                 &mut factory,
-                data,
+                buffer.pixels_rgb.clone(),
                 buffer.width as u32,
                 buffer.height as u32,
             )

@@ -6,10 +6,10 @@ use gfx_device_gl::CommandBuffer;
 use gfx_device_gl::Resources;
 
 // A buffer representing color information.
-pub struct RGBBuffer {
+pub struct RgbBuffer {
     pub pixels_rgb: Box<[u8]>,
-    pub width: usize,
-    pub height: usize,
+    pub width: u32,
+    pub height: u32,
 }
 
 ///
@@ -279,19 +279,19 @@ pub fn load_highres_normalmap(
     Ok((tex, view))
 }
 
-pub fn download_rgb(window: &Window, target: &DeviceTarget) -> RGBBuffer {
+pub fn download_rgb(window: &Window, target: &DeviceTarget) -> RgbBuffer {
     use gfx::format::Formatted;
     use gfx::memory::Typed;
 
     let factory = &mut window.factory().borrow_mut();
     let encoder = &mut window.encoder().borrow_mut();
     let (width, height, _, _) = target.get_dimensions();
-    let width = width as usize;
-    let height = height as usize;
+    let width = width as u32;
+    let height = height as u32;
 
     // Schedule download.
     let download = factory
-        .create_download_buffer::<[u8; 4]>(width * height)
+        .create_download_buffer::<[u8; 4]>((width * height) as usize)
         .unwrap();
     encoder
         .copy_texture_to_buffer_raw(
@@ -316,7 +316,7 @@ pub fn download_rgb(window: &Window, target: &DeviceTarget) -> RGBBuffer {
     window.flush(encoder);
 
     // Copy to buffers.
-    let mut pixels_rgb = Vec::with_capacity(width * height * 3);
+    let mut pixels_rgb = Vec::with_capacity((width * height * 3) as usize);
     let reader = factory.read_mapping(&download).unwrap();
     for row in reader.chunks(width as usize).rev() {
         for pixel in row.iter() {
@@ -326,9 +326,45 @@ pub fn download_rgb(window: &Window, target: &DeviceTarget) -> RGBBuffer {
         }
     }
 
-    RGBBuffer {
+    RgbBuffer {
         pixels_rgb: pixels_rgb.into_boxed_slice(),
         width,
         height,
     }
+}
+
+pub fn create_target(window: &Window, width: u32, height: u32) -> (DeviceSource, DeviceTarget) {
+    let mut factory = window.factory().borrow_mut();
+
+    let texture = factory
+        .create_texture(
+            gfx::texture::Kind::D2(
+                width as u16,
+                height as u16,
+                gfx::texture::AaMode::Single,
+            ),
+            1,
+            gfx::memory::Bind::RENDER_TARGET | gfx::memory::Bind::SHADER_RESOURCE | gfx::memory::Bind::TRANSFER_SRC,
+            gfx::memory::Usage::Dynamic,
+            Some( <<ColorFormat as gfx::format::Formatted>::Channel as gfx::format::ChannelTyped>::get_channel_type() ),
+        )
+        .unwrap();
+    let source = factory
+        .view_texture_as_shader_resource::<ColorFormat>(
+            &texture,
+            (0, 0),
+            gfx::format::Swizzle::new(),
+        )
+        .unwrap();
+    let target = factory
+        .view_texture_as_render_target::<ColorFormat>(&texture, 0, None)
+        .unwrap();
+    (
+        DeviceSource::Rgb {
+            width: width as u32,
+            height: height as u32,
+            rgba8: source,
+        },
+        target,
+    )
 }

@@ -42,13 +42,6 @@ pub enum DeviceSource {
         rgba8: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>,
         d: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, f32>,
     },
-    Yuv {
-        width: u32,
-        height: u32,
-        y: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, f32>,
-        u: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, f32>,
-        v: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, f32>,
-    },
 }
 
 pub type RgbSurfaceFormat = gfx::format::R8_G8_B8_A8; //TODO: remove
@@ -100,42 +93,9 @@ impl Pipeline {
                     let (width, height) = match *source {
                         DeviceSource::Rgb { width, height, .. } => (width, height),
                         DeviceSource::RgbDepth { width, height, .. } => (width, height),
-                        DeviceSource::Yuv { width, height, .. } => (width, height),
                     };
-
-                    let mut factory = window.factory().borrow_mut();
-
-                    let texture = factory
-                        .create_texture(
-                            gfx::texture::Kind::D2(
-                                width as u16,
-                                height as u16,
-                                gfx::texture::AaMode::Single,
-                            ),
-                            1,
-                            gfx::memory::Bind::RENDER_TARGET | gfx::memory::Bind::SHADER_RESOURCE | gfx::memory::Bind::TRANSFER_SRC,
-                            gfx::memory::Usage::Dynamic,
-                            Some( <<ColorFormat as gfx::format::Formatted>::Channel as gfx::format::ChannelTyped>::get_channel_type() ),
-                        )
-                        .unwrap();
-                    let source = factory
-                        .view_texture_as_shader_resource::<ColorFormat>(
-                            &texture,
-                            (0, 0),
-                            gfx::format::Swizzle::new(),
-                        )
-                        .unwrap();
-                    let target = factory
-                        .view_texture_as_render_target::<ColorFormat>(&texture, 0, None)
-                        .unwrap();
-                    (
-                        Some(DeviceSource::Rgb {
-                            width: width as u32,
-                            height: height as u32,
-                            rgba8: source,
-                        }),
-                        Some(target),
-                    )
+                    let (source, target) = create_target(window, width, height);
+                    (Some(source), Some(target))
                 } else {
                     // No suggestion (can cause update-aborting errors).
                     (None, None)

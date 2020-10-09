@@ -13,12 +13,12 @@ gfx_defines! {
     }
 }
 
-pub struct RgbToDisplay {
+pub struct Display {
     pso: gfx::PipelineState<Resources, pipe::Meta>,
     pso_data: pipe::Data<Resources>,
 }
 
-impl Node for RgbToDisplay {
+impl Node for Display {
     fn new(window: &Window) -> Self {
         let mut factory = window.factory().borrow_mut();
 
@@ -33,7 +33,7 @@ impl Node for RgbToDisplay {
         let sampler = factory.create_sampler_linear();
         let (_, src, dst) = factory.create_render_target(1, 1).unwrap();
 
-        RgbToDisplay {
+        Display {
             pso,
             pso_data: pipe::Data {
                 u_stereo: 0,
@@ -76,7 +76,6 @@ impl Node for RgbToDisplay {
                 self.pso_data.u_resolution_in = [width as f32, height as f32];
                 self.pso_data.s_source = (rgba8.clone(), factory.create_sampler_linear());
             }
-            DeviceSource::Yuv { .. } => panic!("Unsupported source"),
         }
         (target_candidate.0, Some(target))
     }

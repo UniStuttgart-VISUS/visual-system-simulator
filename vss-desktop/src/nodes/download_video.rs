@@ -169,7 +169,7 @@ impl AvDevice {
                         }
                     }
 
-                    self.video.upload_yuv(YUVBuffer {
+                    self.video.upload_yuv(YuvBuffer {
                         pixels_y,
                         pixels_u,
                         pixels_v,

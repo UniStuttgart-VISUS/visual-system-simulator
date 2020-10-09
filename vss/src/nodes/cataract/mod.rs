@@ -63,7 +63,6 @@ impl Node for Cataract {
             DeviceSource::RgbDepth { rgba8, .. } => {
                 self.pso_data.s_color = (rgba8.clone(), factory.create_sampler_linear());
             }
-            DeviceSource::Yuv { .. } => panic!("Unsupported source"),
         }
         (target_candidate.0, Some(target))
     }

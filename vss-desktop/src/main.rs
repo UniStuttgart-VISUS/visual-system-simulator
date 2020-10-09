@@ -35,12 +35,12 @@ impl IoGenerator {
         } else {
             let input = &self.inputs[self.input_idx];
             self.input_idx += 1;
-            if BufferToRgb::has_image_extension(&input) {
+            if UploadRgbBuffer::has_image_extension(&input) {
                 let input_path = std::path::Path::new(input);
-                let mut input_node = BufferToRgb::new(&window);
-                input_node.enqueue_buffer(load(input_path));
+                let mut input_node = UploadRgbBuffer::new(&window);
+                input_node.enqueue_image(load(input_path));
                 let output_node = if let Some(output) = &self.output {
-                    let mut output_node = RgbToBuffer::new(&window);
+                    let mut output_node = DownloadRgbBuffer::new(&window);
                     let input_info = InputInfo {
                         dirname: input_path
                             .parent()
@@ -69,14 +69,16 @@ impl IoGenerator {
                             .unwrap(),
                     };
                     let output_path = output.render_to_string(&input_info).unwrap();
-                    output_node.set_output_path(output_path, self.input_processed.clone());
+                    output_node.set_image_path(output_path, self.input_processed.clone());
                     Some(Box::new(output_node) as Box<dyn Node>)
                 } else {
                     None
                 };
                 Some((Box::new(input_node), output_node))
-            } else if input.ends_with(".avi") {
-                Some((Box::new(AvToRgb::new(&window)), None))
+            } else if UploadVideo::has_video_extension(input) {
+                let mut node = UploadVideo::new(&window);
+                node.open(input).unwrap();
+                Some((Box::new(node), None))
             } else {
                 panic!("Unknown file extension");
             }
@@ -116,7 +118,7 @@ pub fn main() {
     }
 
     // Display node.
-    let node = RgbToDisplay::new(&window);
+    let node = Display::new(&window);
     window.add_node(Box::new(node));
 
     let mut done = false;

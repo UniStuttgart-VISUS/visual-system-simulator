@@ -17,8 +17,8 @@ serde = { version = "1", features = ["derive"] }
 glob = "0.3"
 mustache = "0.9"
 serde_json = "*"
-av = { git = "https://github.com/unpatched/rust-av.git", branch = "master", optional = true }
+ac_ffmpeg = { package = "ac-ffmpeg", version = "0.15.3", optional = true }
 
 [features]
 default = []
-video = ["av"]
+video = ["ac_ffmpeg"]

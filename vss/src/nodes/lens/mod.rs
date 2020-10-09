@@ -101,7 +101,6 @@ impl Node for Lens {
                 self.pso_data.s_color = (rgba8.clone(), factory.create_sampler_linear());
                 self.pso_data.s_depth = (d.clone(), factory.create_sampler_linear());
             }
-            DeviceSource::Yuv { .. } => panic!("Unsupported source"),
         }
         (target_candidate.0, Some(target))
     }
