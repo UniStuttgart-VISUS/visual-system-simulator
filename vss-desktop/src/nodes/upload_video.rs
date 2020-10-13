@@ -189,12 +189,17 @@ impl UploadVideo {
             }
         }
     }
+
+    pub fn set_flags(&mut self, flags: RgbInputFlags) {
+        self.uploader
+            .set_flags(flags | RgbInputFlags::VERTICALLY_FLIPPED);
+    }
 }
 
 impl Node for UploadVideo {
     fn new(window: &Window) -> Self {
         let mut uploader = UploadRgbBuffer::new(window);
-        uploader.set_mode(RgbInputMode::VerticallyFlipped);
+        uploader.set_flags(RgbInputFlags::VERTICALLY_FLIPPED);
         Self {
             upload_start: None,
             uploader,
@@ -219,6 +224,14 @@ impl Node for UploadVideo {
     ) -> (Option<DeviceSource>, Option<DeviceTarget>) {
         self.validate_data();
         self.uploader.update_io(window, source, target_candidate)
+    }
+
+    fn update_values(&mut self, window: &Window, values: &ValueMap) {
+        self.uploader.update_values(window, values);
+    }
+
+    fn input(&mut self, head: &Head, gaze: &DeviceGaze) -> DeviceGaze {
+        self.uploader.input(head, gaze)
     }
 
     fn render(&mut self, window: &Window) {

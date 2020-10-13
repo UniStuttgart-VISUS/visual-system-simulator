@@ -8,7 +8,7 @@ use crate::pipeline::*;
 
 gfx_defines! {
     pipeline pipe {
-        u_mode: gfx::Global<i32> = "u_mode",
+        u_flags: gfx::Global<u32> = "u_flags",
         u_head: gfx::Global<[[f32; 4];4]> = "u_head",
         u_fov: gfx::Global<[f32; 2]> = "u_fov",
         s_rgb: gfx::TextureSampler<[f32; 4]> = "s_rgb",
@@ -16,10 +16,12 @@ gfx_defines! {
     }
 }
 
-pub enum RgbInputMode {
-    Normal = 0,
-    VerticallyFlipped = 1,
-    Equirectangular = 2,
+bitflags! {
+    pub struct RgbInputFlags : u32 {
+        const EQUIRECTANGULAR = 1;
+        const VERTICALLY_FLIPPED = 2;
+        const RGBD_HORIZONTAL = 4;
+    }
 }
 
 /// A device for static RGBA image data.
@@ -80,8 +82,8 @@ impl UploadRgbBuffer {
         self.buffer_upload = true;
     }
 
-    pub fn set_mode(&mut self, mode: RgbInputMode) {
-        self.pso_data.u_mode = mode as i32;
+    pub fn set_flags(&mut self, flags: RgbInputFlags) {
+        self.pso_data.u_flags = flags.bits();
     }
 }
 
@@ -107,7 +109,7 @@ impl Node for UploadRgbBuffer {
 
             pso,
             pso_data: pipe::Data {
-                u_mode: 2,
+                u_flags: RgbInputFlags::empty().bits(),
                 u_head: [[0.0; 4]; 4],
                 u_fov: [90.0_f32.to_radians(), 59.0_f32.to_radians()],
                 s_rgb: (src, sampler),
@@ -143,6 +145,11 @@ impl Node for UploadRgbBuffer {
             let info = texture.get_info().to_image_info(0);
             width = info.width as u32;
             height = info.height as u32;
+        }
+
+        let flags = RgbInputFlags::from_bits(self.pso_data.u_flags).unwrap();
+        if flags.contains(RgbInputFlags::RGBD_HORIZONTAL) {
+            height /= 2;
         }
 
         // Compute vertical FOV from aspect ratio.
