@@ -45,7 +45,6 @@ pub enum DeviceSource {
 }
 
 pub type RgbSurfaceFormat = gfx::format::R8_G8_B8_A8; //TODO: remove
-pub type YuvSurfaceFormat = gfx::format::R8; //TODO: remove
 pub type ColorFormat = (RgbSurfaceFormat, gfx::format::Unorm);
 
 pub type DeviceTarget = gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat>;

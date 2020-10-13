@@ -12,6 +12,16 @@ pub struct RgbBuffer {
     pub height: u32,
 }
 
+impl Default for RgbBuffer {
+    fn default() -> Self {
+        Self {
+            pixels_rgb: vec![0; 1].into_boxed_slice(),
+            width: 1,
+            height: 1,
+        }
+    }
+}
+
 ///
 /// Can be used to replace parts of or a whole texture.
 ///

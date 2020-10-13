@@ -27,6 +27,7 @@ pub struct Window {
         >,
     >,
 
+    last_gaze: RefCell<DeviceGaze>,
     active: RefCell<bool>,
     values: RefCell<ValueMap>,
 }
@@ -72,6 +73,7 @@ impl Window {
             encoder: RefCell::new(encoder),
             render_target: RefCell::new(render_target),
             main_depth: RefCell::new(main_depth),
+            last_gaze: RefCell::new(DeviceGaze { x: 0.5, y: 0.5 }),
             active: RefCell::new(false),
             values: RefCell::new(values),
         }
@@ -134,7 +136,7 @@ impl Window {
         let mut done = false;
         let mut deferred_size = None;
         let mut deferred_gaze =
-            Self::override_gaze(DeviceGaze { x: 0.5, y: 0.5 }, &self.values.borrow());
+            Self::override_gaze(self.last_gaze.borrow().clone(), &self.values.borrow());
 
         // Poll for window events.
         self.events_loop.borrow_mut().poll_events(|event| {
@@ -198,6 +200,7 @@ impl Window {
 
         // Update input.
         self.pipeline.input(&deferred_gaze);
+        *self.last_gaze.borrow_mut() = deferred_gaze;
 
         self.encoder
             .borrow_mut()

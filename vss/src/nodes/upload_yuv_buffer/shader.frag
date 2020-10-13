@@ -9,19 +9,40 @@ out vec4 rt_color;
 
 void main() {
     if (u_format == 0) {
-        // YUV/YCbCr to RGB color space conversion.
-        // Assuming the following input:
-        //   - Y texture has size `width * height`
-        //   - Y and U are vertically flipped
-        //   - U and V textures have size `(width / 2) * (height / 2)`
-        vec2 v_tex_flip = vec2(v_tex.x, 1.0 - v_tex.y);
-        vec3 yuv = vec3(texture(s_y, v_tex_flip).r,
-            texture(s_u, v_tex_flip).r - 0.5,
-            texture(s_v, v_tex_flip).r - 0.5);
+        // YUV/YCbCr to RGB color space conversion using ITU recommendation [BT.709][1].
+        // We assume the following input:
+        //   - Y channel has full size, i.e., `width * height`
+        //   - U and V channels have half size, i.e., `(width / 2) * (height / 2)`
+        //   - All channels are vertically flipped
+        //
+        // [1]: https://www.itu.int/rec/R-REC-BT.709 "BT.709"
+        vec2 v_tex_flipped = vec2(v_tex.x, 1.0 - v_tex.y);
+        
+        float Y = texture(s_y, v_tex_flipped).r;
+        float Cb = texture(s_u, v_tex_flipped).r - 0.5;
+        float Cr = texture(s_v, v_tex_flipped).r - 0.5;
 
-        rt_color = vec4(yuv.x + yuv.z * 1.4,
-            yuv.x + yuv.y * -0.343 + yuv.z * -0.711,
-            yuv.x + yuv.y * 1.765, 1.0);
+        // | | [BT.601][1] | [BT.709][2] | [BT.2020][3] |
+        // |--|-------|-------|-------|
+        // a | 0.299 | 0.2126 | 0.2627 |
+        // b | 0.587 | 0.7152 | 0.6780 |
+        // c | 0.114 | 0.0722 | 0.0593 |
+        // d | 1.772 | 1.8556 | 1.8814 |
+        // e | 1.402 | 1.5748 | 1.4747 |
+        //
+        // [1]: https://www.itu.int/rec/R-REC-BT.601 "BT.601"
+        // [2]: https://www.itu.int/rec/R-REC-BT.709 "BT.709"
+        // [3]: https://www.itu.int/rec/R-REC-BT.2020 "BT.2020"
+        const float a = 0.2126;
+        const float b = 0.7152;
+        const float c = 0.0722;
+        const float d = 1.8556;
+        const float e = 1.5748;
+        rt_color = vec4(
+            Y + e * Cr,
+            Y - (a * e / b) * Cr - (c * d / b) * Cb,
+            Y + d * Cb,
+            1.0);
     } else if (u_format == 1) {
         // YUV_420_888 to RGB color space conversion.
         // The textures are the original android-cam textures, formatted like so:

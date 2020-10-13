@@ -31,16 +31,20 @@ pub struct YuvBuffer {
 
 pub struct UploadYuvBuffer {
     buffer_next: Option<YuvBuffer>,
-    texture_y: Option<gfx::handle::Texture<Resources, YuvSurfaceFormat>>,
-    texture_u: Option<gfx::handle::Texture<Resources, YuvSurfaceFormat>>,
-    texture_v: Option<gfx::handle::Texture<Resources, YuvSurfaceFormat>>,
+    texture_y: Option<gfx::handle::Texture<Resources, gfx::format::R8>>,
+    texture_u: Option<gfx::handle::Texture<Resources, gfx::format::R8>>,
+    texture_v: Option<gfx::handle::Texture<Resources, gfx::format::R8>>,
 
     pso: gfx::PipelineState<Resources, pipe::Meta>,
     pso_data: pipe::Data<Resources>,
 }
 
 impl UploadYuvBuffer {
-    pub fn enqueue_buffer(&mut self, buffer: YuvBuffer) {
+    pub fn is_empty(&self) -> bool {
+        self.buffer_next.is_none()
+    }
+
+    pub fn upload_buffer(&mut self, buffer: YuvBuffer) {
         // Test if we have to invalidate textures.
         if let Some(texture_y) = &self.texture_y {
             let info_y = texture_y.get_info().to_image_info(0);
@@ -102,9 +106,6 @@ impl Node for UploadYuvBuffer {
         _source: (Option<DeviceSource>, Option<DeviceTarget>),
         _target_candidate: (Option<DeviceSource>, Option<DeviceTarget>),
     ) -> (Option<DeviceSource>, Option<DeviceTarget>) {
-        let mut width = 1;
-        let mut height = 1;
-
         if let Some(buffer) = &self.buffer_next {
             let mut factory = window.factory().borrow_mut();
 
@@ -138,9 +139,14 @@ impl Node for UploadYuvBuffer {
             self.pso_data.s_y = (view_y, sampler.clone());
             self.pso_data.s_u = (view_u, sampler.clone());
             self.pso_data.s_v = (view_v, sampler);
+        }
 
-            width = buffer.width;
-            height = buffer.height;
+        let mut width = 1;
+        let mut height = 1;
+        if let Some(texture_y) = &self.texture_y {
+            let info = texture_y.get_info().to_image_info(0);
+            width = info.width as u32;
+            height = info.height as u32;
         }
 
         let (source, target) = create_target(window, width, height);

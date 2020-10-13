@@ -38,7 +38,7 @@ impl IoGenerator {
             if UploadRgbBuffer::has_image_extension(&input) {
                 let input_path = std::path::Path::new(input);
                 let mut input_node = UploadRgbBuffer::new(&window);
-                input_node.enqueue_image(load(input_path));
+                input_node.upload_image(load(input_path));
                 let output_node = if let Some(output) = &self.output {
                     let mut output_node = DownloadRgbBuffer::new(&window);
                     let input_info = InputInfo {

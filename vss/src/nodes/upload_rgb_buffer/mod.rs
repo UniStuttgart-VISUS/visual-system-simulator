@@ -1,14 +1,27 @@
+use gfx;
+use gfx_device_gl::Resources;
+
 use std::io::Cursor;
 use std::path::Path;
 
 use crate::pipeline::*;
-use crate::window::Window;
+
+gfx_defines! {
+    pipeline pipe {
+        u_vflip: gfx::Global<i32> = "u_vflip",
+        s_rgb: gfx::TextureSampler<[f32; 4]> = "s_rgb",
+        rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
+    }
+}
 
 /// A device for static RGBA image data.
 pub struct UploadRgbBuffer {
-    buffer_next: Option<RgbBuffer>,
-    texture: Option<gfx::handle::Texture<gfx_device_gl::Resources, RgbSurfaceFormat>>,
-    view: Option<DeviceSource>,
+    buffer_next: RgbBuffer,
+    buffer_upload: bool,
+    texture: Option<gfx::handle::Texture<Resources, RgbSurfaceFormat>>,
+
+    pso: gfx::PipelineState<Resources, pipe::Meta>,
+    pso_data: pipe::Data<Resources>,
 }
 
 impl UploadRgbBuffer {
@@ -19,40 +32,77 @@ impl UploadRgbBuffer {
         image::ImageFormat::from_path(path).is_ok()
     }
 
-    pub fn enqueue_image(&mut self, cursor: Cursor<Vec<u8>>) {
+    pub fn upload_image(&mut self, cursor: Cursor<Vec<u8>>) {
         let reader = image::io::Reader::new(cursor)
             .with_guessed_format()
             .expect("Cursor io never fails");
         let img = reader.decode().unwrap().flipv().to_rgba();
         let (width, height) = img.dimensions();
 
-        self.enqueue_buffer(RgbBuffer {
-            width: width,
-            height: height,
+        self.upload_buffer(&RgbBuffer {
             pixels_rgb: img.into_raw().into_boxed_slice(),
+            width,
+            height,
         });
     }
 
-    pub fn enqueue_buffer(&mut self, buffer: RgbBuffer) {
+    pub fn upload_buffer(&mut self, buffer: &RgbBuffer) {
         // Test if we have to invalidate the texture.
         if let Some(texture) = &self.texture {
             let info = texture.get_info().to_image_info(0);
             if buffer.width != info.width as u32 || buffer.height != info.height as u32 {
                 self.texture = None;
-                self.view = None;
             }
         }
 
-        self.buffer_next = Some(buffer);
+        if self.buffer_next.width != buffer.width || self.buffer_next.height != buffer.height {
+            // Reallocate and copy.
+            self.buffer_next = RgbBuffer {
+                pixels_rgb: buffer.pixels_rgb.clone(),
+                width: buffer.width,
+                height: buffer.height,
+            }
+        } else {
+            // Copy.
+            self.buffer_next
+                .pixels_rgb
+                .copy_from_slice(&buffer.pixels_rgb);
+        }
+
+        self.buffer_upload = true;
+    }
+
+    pub fn set_vflip(&mut self, enabled: bool) {
+        self.pso_data.u_vflip = if enabled { 1 } else { 0 };
     }
 }
 
 impl Node for UploadRgbBuffer {
-    fn new(_window: &Window) -> Self {
+    fn new(window: &Window) -> Self {
+        let mut factory = window.factory().borrow_mut();
+
+        let pso = factory
+            .create_pipeline_simple(
+                &include_glsl!("../shader.vert"),
+                &include_glsl!("shader.frag"),
+                pipe::new(),
+            )
+            .unwrap();
+
+        let sampler = factory.create_sampler_linear();
+        let (_, src, dst) = factory.create_render_target(1, 1).unwrap();
+
         UploadRgbBuffer {
-            buffer_next: None,
+            buffer_next: RgbBuffer::default(),
+            buffer_upload: false,
             texture: None,
-            view: None,
+
+            pso,
+            pso_data: pipe::Data {
+                u_vflip: 0,
+                s_rgb: (src, sampler),
+                rt_color: dst,
+            },
         }
     }
 
@@ -62,39 +112,53 @@ impl Node for UploadRgbBuffer {
         _source: (Option<DeviceSource>, Option<DeviceTarget>),
         _target_candidate: (Option<DeviceSource>, Option<DeviceTarget>),
     ) -> (Option<DeviceSource>, Option<DeviceTarget>) {
-        let mut factory = window.factory().borrow_mut();
-        if let Some(buffer) = &self.buffer_next {
+        if self.buffer_upload {
+            let mut factory = window.factory().borrow_mut();
             let (texture, view) = load_texture_from_bytes(
                 &mut factory,
-                buffer.pixels_rgb.clone(),
-                buffer.width as u32,
-                buffer.height as u32,
+                self.buffer_next.pixels_rgb.clone(),
+                self.buffer_next.width as u32,
+                self.buffer_next.height as u32,
             )
             .unwrap();
             self.texture = Some(texture);
-            self.view = Some(DeviceSource::Rgb {
-                width: buffer.width as u32,
-                height: buffer.height as u32,
-                rgba8: view,
-            });
+
+            let sampler = factory.create_sampler_linear();
+            self.pso_data.s_rgb = (view, sampler.clone());
         }
-        debug_assert!(self.view.is_some(), "A buffer must be set at least once");
-        (self.view.clone(), None)
+
+        let mut width = 1;
+        let mut height = 1;
+        if let Some(texture) = &self.texture {
+            let info = texture.get_info().to_image_info(0);
+            width = info.width as u32;
+            height = info.height as u32;
+        }
+
+        let (source, target) = create_target(window, width, height);
+        self.pso_data.rt_color = target.clone();
+        (Some(source), Some(target))
     }
 
     fn render(&mut self, window: &Window) {
         let mut encoder = window.encoder().borrow_mut();
 
         if let Some(texture) = &self.texture {
-            if let Some(buffer) = self.buffer_next.take() {
+            if self.buffer_upload {
                 update_texture(
                     &mut encoder,
                     &texture,
-                    [buffer.width as u16, buffer.height as u16],
+                    [
+                        self.buffer_next.width as u16,
+                        self.buffer_next.height as u16,
+                    ],
                     [0, 0],
-                    &*buffer.pixels_rgb,
+                    &*self.buffer_next.pixels_rgb,
                 );
+                self.buffer_upload = false;
             }
         }
+
+        encoder.draw(&gfx::Slice::from_vertex_count(6), &self.pso, &self.pso_data);
     }
 }
