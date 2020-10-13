@@ -93,7 +93,7 @@ impl Node for Display {
         }
     }
 
-    fn input(&mut self, gaze: &DeviceGaze) -> DeviceGaze {
+    fn input(&mut self, _head: &Head, gaze: &DeviceGaze) -> DeviceGaze {
         let ratio = [
             self.pso_data.u_resolution_out[0] / self.pso_data.u_resolution_in[0],
             self.pso_data.u_resolution_out[1] / self.pso_data.u_resolution_in[1],

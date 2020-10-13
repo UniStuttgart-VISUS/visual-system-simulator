@@ -29,7 +29,7 @@ pub trait Node {
     fn update_values(&mut self, window: &Window, values: &ValueMap) {}
 
     /// Handle input.
-    fn input(&mut self, gaze: &DeviceGaze) -> DeviceGaze {
+    fn input(&mut self, _head: &Head, gaze: &DeviceGaze) -> DeviceGaze {
         gaze.clone()
     }
 

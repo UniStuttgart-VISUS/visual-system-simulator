@@ -28,6 +28,11 @@ pub struct DeviceGaze {
     pub y: f32,
 }
 
+pub struct Head {
+    pub yaw: f32,
+    pub pitch: f32,
+}
+
 /// Enum to hold texture-representations for shaders.
 #[derive(Clone, Debug)]
 pub enum DeviceSource {
@@ -113,11 +118,11 @@ impl Pipeline {
         }
     }
 
-    pub fn input(&self, gaze: &DeviceGaze) {
+    pub fn input(&self, head: &Head, gaze: &DeviceGaze) {
         let mut gaze = gaze.clone();
         // Propagate to nodes.
         for node in self.nodes.borrow_mut().iter_mut().rev() {
-            gaze = node.input(&gaze);
+            gaze = node.input(head, &gaze);
         }
     }
 

@@ -27,6 +27,7 @@ pub struct Window {
         >,
     >,
 
+    last_head: RefCell<Head>,
     last_gaze: RefCell<DeviceGaze>,
     active: RefCell<bool>,
     values: RefCell<ValueMap>,
@@ -55,6 +56,8 @@ impl Window {
             )
             .unwrap();
 
+        windowed_context.window().hide_cursor(true);
+
         // Create a command buffer.
         let encoder: gfx::Encoder<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer> =
             factory.create_command_buffer().into();
@@ -73,6 +76,10 @@ impl Window {
             encoder: RefCell::new(encoder),
             render_target: RefCell::new(render_target),
             main_depth: RefCell::new(main_depth),
+            last_head: RefCell::new(Head {
+                yaw: 0.0,
+                pitch: 0.0,
+            }),
             last_gaze: RefCell::new(DeviceGaze { x: 0.5, y: 0.5 }),
             active: RefCell::new(false),
             values: RefCell::new(values),
@@ -169,6 +176,14 @@ impl Window {
                                 },
                                 &self.values.borrow(),
                             );
+                            let last_head = &mut self.last_head.borrow_mut();
+                            last_head.yaw = position.x as f32 / window_size.width as f32
+                                * std::f32::consts::PI
+                                * 2.0
+                                - 0.5;
+                            last_head.pitch = position.y as f32 / window_size.height as f32
+                                * std::f32::consts::PI
+                                - 0.5;
                         }
                     }
                     glutin::WindowEvent::CursorLeft { .. } => {
@@ -199,7 +214,8 @@ impl Window {
         }
 
         // Update input.
-        self.pipeline.input(&deferred_gaze);
+        self.pipeline
+            .input(&self.last_head.borrow(), &deferred_gaze);
         *self.last_gaze.borrow_mut() = deferred_gaze;
 
         self.encoder

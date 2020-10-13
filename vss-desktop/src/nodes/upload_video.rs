@@ -194,7 +194,7 @@ impl UploadVideo {
 impl Node for UploadVideo {
     fn new(window: &Window) -> Self {
         let mut uploader = UploadRgbBuffer::new(window);
-        uploader.set_vflip(true);
+        uploader.set_mode(RgbInputMode::VerticallyFlipped);
         Self {
             upload_start: None,
             uploader,

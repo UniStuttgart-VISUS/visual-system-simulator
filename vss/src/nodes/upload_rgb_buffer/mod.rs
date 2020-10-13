@@ -8,10 +8,18 @@ use crate::pipeline::*;
 
 gfx_defines! {
     pipeline pipe {
-        u_vflip: gfx::Global<i32> = "u_vflip",
+        u_mode: gfx::Global<i32> = "u_mode",
+        u_head: gfx::Global<[[f32; 4];4]> = "u_head",
+        u_fov: gfx::Global<[f32; 2]> = "u_fov",
         s_rgb: gfx::TextureSampler<[f32; 4]> = "s_rgb",
         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
     }
+}
+
+pub enum RgbInputMode {
+    Normal = 0,
+    VerticallyFlipped = 1,
+    Equirectangular = 2,
 }
 
 /// A device for static RGBA image data.
@@ -72,8 +80,8 @@ impl UploadRgbBuffer {
         self.buffer_upload = true;
     }
 
-    pub fn set_vflip(&mut self, enabled: bool) {
-        self.pso_data.u_vflip = if enabled { 1 } else { 0 };
+    pub fn set_mode(&mut self, mode: RgbInputMode) {
+        self.pso_data.u_mode = mode as i32;
     }
 }
 
@@ -99,7 +107,9 @@ impl Node for UploadRgbBuffer {
 
             pso,
             pso_data: pipe::Data {
-                u_vflip: 0,
+                u_mode: 2,
+                u_head: [[0.0; 4]; 4],
+                u_fov: [90.0_f32.to_radians(), 59.0_f32.to_radians()],
                 s_rgb: (src, sampler),
                 rt_color: dst,
             },
@@ -135,9 +145,21 @@ impl Node for UploadRgbBuffer {
             height = info.height as u32;
         }
 
+        // Compute vertical FOV from aspect ratio.
+        self.pso_data.u_fov[1] =
+            2.0 * ((self.pso_data.u_fov[0] / 2.0).tan() * height as f32 / width as f32).atan();
+
         let (source, target) = create_target(window, width, height);
         self.pso_data.rt_color = target.clone();
         (Some(source), Some(target))
+    }
+
+    fn input(&mut self, head: &Head, gaze: &DeviceGaze) -> DeviceGaze {
+        use cgmath::Matrix4;
+        self.pso_data.u_head = (Matrix4::from_angle_y(cgmath::Rad(head.yaw))
+            * Matrix4::from_angle_x(cgmath::Rad(head.pitch)))
+        .into();
+        gaze.clone()
     }
 
     fn render(&mut self, window: &Window) {
