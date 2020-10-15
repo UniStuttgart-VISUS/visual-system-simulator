@@ -3,7 +3,7 @@ mod retina_map;
 use gfx;
 
 use self::retina_map::generate_retina_map;
-use crate::pipeline::*;
+use crate::*;
 
 gfx_defines! {
     pipeline pipe {

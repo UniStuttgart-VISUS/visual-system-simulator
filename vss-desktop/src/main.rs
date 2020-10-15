@@ -1,10 +1,10 @@
 mod cmd;
-mod nodes;
+mod node;
 
 use vss::*;
 
 use crate::cmd::*;
-use crate::nodes::*;
+use crate::node::*;
 
 type IoNodePair = (Box<dyn Node>, Option<Box<dyn Node>>);
 

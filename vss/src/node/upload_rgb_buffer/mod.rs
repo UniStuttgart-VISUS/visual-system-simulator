@@ -4,7 +4,7 @@ use gfx_device_gl::Resources;
 use std::io::Cursor;
 use std::path::Path;
 
-use crate::pipeline::*;
+use crate::*;
 
 gfx_defines! {
     pipeline pipe {

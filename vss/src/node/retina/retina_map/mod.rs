@@ -5,7 +5,7 @@ mod nyctalopia;
 mod osterberg;
 mod receptor_density;
 
-use crate::pipeline::*;
+use crate::*;
 
 pub fn generate_retina_map(resolution: (u32, u32), values: &ValueMap) -> Box<[u8]> {
     let mut maps: Vec<image::ImageBuffer<image::Rgba<u8>, Vec<u8>>> = Vec::new();

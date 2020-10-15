@@ -1,4 +1,4 @@
-use crate::pipeline::*;
+use crate::*;
 
 /// A node that does dot alter anything.
 pub struct Passthrough;

@@ -1,4 +1,4 @@
-use crate::pipeline::*;
+use crate::*;
 use std::path::Path;
 
 pub type RgbBufferCb = Box<dyn FnOnce(RgbBuffer) + Send>;

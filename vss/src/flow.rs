@@ -1,19 +1,9 @@
-mod node;
-mod texture;
-#[macro_use]
-mod utils;
-mod value;
-
-pub use self::node::*;
-pub use self::texture::*;
-pub use self::utils::*;
-pub use self::value::*;
-
 pub use crate::window::Window;
 pub use gfx::traits::FactoryExt;
 pub use gfx::Factory;
 
 use std::cell::RefCell;
+use crate::*;
 
 /// A factory to create pipeline objects from.
 pub type DeviceFactory = gfx_device_gl::Factory;
@@ -57,13 +47,13 @@ pub type DepthFormat = (gfx::format::R32, gfx::format::Float);
 
 
 /// The pipeline encapsulates the simulation and rendering system, i.e., all rendering nodes.
-pub struct Pipeline {
+pub struct Flow {
     nodes: RefCell<Vec<Box<dyn Node>>>,
 }
 
-impl Pipeline {
+impl Flow {
     pub fn new() -> Self {
-        Pipeline {
+        Flow {
             nodes: RefCell::new(Vec::new()),
         }
     }

@@ -2,16 +2,14 @@ use std::cell::RefCell;
 
 use glutin::dpi::*;
 use glutin::GlRequest;
-
-use super::*;
-use crate::pipeline::*;
+use crate::*;
 
 pub type DepthFormat = gfx::format::DepthStencil;
 
 /// A device for window and context creation.
 pub struct Window {
     remote: Option<Remote>,
-    pipeline: Pipeline,
+    pipeline: Flow,
 
     windowed_context: glutin::WindowedContext<glutin::PossiblyCurrent>,
     events_loop: RefCell<glutin::EventsLoop>,
@@ -68,7 +66,7 @@ impl Window {
         }
 
         Window {
-            pipeline: Pipeline::new(),
+            pipeline: Flow::new(),
             remote,
             windowed_context,
             events_loop: RefCell::new(events_loop),

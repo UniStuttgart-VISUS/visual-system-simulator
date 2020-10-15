@@ -1,7 +1,7 @@
 use gfx;
 use gfx_device_gl::Resources;
 
-use crate::pipeline::*;
+use crate::*;
 
 gfx_defines! {
     pipeline pipe {

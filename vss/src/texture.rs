@@ -1,6 +1,6 @@
 use std::io::Cursor;
 
-use super::*;
+use crate::*;
 use gfx::Factory;
 use gfx_device_gl::CommandBuffer;
 use gfx_device_gl::Resources;

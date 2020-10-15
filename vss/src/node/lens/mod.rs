@@ -4,7 +4,7 @@ use std::io::Cursor;
 use gfx;
 use gfx_device_gl::Resources;
 
-use crate::pipeline::*;
+use crate::*;
 
 const DIOPTRES_SCALING: f32 = 0.332_763_369_417_523 as f32;
 
