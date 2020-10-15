@@ -43,7 +43,8 @@ impl Window {
         let events_loop = glutin::EventsLoop::new();
         let window_builder = glutin::WindowBuilder::new()
             .with_title("Visual System Simulator")
-            .with_min_dimensions(LogicalSize::new(320.0, 200.0))
+            .with_min_dimensions(LogicalSize::new(640.0, 360.0))
+            .with_dimensions(LogicalSize::new(1280.0, 720.0))
             .with_visibility(visible);
         let context_builder = glutin::ContextBuilder::new()
             .with_vsync(true)
