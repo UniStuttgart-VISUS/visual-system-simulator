@@ -20,5 +20,5 @@ serde_json = "*"
 ac_ffmpeg = { package = "ac-ffmpeg", version = "0.15.3", optional = true }
 
 [features]
-default = ["video"]
+default = []
 video = ["ac_ffmpeg"]
