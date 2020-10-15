@@ -31,8 +31,7 @@ impl Node for Retina {
             )
             .unwrap();
 
-        let rgba_white = vec![255; 4].into_boxed_slice();
-        let (_, mask_view) = load_texture_from_bytes(&mut factory, rgba_white, 1, 1).unwrap();
+        let (_, mask_view) = load_texture_from_bytes(&mut factory, &[255; 4], 1, 1).unwrap();
         let sampler = factory.create_sampler_linear();
 
         let (_, src, dst) = factory.create_render_target(1, 1).unwrap();
@@ -87,7 +86,7 @@ impl Node for Retina {
             let retina_map = generate_retina_map(target_resolution, &values);
             let (_, retinamap_view) = load_texture_from_bytes(
                 &mut factory,
-                retina_map,
+                &retina_map,
                 target_resolution.0,
                 target_resolution.1,
             )

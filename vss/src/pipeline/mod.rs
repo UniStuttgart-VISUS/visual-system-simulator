@@ -49,10 +49,12 @@ pub enum DeviceSource {
     },
 }
 
-pub type RgbSurfaceFormat = gfx::format::R8_G8_B8_A8; //TODO: remove
-pub type ColorFormat = (RgbSurfaceFormat, gfx::format::Unorm);
-
 pub type DeviceTarget = gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat>;
+
+pub type RgbSurfaceFormat = gfx::format::R8_G8_B8_A8; //TODO: remove
+pub type ColorFormat = (gfx::format::R8_G8_B8_A8, gfx::format::Unorm);
+pub type DepthFormat = (gfx::format::R32, gfx::format::Float);
+
 
 /// The pipeline encapsulates the simulation and rendering system, i.e., all rendering nodes.
 pub struct Pipeline {
@@ -98,8 +100,19 @@ impl Pipeline {
                         DeviceSource::Rgb { width, height, .. } => (width, height),
                         DeviceSource::RgbDepth { width, height, .. } => (width, height),
                     };
-                    let (source, target) = create_target(window, width, height);
-                    (Some(source), Some(target))
+                    let (target_view, target) = create_texture_render_target::<ColorFormat>(
+                        &mut window.factory().borrow_mut(),
+                        width,
+                        height,
+                    );
+                    (
+                        Some(DeviceSource::Rgb {
+                            width,
+                            height,
+                            rgba8: target_view,
+                        }),
+                        Some(target),
+                    )
                 } else {
                     // No suggestion (can cause update-aborting errors).
                     (None, None)

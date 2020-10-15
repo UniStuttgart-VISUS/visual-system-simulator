@@ -13,6 +13,7 @@ gfx_defines! {
         u_fov: gfx::Global<[f32; 2]> = "u_fov",
         s_rgb: gfx::TextureSampler<[f32; 4]> = "s_rgb",
         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
+        rt_depth: gfx::RenderTarget<DepthFormat> = "rt_depth",
     }
 }
 
@@ -100,7 +101,9 @@ impl Node for UploadRgbBuffer {
             .unwrap();
 
         let sampler = factory.create_sampler_linear();
-        let (_, src, dst) = factory.create_render_target(1, 1).unwrap();
+        let (_, rgb_view) = load_texture_from_bytes(&mut factory, &[0; 4], 1, 1).unwrap();
+        let (_, _, rt_color) = factory.create_render_target(1, 1).unwrap();
+        let (_, _, rt_depth) = factory.create_render_target(1, 1).unwrap();
 
         UploadRgbBuffer {
             buffer_next: RgbBuffer::default(),
@@ -112,8 +115,9 @@ impl Node for UploadRgbBuffer {
                 u_flags: RgbInputFlags::empty().bits(),
                 u_head: [[0.0; 4]; 4],
                 u_fov: [90.0_f32.to_radians(), 59.0_f32.to_radians()],
-                s_rgb: (src, sampler),
-                rt_color: dst,
+                s_rgb: (rgb_view, sampler),
+                rt_color,
+                rt_depth,
             },
         }
     }
@@ -128,7 +132,7 @@ impl Node for UploadRgbBuffer {
             let mut factory = window.factory().borrow_mut();
             let (texture, view) = load_texture_from_bytes(
                 &mut factory,
-                self.buffer_next.pixels_rgb.clone(),
+                &self.buffer_next.pixels_rgb,
                 self.buffer_next.width as u32,
                 self.buffer_next.height as u32,
             )
@@ -156,9 +160,28 @@ impl Node for UploadRgbBuffer {
         self.pso_data.u_fov[1] =
             2.0 * ((self.pso_data.u_fov[0] / 2.0).tan() * height as f32 / width as f32).atan();
 
-        let (source, target) = create_target(window, width, height);
-        self.pso_data.rt_color = target.clone();
-        (Some(source), Some(target))
+        let (color_view, color) = create_texture_render_target::<ColorFormat>(
+            &mut window.factory().borrow_mut(),
+            width,
+            height,
+        );
+        let (depth_view, depth) = create_texture_render_target::<DepthFormat>(
+            &mut window.factory().borrow_mut(),
+            width,
+            height,
+        );
+
+        self.pso_data.rt_color = color.clone();
+        self.pso_data.rt_depth = depth.clone();
+        (
+            Some(DeviceSource::RgbDepth {
+                width,
+                height,
+                rgba8: color_view,
+                d: depth_view,
+            }),
+            Some(color),
+        )
     }
 
     fn input(&mut self, head: &Head, gaze: &DeviceGaze) -> DeviceGaze {

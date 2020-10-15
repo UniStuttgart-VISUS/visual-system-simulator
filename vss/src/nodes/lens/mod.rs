@@ -52,8 +52,7 @@ impl Node for Lens {
         let filename_normal = Cursor::new(include_bytes!("normal.png").to_vec());
         let (_, normal_view) = load_highres_normalmap(&mut factory, filename_normal).unwrap();
 
-        let rgba_cornea = vec![127; 4].into_boxed_slice();
-        let (_, cornea_view) = load_texture_from_bytes(&mut factory, rgba_cornea, 1, 1).unwrap();
+        let (_, cornea_view) = load_texture_from_bytes(&mut factory, &[127; 4], 1, 1).unwrap();
 
         let sampler = factory.create_sampler_linear();
         let (_, src, dst) = factory.create_render_target(1, 1).unwrap();

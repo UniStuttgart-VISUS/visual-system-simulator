@@ -77,7 +77,58 @@ impl Node for DownloadRgbBuffer {
 
     fn render(&mut self, window: &Window) {
         if let Some(target) = &self.target {
-            let rgb_buffer = download_rgb(window, target);
+            use gfx::format::Formatted;
+            use gfx::memory::Typed;
+
+            let factory = &mut window.factory().borrow_mut();
+            let encoder = &mut window.encoder().borrow_mut();
+            let (width, height, _, _) = target.get_dimensions();
+            let width = width as u32;
+            let height = height as u32;
+
+            // Schedule download.
+            let download = factory
+                .create_download_buffer::<[u8; 4]>((width * height) as usize)
+                .unwrap();
+            encoder
+                .copy_texture_to_buffer_raw(
+                    target.raw().get_texture(),
+                    None,
+                    gfx::texture::RawImageInfo {
+                        xoffset: 0,
+                        yoffset: 0,
+                        zoffset: 0,
+                        width: width as u16,
+                        height: height as u16,
+                        depth: 0,
+                        format: ColorFormat::get_format(),
+                        mipmap: 0,
+                    },
+                    download.raw(),
+                    0,
+                )
+                .unwrap();
+
+            // Flush before reading the buffers to prevent panics.
+            window.flush(encoder);
+
+            // Copy to buffers.
+            let mut pixels_rgb = Vec::with_capacity((width * height * 3) as usize);
+            let reader = factory.read_mapping(&download).unwrap();
+            for row in reader.chunks(width as usize).rev() {
+                for pixel in row.iter() {
+                    pixels_rgb.push(pixel[0]);
+                    pixels_rgb.push(pixel[1]);
+                    pixels_rgb.push(pixel[2]);
+                }
+            }
+
+            let rgb_buffer = RgbBuffer {
+                pixels_rgb: pixels_rgb.into_boxed_slice(),
+                width,
+                height,
+            };
+
             self.tx.send(Message::Buffer(rgb_buffer)).unwrap();
         }
     }

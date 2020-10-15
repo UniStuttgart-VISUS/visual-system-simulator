@@ -77,7 +77,7 @@ pub fn load_texture(
     let (width, height) = img.dimensions();
     let data = img.into_raw();
 
-    load_texture_from_bytes(factory, data.into_boxed_slice(), width, height)
+    load_texture_from_bytes(factory, &data, width, height)
 }
 
 ///
@@ -96,7 +96,7 @@ pub fn load_texture(
 ///
 pub fn load_texture_from_bytes(
     factory: &mut gfx_device_gl::Factory,
-    data: Box<[u8]>,
+    data: &[u8],
     width: u32,
     height: u32,
 ) -> Result<
@@ -289,63 +289,18 @@ pub fn load_highres_normalmap(
     Ok((tex, view))
 }
 
-pub fn download_rgb(window: &Window, target: &DeviceTarget) -> RgbBuffer {
-    use gfx::format::Formatted;
-    use gfx::memory::Typed;
-
-    let factory = &mut window.factory().borrow_mut();
-    let encoder = &mut window.encoder().borrow_mut();
-    let (width, height, _, _) = target.get_dimensions();
-    let width = width as u32;
-    let height = height as u32;
-
-    // Schedule download.
-    let download = factory
-        .create_download_buffer::<[u8; 4]>((width * height) as usize)
-        .unwrap();
-    encoder
-        .copy_texture_to_buffer_raw(
-            target.raw().get_texture(),
-            None,
-            gfx::texture::RawImageInfo {
-                xoffset: 0,
-                yoffset: 0,
-                zoffset: 0,
-                width: width as u16,
-                height: height as u16,
-                depth: 0,
-                format: ColorFormat::get_format(),
-                mipmap: 0,
-            },
-            download.raw(),
-            0,
-        )
-        .unwrap();
-
-    // Flush before reading the buffers to prevent panics.
-    window.flush(encoder);
-
-    // Copy to buffers.
-    let mut pixels_rgb = Vec::with_capacity((width * height * 3) as usize);
-    let reader = factory.read_mapping(&download).unwrap();
-    for row in reader.chunks(width as usize).rev() {
-        for pixel in row.iter() {
-            pixels_rgb.push(pixel[0]);
-            pixels_rgb.push(pixel[1]);
-            pixels_rgb.push(pixel[2]);
-        }
-    }
-
-    RgbBuffer {
-        pixels_rgb: pixels_rgb.into_boxed_slice(),
-        width,
-        height,
-    }
-}
-
-pub fn create_target(window: &Window, width: u32, height: u32) -> (DeviceSource, DeviceTarget) {
-    let mut factory = window.factory().borrow_mut();
-
+/// Creates a texture that can be read from in shaders (view) and rendered to (render target).
+pub fn create_texture_render_target<T>(
+    factory: &mut gfx_device_gl::Factory,
+    width: u32,
+    height: u32,
+) -> (
+    gfx::handle::ShaderResourceView<gfx_device_gl::Resources, <T as gfx::format::Formatted>::View>,
+    gfx::handle::RenderTargetView<gfx_device_gl::Resources, T>,
+)
+where
+    T: gfx::format::TextureFormat + gfx::format::RenderFormat,
+{
     let texture = factory
         .create_texture(
             gfx::texture::Kind::D2(
@@ -356,25 +311,14 @@ pub fn create_target(window: &Window, width: u32, height: u32) -> (DeviceSource,
             1,
             gfx::memory::Bind::RENDER_TARGET | gfx::memory::Bind::SHADER_RESOURCE | gfx::memory::Bind::TRANSFER_SRC,
             gfx::memory::Usage::Dynamic,
-            Some( <<ColorFormat as gfx::format::Formatted>::Channel as gfx::format::ChannelTyped>::get_channel_type() ),
+            Some( <<T as gfx::format::Formatted>::Channel as gfx::format::ChannelTyped>::get_channel_type() ),
         )
         .unwrap();
-    let source = factory
-        .view_texture_as_shader_resource::<ColorFormat>(
-            &texture,
-            (0, 0),
-            gfx::format::Swizzle::new(),
-        )
+    let target_view = factory
+        .view_texture_as_shader_resource::<T>(&texture, (0, 0), gfx::format::Swizzle::new())
         .unwrap();
     let target = factory
-        .view_texture_as_render_target::<ColorFormat>(&texture, 0, None)
+        .view_texture_as_render_target::<T>(&texture, 0, None)
         .unwrap();
-    (
-        DeviceSource::Rgb {
-            width: width as u32,
-            height: height as u32,
-            rgba8: source,
-        },
-        target,
-    )
+    (target_view, target)
 }

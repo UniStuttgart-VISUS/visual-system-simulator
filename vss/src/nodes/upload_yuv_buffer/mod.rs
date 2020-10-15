@@ -149,9 +149,21 @@ impl Node for UploadYuvBuffer {
             height = info.height as u32;
         }
 
-        let (source, target) = create_target(window, width, height);
-        self.pso_data.rt_color = target.clone();
-        (Some(source), Some(target))
+        let (color_view, color) = create_texture_render_target::<ColorFormat>(
+            &mut window.factory().borrow_mut(),
+            width,
+            height,
+        );
+
+        self.pso_data.rt_color = color.clone();
+        (
+            Some(DeviceSource::Rgb {
+                width,
+                height,
+                rgba8: color_view,
+            }),
+            Some(color),
+        )
     }
 
     fn render(&mut self, window: &Window) {
