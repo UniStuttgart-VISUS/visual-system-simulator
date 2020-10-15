@@ -25,7 +25,7 @@ use gfx_device_gl::Resources;
 
 use super::*;
 
-/// An executable function that implements an aspect of the simulation pipeline.
+/// An executable function that implements an aspect of the simulation.
 ///
 /// Initialize with `build(...)`, then apply with `render(...)`.
 ///

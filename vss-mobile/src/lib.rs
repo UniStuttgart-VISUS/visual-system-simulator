@@ -23,13 +23,13 @@ pub fn main() {
     config.loop_provider = String::from("camera");
     config.special_loop_provider_set = true;
  
-     
-      let (mut device, mut pipeline) = config.build();
+
+    let (mut device, mut flow) = config.build();
 
     let mut done = false;
     while !done {
         device.begin_frame();
-        pipeline.render(&mut device);
+        flow.render(&mut device);
         device.end_frame(&mut done);
     }
 }

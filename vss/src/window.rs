@@ -29,7 +29,7 @@ pub struct Window {
     values: RefCell<ValueMap>,
 
     remote: Option<Remote>,
-    pipeline: Flow,
+    flow: Flow,
 }
 
 impl Window {
@@ -65,7 +65,7 @@ impl Window {
         }
 
         Window {
-            pipeline: Flow::new(),
+            flow: Flow::new(),
             remote,
             windowed_context,
             events_loop: RefCell::new(events_loop),
@@ -87,25 +87,25 @@ impl Window {
 
 impl Window {
     pub fn add_node(&mut self, node: Box<dyn Node>) {
-        self.pipeline.add_node(node);
+        self.flow.add_node(node);
     }
 
     pub fn replace_node(&mut self, index: usize, node: Box<dyn Node>) {
-        self.pipeline.replace_node(index, node);
+        self.flow.replace_node(index, node);
     }
 
     pub fn nodes_len(&self) -> usize {
-        self.pipeline.nodes_len()
+        self.flow.nodes_len()
     }
 
     pub fn update_nodes(&mut self) {
-        self.pipeline.update_io(&self);
-        self.pipeline.update_values(&self, &self.values.borrow());
+        self.flow.update_io(&self);
+        self.flow.update_values(&self, &self.values.borrow());
     }
 
     pub fn set_values(&self, values: ValueMap) {
         self.values.replace(values);
-        self.pipeline.update_values(&self, &self.values.borrow());
+        self.flow.update_values(&self, &self.values.borrow());
     }
 
     pub fn factory(&self) -> &RefCell<DeviceFactory> {
@@ -205,19 +205,18 @@ impl Window {
                 &mut self.render_target.borrow_mut(),
                 &mut self.main_depth.borrow_mut(),
             );
-            self.pipeline.update_io(&self);
-            self.pipeline.update_values(&self, &self.values.borrow());
+            self.flow.update_io(&self);
+            self.flow.update_values(&self, &self.values.borrow());
         }
 
         // Update input.
-        self.pipeline
-            .input(&self.last_head.borrow(), &deferred_gaze);
+        self.flow.input(&self.last_head.borrow(), &deferred_gaze);
         *self.last_gaze.borrow_mut() = deferred_gaze;
 
         self.encoder
             .borrow_mut()
             .clear(&self.render_target.borrow(), [68.0 / 255.0; 4]);
-        self.pipeline.render(&self);
+        self.flow.render(&self);
 
         use gfx::Device;
         self.flush(&mut self.encoder().borrow_mut());
