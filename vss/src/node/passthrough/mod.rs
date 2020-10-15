@@ -1,4 +1,4 @@
-use crate::*;
+use super::*;
 
 /// A node that does dot alter anything.
 pub struct Passthrough;
@@ -11,9 +11,9 @@ impl Node for Passthrough {
     fn update_io(
         &mut self,
         _window: &Window,
-        source: (Option<DeviceSource>, Option<DeviceTarget>),
-        _target_candidate: (Option<DeviceSource>, Option<DeviceTarget>),
-    ) -> (Option<DeviceSource>, Option<DeviceTarget>) {
+        source: (Option<NodeSource>, Option<NodeTarget>),
+        _target_candidate: (Option<NodeSource>, Option<NodeTarget>),
+    ) -> (Option<NodeSource>, Option<NodeTarget>) {
         source
     }
 

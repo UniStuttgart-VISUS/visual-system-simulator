@@ -74,7 +74,7 @@ impl Device for CameraDevice{
         let (t_u, v_u) = core::load_single_channel_texture_from_bytes(factory, Box::from(memory_u), 1920, 1080).unwrap();
         let (t_v, v_v) = core::load_single_channel_texture_from_bytes(factory, Box::from(memory_v), 1920, 1080).unwrap();
 
-        let view = DeviceSource::Yuv {
+        let view = NodeSource::Yuv {
             y: v_y,
             u: v_u,
             v: v_v

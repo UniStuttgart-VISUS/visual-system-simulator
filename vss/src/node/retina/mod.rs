@@ -1,9 +1,8 @@
 mod retina_map;
 
-use gfx;
-
 use self::retina_map::generate_retina_map;
-use crate::*;
+use super::*;
+use gfx;
 
 gfx_defines! {
     pipeline pipe {
@@ -25,8 +24,8 @@ impl Node for Retina {
         let mut factory = window.factory().borrow_mut();
         let pso = factory
             .create_pipeline_simple(
-                &include_glsl!("../shader.vert"),
-                &include_glsl!("shader.frag"),
+                &include_glsl!("../mod.vert"),
+                &include_glsl!("mod.frag"),
                 pipe::new(),
             )
             .unwrap();
@@ -51,19 +50,19 @@ impl Node for Retina {
     fn update_io(
         &mut self,
         window: &Window,
-        source: (Option<DeviceSource>, Option<DeviceTarget>),
-        target_candidate: (Option<DeviceSource>, Option<DeviceTarget>),
-    ) -> (Option<DeviceSource>, Option<DeviceTarget>) {
+        source: (Option<NodeSource>, Option<NodeTarget>),
+        target_candidate: (Option<NodeSource>, Option<NodeTarget>),
+    ) -> (Option<NodeSource>, Option<NodeTarget>) {
         let mut factory = window.factory().borrow_mut();
         let target = target_candidate.1.expect("Render target expected");
         let target_size = target.get_dimensions();
         self.pso_data.u_resolution = [target_size.0 as f32, target_size.1 as f32];
         self.pso_data.rt_color = target.clone();
         match source.0.expect("Source expected") {
-            DeviceSource::Rgb { rgba8, .. } => {
+            NodeSource::Rgb { rgba8, .. } => {
                 self.pso_data.s_source = (rgba8.clone(), factory.create_sampler_linear());
             }
-            DeviceSource::RgbDepth { rgba8, .. } => {
+            NodeSource::RgbDepth { rgba8, .. } => {
                 self.pso_data.s_source = (rgba8.clone(), factory.create_sampler_linear());
             }
         }
@@ -96,7 +95,7 @@ impl Node for Retina {
         };
     }
 
-    fn input(&mut self, _head: &Head, gaze: &DeviceGaze) -> DeviceGaze {
+    fn input(&mut self, _head: &Head, gaze: &Gaze) -> Gaze {
         self.pso_data.u_gaze = [
             gaze.x * self.pso_data.u_resolution[0],
             gaze.y * self.pso_data.u_resolution[1],

@@ -1,29 +1,27 @@
 //!
-//! This module contains several [nodes](Node) that can be chained to form a [pipeline](Pipeline).
+//! This module contains several [Nodes](Node) that can be chained to form a [Flow].
 //!
-
 mod cataract;
 mod display;
-mod download_rgb_buffer;
 mod lens;
 mod passthrough;
 mod retina;
-mod upload_rgb_buffer;
-mod upload_yuv_buffer;
+mod rgb_buffer;
+mod yuv_buffer;
 
 pub use self::cataract::*;
 pub use self::display::*;
-pub use self::download_rgb_buffer::*;
 pub use self::lens::*;
 pub use self::passthrough::*;
 pub use self::retina::*;
-pub use self::upload_rgb_buffer::*;
-pub use self::upload_yuv_buffer::*;
+pub use self::rgb_buffer::*;
+pub use self::yuv_buffer::*;
 
-pub use gfx;
-pub use gfx_device_gl;
-pub use gfx_device_gl::CommandBuffer;
-pub use gfx_device_gl::Resources;
+use gfx;
+use gfx::traits::FactoryExt;
+use gfx::Factory;
+use gfx_device_gl;
+use gfx_device_gl::Resources;
 
 use super::*;
 
@@ -42,16 +40,16 @@ pub trait Node {
     fn update_io(
         &mut self,
         window: &Window,
-        source: (Option<DeviceSource>, Option<DeviceTarget>),
-        target_candidate: (Option<DeviceSource>, Option<DeviceTarget>),
-    ) -> (Option<DeviceSource>, Option<DeviceTarget>);
+        source: (Option<NodeSource>, Option<NodeTarget>),
+        target_candidate: (Option<NodeSource>, Option<NodeTarget>),
+    ) -> (Option<NodeSource>, Option<NodeTarget>);
 
     /// Set new parameters for this effect
     #[allow(unused_variables)]
     fn update_values(&mut self, window: &Window, values: &ValueMap) {}
 
     /// Handle input.
-    fn input(&mut self, _head: &Head, gaze: &DeviceGaze) -> DeviceGaze {
+    fn input(&mut self, _head: &Head, gaze: &Gaze) -> Gaze {
         gaze.clone()
     }
 

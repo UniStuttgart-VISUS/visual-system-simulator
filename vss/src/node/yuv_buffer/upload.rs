@@ -1,7 +1,5 @@
+use super::*;
 use gfx;
-use gfx_device_gl::Resources;
-
-use crate::*;
 
 gfx_defines! {
     pipeline pipe {
@@ -69,8 +67,8 @@ impl Node for UploadYuvBuffer {
 
         let pso = factory
             .create_pipeline_simple(
-                &include_glsl!("../shader.vert"),
-                &include_glsl!("shader.frag"),
+                &include_glsl!("../mod.vert"),
+                &include_glsl!("upload.frag"),
                 pipe::new(),
             )
             .unwrap();
@@ -103,9 +101,9 @@ impl Node for UploadYuvBuffer {
     fn update_io(
         &mut self,
         window: &Window,
-        _source: (Option<DeviceSource>, Option<DeviceTarget>),
-        _target_candidate: (Option<DeviceSource>, Option<DeviceTarget>),
-    ) -> (Option<DeviceSource>, Option<DeviceTarget>) {
+        _source: (Option<NodeSource>, Option<NodeTarget>),
+        _target_candidate: (Option<NodeSource>, Option<NodeTarget>),
+    ) -> (Option<NodeSource>, Option<NodeTarget>) {
         if let Some(buffer) = &self.buffer_next {
             let mut factory = window.factory().borrow_mut();
 
@@ -157,7 +155,7 @@ impl Node for UploadYuvBuffer {
 
         self.pso_data.rt_color = color.clone();
         (
-            Some(DeviceSource::Rgb {
+            Some(NodeSource::Rgb {
                 width,
                 height,
                 rgba8: color_view,

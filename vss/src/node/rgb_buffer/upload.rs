@@ -1,10 +1,7 @@
+use super::*;
 use gfx;
-use gfx_device_gl::Resources;
-
 use std::io::Cursor;
 use std::path::Path;
-
-use crate::*;
 
 gfx_defines! {
     pipeline pipe {
@@ -29,7 +26,7 @@ bitflags! {
 pub struct UploadRgbBuffer {
     buffer_next: RgbBuffer,
     buffer_upload: bool,
-    texture: Option<gfx::handle::Texture<Resources, RgbSurfaceFormat>>,
+    texture: Option<gfx::handle::Texture<Resources, gfx::format::R8_G8_B8_A8>>,
 
     pso: gfx::PipelineState<Resources, pipe::Meta>,
     pso_data: pipe::Data<Resources>,
@@ -94,8 +91,8 @@ impl Node for UploadRgbBuffer {
 
         let pso = factory
             .create_pipeline_simple(
-                &include_glsl!("../shader.vert"),
-                &include_glsl!("shader.frag"),
+                &include_glsl!("../mod.vert"),
+                &include_glsl!("upload.frag"),
                 pipe::new(),
             )
             .unwrap();
@@ -125,9 +122,9 @@ impl Node for UploadRgbBuffer {
     fn update_io(
         &mut self,
         window: &Window,
-        _source: (Option<DeviceSource>, Option<DeviceTarget>),
-        _target_candidate: (Option<DeviceSource>, Option<DeviceTarget>),
-    ) -> (Option<DeviceSource>, Option<DeviceTarget>) {
+        _source: (Option<NodeSource>, Option<NodeTarget>),
+        _target_candidate: (Option<NodeSource>, Option<NodeTarget>),
+    ) -> (Option<NodeSource>, Option<NodeTarget>) {
         if self.buffer_upload {
             let mut factory = window.factory().borrow_mut();
             let (texture, view) = load_texture_from_bytes(
@@ -174,7 +171,7 @@ impl Node for UploadRgbBuffer {
         self.pso_data.rt_color = color.clone();
         self.pso_data.rt_depth = depth.clone();
         (
-            Some(DeviceSource::RgbDepth {
+            Some(NodeSource::RgbDepth {
                 width,
                 height,
                 rgba8: color_view,
@@ -184,7 +181,7 @@ impl Node for UploadRgbBuffer {
         )
     }
 
-    fn input(&mut self, head: &Head, gaze: &DeviceGaze) -> DeviceGaze {
+    fn input(&mut self, head: &Head, gaze: &Gaze) -> Gaze {
         use cgmath::Matrix4;
         self.pso_data.u_head = (Matrix4::from_angle_y(cgmath::Rad(head.yaw))
             * Matrix4::from_angle_x(cgmath::Rad(head.pitch)))

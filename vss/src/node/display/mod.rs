@@ -1,7 +1,5 @@
+use super::*;
 use gfx;
-use gfx_device_gl::Resources;
-
-use crate::*;
 
 gfx_defines! {
     pipeline pipe {
@@ -24,8 +22,8 @@ impl Node for Display {
 
         let pso = factory
             .create_pipeline_simple(
-                &include_glsl!("shader.vert"),
-                &include_glsl!("shader.frag"),
+                &include_glsl!("mod.vert"),
+                &include_glsl!("mod.frag"),
                 pipe::new(),
             )
             .unwrap();
@@ -48,9 +46,9 @@ impl Node for Display {
     fn update_io(
         &mut self,
         window: &Window,
-        source: (Option<DeviceSource>, Option<DeviceTarget>),
-        target_candidate: (Option<DeviceSource>, Option<DeviceTarget>),
-    ) -> (Option<DeviceSource>, Option<DeviceTarget>) {
+        source: (Option<NodeSource>, Option<NodeTarget>),
+        target_candidate: (Option<NodeSource>, Option<NodeTarget>),
+    ) -> (Option<NodeSource>, Option<NodeTarget>) {
         let mut factory = window.factory().borrow_mut();
 
         let target = target_candidate.1.expect("Render target expected");
@@ -59,7 +57,7 @@ impl Node for Display {
         self.pso_data.u_resolution_out = [target_size.0 as f32, target_size.1 as f32];
         self.pso_data.rt_color = target.clone();
         match source.0.expect("Source expected") {
-            DeviceSource::Rgb {
+            NodeSource::Rgb {
                 rgba8,
                 width,
                 height,
@@ -67,7 +65,7 @@ impl Node for Display {
                 self.pso_data.u_resolution_in = [width as f32, height as f32];
                 self.pso_data.s_source = (rgba8.clone(), factory.create_sampler_linear());
             }
-            DeviceSource::RgbDepth {
+            NodeSource::RgbDepth {
                 rgba8,
                 width,
                 height,
@@ -93,7 +91,7 @@ impl Node for Display {
         }
     }
 
-    fn input(&mut self, _head: &Head, gaze: &DeviceGaze) -> DeviceGaze {
+    fn input(&mut self, _head: &Head, gaze: &Gaze) -> Gaze {
         let ratio = [
             self.pso_data.u_resolution_out[0] / self.pso_data.u_resolution_in[0],
             self.pso_data.u_resolution_out[1] / self.pso_data.u_resolution_in[1],
@@ -107,7 +105,7 @@ impl Node for Display {
             ratio[1] / ratio[0].min(ratio[1]),
         ];
 
-        DeviceGaze {
+        Gaze {
             x: scale[0] * gaze.x - offset[0],
             y: scale[1] * gaze.y - offset[1],
         }

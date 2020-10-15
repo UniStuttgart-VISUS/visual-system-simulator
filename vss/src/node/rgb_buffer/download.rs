@@ -1,4 +1,4 @@
-use crate::*;
+use super::*;
 use std::path::Path;
 
 pub type RgbBufferCb = Box<dyn FnOnce(RgbBuffer) + Send>;
@@ -9,7 +9,7 @@ enum Message {
 }
 /// A node that downloads RGB buffers.
 pub struct DownloadRgbBuffer {
-    target: Option<DeviceTarget>,
+    target: Option<NodeTarget>,
     tx: std::sync::mpsc::Sender<Message>,
 }
 
@@ -68,9 +68,9 @@ impl Node for DownloadRgbBuffer {
     fn update_io(
         &mut self,
         _window: &Window,
-        source: (Option<DeviceSource>, Option<DeviceTarget>),
-        _target_candidate: (Option<DeviceSource>, Option<DeviceTarget>),
-    ) -> (Option<DeviceSource>, Option<DeviceTarget>) {
+        source: (Option<NodeSource>, Option<NodeTarget>),
+        _target_candidate: (Option<NodeSource>, Option<NodeTarget>),
+    ) -> (Option<NodeSource>, Option<NodeTarget>) {
         self.target = source.1.clone();
         source
     }

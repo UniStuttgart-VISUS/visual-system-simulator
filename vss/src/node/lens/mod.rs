@@ -1,10 +1,7 @@
+use super::*;
+use gfx;
 use std::f32;
 use std::io::Cursor;
-
-use gfx;
-use gfx_device_gl::Resources;
-
-use crate::*;
 
 const DIOPTRES_SCALING: f32 = 0.332_763_369_417_523 as f32;
 
@@ -42,8 +39,8 @@ impl Node for Lens {
         let mut factory = window.factory().borrow_mut();
         let pso = factory
             .create_pipeline_simple(
-                &include_glsl!("../shader.vert"),
-                &include_glsl!("shader.frag"),
+                &include_glsl!("../mod.vert"),
+                &include_glsl!("mod.frag"),
                 pipe::new(),
             )
             .unwrap();
@@ -86,17 +83,17 @@ impl Node for Lens {
     fn update_io(
         &mut self,
         window: &Window,
-        source: (Option<DeviceSource>, Option<DeviceTarget>),
-        target_candidate: (Option<DeviceSource>, Option<DeviceTarget>),
-    ) -> (Option<DeviceSource>, Option<DeviceTarget>) {
+        source: (Option<NodeSource>, Option<NodeTarget>),
+        target_candidate: (Option<NodeSource>, Option<NodeTarget>),
+    ) -> (Option<NodeSource>, Option<NodeTarget>) {
         let mut factory = window.factory().borrow_mut();
         let target = target_candidate.1.expect("Render target expected");
         self.pso_data.rt_color = target.clone();
         match source.0.expect("Source expected") {
-            DeviceSource::Rgb { rgba8, .. } => {
+            NodeSource::Rgb { rgba8, .. } => {
                 self.pso_data.s_color = (rgba8.clone(), factory.create_sampler_linear());
             }
-            DeviceSource::RgbDepth { rgba8, d, .. } => {
+            NodeSource::RgbDepth { rgba8, d, .. } => {
                 self.pso_data.s_color = (rgba8.clone(), factory.create_sampler_linear());
                 self.pso_data.s_depth = (d.clone(), factory.create_sampler_linear());
             }

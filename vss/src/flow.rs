@@ -1,31 +1,12 @@
-pub use crate::window::Window;
-pub use gfx::traits::FactoryExt;
-pub use gfx::Factory;
-
-use std::cell::RefCell;
 use crate::*;
+use std::cell::RefCell;
 
-/// A factory to create pipeline objects from.
-pub type DeviceFactory = gfx_device_gl::Factory;
-
-/// An encoder to manipulate the command queue.
-pub type DeviceEncoder = gfx::Encoder<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer>;
-
-/// Represents properties of eye-tracking data.
-#[derive(Debug, Clone)]
-pub struct DeviceGaze {
-    pub x: f32,
-    pub y: f32,
-}
-
-pub struct Head {
-    pub yaw: f32,
-    pub pitch: f32,
-}
+pub type ColorFormat = (gfx::format::R8_G8_B8_A8, gfx::format::Unorm);
+pub type DepthFormat = (gfx::format::R32, gfx::format::Float);
 
 /// Enum to hold texture-representations for shaders.
 #[derive(Clone, Debug)]
-pub enum DeviceSource {
+pub enum NodeSource {
     Rgb {
         width: u32,
         height: u32,
@@ -39,14 +20,22 @@ pub enum DeviceSource {
     },
 }
 
-pub type DeviceTarget = gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat>;
+pub type NodeTarget = gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat>;
 
-pub type RgbSurfaceFormat = gfx::format::R8_G8_B8_A8; //TODO: remove
-pub type ColorFormat = (gfx::format::R8_G8_B8_A8, gfx::format::Unorm);
-pub type DepthFormat = (gfx::format::R32, gfx::format::Float);
+/// Represents properties of eye-tracking data.
+#[derive(Debug, Clone)]
+pub struct Gaze {
+    pub x: f32,
+    pub y: f32,
+}
 
+/// Represents properties of eye-tracking data.
+pub struct Head {
+    pub yaw: f32,
+    pub pitch: f32,
+}
 
-/// The pipeline encapsulates the simulation and rendering system, i.e., all rendering nodes.
+/// A flow encapsulates simulation nodes, i.e., all simulation and rendering.
 pub struct Flow {
     nodes: RefCell<Vec<Box<dyn Node>>>,
 }
@@ -71,7 +60,7 @@ impl Flow {
     }
 
     pub fn update_io(&self, window: &Window) {
-        let mut last_targets: [(Option<DeviceSource>, Option<DeviceTarget>); 2] =
+        let mut last_targets: [(Option<NodeSource>, Option<NodeTarget>); 2] =
             [(None, None), (None, None)];
         let nodes_len = self.nodes.borrow().len();
         for (idx, node) in self.nodes.borrow_mut().iter_mut().enumerate() {
@@ -87,8 +76,8 @@ impl Flow {
                 } else if let Some(source) = &source.0 {
                     // Guess target, based on source.
                     let (width, height) = match *source {
-                        DeviceSource::Rgb { width, height, .. } => (width, height),
-                        DeviceSource::RgbDepth { width, height, .. } => (width, height),
+                        NodeSource::Rgb { width, height, .. } => (width, height),
+                        NodeSource::RgbDepth { width, height, .. } => (width, height),
                     };
                     let (target_view, target) = create_texture_render_target::<ColorFormat>(
                         &mut window.factory().borrow_mut(),
@@ -96,7 +85,7 @@ impl Flow {
                         height,
                     );
                     (
-                        Some(DeviceSource::Rgb {
+                        Some(NodeSource::Rgb {
                             width,
                             height,
                             rgba8: target_view,
@@ -121,7 +110,7 @@ impl Flow {
         }
     }
 
-    pub fn input(&self, head: &Head, gaze: &DeviceGaze) {
+    pub fn input(&self, head: &Head, gaze: &Gaze) {
         let mut gaze = gaze.clone();
         // Propagate to nodes.
         for node in self.nodes.borrow_mut().iter_mut().rev() {

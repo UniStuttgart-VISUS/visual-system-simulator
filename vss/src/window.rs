@@ -1,21 +1,19 @@
+use crate::*;
 use std::cell::RefCell;
 
-use glutin::dpi::*;
-use glutin::GlRequest;
-use crate::*;
+/// A factory to create device objects.
+pub type DeviceFactory = gfx_device_gl::Factory;
 
-pub type DepthFormat = gfx::format::DepthStencil;
+/// An encoder to manipulate a device command queue.
+pub type DeviceEncoder = gfx::Encoder<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer>;
 
-/// A device for window and context creation.
+/// Represents a window and its associated rendering context and [Flow].
 pub struct Window {
-    remote: Option<Remote>,
-    pipeline: Flow,
-
     windowed_context: glutin::WindowedContext<glutin::PossiblyCurrent>,
     events_loop: RefCell<glutin::EventsLoop>,
     device: RefCell<gfx_device_gl::Device>,
-    factory: RefCell<gfx_device_gl::Factory>,
-    encoder: RefCell<gfx::Encoder<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer>>,
+    factory: RefCell<DeviceFactory>,
+    encoder: RefCell<DeviceEncoder>,
 
     render_target: RefCell<gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat>>,
     main_depth: RefCell<
@@ -26,40 +24,41 @@ pub struct Window {
     >,
 
     last_head: RefCell<Head>,
-    last_gaze: RefCell<DeviceGaze>,
+    last_gaze: RefCell<Gaze>,
     active: RefCell<bool>,
     values: RefCell<ValueMap>,
+
+    remote: Option<Remote>,
+    pipeline: Flow,
 }
 
 impl Window {
     pub fn new(visible: bool, remote: Option<Remote>, values: ValueMap) -> Self {
         // Create a window and context.
-        let gl_version = GlRequest::GlThenGles {
+        let gl_version = glutin::GlRequest::GlThenGles {
             opengles_version: (3, 2),
             opengl_version: (4, 1),
         };
         let events_loop = glutin::EventsLoop::new();
         let window_builder = glutin::WindowBuilder::new()
             .with_title("Visual System Simulator")
-            .with_min_dimensions(LogicalSize::new(640.0, 360.0))
-            .with_dimensions(LogicalSize::new(1280.0, 720.0))
+            .with_min_dimensions(glutin::dpi::LogicalSize::new(640.0, 360.0))
+            .with_dimensions(glutin::dpi::LogicalSize::new(1280.0, 720.0))
             .with_visibility(visible);
         let context_builder = glutin::ContextBuilder::new()
             .with_vsync(true)
             .with_gl(gl_version);
         let (windowed_context, mut device, mut factory, render_target, main_depth) =
-            gfx_window_glutin::init::<ColorFormat, DepthFormat>(
-                window_builder,
-                context_builder,
-                &events_loop,
-            )
+            gfx_window_glutin::init::<
+                (gfx::format::R8_G8_B8_A8, gfx::format::Unorm),
+                gfx::format::DepthStencil,
+            >(window_builder, context_builder, &events_loop)
             .unwrap();
 
         windowed_context.window().hide_cursor(true);
 
         // Create a command buffer.
-        let encoder: gfx::Encoder<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer> =
-            factory.create_command_buffer().into();
+        let encoder: DeviceEncoder = factory.create_command_buffer().into();
 
         unsafe {
             device.with_gl(|gl| gl.Disable(gfx_gl::FRAMEBUFFER_SRGB));
@@ -79,7 +78,7 @@ impl Window {
                 yaw: 0.0,
                 pitch: 0.0,
             }),
-            last_gaze: RefCell::new(DeviceGaze { x: 0.5, y: 0.5 }),
+            last_gaze: RefCell::new(Gaze { x: 0.5, y: 0.5 }),
             active: RefCell::new(false),
             values: RefCell::new(values),
         }
@@ -123,9 +122,9 @@ impl Window {
         encoder.flush(device.deref_mut());
     }
 
-    fn override_gaze(gaze: DeviceGaze, values: &ValueMap) -> DeviceGaze {
+    fn override_gaze(gaze: Gaze, values: &ValueMap) -> Gaze {
         if let (Some(gaze_x), Some(gaze_y)) = (values.get("gaze_x"), values.get("gaze_y")) {
-            DeviceGaze {
+            Gaze {
                 x: gaze_x.as_f64().unwrap_or(0.0) as f32,
                 y: gaze_y.as_f64().unwrap_or(0.0) as f32,
             }
@@ -134,7 +133,7 @@ impl Window {
         }
     }
 
-    pub fn target(&self) -> DeviceTarget {
+    pub fn target(&self) -> NodeTarget {
         self.render_target.borrow().clone()
     }
 
@@ -169,7 +168,7 @@ impl Window {
                             let window_size =
                                 &self.windowed_context.window().get_inner_size().unwrap();
                             deferred_gaze = Self::override_gaze(
-                                DeviceGaze {
+                                Gaze {
                                     x: position.x as f32 / window_size.width as f32,
                                     y: 1.0 - (position.y as f32 / window_size.height as f32),
                                 },
@@ -187,10 +186,8 @@ impl Window {
                     }
                     glutin::WindowEvent::CursorLeft { .. } => {
                         if *self.active.borrow() {
-                            deferred_gaze = Self::override_gaze(
-                                DeviceGaze { x: 0.5, y: 0.5 },
-                                &self.values.borrow(),
-                            );
+                            deferred_gaze =
+                                Self::override_gaze(Gaze { x: 0.5, y: 0.5 }, &self.values.borrow());
                         }
                     }
                     _ => (),

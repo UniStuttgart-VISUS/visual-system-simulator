@@ -1,26 +1,8 @@
-use std::io::Cursor;
-
 use crate::*;
 use gfx::Factory;
 use gfx_device_gl::CommandBuffer;
 use gfx_device_gl::Resources;
-
-// A buffer representing color information.
-pub struct RgbBuffer {
-    pub pixels_rgb: Box<[u8]>,
-    pub width: u32,
-    pub height: u32,
-}
-
-impl Default for RgbBuffer {
-    fn default() -> Self {
-        Self {
-            pixels_rgb: vec![0; 1].into_boxed_slice(),
-            width: 1,
-            height: 1,
-        }
-    }
-}
+use std::io::Cursor;
 
 ///
 /// Can be used to replace parts of or a whole texture.
@@ -39,7 +21,7 @@ impl Default for RgbBuffer {
 ///
 pub fn update_texture(
     encoder: &mut gfx::Encoder<Resources, CommandBuffer>,
-    texture: &gfx::handle::Texture<Resources, RgbSurfaceFormat>,
+    texture: &gfx::handle::Texture<Resources, gfx::format::R8_G8_B8_A8>,
     size: [u16; 2],
     offset: [u16; 2],
     raw_data: &[u8],
@@ -56,8 +38,8 @@ pub fn update_texture(
     };
 
     let data = gfx::memory::cast_slice(&raw_data);
-    let _msg =
-        encoder.update_texture::<RgbSurfaceFormat, ColorFormat>(texture, None, img_info, data);
+    let _msg = encoder
+        .update_texture::<gfx::format::R8_G8_B8_A8, ColorFormat>(texture, None, img_info, data);
 }
 
 pub fn load_texture(
@@ -65,7 +47,7 @@ pub fn load_texture(
     data: Cursor<Vec<u8>>,
 ) -> Result<
     (
-        gfx::handle::Texture<Resources, RgbSurfaceFormat>,
+        gfx::handle::Texture<Resources, gfx::format::R8_G8_B8_A8>,
         gfx::handle::ShaderResourceView<Resources, [f32; 4]>,
     ),
     String,
@@ -101,7 +83,7 @@ pub fn load_texture_from_bytes(
     height: u32,
 ) -> Result<
     (
-        gfx::handle::Texture<Resources, RgbSurfaceFormat>,
+        gfx::handle::Texture<Resources, gfx::format::R8_G8_B8_A8>,
         gfx::handle::ShaderResourceView<Resources, [f32; 4]>,
     ),
     String,

@@ -2,7 +2,6 @@ use std::io::Cursor;
 use std::sync::mpsc;
 use std::sync::{Arc, RwLock};
 use std::thread;
-
 use ws::{listen, CloseCode, Handler, Message, Result, Sender};
 
 #[derive(Clone)]
@@ -16,7 +15,7 @@ enum RemoteMessage {
     //TODO config
 }
 
-/// A device that decorates another device with remote WebSocket capabilities.
+/// Represents a remote access via WebSockets.
 pub struct Remote {
     publisher: mpsc::Sender<RemoteMessage>,
     clients: Arc<RwLock<Vec<RemoteClient>>>,

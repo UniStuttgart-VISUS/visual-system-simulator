@@ -3,9 +3,9 @@ mod camera_ffi;
  
 //atm neededd to export function
 #[cfg(target_os = "android")]
-pub use android::Java_de_uni_1stuttgart_vis_fist_activities_CoreActivity_postData;
+  use android::Java_de_uni_1stuttgart_vis_fist_activities_CoreActivity_postData;
 #[cfg(target_os = "android")]
-pub use android::Java_de_uni_1stuttgart_vis_fist_activities_CoreActivity_postConfig;
+  use android::Java_de_uni_1stuttgart_vis_fist_activities_CoreActivity_postConfig;
  
 /// Program entry point for Android.
 #[cfg(target_os = "android")]

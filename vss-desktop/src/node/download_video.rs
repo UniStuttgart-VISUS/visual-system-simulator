@@ -254,15 +254,15 @@ impl Device for AvDevice {
         self.video.encoder()
     }
 
-    fn gaze(&self) -> DeviceGaze {
+    fn gaze(&self) -> Gaze {
         self.video.gaze()
     }
 
-    fn source(&self) -> &RefCell<DeviceSource> {
+    fn source(&self) -> &RefCell<NodeSource> {
         self.video.source()
     }
 
-    fn target(&self) -> &RefCell<DeviceTarget> {
+    fn target(&self) -> &RefCell<NodeTarget> {
         self.video.target()
     }
 

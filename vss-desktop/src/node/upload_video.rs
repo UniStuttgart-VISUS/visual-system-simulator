@@ -219,9 +219,9 @@ impl Node for UploadVideo {
     fn update_io(
         &mut self,
         window: &Window,
-        source: (Option<DeviceSource>, Option<DeviceTarget>),
-        target_candidate: (Option<DeviceSource>, Option<DeviceTarget>),
-    ) -> (Option<DeviceSource>, Option<DeviceTarget>) {
+        source: (Option<NodeSource>, Option<NodeTarget>),
+        target_candidate: (Option<NodeSource>, Option<NodeTarget>),
+    ) -> (Option<NodeSource>, Option<NodeTarget>) {
         self.validate_data();
         self.uploader.update_io(window, source, target_candidate)
     }
@@ -230,7 +230,7 @@ impl Node for UploadVideo {
         self.uploader.update_values(window, values);
     }
 
-    fn input(&mut self, head: &Head, gaze: &DeviceGaze) -> DeviceGaze {
+    fn input(&mut self, head: &Head, gaze: &Gaze) -> Gaze {
         self.uploader.input(head, gaze)
     }
 
