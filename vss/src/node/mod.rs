@@ -26,12 +26,8 @@ use gfx_device_gl::Resources;
 use super::*;
 
 /// An executable function that implements an aspect of the simulation.
-///
-/// Initialize with `build(...)`, then apply with `render(...)`.
-///
-/// The texture this pass is applied to and where the output will be written
-/// is determined by the RenderContext passed to `build(...)`.
 pub trait Node {
+    /// Initializes this node.
     fn new(window: &Window) -> Self
     where
         Self: Sized;
@@ -49,7 +45,8 @@ pub trait Node {
     fn update_values(&mut self, window: &Window, values: &ValueMap) {}
 
     /// Handle input.
-    fn input(&mut self, _head: &Head, gaze: &Gaze) -> Gaze {
+    #[allow(unused_variables)]
+    fn input(&mut self, head: &Head, gaze: &Gaze) -> Gaze {
         gaze.clone()
     }
 

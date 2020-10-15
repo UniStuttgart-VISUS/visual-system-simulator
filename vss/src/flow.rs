@@ -4,7 +4,7 @@ use std::cell::RefCell;
 pub type ColorFormat = (gfx::format::R8_G8_B8_A8, gfx::format::Unorm);
 pub type DepthFormat = (gfx::format::R32, gfx::format::Float);
 
-/// Enum to hold texture-representations for shaders.
+/// Represents texture views for shaders.
 #[derive(Clone, Debug)]
 pub enum NodeSource {
     Rgb {

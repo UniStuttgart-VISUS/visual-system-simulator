@@ -7,7 +7,7 @@ pub type DeviceFactory = gfx_device_gl::Factory;
 /// An encoder to manipulate a device command queue.
 pub type DeviceEncoder = gfx::Encoder<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer>;
 
-/// Represents a window and its associated rendering context and [Flow].
+/// Represents a window along with its associated rendering context and [Flow].
 pub struct Window {
     windowed_context: glutin::WindowedContext<glutin::PossiblyCurrent>,
     events_loop: RefCell<glutin::EventsLoop>,
