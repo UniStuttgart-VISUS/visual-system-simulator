@@ -10,12 +10,12 @@ pub enum NodeSource {
     Rgb {
         width: u32,
         height: u32,
-        color: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>, //TODO: rename to rgb, drop last component?
+        color: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>, //TODO: drop last component?
     },
     RgbDepth {
         width: u32,
         height: u32,
-        color: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>, //TODO: rename to rgb, drop last component?
+        color: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>, //TODO: drop last component?
         depth: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, f32>,
     },
 }
