@@ -39,7 +39,7 @@ impl IoGenerator {
                 let input_path = std::path::Path::new(input);
                 let mut input_node = UploadRgbBuffer::new(&window);
                 input_node.upload_image(load(input_path));
-                input_node.set_flags(RgbInputFlags::EQUIRECTANGULAR); //xxx
+                input_node.set_flags(RgbInputFlags::from_extension(&input));
                 let output_node = if let Some(output) = &self.output {
                     let mut output_node = DownloadRgbBuffer::new(&window);
                     let input_info = InputInfo {
@@ -76,10 +76,9 @@ impl IoGenerator {
                     None
                 };
                 Some((Box::new(input_node), output_node))
-            } else if UploadVideo::has_video_extension(input) {
+            } else if UploadVideo::has_video_extension(&input) {
                 let mut input_node = UploadVideo::new(&window);
-                input_node
-                    .set_flags(RgbInputFlags::RGBD_HORIZONTAL | RgbInputFlags::EQUIRECTANGULAR); //XXX
+                input_node.set_flags(RgbInputFlags::from_extension(&input));
                 input_node.open(input).unwrap();
                 Some((Box::new(input_node), None))
             } else {

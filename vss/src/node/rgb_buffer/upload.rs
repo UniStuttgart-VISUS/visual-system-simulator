@@ -22,6 +22,29 @@ bitflags! {
     }
 }
 
+impl RgbInputFlags {
+    pub fn from_extension<P>(path: P) -> RgbInputFlags
+    where
+        P: AsRef<Path>,
+    {
+        let mut flags = RgbInputFlags::empty();
+        let file_name = path
+            .as_ref()
+            .file_name()
+            .unwrap()
+            .to_os_string()
+            .into_string()
+            .unwrap();
+        if file_name.contains(".rgbd.") {
+            flags |= RgbInputFlags::RGBD_HORIZONTAL;
+        }
+        if file_name.contains(".erp.") {
+            flags |= RgbInputFlags::EQUIRECTANGULAR;
+        }
+        flags
+    }
+}
+
 /// A device for static RGBA image data.
 pub struct UploadRgbBuffer {
     buffer_next: RgbBuffer,

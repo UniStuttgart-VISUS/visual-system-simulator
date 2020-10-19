@@ -29,8 +29,9 @@ void main() {
 
     if ((u_flags & 4) == 4) {
         // RGBD horizontally splitted.
-        tex = vec2(tex.x, 0.5 * tex.y);
-        depth = vec4(texture(s_rgb, tex + 0.5).rgb, 1.0).r;
+        vec2 tex_depth = vec2(tex.x, 0.5 * tex.y);
+        tex = vec2(tex.x, 0.5 * tex.y + 0.5);
+        depth = texture(s_rgb, tex + vec2(0.0, 0.5)).r;
     }
 
     rt_color = vec4(texture(s_rgb, tex).rgb, 1.0);
