@@ -90,12 +90,12 @@ impl Node for Lens {
         let target = target_candidate.1.expect("Render target expected");
         self.pso_data.rt_color = target.clone();
         match source.0.expect("Source expected") {
-            NodeSource::Rgb { rgba8, .. } => {
-                self.pso_data.s_color = (rgba8.clone(), factory.create_sampler_linear());
+            NodeSource::Rgb { color, .. } => {
+                self.pso_data.s_color = (color.clone(), factory.create_sampler_linear());
             }
-            NodeSource::RgbDepth { rgba8, d, .. } => {
-                self.pso_data.s_color = (rgba8.clone(), factory.create_sampler_linear());
-                self.pso_data.s_depth = (d.clone(), factory.create_sampler_linear());
+            NodeSource::RgbDepth { color, depth, .. } => {
+                self.pso_data.s_color = (color.clone(), factory.create_sampler_linear());
+                self.pso_data.s_depth = (depth.clone(), factory.create_sampler_linear());
             }
         }
         (target_candidate.0, Some(target))

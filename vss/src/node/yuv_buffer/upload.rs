@@ -159,7 +159,7 @@ impl Node for UploadYuvBuffer {
             Some(NodeSource::Rgb {
                 width,
                 height,
-                rgba8: color_view,
+                color: color_view,
             }),
             Some(color),
         )

@@ -174,8 +174,8 @@ impl Node for UploadRgbBuffer {
             Some(NodeSource::RgbDepth {
                 width,
                 height,
-                rgba8: color_view,
-                d: depth_view,
+                color: color_view,
+                depth: depth_view,
             }),
             Some(color),
         )

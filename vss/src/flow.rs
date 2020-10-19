@@ -10,13 +10,13 @@ pub enum NodeSource {
     Rgb {
         width: u32,
         height: u32,
-        rgba8: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>, //TODO: rename to rgb, drop last component?
+        color: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>, //TODO: rename to rgb, drop last component?
     },
     RgbDepth {
         width: u32,
         height: u32,
-        rgba8: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>, //TODO: rename to rgb, drop last component?
-        d: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, f32>,
+        color: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>, //TODO: rename to rgb, drop last component?
+        depth: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, f32>,
     },
 }
 
@@ -88,7 +88,7 @@ impl Flow {
                         Some(NodeSource::Rgb {
                             width,
                             height,
-                            rgba8: target_view,
+                            color: target_view,
                         }),
                         Some(target),
                     )

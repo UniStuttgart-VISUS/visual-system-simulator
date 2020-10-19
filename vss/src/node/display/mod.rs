@@ -58,21 +58,21 @@ impl Node for Display {
         self.pso_data.rt_color = target.clone();
         match source.0.expect("Source expected") {
             NodeSource::Rgb {
-                rgba8,
+                color,
                 width,
                 height,
             } => {
                 self.pso_data.u_resolution_in = [width as f32, height as f32];
-                self.pso_data.s_source = (rgba8.clone(), factory.create_sampler_linear());
+                self.pso_data.s_source = (color.clone(), factory.create_sampler_linear());
             }
             NodeSource::RgbDepth {
-                rgba8,
+                color,
                 width,
                 height,
                 ..
             } => {
                 self.pso_data.u_resolution_in = [width as f32, height as f32];
-                self.pso_data.s_source = (rgba8.clone(), factory.create_sampler_linear());
+                self.pso_data.s_source = (color.clone(), factory.create_sampler_linear());
             }
         }
         (target_candidate.0, Some(target))
