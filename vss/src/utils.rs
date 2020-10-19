@@ -1,20 +1,7 @@
 use std::io::Cursor;
 use std::path::Path;
 
-macro_rules! include_glsl {
-    ($file: expr) => {{
-        let mut version = if cfg!(target_os = "android") {
-            "#version 300 es\nprecision mediump float;\n"
-        } else {
-            "#version 410\n"
-        }
-        .as_bytes()
-        .to_vec();
-        let mut code = include_bytes!($file).to_vec();
-        version.append(&mut code);
-        version
-    }};
-}
+
 
 #[cfg(not(target_os = "android"))]
 pub fn load<P: AsRef<Path>>(path: P) -> Cursor<Vec<u8>> {

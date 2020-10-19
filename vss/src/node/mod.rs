@@ -1,6 +1,8 @@
 //!
 //! This module contains several [Nodes](Node) that can be chained to form a [Flow].
 //!
+#[macro_use]
+mod macros;
 mod cataract;
 mod display;
 mod lens;
@@ -9,6 +11,7 @@ mod retina;
 mod rgb_buffer;
 mod yuv_buffer;
 
+use self::macros::*;
 pub use self::cataract::*;
 pub use self::display::*;
 pub use self::lens::*;

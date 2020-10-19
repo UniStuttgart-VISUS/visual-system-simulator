@@ -109,21 +109,21 @@ impl Node for UploadYuvBuffer {
 
             let (texture_y, view_y) = load_single_channel_texture_from_bytes(
                 &mut factory,
-                buffer.pixels_y.clone(),
+                &buffer.pixels_y,
                 buffer.width as u32,
                 buffer.height as u32,
             )
             .unwrap();
             let (texture_u, view_u) = load_single_channel_texture_from_bytes(
                 &mut factory,
-                buffer.pixels_u.clone(),
+                &buffer.pixels_u,
                 (buffer.width / 2) as u32,
                 (buffer.height / 2) as u32,
             )
             .unwrap();
             let (texture_v, view_v) = load_single_channel_texture_from_bytes(
                 &mut factory,
-                buffer.pixels_v.clone(),
+                &buffer.pixels_v,
                 (buffer.width / 2) as u32,
                 (buffer.height / 2) as u32,
             )
@@ -154,6 +154,7 @@ impl Node for UploadYuvBuffer {
         );
 
         self.pso_data.rt_color = color.clone();
+
         (
             Some(NodeSource::Rgb {
                 width,

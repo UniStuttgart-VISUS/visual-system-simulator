@@ -150,7 +150,7 @@ pub fn update_single_channel_texture(
 
 pub fn load_single_channel_texture_from_bytes(
     factory: &mut gfx_device_gl::Factory,
-    data: Box<[u8]>,
+    data: &[u8],
     width: u32,
     height: u32,
 ) -> Result<

@@ -1,4 +1,5 @@
-#define BLUR_SIZE 9
+#include "common.glsl"
+
 #define GLAUCOMA_COLOR vec4(0.02, 0.02, 0.02, 1.0);
 
 uniform vec2 u_resolution;
@@ -14,42 +15,11 @@ float getLuminance(in vec4 color) {
     return dot(vec4(0.299, 0.587, 0.114, 0), color);
 }
 
-float normpdf(in float x) {
-    return 0.39894 * exp(-0.5 * x * x / (49.0)) / 7.0;
-}
-
-void applyBlur(out vec4 fragColor, in vec2 fragCoord, float blur_scale, vec2 resolution) {
-    // declare stuff
-    const int kSize = (BLUR_SIZE - 1) / 2;
-    float kernel[BLUR_SIZE];
-    vec3 final_colour = vec3(0.0);
-
-    // create the 1-D kernel
-    float Z = 0.0;
-    for (int j = 0; j <= kSize; ++j) {
-        kernel[kSize + j] = kernel[kSize - j] = normpdf(float(j));
-    }
-
-    // get the normalization factor (as the gaussian has been clamped)
-    for (int j = 0; j < BLUR_SIZE; ++j) {
-        Z += kernel[j];
-    }
-
-    //read out the texels
-    for (int i = -kSize; i <= kSize; ++i) {
-        for (int j = -kSize; j <= kSize; ++j) {
-            final_colour += kernel[kSize + j] * kernel[kSize + i] * texture(s_color, (fragCoord + vec2(float(i), float(j)) * blur_scale / resolution)).rgb;
-        }
-    }
-
-    fragColor = vec4(final_colour / (Z * Z), 1.0);
-}
-
 void applyBlurAndBloom(inout vec4 color, in vec4 retina) {
     float max_rgb = max(max(retina.r, retina.g), retina.b);
     if (max_rgb < .75) {
         float blur_scale = (0.75 - (retina.r + retina.g + retina.b) / 3.0) * 5.0;
-        applyBlur(color, v_tex, blur_scale, u_resolution);
+        color = blur(v_tex, s_color, blur_scale, u_resolution);
         // apply bloom
         color = color * (1.0 + getLuminance(color) * (0.75 - max_rgb) * 0.5);
     }

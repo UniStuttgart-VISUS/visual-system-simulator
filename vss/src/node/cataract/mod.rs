@@ -8,7 +8,9 @@ gfx_defines! {
         u_blur_factor: gfx::Global<f32> = "u_blur_factor",
         u_contrast_factor: gfx::Global<f32> = "u_contrast_factor",
         s_color: gfx::TextureSampler<[f32; 4]> = "s_color",
+        //s_depth: gfx::TextureSampler<f32> = "s_depth",
         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
+        //rt_depth: gfx::RenderTarget<DepthFormat> = "rt_depth",
     }
 }
 
@@ -27,8 +29,12 @@ impl Node for Cataract {
                 pipe::new(),
             )
             .unwrap();
-        let (_, src, dst) = factory.create_render_target(1, 1).unwrap();
         let sampler = factory.create_sampler_linear();
+        let (_, color_view) = load_texture_from_bytes(&mut factory, &[0; 4], 1, 1).unwrap();
+        //let (_, depth_view) =
+        //    load_single_channel_texture_from_bytes(&mut factory, &[0; 4], 1, 1).unwrap();
+        let (_, _, rt_color) = factory.create_render_target(1, 1).unwrap();
+        //let (_, _, rt_depth) = factory.create_render_target(1, 1).unwrap();
 
         Cataract {
             pso,
@@ -37,8 +43,10 @@ impl Node for Cataract {
                 u_resolution: [0.0, 0.0],
                 u_blur_factor: 0.0,
                 u_contrast_factor: 0.0,
-                s_color: (src, sampler),
-                rt_color: dst,
+                s_color: (color_view, sampler.clone()),
+                //s_depth: (depth_view, sampler),
+                rt_color,
+                //rt_depth,
             },
         }
     }
@@ -58,8 +66,9 @@ impl Node for Cataract {
             NodeSource::Rgb { rgba8, .. } => {
                 self.pso_data.s_color = (rgba8.clone(), factory.create_sampler_linear());
             }
-            NodeSource::RgbDepth { rgba8, .. } => {
+            NodeSource::RgbDepth { rgba8, d,.. } => {
                 self.pso_data.s_color = (rgba8.clone(), factory.create_sampler_linear());
+                //self.pso_data.s_depth = (d.clone(), factory.create_sampler_linear());
             }
         }
         (target_candidate.0, Some(target))

@@ -11,6 +11,7 @@ out vec4 rt_color;
 out float rt_depth;
 
 void main() {
+    float depth = 0.5;
     vec2 tex = v_tex;
          
     if ((u_flags & 1) == 1) {
@@ -29,8 +30,9 @@ void main() {
     if ((u_flags & 4) == 4) {
         // RGBD horizontally splitted.
         tex = vec2(tex.x, 0.5 * tex.y);
+        depth = vec4(texture(s_rgb, tex + 0.5).rgb, 1.0).r;
     }
 
     rt_color = vec4(texture(s_rgb, tex).rgb, 1.0);
-    rt_depth = 0.5;
+    rt_depth = depth;
 }

@@ -4,7 +4,6 @@ pub extern crate gfx;
 extern crate bitflags;
 
 mod texture;
-#[macro_use]
 mod utils;
 mod flow;
 mod node;
