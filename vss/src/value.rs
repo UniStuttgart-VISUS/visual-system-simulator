@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
 //TODO: replace all this stuff by making "trait Node: serde::Serialize + serde::Deserialize"
+// try a mix of #[serde(flatten)] and #[serde(skip)]
+
 #[derive(Debug)]
 pub enum Value {
     Bool(bool),
