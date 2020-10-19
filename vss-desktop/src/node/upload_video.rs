@@ -132,13 +132,18 @@ impl UploadVideo {
                         }
                         Ok(None) => {
                             // Demux another packet.
+                            let mut retry = false;
                             if let Some(demuxer) = &mut self.demuxer {
                                 while let Some(packet) = demuxer.take()? {
                                     if packet.stream_index() == self.video_stream_index {
                                         video_decoder.push(packet)?;
+                                        retry = true;
                                         break;
                                     }
                                 }
+                            }
+                            if !retry {
+                                break;
                             }
                         }
                         Err(err) => {
