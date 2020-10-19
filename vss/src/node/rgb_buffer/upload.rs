@@ -119,12 +119,7 @@ impl Node for UploadRgbBuffer {
         }
     }
 
-    fn update_io(
-        &mut self,
-        window: &Window,
-        _source: (Option<NodeSource>, Option<NodeTarget>),
-        _target_candidate: (Option<NodeSource>, Option<NodeTarget>),
-    ) -> (Option<NodeSource>, Option<NodeTarget>) {
+    fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
         if self.buffer_upload {
             let mut factory = window.factory().borrow_mut();
             let (texture, view) = load_texture_from_bytes(
@@ -157,28 +152,11 @@ impl Node for UploadRgbBuffer {
         self.pso_data.u_fov[1] =
             2.0 * ((self.pso_data.u_fov[0] / 2.0).tan() * height as f32 / width as f32).atan();
 
-        let (color_view, color) = create_texture_render_target::<ColorFormat>(
-            &mut window.factory().borrow_mut(),
-            width,
-            height,
-        );
-        let (depth_view, depth) = create_texture_render_target::<DepthFormat>(
-            &mut window.factory().borrow_mut(),
-            width,
-            height,
-        );
-
-        self.pso_data.rt_color = color.clone();
-        self.pso_data.rt_depth = depth.clone();
-        (
-            Some(NodeSource::RgbDepth {
-                width,
-                height,
-                color: color_view,
-                depth: depth_view,
-            }),
-            Some(color),
-        )
+        let slots = slots.emplace_color_depth_output(window, width, height);
+        let (color, depth) = slots.as_color_depth();
+        self.pso_data.rt_color = color;
+        self.pso_data.rt_depth = depth;
+        slots
     }
 
     fn input(&mut self, head: &Head, gaze: &Gaze) -> Gaze {

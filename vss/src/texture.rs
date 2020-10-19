@@ -277,8 +277,8 @@ pub fn create_texture_render_target<T>(
     width: u32,
     height: u32,
 ) -> (
-    gfx::handle::ShaderResourceView<gfx_device_gl::Resources, <T as gfx::format::Formatted>::View>,
     gfx::handle::RenderTargetView<gfx_device_gl::Resources, T>,
+    gfx::handle::ShaderResourceView<gfx_device_gl::Resources, <T as gfx::format::Formatted>::View>,
 )
 where
     T: gfx::format::TextureFormat + gfx::format::RenderFormat,
@@ -302,5 +302,5 @@ where
     let target = factory
         .view_texture_as_render_target::<T>(&texture, 0, None)
         .unwrap();
-    (target_view, target)
+    (target, target_view)
 }

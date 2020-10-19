@@ -8,9 +8,9 @@ gfx_defines! {
         u_blur_factor: gfx::Global<f32> = "u_blur_factor",
         u_contrast_factor: gfx::Global<f32> = "u_contrast_factor",
         s_color: gfx::TextureSampler<[f32; 4]> = "s_color",
-        //s_depth: gfx::TextureSampler<f32> = "s_depth",
+        s_depth: gfx::TextureSampler<f32> = "s_depth",
         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
-        //rt_depth: gfx::RenderTarget<DepthFormat> = "rt_depth",
+        rt_depth: gfx::RenderTarget<DepthFormat> = "rt_depth",
     }
 }
 
@@ -31,10 +31,10 @@ impl Node for Cataract {
             .unwrap();
         let sampler = factory.create_sampler_linear();
         let (_, color_view) = load_texture_from_bytes(&mut factory, &[0; 4], 1, 1).unwrap();
-        //let (_, depth_view) =
-        //    load_single_channel_texture_from_bytes(&mut factory, &[0; 4], 1, 1).unwrap();
+        let (_, depth_view) =
+            load_single_channel_texture_from_bytes(&mut factory, &[0; 4], 1, 1).unwrap();
         let (_, _, rt_color) = factory.create_render_target(1, 1).unwrap();
-        //let (_, _, rt_depth) = factory.create_render_target(1, 1).unwrap();
+        let (_, _, rt_depth) = factory.create_render_target(1, 1).unwrap();
 
         Cataract {
             pso,
@@ -44,34 +44,25 @@ impl Node for Cataract {
                 u_blur_factor: 0.0,
                 u_contrast_factor: 0.0,
                 s_color: (color_view, sampler.clone()),
-                //s_depth: (depth_view, sampler),
+                s_depth: (depth_view, sampler),
                 rt_color,
-                //rt_depth,
+                rt_depth,
             },
         }
     }
 
-    fn update_io(
-        &mut self,
-        window: &Window,
-        source: (Option<NodeSource>, Option<NodeTarget>),
-        target_candidate: (Option<NodeSource>, Option<NodeTarget>),
-    ) -> (Option<NodeSource>, Option<NodeTarget>) {
-        let mut factory = window.factory().borrow_mut();
-        let target = target_candidate.1.expect("Render target expected");
-        let target_size = target.get_dimensions();
-        self.pso_data.u_resolution = [target_size.0 as f32, target_size.1 as f32];
-        self.pso_data.rt_color = target.clone();
-        match source.0.expect("Source expected") {
-            NodeSource::Rgb { color, .. } => {
-                self.pso_data.s_color = (color.clone(), factory.create_sampler_linear());
-            }
-            NodeSource::RgbDepth { color, depth, .. } => {
-                self.pso_data.s_color = (color.clone(), factory.create_sampler_linear());
-                //self.pso_data.s_depth = (depth.clone(), factory.create_sampler_linear());
-            }
-        }
-        (target_candidate.0, Some(target))
+    fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
+        let slots = slots
+            .to_color_depth_input(window)
+            .to_color_depth_output(window);
+        self.pso_data.u_resolution = slots.output_size_f32();
+        let (color_view, depth_view) = slots.as_color_depth_view();
+        self.pso_data.s_color = color_view;
+        self.pso_data.s_depth = depth_view;
+        let (color, depth) = slots.as_color_depth();
+        self.pso_data.rt_color = color;
+        self.pso_data.rt_depth = depth;
+        slots
     }
 
     fn update_values(&mut self, _window: &Window, values: &ValueMap) {

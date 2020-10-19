@@ -8,13 +8,8 @@ impl Node for Passthrough {
         Passthrough {}
     }
 
-    fn update_io(
-        &mut self,
-        _window: &Window,
-        source: (Option<NodeSource>, Option<NodeTarget>),
-        _target_candidate: (Option<NodeSource>, Option<NodeTarget>),
-    ) -> (Option<NodeSource>, Option<NodeTarget>) {
-        source
+    fn negociate_slots(&mut self, _window: &Window, slots: NodeSlots) -> NodeSlots {
+        slots.to_passthrough()
     }
 
     fn render(&mut self, _window: &Window) {}

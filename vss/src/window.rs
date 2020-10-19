@@ -99,7 +99,7 @@ impl Window {
     }
 
     pub fn update_nodes(&mut self) {
-        self.flow.update_io(&self);
+        self.flow.negociate_slots(&self);
         self.flow.update_values(&self, &self.values.borrow());
     }
 
@@ -133,7 +133,7 @@ impl Window {
         }
     }
 
-    pub fn target(&self) -> NodeTarget {
+    pub fn target(&self) -> gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat> {
         self.render_target.borrow().clone()
     }
 
@@ -205,7 +205,7 @@ impl Window {
                 &mut self.render_target.borrow_mut(),
                 &mut self.main_depth.borrow_mut(),
             );
-            self.flow.update_io(&self);
+            self.flow.negociate_slots(&self);
             self.flow.update_values(&self, &self.values.borrow());
         }
 

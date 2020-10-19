@@ -98,12 +98,7 @@ impl Node for UploadYuvBuffer {
         }
     }
 
-    fn update_io(
-        &mut self,
-        window: &Window,
-        _source: (Option<NodeSource>, Option<NodeTarget>),
-        _target_candidate: (Option<NodeSource>, Option<NodeTarget>),
-    ) -> (Option<NodeSource>, Option<NodeTarget>) {
+    fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
         if let Some(buffer) = &self.buffer_next {
             let mut factory = window.factory().borrow_mut();
 
@@ -147,22 +142,10 @@ impl Node for UploadYuvBuffer {
             height = info.height as u32;
         }
 
-        let (color_view, color) = create_texture_render_target::<ColorFormat>(
-            &mut window.factory().borrow_mut(),
-            width,
-            height,
-        );
+        let slots = slots.emplace_color_output(window, width, height);
+        self.pso_data.rt_color = slots.as_color();
 
-        self.pso_data.rt_color = color.clone();
-
-        (
-            Some(NodeSource::Rgb {
-                width,
-                height,
-                color: color_view,
-            }),
-            Some(color),
-        )
+        slots
     }
 
     fn render(&mut self, window: &Window) {

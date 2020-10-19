@@ -221,14 +221,9 @@ impl Node for UploadVideo {
         }
     }
 
-    fn update_io(
-        &mut self,
-        window: &Window,
-        source: (Option<NodeSource>, Option<NodeTarget>),
-        target_candidate: (Option<NodeSource>, Option<NodeTarget>),
-    ) -> (Option<NodeSource>, Option<NodeTarget>) {
+    fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
         self.validate_data();
-        self.uploader.update_io(window, source, target_candidate)
+        self.uploader.negociate_slots(window, slots)
     }
 
     fn update_values(&mut self, window: &Window, values: &ValueMap) {

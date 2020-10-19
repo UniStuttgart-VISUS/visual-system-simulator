@@ -1,27 +1,6 @@
 use crate::*;
 use std::cell::RefCell;
 
-pub type ColorFormat = (gfx::format::R8_G8_B8_A8, gfx::format::Unorm);
-pub type DepthFormat = (gfx::format::R32, gfx::format::Float);
-
-/// Represents texture views for shaders.
-#[derive(Clone, Debug)]
-pub enum NodeSource {
-    Rgb {
-        width: u32,
-        height: u32,
-        color: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>, //TODO: drop last component?
-    },
-    RgbDepth {
-        width: u32,
-        height: u32,
-        color: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>, //TODO: drop last component?
-        depth: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, f32>,
-    },
-}
-
-pub type NodeTarget = gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat>;
-
 /// Represents properties of eye-tracking data.
 #[derive(Debug, Clone)]
 pub struct Gaze {
@@ -59,47 +38,28 @@ impl Flow {
         self.nodes.borrow().len()
     }
 
-    pub fn update_io(&self, window: &Window) {
-        let mut last_targets: [(Option<NodeSource>, Option<NodeTarget>); 2] =
-            [(None, None), (None, None)];
+    pub fn negociate_slots(&self, window: &Window) {
+        let mut slot_a = NodeSlots::new(window);
+        let mut slot_b = NodeSlots::new(window);
         let nodes_len = self.nodes.borrow().len();
         for (idx, node) in self.nodes.borrow_mut().iter_mut().enumerate() {
-            // Determine source.
-            let source = last_targets[0].clone();
-            let target_candidate = if idx + 1 == nodes_len {
-                // Suggest window as final target.
-                (None, Some(window.target().clone()))
+            let suggested_slot = if idx + 1 == nodes_len {
+                // Suggest window as final output.
+                NodeSlots::new_io(
+                    window,
+                    slot_b.take_output(),
+                    Slot::Rgb {
+                        color: window.target(),
+                        color_view: None,
+                    },
+                )
             } else {
-                if let (Some(source), Some(target)) = &last_targets[1] {
-                    // Suggest reusing the pre-predecessor's target.
-                    (Some(source.clone()), Some(target.clone()))
-                } else if let Some(source) = &source.0 {
-                    // Guess target, based on source.
-                    let (width, height) = match *source {
-                        NodeSource::Rgb { width, height, .. } => (width, height),
-                        NodeSource::RgbDepth { width, height, .. } => (width, height),
-                    };
-                    let (target_view, target) = create_texture_render_target::<ColorFormat>(
-                        &mut window.factory().borrow_mut(),
-                        width,
-                        height,
-                    );
-                    (
-                        Some(NodeSource::Rgb {
-                            width,
-                            height,
-                            color: target_view,
-                        }),
-                        Some(target),
-                    )
-                } else {
-                    // No suggestion (can cause update-aborting errors).
-                    (None, None)
-                }
+                // Suggest reusing output of the pre-predecessor.
+                NodeSlots::new_io(window, slot_b.take_output(), slot_a.take_output())
             };
-            // Chain targets and update.
-            last_targets.swap(1, 0);
-            last_targets[0] = node.update_io(window, source, target_candidate);
+            // Negociate and swap.
+            slot_a = node.negociate_slots(window, suggested_slot);
+            std::mem::swap(&mut slot_a, &mut slot_b);
         }
     }
 

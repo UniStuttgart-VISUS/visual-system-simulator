@@ -9,16 +9,19 @@ mod lens;
 mod passthrough;
 mod retina;
 mod rgb_buffer;
+mod slot;
 mod yuv_buffer;
 
 pub use self::cataract::*;
 pub use self::display::*;
 pub use self::lens::*;
-use self::macros::*;
 pub use self::passthrough::*;
 pub use self::retina::*;
 pub use self::rgb_buffer::*;
+pub use self::slot::*;
 pub use self::yuv_buffer::*;
+
+use self::macros::*;
 
 use gfx;
 use gfx::traits::FactoryExt;
@@ -35,13 +38,9 @@ pub trait Node {
     where
         Self: Sized;
 
-    /// Replaces the render target (output) and source texture (input).
-    fn update_io(
-        &mut self,
-        window: &Window,
-        source: (Option<NodeSource>, Option<NodeTarget>),
-        target_candidate: (Option<NodeSource>, Option<NodeTarget>),
-    ) -> (Option<NodeSource>, Option<NodeTarget>);
+    /// Negociates input and output for this node (source texture and render target),
+    /// possibly re-using suggested `slots` (for efficiency).
+    fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots;
 
     /// Set new parameters for this effect
     #[allow(unused_variables)]

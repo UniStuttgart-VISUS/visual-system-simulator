@@ -80,25 +80,13 @@ impl Node for Lens {
         }
     }
 
-    fn update_io(
-        &mut self,
-        window: &Window,
-        source: (Option<NodeSource>, Option<NodeTarget>),
-        target_candidate: (Option<NodeSource>, Option<NodeTarget>),
-    ) -> (Option<NodeSource>, Option<NodeTarget>) {
-        let mut factory = window.factory().borrow_mut();
-        let target = target_candidate.1.expect("Render target expected");
-        self.pso_data.rt_color = target.clone();
-        match source.0.expect("Source expected") {
-            NodeSource::Rgb { color, .. } => {
-                self.pso_data.s_color = (color.clone(), factory.create_sampler_linear());
-            }
-            NodeSource::RgbDepth { color, depth, .. } => {
-                self.pso_data.s_color = (color.clone(), factory.create_sampler_linear());
-                self.pso_data.s_depth = (depth.clone(), factory.create_sampler_linear());
-            }
-        }
-        (target_candidate.0, Some(target))
+    fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
+        let slots = slots.to_color_depth_input(window).to_color_output(window);
+        let (color_view, depth_view) = slots.as_color_depth_view();
+        self.pso_data.s_color = color_view;
+        self.pso_data.s_depth = depth_view;
+        self.pso_data.rt_color = slots.as_color();
+        slots
     }
 
     fn update_values(&mut self, _window: &Window, values: &ValueMap) {

@@ -47,26 +47,12 @@ impl Node for Retina {
         }
     }
 
-    fn update_io(
-        &mut self,
-        window: &Window,
-        source: (Option<NodeSource>, Option<NodeTarget>),
-        target_candidate: (Option<NodeSource>, Option<NodeTarget>),
-    ) -> (Option<NodeSource>, Option<NodeTarget>) {
-        let mut factory = window.factory().borrow_mut();
-        let target = target_candidate.1.expect("Render target expected");
-        let target_size = target.get_dimensions();
-        self.pso_data.u_resolution = [target_size.0 as f32, target_size.1 as f32];
-        self.pso_data.rt_color = target.clone();
-        match source.0.expect("Source expected") {
-            NodeSource::Rgb { color, .. } => {
-                self.pso_data.s_source = (color.clone(), factory.create_sampler_linear());
-            }
-            NodeSource::RgbDepth { color, .. } => {
-                self.pso_data.s_source = (color.clone(), factory.create_sampler_linear());
-            }
-        }
-        (target_candidate.0, Some(target))
+    fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
+        let slots = slots.to_color_input(window).to_color_output(window);
+        self.pso_data.u_resolution = slots.output_size_f32();
+        self.pso_data.s_source = slots.as_color_view();
+        self.pso_data.rt_color = slots.as_color();
+        slots
     }
 
     fn update_values(&mut self, window: &Window, values: &ValueMap) {
