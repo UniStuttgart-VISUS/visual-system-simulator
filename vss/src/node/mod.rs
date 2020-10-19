@@ -11,10 +11,10 @@ mod retina;
 mod rgb_buffer;
 mod yuv_buffer;
 
-use self::macros::*;
 pub use self::cataract::*;
 pub use self::display::*;
 pub use self::lens::*;
+use self::macros::*;
 pub use self::passthrough::*;
 pub use self::retina::*;
 pub use self::rgb_buffer::*;

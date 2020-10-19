@@ -1,8 +1,6 @@
 use std::io::Cursor;
 use std::path::Path;
 
-
-
 #[cfg(not(target_os = "android"))]
 pub fn load<P: AsRef<Path>>(path: P) -> Cursor<Vec<u8>> {
     use std::fs::File;

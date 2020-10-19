@@ -66,7 +66,7 @@ impl Node for Cataract {
             NodeSource::Rgb { rgba8, .. } => {
                 self.pso_data.s_color = (rgba8.clone(), factory.create_sampler_linear());
             }
-            NodeSource::RgbDepth { rgba8, d,.. } => {
+            NodeSource::RgbDepth { rgba8, d, .. } => {
                 self.pso_data.s_color = (rgba8.clone(), factory.create_sampler_linear());
                 //self.pso_data.s_depth = (d.clone(), factory.create_sampler_linear());
             }

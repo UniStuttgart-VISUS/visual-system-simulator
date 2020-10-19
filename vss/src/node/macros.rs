@@ -15,6 +15,8 @@ macro_rules! include_glsl {
         Context::new()
             .include("common.glsl", &COMMON_CODE)
             .expand(code)
-            .unwrap().as_bytes().to_vec()
+            .unwrap()
+            .as_bytes()
+            .to_vec()
     }};
 }

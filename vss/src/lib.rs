@@ -3,11 +3,11 @@ pub extern crate gfx;
 #[macro_use]
 extern crate bitflags;
 
-mod texture;
-mod utils;
 mod flow;
 mod node;
 mod remote;
+mod texture;
+mod utils;
 mod value;
 mod window;
 
