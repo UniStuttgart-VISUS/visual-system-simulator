@@ -5,11 +5,11 @@ uniform vec2 u_resolution;
 uniform float u_blur_factor;
 uniform float u_contrast_factor;
 uniform sampler2D s_color;
-//uniform sampler2D s_depth;
+uniform sampler2D s_depth;
 
 in vec2 v_tex;
 out vec4 rt_color;
-//out float rt_depth;
+out float rt_depth;
 
 
 float computeBloomFactor(in vec4 color, float blur) {
@@ -36,9 +36,9 @@ void main() {
         vec4 color =  blur(v_tex, s_color, u_blur_factor * 3.0, u_resolution);
         rt_color = color * computeBloomFactor(color, u_blur_factor / 3.);
         lowerContrastBy(rt_color, u_contrast_factor);
-        //rt_depth = vec4(texture(s_depth, v_tex)).r;
+        rt_depth = vec4(texture(s_depth, v_tex)).r;
     } else {
         rt_color = vec4(texture(s_color, v_tex));
-        //rt_depth = vec4(texture(s_depth, v_tex)).r;
+        rt_depth = vec4(texture(s_depth, v_tex)).r;
     }
 }
