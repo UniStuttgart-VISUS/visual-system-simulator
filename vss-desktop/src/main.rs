@@ -1,5 +1,7 @@
 mod cmd;
 mod node;
+#[cfg(feature = "varjo")]
+mod varjo;
 
 use vss::*;
 
@@ -91,6 +93,9 @@ impl IoGenerator {
 pub fn main() {
     let config = cmd_parse();
 
+    #[cfg(feature = "varjo")]
+    let varjo = varjo::Varjo::new();
+
     let remote = if let Some(port) = config.port {
         Some(Remote::new(port))
     } else {
@@ -125,7 +130,13 @@ pub fn main() {
 
     let mut done = false;
     while !done {
+        #[cfg(feature = "varjo")]
+        varjo.begin_frame_sync();
+
         done = window.poll_events();
+
+        #[cfg(feature = "varjo")]
+        varjo.end_frame();
 
         if io_generator.is_ready() {
             if let Some((input_node, output_node)) = io_generator.next(&window) {
