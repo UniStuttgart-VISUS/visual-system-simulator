@@ -8,13 +8,22 @@
 #include <stdexcept>
 #include <vector>
 
+struct VarjoRenderTarget
+{
+    GLuint textureId;
+    uint32_t width;
+    uint32_t height;
+};
+
 class Varjo
 {
-private:
+public:
     varjo_Session *m_session = nullptr;
     std::vector<varjo_Viewport> m_viewports;
     varjo_SwapChainConfig2 m_swapChainConfig;
     varjo_SwapChain *m_colorSwapChain = nullptr;
+    std::vector<VarjoRenderTarget> m_renderTargets;
+    std::vector<varjo_LayerMultiProjView> m_projectionLayers;
     varjo_FrameInfo *m_frameInfo = nullptr;
     bool m_visible = true;
 
@@ -36,7 +45,7 @@ public:
         m_session = varjo_SessionInit();
         validate();
 
-        // Enumerate views.
+        // Enumerate and pack views into an atlas-like layout.
         const auto viewCount = varjo_GetViewCount(m_session);
         std::vector<varjo_Viewport> viewports;
         viewports.reserve(viewCount);
@@ -54,14 +63,32 @@ public:
             }
         }
 
-        // Setup color swap chain.
-        m_swapChainConfig.numberOfTextures = 4;
+        // Setup color swap chain (ring buffer of render targets).
+        m_swapChainConfig.numberOfTextures = 3;
         m_swapChainConfig.textureArraySize = 1;
         m_swapChainConfig.textureFormat = varjo_TextureFormat_R8G8B8A8_SRGB;
         m_swapChainConfig.textureWidth = m_viewports.back().width + m_viewports.back().x;
         m_swapChainConfig.textureHeight = m_viewports.back().height + m_viewports.back().y;
         m_colorSwapChain = varjo_GLCreateSwapChain(m_session, &m_swapChainConfig);
         validate();
+
+        // Create a render target per swap chain texture.
+        for (int i = 0; i < m_swapChainConfig.numberOfTextures; ++i)
+        {
+            const varjo_Texture colorTexture = varjo_GetSwapChainImage(m_colorSwapChain, i);
+            m_renderTargets.push_back(
+                VarjoRenderTarget{
+                    varjo_ToGLTexture(colorTexture),
+                    m_swapChainConfig.textureWidth,
+                    m_swapChainConfig.textureHeight});
+        }
+
+        // Create projection layers views
+        for (int32_t i = 0; i < viewCount; i++)
+        {
+            m_projectionLayers[i].extension = nullptr;
+            m_projectionLayers[i].viewport = varjo_SwapChainViewport{m_colorSwapChain, m_viewports[i].x, m_viewports[i].y, m_viewports[i].width, m_viewports[i].height, 0};
+        }
 
         // Create a FrameInfo (used during main loop.)
         m_frameInfo = varjo_CreateFrameInfo(m_session);
@@ -123,6 +150,11 @@ public:
                 }
 
                 //...
+
+
+                   std::copy(view.projectionMatrix, view.projectionMatrix + 16, m_projectionLayers[i].projection.value);
+        std::copy(view.viewMatrix, view.viewMatrix + 16, m_projectionLayers[i].view.value);
+
             }
             */
         }
@@ -133,18 +165,15 @@ public:
         /*
         varjo_ReleaseSwapChainImage(m_colorSwapChain);
 
+    
+
         varjo_LayerMultiProj multiProjectionLayer{
-            {varjo_LayerMultiProjType, flags}, varjo_SpaceLocal, static_cast<int32_t>(m_viewCount), m_multiprojectionViews.data()};
+            {varjo_LayerMultiProjType, 0}, varjo_SpaceLocal, static_cast<int32_t>(m_projectionLayers.size()), m_projectionLayers.data()};
         std::array<varjo_LayerHeader *, 1> layers = {&multiProjectionLayer.header};
-        varjo_SubmitInfoLayers submitInfoLayers{frameInfo->frameNumber, 0, m_colorSwapChain != nullptr ? 1 : 0, layers.data()};
+        varjo_SubmitInfoLayers submitInfoLayers{frameInfo->frameNumber, 0, 1, layers.data()};
 
         varjo_EndFrameWithLayers(m_session, &submitInfoLayers);
         */
-    }
-
-    const varjo_FrameInfo &frameInfo() const
-    {
-        return *m_frameInfo;
     }
 };
 
@@ -168,6 +197,21 @@ API_EXPORT void varjo_drop(Varjo **varjo)
 {
     delete *varjo;
     *varjo = nullptr;
+}
+
+API_EXPORT const char *varjo_render_targets(Varjo *varjo, VarjoRenderTarget **render_targets, uint32_t *render_target_size)
+{
+    assert(varjo != nullptr && "Varjo instance expected");
+    try
+    {
+        *render_targets = varjo->m_renderTargets.data();
+        *render_target_size = varjo->m_renderTargets.size();
+        return nullptr;
+    }
+    catch (const std::exception &ex)
+    {
+        return ex.what();
+    }
 }
 
 API_EXPORT const char *varjo_begin_frame_sync(Varjo *varjo)

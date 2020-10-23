@@ -93,15 +93,15 @@ impl IoGenerator {
 pub fn main() {
     let config = cmd_parse();
 
-    #[cfg(feature = "varjo")]
-    let varjo = varjo::Varjo::new();
-
     let remote = if let Some(port) = config.port {
         Some(Remote::new(port))
     } else {
         None
     };
     let mut window = Window::new(config.visible, remote, config.parameters);
+
+    #[cfg(feature = "varjo")]
+    let varjo = varjo::Varjo::new();
 
     let mut io_generator = IoGenerator::new(config.inputs, config.output);
     let (input_node, output_node) = io_generator.next(&window).unwrap();
