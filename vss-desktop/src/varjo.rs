@@ -1,20 +1,23 @@
 use std::os::raw::{c_char, c_void};
 
+use vss::*;
+
 type VarjoPtr = *mut c_void;
 
 #[repr(C)]
+#[derive(Clone)]
 struct VarjoRenderTarget {
-    texture_id: u32,
-    width: u32,
-    height: u32,
+    pub texture_id: u32,
+    pub width: u32,
+    pub height: u32,
 }
 
 extern "C" {
     fn varjo_new(varjo: *mut VarjoPtr) -> *const c_char;
     fn varjo_render_targets(
         varjo: VarjoPtr,
-        render_targets: *mut *mut VarjoRenderTaret,
-        render_targets_size: *mut uint32_t,
+        render_targets: *mut *mut VarjoRenderTarget,
+        render_targets_size: *mut u32,
     ) -> *const c_char;
     fn varjo_begin_frame_sync(varjo: VarjoPtr) -> *const c_char;
     fn varjo_end_frame(varjo: VarjoPtr) -> *const c_char;
@@ -47,9 +50,9 @@ impl Varjo {
         Self { varjo }
     }
 
-    pub fn render_targets(&self) -> Vec<VarjoRenderTarget> {
-        let mut render_targets = std::ptr::null_mut();
-        let mut render_targets_size = 0;
+    pub fn render_targets(&self) -> Vec<u32> {
+        let mut render_targets = std::ptr::null_mut::<VarjoRenderTarget>();
+        let mut render_targets_size = 0u32;
         try_fail(unsafe {
             varjo_render_targets(
                 self.varjo,
@@ -58,7 +61,20 @@ impl Varjo {
             )
         })
         .unwrap();
-        unsafe { std::slice::from_raw_parts(render_targets, render_targets_size).to_vec() }
+        let render_targets =
+            unsafe { std::slice::from_raw_parts(render_targets, render_targets_size as usize) };
+
+        let mut textures = Vec::new();
+        for render_target in render_targets {
+            textures.push(texture_from_id_and_size::<ColorFormat>(
+                render_target.texture_id,
+                render_target.width,
+                render_target.height,
+            ));
+            //XXX: Create RenderTarget and ShaderResourceView
+        }
+
+        vec![0u32] //XXX: convert to gfx
     }
 
     pub fn begin_frame_sync(&self) {

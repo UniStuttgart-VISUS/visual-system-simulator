@@ -28,6 +28,7 @@ fn link(lib: &str, mode: &str) {
 
 fn main() {
     if cfg!(feature = "varjo") {
+        let target = std::env::var("TARGET").unwrap();
         let (include_dirs, lib_dirs) = varjo_dirs().unwrap_or_else(|_| {
             eprintln!(
                 "Unable to find Varjo SDK. \
@@ -39,9 +40,12 @@ fn main() {
 
         println!("cargo:rerun-if-changed=src/varjo.cpp");
 
-        cc::Build::new()
-            .cpp(true)
-            .warnings(true)
+        let mut build = cc::Build::new();
+        build.cpp(true).warnings(true);
+        if target.contains("msvc") {
+            build.flag("-EHsc");
+        }
+        build
             .includes(include_dirs)
             .file("src/varjo.cpp")
             .compile("vss-desktop-cc");

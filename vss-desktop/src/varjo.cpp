@@ -79,8 +79,8 @@ public:
             m_renderTargets.push_back(
                 VarjoRenderTarget{
                     varjo_ToGLTexture(colorTexture),
-                    m_swapChainConfig.textureWidth,
-                    m_swapChainConfig.textureHeight});
+                    static_cast<uint32_t>(m_swapChainConfig.textureWidth),
+                    static_cast<uint32_t>(m_swapChainConfig.textureHeight)});
         }
 
         // Create projection layers views
@@ -191,6 +191,10 @@ API_EXPORT const char *varjo_new(Varjo **varjo)
     {
         return ex.what();
     }
+    catch (...)
+    {
+        return "Unexpected exception";
+    }
 }
 
 API_EXPORT void varjo_drop(Varjo **varjo)
@@ -205,12 +209,16 @@ API_EXPORT const char *varjo_render_targets(Varjo *varjo, VarjoRenderTarget **re
     try
     {
         *render_targets = varjo->m_renderTargets.data();
-        *render_target_size = varjo->m_renderTargets.size();
+        *render_target_size = static_cast<uint32_t>(varjo->m_renderTargets.size());
         return nullptr;
     }
     catch (const std::exception &ex)
     {
         return ex.what();
+    }
+    catch (...)
+    {
+        return "Unexpected exception";
     }
 }
 
@@ -226,6 +234,10 @@ API_EXPORT const char *varjo_begin_frame_sync(Varjo *varjo)
     {
         return ex.what();
     }
+    catch (...)
+    {
+        return "Unexpected exception";
+    }
 }
 
 API_EXPORT const char *varjo_end_frame(Varjo *varjo)
@@ -239,5 +251,9 @@ API_EXPORT const char *varjo_end_frame(Varjo *varjo)
     catch (const std::exception &ex)
     {
         return ex.what();
+    }
+    catch (...)
+    {
+        return "Unexpected exception";
     }
 }
