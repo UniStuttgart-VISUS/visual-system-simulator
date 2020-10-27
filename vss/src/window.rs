@@ -7,6 +7,10 @@ pub type DeviceFactory = gfx_device_gl::Factory;
 /// An encoder to manipulate a device command queue.
 pub type DeviceEncoder = gfx::Encoder<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer>;
 
+/// Render Target Types of this Window.
+pub type RenderTargetColor = gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat>;
+pub type RenderTargetDepth = gfx::handle::DepthStencilView<gfx_device_gl::Resources, (gfx::format::D24_S8, gfx::format::Unorm)>;
+
 /// Represents a window along with its associated rendering context and [Flow].
 pub struct Window {
     windowed_context: glutin::WindowedContext<glutin::PossiblyCurrent>,
@@ -135,6 +139,11 @@ impl Window {
 
     pub fn target(&self) -> gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat> {
         self.render_target.borrow().clone()
+    }
+
+    pub fn replace_targets(&self, target_color: RenderTargetColor, target_depth: RenderTargetDepth) {
+        self.render_target.replace(target_color);
+        self.main_depth.replace(target_depth);
     }
 
     pub fn poll_events(&self) -> bool {

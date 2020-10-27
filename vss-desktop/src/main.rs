@@ -128,6 +128,12 @@ pub fn main() {
     let node = Display::new(&window);
     window.add_node(Box::new(node));
 
+    //XXX: Varjo Node.
+    #[cfg(feature = "varjo")]{
+        let varjo_target = varjo.render_targets(&window);
+        //window.replace_target(varjo_target);
+    }
+
     let mut done = false;
     while !done {
         #[cfg(feature = "varjo")]

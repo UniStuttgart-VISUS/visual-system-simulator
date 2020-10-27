@@ -1,13 +1,15 @@
 use std::os::raw::{c_char, c_void};
 
 use vss::*;
+use vss::gfx::Factory;
 
 type VarjoPtr = *mut c_void;
 
 #[repr(C)]
 #[derive(Clone)]
 struct VarjoRenderTarget {
-    pub texture_id: u32,
+    pub color_texture_id: u32,
+    pub depth_texture_id: u32,
     pub width: u32,
     pub height: u32,
 }
@@ -50,7 +52,7 @@ impl Varjo {
         Self { varjo }
     }
 
-    pub fn render_targets(&self) -> Vec<u32> {
+    pub fn render_targets(&self, window: &Window) -> RenderTargetColor {
         let mut render_targets = std::ptr::null_mut::<VarjoRenderTarget>();
         let mut render_targets_size = 0u32;
         try_fail(unsafe {
@@ -67,14 +69,16 @@ impl Varjo {
         let mut textures = Vec::new();
         for render_target in render_targets {
             textures.push(texture_from_id_and_size::<ColorFormat>(
-                render_target.texture_id,
+                render_target.color_texture_id,
                 render_target.width,
                 render_target.height,
             ));
             //XXX: Create RenderTarget and ShaderResourceView
+            //use factory.view_texture_as_render_target ?
         }
-
-        vec![0u32] //XXX: convert to gfx
+        let mut factory = window.factory().borrow_mut();
+        //factory.view_texture_as_depth_stencil(&depth_textures[0], 0, None, gfx::texture::DepthStencilFlags::empty());
+        return factory.view_texture_as_render_target(&textures[0], 0, None).unwrap();
     }
 
     pub fn begin_frame_sync(&self) {

@@ -7,10 +7,13 @@
 #include <cassert>
 #include <stdexcept>
 #include <vector>
+#include <array>
+#include <iostream>
 
 struct VarjoRenderTarget
 {
-    GLuint textureId;
+    GLuint colorTextureId;
+    GLuint depthTextureId;
     uint32_t width;
     uint32_t height;
 };
@@ -19,10 +22,12 @@ class Varjo
 {
 public:
     varjo_Session *m_session = nullptr;
+    int32_t m_viewCount;
     std::vector<varjo_Viewport> m_viewports;
     varjo_SwapChainConfig2 m_swapChainConfig;
     varjo_SwapChain *m_colorSwapChain = nullptr;
     std::vector<VarjoRenderTarget> m_renderTargets;
+    int32_t m_currentSwapChainIndex = 0;
     std::vector<varjo_LayerMultiProjView> m_projectionLayers;
     varjo_FrameInfo *m_frameInfo = nullptr;
     bool m_visible = true;
@@ -46,11 +51,11 @@ public:
         validate();
 
         // Enumerate and pack views into an atlas-like layout.
-        const auto viewCount = varjo_GetViewCount(m_session);
+        m_viewCount = varjo_GetViewCount(m_session);
         std::vector<varjo_Viewport> viewports;
-        viewports.reserve(viewCount);
+        viewports.reserve(m_viewCount);
         int x = 0, y = 0;
-        for (int32_t i = 0; i < viewCount; i++)
+        for (int32_t i = 0; i < m_viewCount; i++)
         {
             const varjo_ViewDescription viewDescription = varjo_GetViewDescription(m_session, i);
             const varjo_Viewport viewport = varjo_Viewport{x, y, viewDescription.width, viewDescription.height};
@@ -76,15 +81,19 @@ public:
         for (int i = 0; i < m_swapChainConfig.numberOfTextures; ++i)
         {
             const varjo_Texture colorTexture = varjo_GetSwapChainImage(m_colorSwapChain, i);
+            //XXX: create depth swapchain
+            //const varjo_Texture depthTexture = varjo_GetSwapChainImage(m_depthSwapChain, i);
             m_renderTargets.push_back(
                 VarjoRenderTarget{
                     varjo_ToGLTexture(colorTexture),
+                    0, //varjo_ToGLTexture(depthTexture),
                     static_cast<uint32_t>(m_swapChainConfig.textureWidth),
                     static_cast<uint32_t>(m_swapChainConfig.textureHeight)});
         }
 
         // Create projection layers views
-        for (int32_t i = 0; i < viewCount; i++)
+        m_projectionLayers.reserve(m_viewCount);
+        for (int32_t i = 0; i < m_viewCount; i++)
         {
             m_projectionLayers[i].extension = nullptr;
             m_projectionLayers[i].viewport = varjo_SwapChainViewport{m_colorSwapChain, m_viewports[i].x, m_viewports[i].y, m_viewports[i].width, m_viewports[i].height, 0};
@@ -135,15 +144,12 @@ public:
             // Wait before rendering the next frame.
             varjo_WaitSync(m_session, m_frameInfo);
 
-            /*
             varjo_BeginFrameWithLayers(m_session);
 
-            int32_t swapChainIndex = 0;
-            varjo_AcquireSwapChainImage(m_colorSwapChain, &swapChainIndex);
-            m_currentRenderTarget = m_renderTargets[swapChainIndex];
+            varjo_AcquireSwapChainImage(m_colorSwapChain, &m_currentSwapChainIndex);
             for (uint32_t i = 0; i < m_viewCount; ++i)
             {
-                varjo_ViewInfo &view = frameInfo->views[i];
+                varjo_ViewInfo &view = m_frameInfo->views[i];
                 if (!view.enabled)
                 {
                     continue; // Skip a view if it is not enabled.
@@ -151,29 +157,22 @@ public:
 
                 //...
 
-
-                   std::copy(view.projectionMatrix, view.projectionMatrix + 16, m_projectionLayers[i].projection.value);
-        std::copy(view.viewMatrix, view.viewMatrix + 16, m_projectionLayers[i].view.value);
-
+                std::copy(view.projectionMatrix, view.projectionMatrix + 16, m_projectionLayers[i].projection.value);
+                std::copy(view.viewMatrix, view.viewMatrix + 16, m_projectionLayers[i].view.value);
             }
-            */
         }
     }
 
     void endFrame()
     {
-        /*
+        varjo_LayerMultiProj multiProjectionLayer{
+            {varjo_LayerMultiProjType, 0}, varjo_SpaceLocal, static_cast<int32_t>(m_viewCount), m_projectionLayers.data()};
+        std::array<varjo_LayerHeader *, 1> layers = {&multiProjectionLayer.header};
+        varjo_SubmitInfoLayers submitInfoLayers{m_frameInfo->frameNumber, 0, 1, layers.data()};
+
         varjo_ReleaseSwapChainImage(m_colorSwapChain);
 
-    
-
-        varjo_LayerMultiProj multiProjectionLayer{
-            {varjo_LayerMultiProjType, 0}, varjo_SpaceLocal, static_cast<int32_t>(m_projectionLayers.size()), m_projectionLayers.data()};
-        std::array<varjo_LayerHeader *, 1> layers = {&multiProjectionLayer.header};
-        varjo_SubmitInfoLayers submitInfoLayers{frameInfo->frameNumber, 0, 1, layers.data()};
-
         varjo_EndFrameWithLayers(m_session, &submitInfoLayers);
-        */
     }
 };
 
