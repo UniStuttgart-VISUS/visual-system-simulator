@@ -180,6 +180,24 @@ vec2 to_dir_angle(in vec3 dir){
     return pt;
 }
 
+float[17] sort_observations(float[17] obs)
+{
+	float t;
+	for (int j = 0; j < 17-1; ++j)
+	{
+		int swap = j;
+		for (int i = j+1; i < 17; ++i)
+		{
+			if (obs[swap] > obs[i])
+				swap = i;
+		}
+		t = obs[swap];
+		obs[swap] = obs[j];
+		obs[j] = t;
+	}
+    return obs;
+}
+
 void main() {
 
     // // color range
@@ -208,6 +226,15 @@ void main() {
     vec2 sd_dir = vec2(0.0);
 
 
+    // values stolen from the interwebs: https://www.real-statistics.com/statistics-tables/shapiro-wilk-table/
+    float sw_weights[8] = float[](
+        0.4968, 0.3273, 0.2540, 0.1988,
+        0.1524, 0.1109, 0.0725, 0.0359
+        ); 
+    float sw_x = 0;
+    float sw_y = 0;
+
+
 
 
     if (1 == u_active) {
@@ -231,6 +258,9 @@ void main() {
         }
 
         Simulation colors[17];
+        float sw_values_x[17];
+        float sw_values_y[17];
+
 
         // The higher the sampleCount, the more rays are cast. Rays are cast in this fashion,
         // where the number indicates the minimum sampleCount required for this ray to be cast:
@@ -293,6 +323,8 @@ void main() {
         // calculate the mean direction
         for (int i = 0; i < 17; i++) {
             avg_dir += to_dir_angle(colors[i].dir);
+            sw_values_x[i] = to_dir_angle(colors[i].dir).x;
+            sw_values_y[i] = to_dir_angle(colors[i].dir).y;
         }
         avg_dir /= sampleCount;
 
@@ -306,6 +338,31 @@ void main() {
         sd_avg+=sd_dir.x;
         sd_avg+=sd_dir.y;
         sd_avg /= 2;
+
+
+        // sort sw_values
+
+        sw_values_x = sort_observations(sw_values_x);
+        sw_values_y = sort_observations(sw_values_y);
+
+
+        // calculate sw value based on weights
+        float b_x = 0.0;
+        float b_y = 0.0;
+        for (int i = 0; i < 8; i++) {
+            b_x += sw_weights[i]*(sw_values_x[16-i]-sw_values_x[i]);
+            b_y += sw_weights[i]*(sw_values_y[16-i]-sw_values_y[i]);
+        }
+        sw_x = b_x*b_x / ( 16*var_dir.x );
+        sw_y = b_y*b_y / ( 16*var_dir.y );
+
+        // for sign. niv. 5%, with 17 samples, w-crit is 0.892, according to https://scistatcalc.blogspot.com/2013/09/critical-value-of-w-statistic.html?m=1
+        float w_crit = 0.892;
+        if (sw_x > w_crit){ sw_x=1.0; } else{ sw_x=0.0; }
+        if (sw_y > w_crit){ sw_y=1.0; } else{ sw_y=0.0; }
+
+
+
 
 
         for (int i = 0; i < 17; i++) {
@@ -384,9 +441,9 @@ void main() {
 
     // direction variance
     rt_deflection = vec4(
-        // vec3(sd_dir.x, sd_dir.y, 0.0),
-        // vec3(avg_dir, 0.0),
-        vec3(sd_avg),
+        vec3(sd_dir.x, sd_dir.y, 0.0),
+        //vec3(sd_avg),
+        //vec3(sw_x,sw_y,0.0),
         0.0);
 
     // rt_deflection = vec4(vec3(dev_max-dev_min), 0.0);
