@@ -30,6 +30,7 @@ pub struct Window {
 
     remote: Option<Remote>,
     flow: Flow,
+    vis_param: RefCell<VisualizationParameters>
 }
 
 impl Window {
@@ -81,6 +82,7 @@ impl Window {
             last_gaze: RefCell::new(Gaze { x: 0.5, y: 0.5 }),
             active: RefCell::new(false),
             values: RefCell::new(values),
+            vis_param: RefCell::new(VisualizationParameters::default())
         }
     }
 }
@@ -150,6 +152,70 @@ impl Window {
                     glutin::WindowEvent::KeyboardInput {
                         input:
                             glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::A),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().dir_calc_scale+=0.5;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::D),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().dir_calc_scale-=0.5;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::W),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().heat_scale+=0.5;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::S),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().heat_scale-=0.5;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                virtual_keycode: Some(glutin::VirtualKeyCode::Key0),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().vis_type=VisualizationType::Output;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                virtual_keycode: Some(glutin::VirtualKeyCode::Key1),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().vis_type=VisualizationType::Deflection;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
                                 virtual_keycode: Some(glutin::VirtualKeyCode::Escape),
                                 ..
                             },
@@ -210,7 +276,7 @@ impl Window {
         }
 
         // Update input.
-        self.flow.input(&self.last_head.borrow(), &deferred_gaze);
+        self.flow.input(&self.last_head.borrow(), &deferred_gaze, &self.vis_param.borrow());
         *self.last_gaze.borrow_mut() = deferred_gaze;
 
         self.encoder

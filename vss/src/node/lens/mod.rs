@@ -26,6 +26,9 @@ gfx_defines! {
         s_normal: gfx::TextureSampler<[f32; 4]> = "s_normal",
         s_cornea: gfx::TextureSampler<[f32; 4]> = "s_cornea",
         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
+        s_deflection: gfx::TextureSampler<[f32; 4]> = "s_deflection",
+        rt_deflection: gfx::RenderTarget<ColorFormat> = "rt_deflection",
+        u_dir_calc_scale: gfx::Global<f32> = "u_dir_calc_scale",
     }
 }
 
@@ -59,6 +62,8 @@ impl Node for Lens {
             _,
             gfx::handle::RenderTargetView<gfx_device_gl::Resources, f32>,
         ) = factory.create_render_target(1, 1).unwrap();
+        let (_, s_deflection, rt_deflection) = factory.create_render_target(1, 1).unwrap();
+
 
         Lens {
             pso,
@@ -74,8 +79,11 @@ impl Node for Lens {
                 s_color: (src, sampler.clone()),
                 s_depth: (srv, sampler.clone()),
                 s_normal: (normal_view, sampler.clone()),
-                s_cornea: (cornea_view, sampler),
+                s_cornea: (cornea_view, sampler.clone()),
                 rt_color: dst,
+                s_deflection:(s_deflection, sampler.clone()),
+                rt_deflection,
+                u_dir_calc_scale: 1.0
             },
         }
     }
@@ -86,6 +94,8 @@ impl Node for Lens {
         self.pso_data.s_color = color_view;
         self.pso_data.s_depth = depth_view;
         self.pso_data.rt_color = slots.as_color();
+        self.pso_data.s_deflection = slots.as_deflection_view();
+        self.pso_data.rt_deflection = slots.as_deflection();
         slots
     }
 
@@ -137,5 +147,10 @@ impl Node for Lens {
     fn render(&mut self, window: &Window) {
         let mut encoder = window.encoder().borrow_mut();
         encoder.draw(&gfx::Slice::from_vertex_count(6), &self.pso, &self.pso_data);
+    }
+
+    fn input(&mut self, _head: &Head, gaze: &Gaze, vis_param: &VisualizationParameters) -> Gaze {
+        self.pso_data.u_dir_calc_scale = vis_param.dir_calc_scale;
+        gaze.clone()
     }
 }

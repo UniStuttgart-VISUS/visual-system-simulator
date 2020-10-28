@@ -9,6 +9,8 @@ uniform sampler2D s_rgb;
 in vec2 v_tex;
 out vec4 rt_color;
 out float rt_depth;
+out vec4 rt_deflection;
+
 
 void main() {
     float depth = 0.5;
@@ -36,4 +38,6 @@ void main() {
 
     rt_color = vec4(texture(s_rgb, tex).rgb, 1.0);
     rt_depth = depth;
+    rt_deflection = vec4(0.0,0.0,0.0,1.0);
+
 }

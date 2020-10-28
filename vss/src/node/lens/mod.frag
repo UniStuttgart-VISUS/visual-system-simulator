@@ -45,14 +45,25 @@ uniform float u_near_point;
 uniform float u_far_point;
 uniform float u_near_vision_factor;
 uniform float u_far_vision_factor;
+uniform float u_dir_calc_scale;
 
 uniform sampler2D s_color;
 uniform sampler2D s_normal;
 uniform sampler2D s_depth;
 uniform sampler2D s_cornea;
+uniform sampler2D s_deflection;
+
 
 in vec2 v_tex;
 out vec4 rt_color;
+out vec4 rt_deflection;
+
+struct Simulation
+{
+  vec4 color;
+  vec3 dir;
+};
+
 
 // alters the direction of a ray according to the imperfection in the cornea specified by the cornea map
 vec3 applyCorneaImperfection(vec3 pos, vec3 dir) {
@@ -140,7 +151,7 @@ vec3 rayIntersectSphere(vec3 rPos, vec3 rDir, vec3 cPos, float cRad) {
 
 // sends the ray through all four surfaces in the optical system and returns the color
 // of the texture at the intersection point.
-vec4 getColorSample(vec3 start, vec2 aim, float accDistance, float nAnteriorChamberFactor) {
+Simulation getColorSample(vec3 start, vec2 aim, float accDistance, float nAnteriorChamberFactor) {
     vec3 dir = normalize(vec3(aim, VITREOUS_HUMOUR_RADIUS) - start);
 
     start = rayIntersectSphere(start, dir, getInnerLensCenter(accDistance), getInnerLensRadius(accDistance));
@@ -156,10 +167,49 @@ vec4 getColorSample(vec3 start, vec2 aim, float accDistance, float nAnteriorCham
     dir = refract(dir, -normalize(start - OUTER_CORNEA_CENTER), N_CORNEA / N_AIR);
     dir = applyCorneaImperfection(start, dir);
 
-    return getColorWithRay(start, dir);
+    vec4 color = getColorWithRay(start, dir);
+    Simulation sim = Simulation(color,dir);
+    return sim;
+}
+
+
+vec2 to_dir_angle(in vec3 dir){		
+	vec2 pt;
+    pt.x = atan(dir.x/dir.z)*u_dir_calc_scale;
+    pt.y = atan(dir.y/dir.z)*u_dir_calc_scale;
+    return pt;
 }
 
 void main() {
+
+    // // color range
+    // vec3 color_min = vec3(1.0);
+    // vec3 color_max = vec3(0.0);
+
+    // // mist
+    // float dev_min = 1.0;
+    // float dev_max = 0.0;
+
+    // // rg range
+    // float color_min_r = 1.0;
+    // float color_max_r = 0.0;
+    // float color_min_g = 1.0;
+    // float color_max_g = 0.0;
+
+    // // color sd
+    // vec3 avg_rgb = vec3(0.0);
+    // vec3 var_rgb = vec3(0.0);
+    // vec3 sd_rgb = vec3(0.0);
+    float sd_avg = 0.0;
+
+    // // dir sd
+    vec2 avg_dir = vec2(0.0);
+    vec2 var_dir = vec2(0.0);
+    vec2 sd_dir = vec2(0.0);
+
+
+
+
     if (1 == u_active) {
         rt_color = vec4(0.5);
         vec3 start = (texture(s_normal, v_tex) * 2.0 - 1.0).xyz * VITREOUS_HUMOUR_RADIUS;
@@ -180,6 +230,8 @@ void main() {
             accomodationDistance = u_near_point;
         }
 
+        Simulation colors[17];
+
         // The higher the sampleCount, the more rays are cast. Rays are cast in this fashion,
         // where the number indicates the minimum sampleCount required for this ray to be cast:
         // 3   2   3
@@ -190,29 +242,119 @@ void main() {
         switch (u_samplecount) {
         case 4:
             sampleCount += 8.0;
-            color += getColorSample(start, vec2(-0.5, -0.5), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(-0.5, 0.5), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(0.5, -0.5), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(0.5, 0.5), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(-0.5, 0.0), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(0.5, 0.0), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(0.0, -0.5), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(0.0, 0.5), accomodationDistance, nAnteriorChamberFactor);
+            colors[0] = getColorSample(start, vec2(-0.5, -0.5), accomodationDistance, nAnteriorChamberFactor);
+            colors[1] = getColorSample(start, vec2(-0.5, 0.5), accomodationDistance, nAnteriorChamberFactor);
+            colors[2] = getColorSample(start, vec2(0.5, -0.5), accomodationDistance, nAnteriorChamberFactor);
+            colors[3] = getColorSample(start, vec2(0.5, 0.5), accomodationDistance, nAnteriorChamberFactor);
+            colors[4] = getColorSample(start, vec2(-0.5, 0.0), accomodationDistance, nAnteriorChamberFactor);
+            colors[5] = getColorSample(start, vec2(0.5, 0.0), accomodationDistance, nAnteriorChamberFactor);
+            colors[6] = getColorSample(start, vec2(0.0, -0.5), accomodationDistance, nAnteriorChamberFactor);
+            colors[7] = getColorSample(start, vec2(0.0, 0.5), accomodationDistance, nAnteriorChamberFactor);
         case 3:
             sampleCount += 4.0;
-            color += getColorSample(start, vec2(-1.0, -1.0), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(-1.0, 1.0), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(1.0, -1.0), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(1.0, 1.0), accomodationDistance, nAnteriorChamberFactor);
+            colors[8] = getColorSample(start, vec2(-1.0, -1.0), accomodationDistance, nAnteriorChamberFactor);
+            colors[9] = getColorSample(start, vec2(-1.0, 1.0), accomodationDistance, nAnteriorChamberFactor);
+            colors[10] = getColorSample(start, vec2(1.0, -1.0), accomodationDistance, nAnteriorChamberFactor);
+            colors[11] = getColorSample(start, vec2(1.0, 1.0), accomodationDistance, nAnteriorChamberFactor);
         case 2:
             sampleCount += 4.0;
-            color += getColorSample(start, vec2(-1.0, 0.0), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(1.0, 0.0), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(0.0, -1.0), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(0.0, 1.0), accomodationDistance, nAnteriorChamberFactor);
+            colors[12] = getColorSample(start, vec2(-1.0, 0.0), accomodationDistance, nAnteriorChamberFactor);
+            colors[13] = getColorSample(start, vec2(1.0, 0.0), accomodationDistance, nAnteriorChamberFactor);
+            colors[14] = getColorSample(start, vec2(0.0, -1.0), accomodationDistance, nAnteriorChamberFactor);
+            colors[15] = getColorSample(start, vec2(0.0, 1.0), accomodationDistance, nAnteriorChamberFactor);
         case 1:
             sampleCount += 1.0;
-            color += getColorSample(start, vec2(0.0, 0.0), accomodationDistance, nAnteriorChamberFactor);
+            colors[16] = getColorSample(start, vec2(0.0, 0.0), accomodationDistance, nAnteriorChamberFactor);
+        }
+
+
+        // color sd ----------------------------------------------------
+        // // calculate the mean color
+        // for (int i = 0; i < 17; i++) {
+        //     avg_rgb += colors[i].color.rgb;
+        // }
+        // avg_rgb = avg_rgb/sampleCount;
+
+        // // calculate the color variances for each channel
+        // // pow and sqrt are operating componentwise
+        // for (int i = 0; i < 17; i++) {
+        //     var_rgb += pow(colors[i].color.rgb-avg_rgb , vec3(2.0));
+        // }
+        // var_rgb = var_rgb/sampleCount;  // alt sampleCount-1
+        // sd_rgb = sqrt(var_rgb);
+
+        // // lets calculate the average variance across all channels
+        // sd_avg+=sd_rgb.r;
+        // sd_avg+=sd_rgb.g;
+        // sd_avg+=sd_rgb.b;
+        // sd_avg /= 3;
+
+        // dir sd ----------------------------------------------------
+        // calculate the mean direction
+        for (int i = 0; i < 17; i++) {
+            avg_dir += to_dir_angle(colors[i].dir);
+        }
+        avg_dir /= sampleCount;
+
+        for (int i = 0; i < 17; i++) {
+            var_dir += pow(to_dir_angle(colors[i].dir)-avg_dir , vec2(2.0));
+        }
+        var_dir /= sampleCount;
+        sd_dir = sqrt(var_dir);
+        
+        // // lets calculate the average variance across all channels
+        sd_avg+=sd_dir.x;
+        sd_avg+=sd_dir.y;
+        sd_avg /= 2;
+
+
+        for (int i = 0; i < 17; i++) {
+            
+            // dot div ----------------------------------------------------
+            // float dev = abs(dot(normalize(colors[i].dir),vec3(0.0,0.0,1.0)));
+            // if (dev < dev_min) {
+            //     dev_min = dev;
+            // }
+            // if (dev > dev_max) {
+            //     dev_max = dev;
+            // }
+
+            //r/g difference ----------------------------------------------------
+            // if(abs(normalize(colors[i].dir).r) < color_min_r){
+            //     color_min_r = abs(normalize(colors[i].dir).r);
+            // }
+            // if(abs(normalize(colors[i].dir).b) < color_min_g){
+            //     color_min_g = abs(normalize(colors[i].dir).b);
+            // }         
+            // if(abs(normalize(colors[i].dir).r) > color_max_r){
+            //     color_max_r = abs(normalize(colors[i].dir).r);
+            // }
+            // if(abs(normalize(colors[i].dir).b) > color_max_g){
+            //     color_max_g = abs(normalize(colors[i].dir).b);
+            // }   
+
+            //color diff range ----------------------------------------------------
+            // if(colors[i].color.r < color_min.r){
+            //     color_min.r = colors[i].color.r;
+            // }
+            // if(colors[i].color.g < color_min.g){
+            //     color_min.g = colors[i].color.g;
+            // }
+            // if(colors[i].color.b < color_min.b){
+            //     color_min.b = colors[i].color.b;
+            // }
+            // if(colors[i].color.r > color_max.r){
+            //     color_max.r = colors[i].color.r;
+            // }
+            // if(colors[i].color.g > color_max.g){
+            //     color_max.g = colors[i].color.g;
+            // }
+            // if(colors[i].color.b > color_max.b){
+            //     color_max.b = colors[i].color.b;
+            // }
+
+            color+=colors[i].color;
+            //color+=vec4(1.0);
         }
 
         // the final color is the average of all samples
@@ -220,4 +362,32 @@ void main() {
     } else {
         rt_color = texture(s_color, v_tex);
     }
+
+
+    //rt_deflection = vec4(abs(color_max_r-color_min_r), abs(color_max_g-color_min_g), 0.0, 0.0);
+
+
+    // color_diff
+    // rt_deflection = vec4(
+    //     abs(color_max.r-color_min.r), 
+    //     abs(color_max.g-color_min.g), 
+    //     abs(color_max.b-color_min.b), 
+    //     0.0);
+
+
+    // color variance
+    // rt_deflection = vec4(
+    //    //sd_rgb,
+    //    //vec3(sd_avg),
+    //     0.0);
+
+
+    // direction variance
+    rt_deflection = vec4(
+        // vec3(sd_dir.x, sd_dir.y, 0.0),
+        // vec3(avg_dir, 0.0),
+        vec3(sd_avg),
+        0.0);
+
+    // rt_deflection = vec4(vec3(dev_max-dev_min), 0.0);
 }

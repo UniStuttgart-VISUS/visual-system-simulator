@@ -11,6 +11,7 @@ gfx_defines! {
         s_rgb: gfx::TextureSampler<[f32; 4]> = "s_rgb",
         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
         rt_depth: gfx::RenderTarget<DepthFormat> = "rt_depth",
+        rt_deflection: gfx::RenderTarget<ColorFormat> = "rt_deflection",
     }
 }
 
@@ -124,6 +125,7 @@ impl Node for UploadRgbBuffer {
         let (_, rgb_view) = load_texture_from_bytes(&mut factory, &[0; 4], 1, 1).unwrap();
         let (_, _, rt_color) = factory.create_render_target(1, 1).unwrap();
         let (_, _, rt_depth) = factory.create_render_target(1, 1).unwrap();
+        let (_, _, rt_deflection) = factory.create_render_target(1, 1).unwrap();
 
         UploadRgbBuffer {
             buffer_next: RgbBuffer::default(),
@@ -138,6 +140,7 @@ impl Node for UploadRgbBuffer {
                 s_rgb: (rgb_view, sampler),
                 rt_color,
                 rt_depth,
+                rt_deflection
             },
         }
     }
@@ -176,13 +179,14 @@ impl Node for UploadRgbBuffer {
             2.0 * ((self.pso_data.u_fov[0] / 2.0).tan() * height as f32 / width as f32).atan();
 
         let slots = slots.emplace_color_depth_output(window, width, height);
-        let (color, depth) = slots.as_color_depth();
+        let (color, depth, deflection) = slots.as_color_depth_deflect();
         self.pso_data.rt_color = color;
         self.pso_data.rt_depth = depth;
+        self.pso_data.rt_deflection = deflection;
         slots
     }
 
-    fn input(&mut self, head: &Head, gaze: &Gaze) -> Gaze {
+    fn input(&mut self, head: &Head, gaze: &Gaze, _vis_param: &VisualizationParameters) -> Gaze {
         use cgmath::Matrix4;
         self.pso_data.u_head = (Matrix4::from_angle_y(cgmath::Rad(head.yaw))
             * Matrix4::from_angle_x(cgmath::Rad(head.pitch)))

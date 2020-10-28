@@ -51,6 +51,8 @@ impl Flow {
                     Slot::Rgb {
                         color: window.target(),
                         color_view: None,
+                        deflection:  window.target(),
+                        deflection_view: None
                     },
                 )
             } else {
@@ -70,11 +72,11 @@ impl Flow {
         }
     }
 
-    pub fn input(&self, head: &Head, gaze: &Gaze) {
+    pub fn input(&self, head: &Head, gaze: &Gaze, vis_param: &VisualizationParameters) {
         let mut gaze = gaze.clone();
         // Propagate to nodes.
         for node in self.nodes.borrow_mut().iter_mut().rev() {
-            gaze = node.input(head, &gaze);
+            gaze = node.input(head, &gaze, vis_param);
         }
     }
 

@@ -11,6 +11,8 @@ gfx_defines! {
         s_depth: gfx::TextureSampler<f32> = "s_depth",
         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
         rt_depth: gfx::RenderTarget<DepthFormat> = "rt_depth",
+        s_deflection: gfx::TextureSampler<[f32; 4]> = "s_deflection",
+        rt_deflection: gfx::RenderTarget<ColorFormat> = "rt_deflection",
     }
 }
 
@@ -35,6 +37,8 @@ impl Node for Cataract {
             load_single_channel_texture_from_bytes(&mut factory, &[0; 4], 1, 1).unwrap();
         let (_, _, rt_color) = factory.create_render_target(1, 1).unwrap();
         let (_, _, rt_depth) = factory.create_render_target(1, 1).unwrap();
+        let (_, s_deflection, rt_deflection) = factory.create_render_target(1, 1).unwrap();
+
 
         Cataract {
             pso,
@@ -44,9 +48,11 @@ impl Node for Cataract {
                 u_blur_factor: 0.0,
                 u_contrast_factor: 0.0,
                 s_color: (color_view, sampler.clone()),
-                s_depth: (depth_view, sampler),
+                s_depth: (depth_view, sampler.clone()),
                 rt_color,
                 rt_depth,
+                s_deflection:(s_deflection, sampler.clone()),
+                rt_deflection,
             },
         }
     }
@@ -62,6 +68,8 @@ impl Node for Cataract {
         let (color, depth) = slots.as_color_depth();
         self.pso_data.rt_color = color;
         self.pso_data.rt_depth = depth;
+        self.pso_data.s_deflection = slots.as_deflection_view();
+        self.pso_data.rt_deflection = slots.as_deflection();
         slots
     }
 

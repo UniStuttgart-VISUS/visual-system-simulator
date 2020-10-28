@@ -6,10 +6,14 @@ uniform float u_blur_factor;
 uniform float u_contrast_factor;
 uniform sampler2D s_color;
 uniform sampler2D s_depth;
+uniform sampler2D s_deflection;
+
 
 in vec2 v_tex;
 out vec4 rt_color;
 out float rt_depth;
+out vec4 rt_deflection;
+
 
 
 float computeBloomFactor(in vec4 color, float blur) {
@@ -41,4 +45,5 @@ void main() {
         rt_color = vec4(texture(s_color, v_tex));
         rt_depth = vec4(texture(s_depth, v_tex)).r;
     }
+    rt_deflection = texture(s_deflection, v_tex);
 }

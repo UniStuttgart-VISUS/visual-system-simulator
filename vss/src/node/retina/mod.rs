@@ -11,6 +11,9 @@ gfx_defines! {
         s_source: gfx::TextureSampler<[f32; 4]> = "s_color",
         s_retina: gfx::TextureSampler<[f32; 4]> = "s_retina",
         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
+        s_deflection: gfx::TextureSampler<[f32; 4]> = "s_deflection",
+        rt_deflection: gfx::RenderTarget<ColorFormat> = "rt_deflection",
+
     }
 }
 
@@ -34,6 +37,7 @@ impl Node for Retina {
         let sampler = factory.create_sampler_linear();
 
         let (_, src, dst) = factory.create_render_target(1, 1).unwrap();
+        let (_, s_deflection, rt_deflection) = factory.create_render_target(1, 1).unwrap();
 
         Retina {
             pso,
@@ -41,8 +45,10 @@ impl Node for Retina {
                 u_resolution: [1.0, 1.0],
                 u_gaze: [0.0, 0.0],
                 s_source: (src, sampler.clone()),
-                s_retina: (mask_view, sampler),
+                s_retina: (mask_view, sampler.clone()),
                 rt_color: dst,
+                s_deflection:(s_deflection, sampler.clone()),
+                rt_deflection,
             },
         }
     }
@@ -52,6 +58,9 @@ impl Node for Retina {
         self.pso_data.u_resolution = slots.output_size_f32();
         self.pso_data.s_source = slots.as_color_view();
         self.pso_data.rt_color = slots.as_color();
+        self.pso_data.s_deflection = slots.as_deflection_view();
+        self.pso_data.rt_deflection = slots.as_deflection();
+
         slots
     }
 
@@ -81,7 +90,7 @@ impl Node for Retina {
         };
     }
 
-    fn input(&mut self, _head: &Head, gaze: &Gaze) -> Gaze {
+    fn input(&mut self, _head: &Head, gaze: &Gaze, _vis_param: &VisualizationParameters) -> Gaze {
         self.pso_data.u_gaze = [
             gaze.x * self.pso_data.u_resolution[0],
             gaze.y * self.pso_data.u_resolution[1],

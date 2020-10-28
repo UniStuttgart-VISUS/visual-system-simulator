@@ -7,9 +7,13 @@ uniform vec2 u_gaze;
 
 uniform sampler2D s_color;
 uniform sampler2D s_retina;
+uniform sampler2D s_deflection;
+
 
 in vec2 v_tex;
 out vec4 rt_color;
+out vec4 rt_deflection;
+
 
 float getLuminance(in vec4 color) {
     return dot(vec4(0.299, 0.587, 0.114, 0), color);
@@ -108,4 +112,6 @@ void main() {
     applyColorBlindness(rt_color, retina_mask);
     //glaucoma should be one of the last ones because it could decrease the brightness a lot
     glaucoma(rt_color, retina_mask);
+
+    rt_deflection = texture(s_deflection, v_tex);
 }

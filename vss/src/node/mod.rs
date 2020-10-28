@@ -48,7 +48,7 @@ pub trait Node {
 
     /// Handle input.
     #[allow(unused_variables)]
-    fn input(&mut self, head: &Head, gaze: &Gaze) -> Gaze {
+    fn input(&mut self, head: &Head, gaze: &Gaze, vis_param: &VisualizationParameters) -> Gaze {
         gaze.clone()
     }
 
