@@ -22,6 +22,10 @@ extern "C" {
         render_targets_size: *mut u32,
     ) -> *const c_char;
     fn varjo_begin_frame_sync(varjo: VarjoPtr) -> *const c_char;
+    fn varjo_current_swap_chain_index(
+        varjo: VarjoPtr,
+        current_swap_chain_index: *mut u32,
+    ) -> *const c_char;
     fn varjo_end_frame(varjo: VarjoPtr) -> *const c_char;
     fn varjo_drop(varjo: *mut VarjoPtr);
 }
@@ -52,7 +56,7 @@ impl Varjo {
         Self { varjo }
     }
 
-    pub fn render_targets(&self, window: &Window) -> RenderTargetColor {
+    pub fn render_targets(&self, window: &Window) -> (RenderTargetColor, RenderTargetDepth) {
         let mut render_targets = std::ptr::null_mut::<VarjoRenderTarget>();
         let mut render_targets_size = 0u32;
         try_fail(unsafe {
@@ -63,22 +67,35 @@ impl Varjo {
             )
         })
         .unwrap();
+        let mut current_swap_chain_index = 0u32;
+        try_fail(unsafe {
+            varjo_current_swap_chain_index(
+                self.varjo,
+                &mut current_swap_chain_index as *mut _,
+            )
+        })
+        .unwrap();
         let render_targets =
             unsafe { std::slice::from_raw_parts(render_targets, render_targets_size as usize) };
 
         let mut textures = Vec::new();
+        let mut depth_textures = Vec::new();
         for render_target in render_targets {
             textures.push(texture_from_id_and_size::<ColorFormat>(
                 render_target.color_texture_id,
                 render_target.width,
                 render_target.height,
             ));
-            //XXX: Create RenderTarget and ShaderResourceView
-            //use factory.view_texture_as_render_target ?
+            depth_textures.push(depth_texture_from_id_and_size::<RenderTargetDepthFormat>(
+                render_target.depth_texture_id,
+                render_target.width,
+                render_target.height,
+            ));
         }
         let mut factory = window.factory().borrow_mut();
-        //factory.view_texture_as_depth_stencil(&depth_textures[0], 0, None, gfx::texture::DepthStencilFlags::empty());
-        return factory.view_texture_as_render_target(&textures[0], 0, None).unwrap();
+        //XXX: return all render targets and depth stencils at once
+        return (factory.view_texture_as_render_target(&textures[current_swap_chain_index as usize], 0, None).unwrap(),
+                factory.view_texture_as_depth_stencil(&depth_textures[current_swap_chain_index as usize], 0, None, gfx::texture::DepthStencilFlags::empty()).unwrap());
     }
 
     pub fn begin_frame_sync(&self) {

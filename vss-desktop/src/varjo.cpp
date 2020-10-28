@@ -25,7 +25,9 @@ public:
     int32_t m_viewCount;
     std::vector<varjo_Viewport> m_viewports;
     varjo_SwapChainConfig2 m_swapChainConfig;
+    varjo_SwapChainConfig2 m_depthSwapChainConfig;
     varjo_SwapChain *m_colorSwapChain = nullptr;
+    varjo_SwapChain *m_depthSwapChain = nullptr;
     std::vector<VarjoRenderTarget> m_renderTargets;
     int32_t m_currentSwapChainIndex = 0;
     std::vector<varjo_LayerMultiProjView> m_projectionLayers;
@@ -69,24 +71,27 @@ public:
         }
 
         // Setup color swap chain (ring buffer of render targets).
-        m_swapChainConfig.numberOfTextures = 3;
+        m_swapChainConfig.numberOfTextures = 4;
         m_swapChainConfig.textureArraySize = 1;
         m_swapChainConfig.textureFormat = varjo_TextureFormat_R8G8B8A8_SRGB;
         m_swapChainConfig.textureWidth = m_viewports.back().width + m_viewports.back().x;
         m_swapChainConfig.textureHeight = m_viewports.back().height + m_viewports.back().y;
         m_colorSwapChain = varjo_GLCreateSwapChain(m_session, &m_swapChainConfig);
+
+        m_depthSwapChainConfig = m_swapChainConfig;
+        m_depthSwapChainConfig.textureFormat = varjo_DepthTextureFormat_D24_UNORM_S8_UINT;
+        m_depthSwapChain = varjo_GLCreateSwapChain(m_session, &m_depthSwapChainConfig);
         validate();
 
         // Create a render target per swap chain texture.
         for (int i = 0; i < m_swapChainConfig.numberOfTextures; ++i)
         {
             const varjo_Texture colorTexture = varjo_GetSwapChainImage(m_colorSwapChain, i);
-            //XXX: create depth swapchain
-            //const varjo_Texture depthTexture = varjo_GetSwapChainImage(m_depthSwapChain, i);
+            const varjo_Texture depthTexture = varjo_GetSwapChainImage(m_depthSwapChain, i);
             m_renderTargets.push_back(
                 VarjoRenderTarget{
                     varjo_ToGLTexture(colorTexture),
-                    0, //varjo_ToGLTexture(depthTexture),
+                    varjo_ToGLTexture(depthTexture),
                     static_cast<uint32_t>(m_swapChainConfig.textureWidth),
                     static_cast<uint32_t>(m_swapChainConfig.textureHeight)});
         }
@@ -95,7 +100,7 @@ public:
         m_projectionLayers.reserve(m_viewCount);
         for (int32_t i = 0; i < m_viewCount; i++)
         {
-            m_projectionLayers[i].extension = nullptr;
+            m_projectionLayers[i].extension = nullptr;//XXX: add usage of depth textures
             m_projectionLayers[i].viewport = varjo_SwapChainViewport{m_colorSwapChain, m_viewports[i].x, m_viewports[i].y, m_viewports[i].width, m_viewports[i].height, 0};
         }
 
@@ -108,6 +113,7 @@ public:
     {
         varjo_FreeFrameInfo(m_frameInfo);
         varjo_FreeSwapChain(m_colorSwapChain);
+        varjo_FreeSwapChain(m_depthSwapChain);
         varjo_SessionShutDown(m_session);
     }
 
@@ -147,6 +153,7 @@ public:
             varjo_BeginFrameWithLayers(m_session);
 
             varjo_AcquireSwapChainImage(m_colorSwapChain, &m_currentSwapChainIndex);
+            varjo_AcquireSwapChainImage(m_depthSwapChain, &m_currentSwapChainIndex);
             for (uint32_t i = 0; i < m_viewCount; ++i)
             {
                 varjo_ViewInfo &view = m_frameInfo->views[i];
@@ -171,6 +178,7 @@ public:
         varjo_SubmitInfoLayers submitInfoLayers{m_frameInfo->frameNumber, 0, 1, layers.data()};
 
         varjo_ReleaseSwapChainImage(m_colorSwapChain);
+        varjo_ReleaseSwapChainImage(m_depthSwapChain);
 
         varjo_EndFrameWithLayers(m_session, &submitInfoLayers);
     }
@@ -227,6 +235,24 @@ API_EXPORT const char *varjo_begin_frame_sync(Varjo *varjo)
     try
     {
         varjo->beginFrameSync();
+        return nullptr;
+    }
+    catch (const std::exception &ex)
+    {
+        return ex.what();
+    }
+    catch (...)
+    {
+        return "Unexpected exception";
+    }
+}
+
+API_EXPORT const char *varjo_current_swap_chain_index(Varjo *varjo, uint32_t *current_swap_chain_index)
+{
+    assert(varjo != nullptr && "Varjo instance expected");
+    try
+    {
+        *current_swap_chain_index = static_cast<uint32_t>(varjo->m_currentSwapChainIndex);
         return nullptr;
     }
     catch (const std::exception &ex)

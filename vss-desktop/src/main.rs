@@ -128,10 +128,8 @@ pub fn main() {
     let node = Display::new(&window);
     window.add_node(Box::new(node));
 
-    //XXX: Varjo Node.
     #[cfg(feature = "varjo")]{
-        let varjo_target = varjo.render_targets(&window);
-        //window.replace_target(varjo_target);
+        //XXX: get and store all render targets
     }
 
     let mut done = false;
@@ -139,6 +137,12 @@ pub fn main() {
         #[cfg(feature = "varjo")]
         varjo.begin_frame_sync();
 
+        #[cfg(feature = "varjo")]{
+            //XXX: reuse render targets
+            let (varjo_target, varjo_target_depth) = varjo.render_targets(&window);
+            window.replace_targets(varjo_target, varjo_target_depth);
+            window.update_nodes();
+        }
         done = window.poll_events();
 
         #[cfg(feature = "varjo")]

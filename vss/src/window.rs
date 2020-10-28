@@ -9,7 +9,8 @@ pub type DeviceEncoder = gfx::Encoder<gfx_device_gl::Resources, gfx_device_gl::C
 
 /// Render Target Types of this Window.
 pub type RenderTargetColor = gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat>;
-pub type RenderTargetDepth = gfx::handle::DepthStencilView<gfx_device_gl::Resources, (gfx::format::D24_S8, gfx::format::Unorm)>;
+pub type RenderTargetDepthFormat = (gfx::format::D24_S8, gfx::format::Unorm);
+pub type RenderTargetDepth = gfx::handle::DepthStencilView<gfx_device_gl::Resources, RenderTargetDepthFormat>;
 
 /// Represents a window along with its associated rendering context and [Flow].
 pub struct Window {
@@ -19,13 +20,8 @@ pub struct Window {
     factory: RefCell<DeviceFactory>,
     encoder: RefCell<DeviceEncoder>,
 
-    render_target: RefCell<gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat>>,
-    main_depth: RefCell<
-        gfx::handle::DepthStencilView<
-            gfx_device_gl::Resources,
-            (gfx::format::D24_S8, gfx::format::Unorm),
-        >,
-    >,
+    render_target: RefCell<RenderTargetColor>,
+    main_depth: RefCell<RenderTargetDepth>,
 
     last_head: RefCell<Head>,
     last_gaze: RefCell<Gaze>,
