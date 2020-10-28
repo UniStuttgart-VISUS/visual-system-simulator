@@ -47,16 +47,18 @@ fn try_fail(error: *const c_char) -> Result<(), VarjoErr> {
 
 pub struct Varjo {
     varjo: VarjoPtr,
+    render_targets_color: Vec<RenderTargetColor>,
+    render_targets_depth: Vec<RenderTargetDepth>,
 }
 
 impl Varjo {
     pub fn new() -> Self {
         let mut varjo = std::ptr::null_mut();
         try_fail(unsafe { varjo_new(&mut varjo as *mut *mut _) }).unwrap();
-        Self { varjo }
+        Self { varjo, render_targets_color: Vec::new(), render_targets_depth: Vec::new()}
     }
 
-    pub fn render_targets(&self, window: &Window) -> (RenderTargetColor, RenderTargetDepth) {
+    pub fn create_render_targets(&mut self, window: &Window){
         let mut render_targets = std::ptr::null_mut::<VarjoRenderTarget>();
         let mut render_targets_size = 0u32;
         try_fail(unsafe {
@@ -67,6 +69,29 @@ impl Varjo {
             )
         })
         .unwrap();
+        let render_targets =
+            unsafe { std::slice::from_raw_parts(render_targets, render_targets_size as usize) };
+
+        //let mut textures = Vec::new();
+        //let mut depth_textures = Vec::new();
+        let mut factory = window.factory().borrow_mut();
+        for render_target in render_targets {
+            let color_texture =texture_from_id_and_size::<ColorFormat>(
+                render_target.color_texture_id,
+                render_target.width,
+                render_target.height,
+            );
+            let depth_texture = depth_texture_from_id_and_size::<RenderTargetDepthFormat>(
+                render_target.depth_texture_id,
+                render_target.width,
+                render_target.height,
+            );
+            self.render_targets_color.push(factory.view_texture_as_render_target(&color_texture, 0, None).unwrap());
+            self.render_targets_depth.push(factory.view_texture_as_depth_stencil(&depth_texture, 0, None, gfx::texture::DepthStencilFlags::empty()).unwrap());
+        }
+    }
+
+    pub fn get_current_render_target(&self) -> (RenderTargetColor, RenderTargetDepth){
         let mut current_swap_chain_index = 0u32;
         try_fail(unsafe {
             varjo_current_swap_chain_index(
@@ -75,27 +100,8 @@ impl Varjo {
             )
         })
         .unwrap();
-        let render_targets =
-            unsafe { std::slice::from_raw_parts(render_targets, render_targets_size as usize) };
 
-        let mut textures = Vec::new();
-        let mut depth_textures = Vec::new();
-        for render_target in render_targets {
-            textures.push(texture_from_id_and_size::<ColorFormat>(
-                render_target.color_texture_id,
-                render_target.width,
-                render_target.height,
-            ));
-            depth_textures.push(depth_texture_from_id_and_size::<RenderTargetDepthFormat>(
-                render_target.depth_texture_id,
-                render_target.width,
-                render_target.height,
-            ));
-        }
-        let mut factory = window.factory().borrow_mut();
-        //XXX: return all render targets and depth stencils at once
-        return (factory.view_texture_as_render_target(&textures[current_swap_chain_index as usize], 0, None).unwrap(),
-                factory.view_texture_as_depth_stencil(&depth_textures[current_swap_chain_index as usize], 0, None, gfx::texture::DepthStencilFlags::empty()).unwrap());
+        return(self.render_targets_color[current_swap_chain_index as usize].clone(), self.render_targets_depth[current_swap_chain_index as usize].clone());
     }
 
     pub fn begin_frame_sync(&self) {
