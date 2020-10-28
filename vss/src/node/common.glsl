@@ -31,3 +31,8 @@ vec4 blur(in vec2 fragCoord, in sampler2D tex, float blur_scale, vec2 resolution
 
     return vec4(final_colour / (Z * Z), 1.0);
 }
+
+float getPerceivedBrightness(in vec3 color) {
+    // The constants adjust the contribution of each color to the perceived brightness, according to the amount of reception in the eye. See https://www.w3.org/TR/AERT/#color-contrast
+    return dot(vec3(0.299, 0.587, 0.114), color);
+}

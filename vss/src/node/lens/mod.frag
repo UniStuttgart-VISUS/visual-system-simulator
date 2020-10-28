@@ -56,51 +56,53 @@ out vec4 rt_color;
 
 // alters the direction of a ray according to the imperfection in the cornea specified by the cornea map
 vec3 applyCorneaImperfection(vec3 pos, vec3 dir) {
-    vec2 corneaMapSample = texture(s_cornea, pos.xy * vec2(0.17, -0.17) - vec2(-0.5)).rg;
-    vec3 deviation = vec3((corneaMapSample - vec2(0.5)) * vec2(CORNEA_MAP_FACTOR), 0.0);
+    // scale 3D ray to 2D texture coordinates for lookup
+    // The size of the cornea (~5.5mm radius) is mapped to [0;1],[0;1] texture coordinates
+    vec2 corneaMapSample = texture(s_cornea, pos.xy * vec2(0.17, -0.17) + 0.5).rg;
+    vec3 deviation = vec3((corneaMapSample - 0.5) * vec2(CORNEA_MAP_FACTOR), 0.0);
     return dir + deviation;
 }
 
 // calculates the radius of curvature of the outer lens surface
 // while taking accomodation into account.
-// accDistance: the distance between the frontmost point of the
+// focalLength: the distance between the frontmost point of the
 //              vitreous humour and the focused point
-float getOuterLensRadius(float accDistance) {
-    return OUTER_LENS_RADIUS_A * accDistance * accDistance
-        + OUTER_LENS_RADIUS_B * accDistance
+float getOuterLensRadius(float focalLength) {
+    return OUTER_LENS_RADIUS_A * focalLength * focalLength
+        + OUTER_LENS_RADIUS_B * focalLength
         + OUTER_LENS_RADIUS_C;
 }
 
 // calculates the center of the sphere representing the outer
 // lens surface while taking accomodation into account.
-// accDistance: the distance between the frontmost point of the
+// focalLength: the distance between the frontmost point of the
 //              vitreous humour and the focused point
-vec3 getOuterLensCenter(float accDistance) {
-    float outerLensTip = OUTER_LENS_TIP_A * accDistance * accDistance
-        + OUTER_LENS_TIP_B * accDistance
+vec3 getOuterLensCenter(float focalLength) {
+    float outerLensTip = OUTER_LENS_TIP_A * focalLength * focalLength
+        + OUTER_LENS_TIP_B * focalLength
         + OUTER_LENS_TIP_C;
-    return vec3(0.0, 0.0, outerLensTip - getOuterLensRadius(accDistance));
+    return vec3(0.0, 0.0, outerLensTip - getOuterLensRadius(focalLength));
 }
 
 // calculates the radius of curvature of the inner lens surface
 // while taking accomodation into account.
-// accDistance: the distance between the frontmost point of the
+// focalLength: the distance between the frontmost point of the
 //              vitreous humour and the focused point
-float getInnerLensRadius(float accDistance) {
-    return INNER_LENS_RADIUS_A * accDistance * accDistance
-        + INNER_LENS_RADIUS_B * accDistance
+float getInnerLensRadius(float focalLength) {
+    return INNER_LENS_RADIUS_A * focalLength * focalLength
+        + INNER_LENS_RADIUS_B * focalLength
         + INNER_LENS_RADIUS_C;
 }
 
 // calculates the center of the sphere representing the inner
 // lens surface while taking accomodation into account.
-// accDistance: the distance between the frontmost point of the
+// focalLength: the distance between the frontmost point of the
 //              vitreous humour and the focused point
-vec3 getInnerLensCenter(float accDistance) {
-    float innerLensTip = INNER_LENS_TIP_A * accDistance * accDistance
-        + INNER_LENS_TIP_B * accDistance
+vec3 getInnerLensCenter(float focalLength) {
+    float innerLensTip = INNER_LENS_TIP_A * focalLength * focalLength
+        + INNER_LENS_TIP_B * focalLength
         + INNER_LENS_TIP_C;
-    return vec3(0.0, 0.0, innerLensTip + getInnerLensRadius(accDistance));
+    return vec3(0.0, 0.0, innerLensTip + getInnerLensRadius(focalLength));
 }
 
 float getNAnteriorChamber(float nAnteriorChamberFactor) {
@@ -140,14 +142,14 @@ vec3 rayIntersectSphere(vec3 rPos, vec3 rDir, vec3 cPos, float cRad) {
 
 // sends the ray through all four surfaces in the optical system and returns the color
 // of the texture at the intersection point.
-vec4 getColorSample(vec3 start, vec2 aim, float accDistance, float nAnteriorChamberFactor) {
+vec4 getColorSample(vec3 start, vec2 aim, float focalLength, float nAnteriorChamberFactor) {
     vec3 dir = normalize(vec3(aim, VITREOUS_HUMOUR_RADIUS) - start);
 
-    start = rayIntersectSphere(start, dir, getInnerLensCenter(accDistance), getInnerLensRadius(accDistance));
-    dir = refract(dir, normalize(start - getInnerLensCenter(accDistance)), N_VITREOUS_HUMOUR / N_LENS);
+    start = rayIntersectSphere(start, dir, getInnerLensCenter(focalLength), getInnerLensRadius(focalLength));
+    dir = refract(dir, normalize(start - getInnerLensCenter(focalLength)), N_VITREOUS_HUMOUR / N_LENS);
 
-    start = rayIntersectSphere(start, dir, getOuterLensCenter(accDistance), getOuterLensRadius(accDistance));
-    dir = refract(dir, -normalize(start - getOuterLensCenter(accDistance)), N_LENS / getNAnteriorChamber(nAnteriorChamberFactor));
+    start = rayIntersectSphere(start, dir, getOuterLensCenter(focalLength), getOuterLensRadius(focalLength));
+    dir = refract(dir, -normalize(start - getOuterLensCenter(focalLength)), N_LENS / getNAnteriorChamber(nAnteriorChamberFactor));
 
     start = rayIntersectSphere(start, dir, INNER_CORNEA_CENTER, INNER_CORNEA_RADIUS);
     dir = refract(dir, -normalize(start - INNER_CORNEA_CENTER), getNAnteriorChamber(nAnteriorChamberFactor) / N_CORNEA);
@@ -167,17 +169,20 @@ void main() {
         vec4 color = vec4(0.0);
 
         // prepare accomodation
-        float accomodationDistance = length(vec3(
+        // We focus on all possible depths: for each pixel, the lens can focus on the individual depth
+        float focalLength = length(vec3(
             (v_tex.xy - 0.5) * TEXTURE_SCALE,
             u_depth_max - texture(s_depth, v_tex).r * (u_depth_max - u_depth_min)));
 
         float nAnteriorChamberFactor = 1.0;
-        if (accomodationDistance > u_far_point) {
-            nAnteriorChamberFactor = 1.0 / pow((accomodationDistance - u_far_point) / accomodationDistance + 1.0, 0.08 * u_far_vision_factor);
-            accomodationDistance = u_far_point;
-        } else if (accomodationDistance < u_near_point) {
-            nAnteriorChamberFactor = pow(accomodationDistance / u_near_point, 0.12 * u_near_vision_factor);
-            accomodationDistance = u_near_point;
+        if (focalLength > u_far_point) {
+            // TODO factor 0.08
+            nAnteriorChamberFactor = 1.0 / pow((focalLength - u_far_point) / focalLength + 1.0, 0.08 * u_far_vision_factor);
+            focalLength = u_far_point;
+        } else if (focalLength < u_near_point) {
+            // TODO factor 0.12
+            nAnteriorChamberFactor = pow(focalLength / u_near_point, 0.12 * u_near_vision_factor);
+            focalLength = u_near_point;
         }
 
         // The higher the sampleCount, the more rays are cast. Rays are cast in this fashion,
@@ -187,32 +192,34 @@ void main() {
         // 2 4 1 4 2
         //   4 4 4
         // 3   2   3
+        // Since the ray direction is only altered a small amount compared to the radius, 
+        //     it is safe to assume that all of them will still hit the lens.
         switch (u_samplecount) {
         case 4:
             sampleCount += 8.0;
-            color += getColorSample(start, vec2(-0.5, -0.5), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(-0.5, 0.5), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(0.5, -0.5), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(0.5, 0.5), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(-0.5, 0.0), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(0.5, 0.0), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(0.0, -0.5), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(0.0, 0.5), accomodationDistance, nAnteriorChamberFactor);
+            color += getColorSample(start, vec2(-0.5, -0.5), focalLength, nAnteriorChamberFactor);
+            color += getColorSample(start, vec2(-0.5, 0.5), focalLength, nAnteriorChamberFactor);
+            color += getColorSample(start, vec2(0.5, -0.5), focalLength, nAnteriorChamberFactor);
+            color += getColorSample(start, vec2(0.5, 0.5), focalLength, nAnteriorChamberFactor);
+            color += getColorSample(start, vec2(-0.5, 0.0), focalLength, nAnteriorChamberFactor);
+            color += getColorSample(start, vec2(0.5, 0.0), focalLength, nAnteriorChamberFactor);
+            color += getColorSample(start, vec2(0.0, -0.5), focalLength, nAnteriorChamberFactor);
+            color += getColorSample(start, vec2(0.0, 0.5), focalLength, nAnteriorChamberFactor);
         case 3:
             sampleCount += 4.0;
-            color += getColorSample(start, vec2(-1.0, -1.0), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(-1.0, 1.0), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(1.0, -1.0), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(1.0, 1.0), accomodationDistance, nAnteriorChamberFactor);
+            color += getColorSample(start, vec2(-1.0, -1.0), focalLength, nAnteriorChamberFactor);
+            color += getColorSample(start, vec2(-1.0, 1.0), focalLength, nAnteriorChamberFactor);
+            color += getColorSample(start, vec2(1.0, -1.0), focalLength, nAnteriorChamberFactor);
+            color += getColorSample(start, vec2(1.0, 1.0), focalLength, nAnteriorChamberFactor);
         case 2:
             sampleCount += 4.0;
-            color += getColorSample(start, vec2(-1.0, 0.0), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(1.0, 0.0), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(0.0, -1.0), accomodationDistance, nAnteriorChamberFactor);
-            color += getColorSample(start, vec2(0.0, 1.0), accomodationDistance, nAnteriorChamberFactor);
+            color += getColorSample(start, vec2(-1.0, 0.0), focalLength, nAnteriorChamberFactor);
+            color += getColorSample(start, vec2(1.0, 0.0), focalLength, nAnteriorChamberFactor);
+            color += getColorSample(start, vec2(0.0, -1.0), focalLength, nAnteriorChamberFactor);
+            color += getColorSample(start, vec2(0.0, 1.0), focalLength, nAnteriorChamberFactor);
         case 1:
             sampleCount += 1.0;
-            color += getColorSample(start, vec2(0.0, 0.0), accomodationDistance, nAnteriorChamberFactor);
+            color += getColorSample(start, vec2(0.0, 0.0), focalLength, nAnteriorChamberFactor);
         }
 
         // the final color is the average of all samples
