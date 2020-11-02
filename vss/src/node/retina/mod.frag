@@ -1,5 +1,6 @@
 #include "common.glsl"
 
+// The resulting color will converge to this color in case of a glaucoma 
 #define GLAUCOMA_COLOR vec4(0.02, 0.02, 0.02, 1.0);
 
 uniform vec2 u_resolution;
@@ -15,30 +16,31 @@ out vec4 rt_color;
 out vec4 rt_deflection;
 
 
-float getLuminance(in vec4 color) {
-    return dot(vec4(0.299, 0.587, 0.114, 0), color);
-}
-
 void applyBlurAndBloom(inout vec4 color, in vec4 retina) {
     float max_rgb = max(max(retina.r, retina.g), retina.b);
     if (max_rgb < .75) {
         float blur_scale = (0.75 - (retina.r + retina.g + retina.b) / 3.0) * 5.0;
         color = blur(v_tex, s_color, blur_scale, u_resolution);
         // apply bloom
-        color = color * (1.0 + getLuminance(color) * (0.75 - max_rgb) * 0.5);
+        color = color * (1.0 + getPerceivedBrightness(color.rgb) * (0.75 - max_rgb) * 0.5);
     }
 }
 
 void applyColorBlindness(inout vec4 color, in vec4 retina) {
     mat3 neutral = mat3(1.0);
     mat3 weak_color = mat3(0.0);
+    
+    // we assume that perception of brightness is the same in cones+rods and rods only
     mat3 achromatopsia = mat3(
         0.299, 0.299, 0.299, // first column
         0.587, 0.587, 0.587, // second column
         0.114, 0.114, 0.114 // third column
     );
 
+    // baseline, what is left of the weakest receptors (minimum percentage of all receptors)
     float neutral_factor = 0.0;
+    
+    // average of the other receptors in addition to baseline
     float weak_color_factor = 0.0;
 
     if (retina.r < retina.g && retina.r < retina.b) {
@@ -70,27 +72,27 @@ void applyColorBlindness(inout vec4 color, in vec4 retina) {
         weak_color_factor = (retina.r + retina.g) / 2.0 - neutral_factor;
     }
 
+    // factor missing in all receptors
     float achromatopsia_factor = 1.0 - neutral_factor - weak_color_factor;
 
-    mat4 color_transformation = mat4(
-        neutral * neutral_factor + weak_color * weak_color_factor + achromatopsia * achromatopsia_factor);
+    mat3 color_transformation = neutral * neutral_factor + weak_color * weak_color_factor + achromatopsia * achromatopsia_factor;
 
-    color = color_transformation * color;
+    color = vec4(color_transformation * color.rgb, color.a);
 }
 
 void applyNyctalopia(inout vec4 color, in vec4 retina) {
-    float night_blindness_factor = getLuminance(color) * 5.0;
+    float night_blindness_factor = getPerceivedBrightness(color.rgb) * 5.0;
     if (night_blindness_factor < 1.0) {
         color = retina.a * color + (1.0 - retina.a) * night_blindness_factor * color;
     }
 }
 
 void glaucoma(inout vec4 color, in vec4 retina_mask) {
-    //find the biggest value
+    // find the biggest value
     float maxValue = retina_mask.r > retina_mask.g ? retina_mask.r : retina_mask.g;
     maxValue = maxValue > retina_mask.b ? maxValue : retina_mask.b;
     maxValue = maxValue > retina_mask.a ? maxValue : retina_mask.a;
-    //only takes effect when everything is lower than 0.25
+    // only takes effect when everything is lower than 0.25
     maxValue *= 4.0;
     if (maxValue < 1.0) {
         color = (maxValue) * (color) + (1.0 - maxValue) * GLAUCOMA_COLOR;

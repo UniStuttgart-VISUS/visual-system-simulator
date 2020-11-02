@@ -1,5 +1,7 @@
 mod cmd;
 mod node;
+#[cfg(feature = "varjo")]
+mod varjo;
 
 use vss::*;
 
@@ -98,6 +100,9 @@ pub fn main() {
     };
     let mut window = Window::new(config.visible, remote, config.parameters);
 
+    #[cfg(feature = "varjo")]
+    let varjo = varjo::Varjo::new();
+
     let mut io_generator = IoGenerator::new(config.inputs, config.output);
     let (input_node, output_node) = io_generator.next(&window).unwrap();
 
@@ -123,9 +128,25 @@ pub fn main() {
     let node = Display::new(&window);
     window.add_node(Box::new(node));
 
+    #[cfg(feature = "varjo")]{
+        //XXX: get and store all render targets
+    }
+
     let mut done = false;
     while !done {
+        #[cfg(feature = "varjo")]
+        varjo.begin_frame_sync();
+
+        #[cfg(feature = "varjo")]{
+            //XXX: reuse render targets
+            let (varjo_target, varjo_target_depth) = varjo.render_targets(&window);
+            window.replace_targets(varjo_target, varjo_target_depth);
+            window.update_nodes();
+        }
         done = window.poll_events();
+
+        #[cfg(feature = "varjo")]
+        varjo.end_frame();
 
         if io_generator.is_ready() {
             if let Some((input_node, output_node)) = io_generator.next(&window) {

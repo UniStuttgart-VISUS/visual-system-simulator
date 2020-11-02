@@ -4,6 +4,7 @@ edition = "2018"
 version = "1.0.0"
 authors = ["The Visual System Simulator Developers"]
 license = "Apache-2.0"
+build = "build.rs"
 default-run = "vss"
 
 [[bin]]
@@ -19,6 +20,10 @@ mustache = "0.9"
 serde_json = "*"
 ac_ffmpeg = { package = "ac-ffmpeg", version = "0.15.3", optional = true }
 
+[build-dependencies]
+cc = "^1.0.61"
+
 [features]
 default = []
 video = ["ac_ffmpeg"]
+varjo = []
