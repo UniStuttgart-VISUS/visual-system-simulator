@@ -8,7 +8,6 @@
 #include <stdexcept>
 #include <vector>
 #include <array>
-#include <iostream>
 
 struct VarjoRenderTarget
 {
@@ -62,10 +61,8 @@ public:
         {
             const varjo_ViewDescription viewDescription = varjo_GetViewDescription(m_session, i);
             const varjo_Viewport viewport = varjo_Viewport{x, y, viewDescription.width, viewDescription.height};
-            std::cout << viewport.x << " " << viewport.y  << " " << viewport.width << " " << viewport.height << std::endl;
             m_viewports.push_back(viewport);
             x += viewport.width;
-            std::cout << i << " " << m_viewports.size() << " " << std::endl;
             if (i > 0 && m_viewports.size() % 2 == 0)
             {
                 x = 0;
@@ -79,7 +76,6 @@ public:
         m_swapChainConfig.textureFormat = varjo_TextureFormat_R8G8B8A8_SRGB;
         m_swapChainConfig.textureWidth = m_viewports.back().width + m_viewports.back().x;
         m_swapChainConfig.textureHeight = m_viewports.back().height + m_viewports.back().y;
-        std::cout << m_swapChainConfig.textureWidth << " " << m_swapChainConfig.textureHeight << std::endl;
         m_colorSwapChain = varjo_GLCreateSwapChain(m_session, &m_swapChainConfig);
 
         m_depthSwapChainConfig = m_swapChainConfig;
