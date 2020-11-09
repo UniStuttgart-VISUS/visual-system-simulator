@@ -128,15 +128,21 @@ pub fn main() {
     let node = Display::new(&window);
     window.add_node(Box::new(node));
 
-    #[cfg(feature = "varjo")]
-    varjo.create_render_targets(&window);
+    #[cfg(feature = "varjo")]{
+        varjo.create_render_targets(&window);
+        let node = Varjo::new(&window);
+        window.add_node(Box::new(node));
+    }
 
     let mut done = false;
     while !done {
         #[cfg(feature = "varjo")]{
             varjo.begin_frame_sync();
             let (varjo_target_color, varjo_target_depth) = varjo.get_current_render_target();
-            window.replace_targets(varjo_target_color, varjo_target_depth);
+            window.replace_targets(varjo_target_color, varjo_target_depth, false);
+            window.set_value(String::from("view_matrices"), Value::Matrices(varjo.get_current_view_matrices()));
+            window.set_value(String::from("proj_matrices"), Value::Matrices(varjo.get_current_proj_matrices()));
+            
             window.update_nodes();
         }
         

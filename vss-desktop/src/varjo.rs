@@ -2,6 +2,7 @@ use std::os::raw::{c_char, c_void};
 
 use vss::*;
 use vss::gfx::Factory;
+use cgmath::Matrix4;
 
 type VarjoPtr = *mut c_void;
 
@@ -25,6 +26,16 @@ extern "C" {
     fn varjo_current_swap_chain_index(
         varjo: VarjoPtr,
         current_swap_chain_index: *mut u32,
+    ) -> *const c_char;
+    fn varjo_current_view_matrices(
+        varjo: VarjoPtr,
+        view_matrix_values: *mut *mut f32,
+        view_matrix_count: *mut u32,
+    ) -> *const c_char;
+    fn varjo_current_proj_matrices(
+        varjo: VarjoPtr,
+        proj_matrix_values: *mut *mut f32,
+        proj_matrix_count: *mut u32,
     ) -> *const c_char;
     fn varjo_end_frame(varjo: VarjoPtr) -> *const c_char;
     fn varjo_drop(varjo: *mut VarjoPtr);
@@ -102,6 +113,60 @@ impl Varjo {
         .unwrap();
 
         return(self.render_targets_color[current_swap_chain_index as usize].clone(), self.render_targets_depth[current_swap_chain_index as usize].clone());
+    }
+
+    pub fn get_current_view_matrices(&self) -> Vec<Matrix4<f32>>{
+        let mut view_matrix_values = std::ptr::null_mut::<f32>();
+        let mut view_matrix_count = 0u32;
+        try_fail(unsafe {
+            varjo_current_view_matrices(
+                self.varjo,
+                &mut view_matrix_values as *mut *mut _,
+                &mut view_matrix_count as *mut _,
+            )
+        })
+        .unwrap();
+        let matrix_values =
+        unsafe { std::slice::from_raw_parts(view_matrix_values, (view_matrix_count*16) as usize) };
+
+        let mut matrices= Vec::new();
+
+        for i in 0..view_matrix_count{
+            let m = Matrix4::new(
+                matrix_values[(i*16+0) as usize], matrix_values[(i*16+1) as usize], matrix_values[(i*16+2) as usize], matrix_values[(i*16+3) as usize],
+                matrix_values[(i*16+4) as usize], matrix_values[(i*16+5) as usize], matrix_values[(i*16+6) as usize], matrix_values[(i*16+7) as usize],
+                matrix_values[(i*16+8) as usize], matrix_values[(i*16+9) as usize], matrix_values[(i*16+10) as usize], matrix_values[(i*16+11) as usize],
+                matrix_values[(i*16+12) as usize], matrix_values[(i*16+13) as usize], matrix_values[(i*16+14) as usize], matrix_values[(i*16+15) as usize]);
+            matrices.push(m);
+        }
+        matrices
+    }
+    
+    pub fn get_current_proj_matrices(&self) -> Vec<Matrix4<f32>>{
+        let mut proj_matrix_values = std::ptr::null_mut::<f32>();
+        let mut proj_matrix_count = 0u32;
+        try_fail(unsafe {
+            varjo_current_proj_matrices(
+                self.varjo,
+                &mut proj_matrix_values as *mut *mut _,
+                &mut proj_matrix_count as *mut _,
+            )
+        })
+        .unwrap();
+        let matrix_values =
+        unsafe { std::slice::from_raw_parts(proj_matrix_values, (proj_matrix_count*16) as usize) };
+
+        let mut matrices= Vec::new();
+
+        for i in 0..proj_matrix_count{
+            let m = Matrix4::new(
+                matrix_values[(i*16+0) as usize], matrix_values[(i*16+1) as usize], matrix_values[(i*16+2) as usize], matrix_values[(i*16+3) as usize],
+                matrix_values[(i*16+4) as usize], matrix_values[(i*16+5) as usize], matrix_values[(i*16+6) as usize], matrix_values[(i*16+7) as usize],
+                matrix_values[(i*16+8) as usize], matrix_values[(i*16+9) as usize], matrix_values[(i*16+10) as usize], matrix_values[(i*16+11) as usize],
+                matrix_values[(i*16+12) as usize], matrix_values[(i*16+13) as usize], matrix_values[(i*16+14) as usize], matrix_values[(i*16+15) as usize]);
+            matrices.push(m);
+        }
+        matrices
     }
 
     pub fn begin_frame_sync(&self) {

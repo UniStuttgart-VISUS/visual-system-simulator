@@ -11,6 +11,7 @@ mod retina;
 mod rgb_buffer;
 mod slot;
 mod yuv_buffer;
+mod varjo;
 
 pub use self::cataract::*;
 pub use self::display::*;
@@ -20,6 +21,7 @@ pub use self::retina::*;
 pub use self::rgb_buffer::*;
 pub use self::slot::*;
 pub use self::yuv_buffer::*;
+pub use self::varjo::*;
 
 use self::macros::*;
 

@@ -31,6 +31,8 @@ public:
     std::vector<VarjoRenderTarget> m_renderTargets;
     int32_t m_currentSwapChainIndex = 0;
     std::vector<varjo_LayerMultiProjView> m_projectionLayers;
+    std::vector<float> m_viewMatrices;
+    std::vector<float> m_projMatrices;
     varjo_FrameInfo *m_frameInfo = nullptr;
     bool m_visible = true;
 
@@ -54,16 +56,17 @@ public:
 
         // Enumerate and pack views into an atlas-like layout.
         m_viewCount = varjo_GetViewCount(m_session);
-        std::vector<varjo_Viewport> viewports;
-        viewports.reserve(m_viewCount);
+        m_viewports.reserve(m_viewCount);
         int x = 0, y = 0;
         for (int32_t i = 0; i < m_viewCount; i++)
         {
             const varjo_ViewDescription viewDescription = varjo_GetViewDescription(m_session, i);
             const varjo_Viewport viewport = varjo_Viewport{x, y, viewDescription.width, viewDescription.height};
+            std::cout << viewport.x << " " << viewport.y  << " " << viewport.width << " " << viewport.height << std::endl;
             m_viewports.push_back(viewport);
             x += viewport.width;
-            if (i > 0 && viewports.size() % 2 == 0)
+            std::cout << i << " " << m_viewports.size() << " " << std::endl;
+            if (i > 0 && m_viewports.size() % 2 == 0)
             {
                 x = 0;
                 y += viewport.height;
@@ -76,6 +79,7 @@ public:
         m_swapChainConfig.textureFormat = varjo_TextureFormat_R8G8B8A8_SRGB;
         m_swapChainConfig.textureWidth = m_viewports.back().width + m_viewports.back().x;
         m_swapChainConfig.textureHeight = m_viewports.back().height + m_viewports.back().y;
+        std::cout << m_swapChainConfig.textureWidth << " " << m_swapChainConfig.textureHeight << std::endl;
         m_colorSwapChain = varjo_GLCreateSwapChain(m_session, &m_swapChainConfig);
 
         m_depthSwapChainConfig = m_swapChainConfig;
@@ -98,6 +102,8 @@ public:
 
         // Create projection layers views
         m_projectionLayers.reserve(m_viewCount);
+        m_viewMatrices.reserve(m_viewCount*16);
+        m_projMatrices.reserve(m_viewCount*16);
         for (int32_t i = 0; i < m_viewCount; i++)
         {
             m_projectionLayers[i].extension = nullptr;//XXX: add usage of depth textures
@@ -163,6 +169,10 @@ public:
                 }
 
                 //...
+                for(int j = 0; j < 16; ++j){
+                    m_viewMatrices[i*16+j] = view.viewMatrix[j];
+                    m_projMatrices[i*16+j] = view.projectionMatrix[j];
+                }
 
                 std::copy(view.projectionMatrix, view.projectionMatrix + 16, m_projectionLayers[i].projection.value);
                 std::copy(view.viewMatrix, view.viewMatrix + 16, m_projectionLayers[i].view.value);
@@ -253,6 +263,44 @@ API_EXPORT const char *varjo_current_swap_chain_index(Varjo *varjo, uint32_t *cu
     try
     {
         *current_swap_chain_index = static_cast<uint32_t>(varjo->m_currentSwapChainIndex);
+        return nullptr;
+    }
+    catch (const std::exception &ex)
+    {
+        return ex.what();
+    }
+    catch (...)
+    {
+        return "Unexpected exception";
+    }
+}
+
+API_EXPORT const char *varjo_current_view_matrices(Varjo *varjo, float **view_matrix_values, uint32_t *view_matrix_count)
+{
+    assert(varjo != nullptr && "Varjo instance expected");
+    try
+    {
+        *view_matrix_values = varjo->m_viewMatrices.data();
+        *view_matrix_count = static_cast<uint32_t>(varjo->m_viewCount*16);
+        return nullptr;
+    }
+    catch (const std::exception &ex)
+    {
+        return ex.what();
+    }
+    catch (...)
+    {
+        return "Unexpected exception";
+    }
+}
+
+API_EXPORT const char *varjo_current_proj_matrices(Varjo *varjo, float **proj_matrix_values, uint32_t *proj_matrix_count)
+{
+    assert(varjo != nullptr && "Varjo instance expected");
+    try
+    {
+        *proj_matrix_values = varjo->m_projMatrices.data();
+        *proj_matrix_count = static_cast<uint32_t>(varjo->m_viewCount*16);
         return nullptr;
     }
     catch (const std::exception &ex)

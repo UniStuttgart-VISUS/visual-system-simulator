@@ -1,0 +1,41 @@
+const float PI = 3.1415926535897932384626433832795;
+
+//uniform mat4 u_view_matrices[4]; //TODO use array of matrices if possible
+//uniform mat4 u_proj_matrices[4]; //TODO
+uniform mat4 u_view_context_l;
+uniform mat4 u_view_context_r;
+uniform mat4 u_view_focus_l;
+uniform mat4 u_view_focus_r;
+uniform mat4 u_proj_context_l;
+uniform mat4 u_proj_context_r;
+uniform mat4 u_proj_focus_l;
+uniform mat4 u_proj_focus_r;
+
+uniform sampler2D s_color;
+
+in vec3 v_tex;
+out vec4 rt_color;
+
+void main() {
+    mat4 view, projection;
+    if(v_tex.z == 0.0){
+        view = u_view_context_l;
+        projection = u_proj_context_l;
+    }else if(v_tex.z == 1.0){
+        view = u_view_context_r;
+        projection = u_proj_context_r;
+    }else if(v_tex.z == 2.0){
+        view = u_view_focus_l;
+        projection = u_proj_focus_l;
+    }else{
+        view = u_view_focus_r;
+        projection = u_proj_focus_r;
+    }
+
+    vec4 ndc = vec4(v_tex.xy, 0.9, 1.0);
+    vec4 world_dir = inverse(projection * view) * ndc;
+    world_dir.xyz = normalize(world_dir.xyz)/world_dir.w;
+    vec2 tex = vec2(atan(world_dir.z, world_dir.x) + PI, acos(-world_dir.y)) / vec2(2.0 * PI, PI);
+
+    rt_color = vec4(texture(s_color, tex).rgb, 1.0);
+}
