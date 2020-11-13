@@ -158,6 +158,70 @@ impl Window {
                         input:
                             glutin::KeyboardInput {
                                 state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::H),
+                                ..
+                            },
+                        ..
+                    } => {
+                        let mut vp = self.vis_param.borrow_mut();
+                        vp.test_depth_max+=100.0;
+                        println!("Depth min,max [{},{}]",
+                            vp.test_depth_min,
+                            vp.test_depth_max
+                        );
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::L),
+                                ..
+                            },
+                        ..
+                    } => {
+                        let mut vp = self.vis_param.borrow_mut();
+                        vp.test_depth_max-=100.0;
+                        println!("Depth min,max [{},{}]",
+                            vp.test_depth_min,
+                            vp.test_depth_max
+                        );
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::J),
+                                ..
+                            },
+                        ..
+                    } => {
+                        let mut vp = self.vis_param.borrow_mut();
+                        vp.test_depth_min+=10.0;
+                        println!("Depth min,max [{},{}]",
+                            vp.test_depth_min,
+                            vp.test_depth_max
+                        );
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::K),
+                                ..
+                            },
+                        ..
+                    } => {
+                        let mut vp = self.vis_param.borrow_mut();
+                        vp.test_depth_min-=10.0;
+                        println!("Depth min,max [{},{}]",
+                            vp.test_depth_min,
+                            vp.test_depth_max
+                        );
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
                                 virtual_keycode: Some(glutin::VirtualKeyCode::A),
                                 ..
                             },
