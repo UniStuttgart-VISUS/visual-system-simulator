@@ -17,6 +17,12 @@ struct VarjoRenderTarget
     uint32_t height;
 };
 
+struct VarjoGazeData {
+    float leftEye[3];
+    float rightEye[3];
+    float focusDistance;
+};
+
 class Varjo
 {
 public:
@@ -32,6 +38,8 @@ public:
     std::vector<varjo_LayerMultiProjView> m_projectionLayers;
     std::vector<float> m_viewMatrices;
     std::vector<float> m_projMatrices;
+    bool m_gazeAvailable = false;
+    VarjoGazeData m_gazeData;
     varjo_FrameInfo *m_frameInfo = nullptr;
     bool m_visible = true;
 
@@ -109,6 +117,20 @@ public:
         // Create a FrameInfo (used during main loop.)
         m_frameInfo = varjo_CreateFrameInfo(m_session);
         validate();
+
+        // Initialize gaze tracking
+        if (varjo_IsGazeAllowed(m_session)) {
+            varjo_GazeInit(m_session);
+
+            varjo_Error err = varjo_GetError(m_session);
+            if (err != varjo_NoError) {
+                printf("Failed to initialize Gaze: %s", varjo_GetErrorDesc(err));
+            }else{
+                m_gazeAvailable = true;
+            }
+        }else{
+            printf("Gaze tracking is not allowed!\n");
+        }
     }
 
     ~Varjo()
@@ -297,6 +319,43 @@ API_EXPORT const char *varjo_current_proj_matrices(Varjo *varjo, float **proj_ma
     {
         *proj_matrix_values = varjo->m_projMatrices.data();
         *proj_matrix_count = static_cast<uint32_t>(varjo->m_viewCount*16);
+        return nullptr;
+    }
+    catch (const std::exception &ex)
+    {
+        return ex.what();
+    }
+    catch (...)
+    {
+        return "Unexpected exception";
+    }
+}
+
+API_EXPORT const char *varjo_current_gaze_data(Varjo *varjo, bool *is_valid, VarjoGazeData *gaze_data) //TODO left, right eye, plus filtering with status, plus focus dist.
+{
+    assert(varjo != nullptr && "Varjo instance expected");
+    try
+    {
+        *is_valid = false;
+
+        if (!varjo->m_gazeAvailable) return nullptr;
+        
+        varjo_SyncProperties(varjo->m_session);
+
+        // Get gaze and check that it is valid
+        varjo_Gaze gaze = varjo_GetGaze(varjo->m_session);
+        if (gaze.status == varjo_GazeStatus_Invalid) return nullptr;
+
+        varjo->m_gazeData.leftEye[0] = gaze.leftEye.forward[0];
+        varjo->m_gazeData.leftEye[1] = gaze.leftEye.forward[1];
+        varjo->m_gazeData.leftEye[2] = gaze.leftEye.forward[2];
+        varjo->m_gazeData.rightEye[0] = gaze.rightEye.forward[0];
+        varjo->m_gazeData.rightEye[1] = gaze.rightEye.forward[1];
+        varjo->m_gazeData.rightEye[2] = gaze.rightEye.forward[2];
+        varjo->m_gazeData.focusDistance = gaze.focusDistance;
+        *gaze_data = varjo->m_gazeData;
+
+        *is_valid = true;
         return nullptr;
     }
     catch (const std::exception &ex)

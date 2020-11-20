@@ -142,6 +142,7 @@ pub fn main() {
             window.replace_targets(varjo_target_color, varjo_target_depth, false);
             window.set_value(String::from("view_matrices"), Value::Matrices(varjo.get_current_view_matrices()));
             window.set_value(String::from("proj_matrices"), Value::Matrices(varjo.get_current_proj_matrices()));
+            varjo.get_current_gaze();
             
             window.update_nodes();
         }

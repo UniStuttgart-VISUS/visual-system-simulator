@@ -38,7 +38,7 @@ impl Flow {
         self.nodes.borrow().len()
     }
 
-    pub fn negociate_slots(&self, window: &Window) {
+    pub fn negociate_slots(&self, window: &Window) { //TODO: remember last two slots
         let mut slot_a = NodeSlots::new(window);
         let mut slot_b = NodeSlots::new(window);
         let nodes_len = self.nodes.borrow().len();

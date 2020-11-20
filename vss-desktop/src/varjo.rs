@@ -2,7 +2,7 @@ use std::os::raw::{c_char, c_void};
 
 use vss::*;
 use vss::gfx::Factory;
-use cgmath::Matrix4;
+use cgmath::{Matrix4};
 
 type VarjoPtr = *mut c_void;
 
@@ -13,6 +13,15 @@ struct VarjoRenderTarget {
     pub depth_texture_id: u32,
     pub width: u32,
     pub height: u32,
+}
+
+#[repr(C)]
+#[derive(Clone)]
+#[derive(Debug)]
+struct VarjoGazeData {
+    pub leftEye: [f32; 3],
+    pub rightEye: [f32; 3],
+    pub focusDistance: f32,
 }
 
 extern "C" {
@@ -36,6 +45,11 @@ extern "C" {
         varjo: VarjoPtr,
         proj_matrix_values: *mut *mut f32,
         proj_matrix_count: *mut u32,
+    ) -> *const c_char;
+    fn varjo_current_gaze_data(
+        varjo: VarjoPtr,
+        is_valid: *mut bool,
+        varjo_gaze_data: *mut VarjoGazeData,
     ) -> *const c_char;
     fn varjo_end_frame(varjo: VarjoPtr) -> *const c_char;
     fn varjo_drop(varjo: *mut VarjoPtr);
@@ -167,6 +181,30 @@ impl Varjo {
             matrices.push(m);
         }
         matrices
+    }
+    
+    pub fn get_current_gaze(&self){//TODO: return gaze values
+        let mut varjo_gaze_data = VarjoGazeData{
+            leftEye: [0.0; 3],
+            rightEye: [0.0; 3],
+            focusDistance: 0.0,
+        };
+        let mut is_valid = false;
+        try_fail(unsafe {
+            varjo_current_gaze_data(
+                self.varjo,
+                &mut is_valid as *mut _,
+                &mut varjo_gaze_data as *mut _,
+            )
+        })
+        .unwrap();
+
+        println!("{:?}", varjo_gaze_data);
+        /*VRGaze {
+            leftEye: Vector3::new(0.0, 0.0, 0.0),
+            rightEye: Vector3::new(0.0, 0.0, 0.0),
+            focus: 0.0,
+        }*/
     }
 
     pub fn begin_frame_sync(&self) {

@@ -32,8 +32,12 @@ void main() {
         projection = u_proj_focus_r;
     }
 
+    //get head position to fix it
+    vec4 head = (u_view_context_l * vec4(0.0, 0.0, 0.0, 1.0) + u_view_context_r * vec4(0.0, 0.0, 0.0, 1.0)) / 2.0;
+    mat4 translate_head = mat4(1.0, 0.0, 0.0, 0.0,  0.0, 1.0, 0.0, 0.0,  0.0, 0.0, 1.0, 0.0, -head.x, -head.y, -head.z, 1.0);
+
     vec4 ndc = vec4(v_tex.xy, 0.9, 1.0);
-    vec4 world_dir = inverse(projection * view) * ndc;
+    vec4 world_dir = inverse(projection * (translate_head*view)) * ndc;
     world_dir.xyz = normalize(world_dir.xyz)/world_dir.w;
     vec2 tex = vec2(atan(world_dir.z, world_dir.x) + PI, acos(-world_dir.y)) / vec2(2.0 * PI, PI);
 

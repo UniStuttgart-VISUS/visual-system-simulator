@@ -16,7 +16,7 @@ void main() {
     v_tex = vec3(vertices[gl_VertexID % 6] * 2.0 - 1.0, gl_VertexID/6);
     vec2 pos = vertices[gl_VertexID % 6];
 
-    float context_height = (u_resolution_out.x/2.0)/u_resolution_out.y; //assuming the context viewport has a ration of 1:1
+    float context_height = (u_resolution_out.x/2.0)/u_resolution_out.y; //assuming the context viewport has a ratio of 1:1
 
     if(gl_VertexID < 12){
         pos.y *= context_height;

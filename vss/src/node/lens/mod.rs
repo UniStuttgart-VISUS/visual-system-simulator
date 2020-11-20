@@ -1,7 +1,10 @@
+mod generator;
+
+pub use generator::*;
+
 use super::*;
 use gfx;
 use std::f32;
-use std::io::Cursor;
 
 const DIOPTRES_SCALING: f32 = 0.332_763_369_417_523 as f32;
 
@@ -30,12 +33,14 @@ gfx_defines! {
 }
 
 pub struct Lens {
+    generator: NormalMapGenerator,
     pso: gfx::PipelineState<Resources, pipe::Meta>,
     pso_data: pipe::Data<Resources>,
 }
 
 impl Node for Lens {
     fn new(window: &Window) -> Self {
+        let generator = NormalMapGenerator::new(&window);
         let mut factory = window.factory().borrow_mut();
         let pso = factory
             .create_pipeline_simple(
@@ -45,9 +50,8 @@ impl Node for Lens {
             )
             .unwrap();
 
-        //TODO: this is one stupid and slow hack!!! pre-compute this properly
-        let filename_normal = Cursor::new(include_bytes!("normal.png").to_vec());
-        let (_, normal_view) = load_highres_normalmap(&mut factory, filename_normal).unwrap();
+        //TODO: use generalized load_texture_from_bytes
+        let (_, normal_view) = load_highp_texture_from_bytes(&mut factory, &[127; 4], 1, 1).unwrap();
 
         let (_, cornea_view) = load_texture_from_bytes(&mut factory, &[127; 4], 1, 1).unwrap();
 
@@ -61,6 +65,7 @@ impl Node for Lens {
         ) = factory.create_render_target(1, 1).unwrap();
 
         Lens {
+            generator,
             pso,
             pso_data: pipe::Data {
                 u_active: 0,
@@ -81,10 +86,25 @@ impl Node for Lens {
     }
 
     fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
+        use gfx::format;
+
         let slots = slots.to_color_depth_input(window).to_color_output(window);
         let (color_view, depth_view) = slots.as_color_depth_view();
         self.pso_data.s_color = color_view;
         self.pso_data.s_depth = depth_view;
+
+        let size = slots.output_size_f32();
+        self.generator.generate(window, size[0] as u16, size[1] as u16);
+        let mut factory = window.factory().borrow_mut();
+        let normal_texture = factory
+        .view_texture_as_shader_resource::<(gfx::format::R32_G32_B32_A32, gfx::format::Float)>(
+            &self.generator.texture,
+            (0, 0),
+            format::Swizzle::new(),
+        )
+        .unwrap();
+        self.pso_data.s_normal = (normal_texture, factory.create_sampler_linear());
+
         self.pso_data.rt_color = slots.as_color();
         slots
     }
