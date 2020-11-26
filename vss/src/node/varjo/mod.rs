@@ -66,21 +66,18 @@ impl Node for Varjo {
         slots
     }
 
-    fn update_values(&mut self, _window: &Window, values: &ValueMap) {
-        let view_matrices = values.get("view_matrices");
-        if view_matrices.is_some() {
-            self.pso_data.u_view_context_l = (view_matrices.unwrap().as_matrix().unwrap()[0]).into();
-            self.pso_data.u_view_context_r = (view_matrices.unwrap().as_matrix().unwrap()[1]).into();
-            self.pso_data.u_view_focus_l = (view_matrices.unwrap().as_matrix().unwrap()[2]).into();
-            self.pso_data.u_view_focus_r = (view_matrices.unwrap().as_matrix().unwrap()[3]).into();
+    fn input(&mut self, head: &Head, gaze: &Gaze) -> Gaze {
+        if head.view.len() >= 4 && head.proj.len() >= 4 {
+            self.pso_data.u_view_context_l = head.view[0].into();
+            self.pso_data.u_view_context_r = head.view[1].into();
+            self.pso_data.u_view_focus_l = head.view[2].into();
+            self.pso_data.u_view_focus_r = head.view[3].into();
+            self.pso_data.u_proj_context_l = head.proj[0].into();
+            self.pso_data.u_proj_context_r = head.proj[1].into();
+            self.pso_data.u_proj_focus_l = head.proj[2].into();
+            self.pso_data.u_proj_focus_r = head.proj[3].into();
         }
-        let proj_matrices = values.get("proj_matrices");
-        if proj_matrices.is_some() {
-            self.pso_data.u_proj_context_l = (proj_matrices.unwrap().as_matrix().unwrap()[0]).into();
-            self.pso_data.u_proj_context_r = (proj_matrices.unwrap().as_matrix().unwrap()[1]).into();
-            self.pso_data.u_proj_focus_l = (proj_matrices.unwrap().as_matrix().unwrap()[2]).into();
-            self.pso_data.u_proj_focus_r = (proj_matrices.unwrap().as_matrix().unwrap()[3]).into();
-        }
+        gaze.clone()
     }
 
     fn render(&mut self, window: &Window) {

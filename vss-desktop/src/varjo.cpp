@@ -299,7 +299,7 @@ API_EXPORT const char *varjo_current_view_matrices(Varjo *varjo, float **view_ma
     try
     {
         *view_matrix_values = varjo->m_viewMatrices.data();
-        *view_matrix_count = static_cast<uint32_t>(varjo->m_viewCount*16);
+        *view_matrix_count = static_cast<uint32_t>(varjo->m_viewCount);
         return nullptr;
     }
     catch (const std::exception &ex)
@@ -318,7 +318,7 @@ API_EXPORT const char *varjo_current_proj_matrices(Varjo *varjo, float **proj_ma
     try
     {
         *proj_matrix_values = varjo->m_projMatrices.data();
-        *proj_matrix_count = static_cast<uint32_t>(varjo->m_viewCount*16);
+        *proj_matrix_count = static_cast<uint32_t>(varjo->m_viewCount);
         return nullptr;
     }
     catch (const std::exception &ex)

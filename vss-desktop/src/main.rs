@@ -102,6 +102,8 @@ pub fn main() {
 
     #[cfg(feature = "varjo")]
     let mut varjo = varjo::Varjo::new();
+    #[cfg(feature = "varjo")]//TODO: used to reduce log spam, remove when no longer needed or replace with a better solution
+    let mut log_counter = 0;
 
     let mut io_generator = IoGenerator::new(config.inputs, config.output);
     let (input_node, output_node) = io_generator.next(&window).unwrap();
@@ -132,25 +134,28 @@ pub fn main() {
         varjo.create_render_targets(&window);
         let node = Varjo::new(&window);
         window.add_node(Box::new(node));
+        window.update_nodes();
     }
 
     let mut done = false;
     while !done {
         #[cfg(feature = "varjo")]{
+            varjo.logging_enabled = log_counter == 0;
             varjo.begin_frame_sync();
             let (varjo_target_color, varjo_target_depth) = varjo.get_current_render_target();
             window.replace_targets(varjo_target_color, varjo_target_depth, false);
-            window.set_value(String::from("view_matrices"), Value::Matrices(varjo.get_current_view_matrices()));
-            window.set_value(String::from("proj_matrices"), Value::Matrices(varjo.get_current_proj_matrices()));
+            window.set_head(varjo.get_current_view_matrices(), varjo.get_current_proj_matrices());
             varjo.get_current_gaze();
             
-            window.update_nodes();
+            window.update_last_node();
         }
         
         done = window.poll_events();
 
-        #[cfg(feature = "varjo")]
-        varjo.end_frame();
+        #[cfg(feature = "varjo")]{
+            varjo.end_frame();
+            log_counter = (log_counter+1) % 60;
+        }
 
         if io_generator.is_ready() {
             if let Some((input_node, output_node)) = io_generator.next(&window) {

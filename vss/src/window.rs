@@ -1,3 +1,5 @@
+use cgmath::Matrix4;
+
 use crate::*;
 use std::cell::RefCell;
 
@@ -79,6 +81,8 @@ impl Window {
             last_head: RefCell::new(Head {
                 yaw: 0.0,
                 pitch: 0.0,
+                view: Vec::new(),
+                proj: Vec::new(),
             }),
             last_gaze: RefCell::new(Gaze { x: 0.5, y: 0.5 }),
             active: RefCell::new(false),
@@ -100,6 +104,10 @@ impl Window {
         self.flow.nodes_len()
     }
 
+    pub fn update_last_node(&mut self) {
+        self.flow.update_last_slot(&self);
+    }
+
     pub fn update_nodes(&mut self) {
         self.flow.negociate_slots(&self);
         self.flow.update_values(&self, &self.values.borrow());
@@ -110,9 +118,13 @@ impl Window {
         self.flow.update_values(&self, &self.values.borrow());
     }
     
-    pub fn set_value(&self, key: String, value: Value) {
-        self.values.borrow_mut().insert(key, value);
-        self.flow.update_values(&self, &self.values.borrow());
+    pub fn set_head(&self, view: Vec<Matrix4<f32>>, proj: Vec<Matrix4<f32>>) {
+        self.last_head.replace(Head {
+            yaw: 0.0,
+            pitch: 0.0,
+            view,
+            proj,
+        });
     }
 
     pub fn factory(&self) -> &RefCell<DeviceFactory> {

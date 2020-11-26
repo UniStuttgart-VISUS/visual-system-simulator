@@ -1,4 +1,5 @@
 use std::os::raw::{c_char, c_void};
+use log::LevelFilter;
 
 use vss::*;
 use vss::gfx::Factory;
@@ -18,7 +19,7 @@ struct VarjoRenderTarget {
 #[repr(C)]
 #[derive(Clone)]
 #[derive(Debug)]
-struct VarjoGazeData {
+pub struct VarjoGazeData {
     pub leftEye: [f32; 3],
     pub rightEye: [f32; 3],
     pub focusDistance: f32,
@@ -74,13 +75,16 @@ pub struct Varjo {
     varjo: VarjoPtr,
     render_targets_color: Vec<RenderTargetColor>,
     render_targets_depth: Vec<RenderTargetDepth>,
+    pub logging_enabled: bool,
 }
 
 impl Varjo {
     pub fn new() -> Self {
+        simple_logging::log_to_file("vss_latest.log", LevelFilter::Info).unwrap();
+
         let mut varjo = std::ptr::null_mut();
         try_fail(unsafe { varjo_new(&mut varjo as *mut *mut _) }).unwrap();
-        Self { varjo, render_targets_color: Vec::new(), render_targets_depth: Vec::new()}
+        Self { varjo, render_targets_color: Vec::new(), render_targets_depth: Vec::new(), logging_enabled: true}
     }
 
     pub fn create_render_targets(&mut self, window: &Window){
@@ -153,6 +157,9 @@ impl Varjo {
                 matrix_values[(i*16+12) as usize], matrix_values[(i*16+13) as usize], matrix_values[(i*16+14) as usize], matrix_values[(i*16+15) as usize]);
             matrices.push(m);
         }
+        if self.logging_enabled {
+            log::info!("View Matrices {:?}", matrices);
+        }
         matrices
     }
     
@@ -180,10 +187,13 @@ impl Varjo {
                 matrix_values[(i*16+12) as usize], matrix_values[(i*16+13) as usize], matrix_values[(i*16+14) as usize], matrix_values[(i*16+15) as usize]);
             matrices.push(m);
         }
+        if self.logging_enabled {
+            log::info!("Proj Matrices {:?}", matrices);
+        }
         matrices
     }
     
-    pub fn get_current_gaze(&self){//TODO: return gaze values
+    pub fn get_current_gaze(&self) -> VarjoGazeData{
         let mut varjo_gaze_data = VarjoGazeData{
             leftEye: [0.0; 3],
             rightEye: [0.0; 3],
@@ -199,12 +209,11 @@ impl Varjo {
         })
         .unwrap();
 
-        println!("{:?}", varjo_gaze_data);
-        /*VRGaze {
-            leftEye: Vector3::new(0.0, 0.0, 0.0),
-            rightEye: Vector3::new(0.0, 0.0, 0.0),
-            focus: 0.0,
-        }*/
+        if self.logging_enabled {
+            log::info!("{:?}", varjo_gaze_data);
+        }
+
+        varjo_gaze_data
     }
 
     pub fn begin_frame_sync(&self) {
