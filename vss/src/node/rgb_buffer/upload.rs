@@ -182,7 +182,7 @@ impl Node for UploadRgbBuffer {
         slots
     }
 
-    fn input(&mut self, head: &Head, gaze: &Gaze) -> Gaze {
+    fn input(&mut self, head: &Head, gaze: &Gaze, _flow_index: usize) -> Gaze {
         use cgmath::Matrix4;
         self.pso_data.u_head = (Matrix4::from_angle_y(cgmath::Rad(head.yaw))
             * Matrix4::from_angle_x(cgmath::Rad(head.pitch)))

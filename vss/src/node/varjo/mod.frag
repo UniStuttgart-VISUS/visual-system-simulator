@@ -4,12 +4,10 @@ const float PI = 3.1415926535897932384626433832795;
 //uniform mat4 u_proj_matrices[4]; //TODO
 uniform mat4 u_view_context_l;
 uniform mat4 u_view_context_r;
-uniform mat4 u_view_focus_l;
-uniform mat4 u_view_focus_r;
-uniform mat4 u_proj_context_l;
-uniform mat4 u_proj_context_r;
-uniform mat4 u_proj_focus_l;
-uniform mat4 u_proj_focus_r;
+uniform mat4 u_view_focus;
+uniform mat4 u_proj_context;
+uniform mat4 u_proj_focus;
+uniform uint u_right_eye;
 
 uniform sampler2D s_color;
 
@@ -19,17 +17,15 @@ out vec4 rt_color;
 void main() {
     mat4 view, projection;
     if(v_tex.z == 0.0){
-        view = u_view_context_l;
-        projection = u_proj_context_l;
-    }else if(v_tex.z == 1.0){
-        view = u_view_context_r;
-        projection = u_proj_context_r;
-    }else if(v_tex.z == 2.0){
-        view = u_view_focus_l;
-        projection = u_proj_focus_l;
+        if(u_right_eye == 1){
+            view = u_view_context_r;
+        }else{
+            view = u_view_context_l;
+        }
+        projection = u_proj_context;
     }else{
-        view = u_view_focus_r;
-        projection = u_proj_focus_r;
+        view = u_view_focus;
+        projection = u_proj_focus;
     }
 
     //get head position to fix it

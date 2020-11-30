@@ -20,9 +20,9 @@ struct VarjoRenderTarget {
 #[derive(Clone)]
 #[derive(Debug)]
 pub struct VarjoGazeData {
-    pub leftEye: [f32; 3],
-    pub rightEye: [f32; 3],
-    pub focusDistance: f32,
+    pub left_eye: [f32; 3],
+    pub right_eye: [f32; 3],
+    pub focus_distance: f32,
 }
 
 extern "C" {
@@ -195,9 +195,9 @@ impl Varjo {
     
     pub fn get_current_gaze(&self) -> VarjoGazeData{
         let mut varjo_gaze_data = VarjoGazeData{
-            leftEye: [0.0; 3],
-            rightEye: [0.0; 3],
-            focusDistance: 0.0,
+            left_eye: [0.0; 3],
+            right_eye: [0.0; 3],
+            focus_distance: 0.0,
         };
         let mut is_valid = false;
         try_fail(unsafe {

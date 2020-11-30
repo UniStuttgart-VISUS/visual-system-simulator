@@ -44,18 +44,22 @@ impl Flow {
     }
     
     pub fn update_last_slot(&self, window: &Window) {
-        let suggested_slot = 
-            NodeSlots::new_io(
-                window,
-                self.last_slot.borrow_mut().as_mut().unwrap().take_input(),
-                Slot::Rgb {
-                    color: window.target(),
-                    color_view: None,
-                },
-            );
-        // Negociate and swap.
-        let new_last_slot = self.nodes.borrow_mut().last_mut().unwrap().negociate_slots(window, suggested_slot);
-        self.last_slot.replace(Some(new_last_slot));
+        if self.last_slot.borrow().is_some() {
+            let suggested_slot = 
+                NodeSlots::new_io(
+                    window,
+                    self.last_slot.borrow_mut().as_mut().unwrap().take_input(),
+                    Slot::Rgb {
+                        color: window.target(),
+                        color_view: None,
+                    },
+                );
+            // Negociate and swap.
+            let new_last_slot = self.nodes.borrow_mut().last_mut().unwrap().negociate_slots(window, suggested_slot);
+            self.last_slot.replace(Some(new_last_slot));
+        }else{
+            self.negociate_slots(window);
+        }
     }
 
     pub fn negociate_slots(&self, window: &Window) {
@@ -91,11 +95,11 @@ impl Flow {
         }
     }
 
-    pub fn input(&self, head: &Head, gaze: &Gaze) {
+    pub fn input(&self, head: &Head, gaze: &Gaze, flow_index: usize) {
         let mut gaze = gaze.clone();
         // Propagate to nodes.
         for node in self.nodes.borrow_mut().iter_mut().rev() {
-            gaze = node.input(head, &gaze);
+            gaze = node.input(head, &gaze, flow_index);
         }
     }
 

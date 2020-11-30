@@ -1,4 +1,5 @@
 uniform vec2 u_resolution_out;
+uniform uint u_right_eye;
 
 out vec3 v_tex;
 
@@ -18,7 +19,7 @@ void main() {
 
     float context_height = (u_resolution_out.x/2.0)/u_resolution_out.y; //assuming the context viewport has a ratio of 1:1
 
-    if(gl_VertexID < 12){
+    if(gl_VertexID < 6){
         pos.y *= context_height;
     }else{
         pos.y *= 1.0-context_height;
@@ -26,7 +27,7 @@ void main() {
     }
 
     pos.x *= 0.5;
-    if(gl_VertexID%12 >= 6){
+    if(u_right_eye == 1){
         pos.x += 0.5;
     }
 

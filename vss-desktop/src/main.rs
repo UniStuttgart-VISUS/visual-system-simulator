@@ -32,11 +32,15 @@ impl IoGenerator {
     }
 
     fn next(&mut self, window: &Window) -> Option<IoNodePair> {
+        self.input_idx += 1;
+        self.current(&window)
+    }
+
+    fn current(&mut self, window: &Window) -> Option<IoNodePair> {
         if self.input_idx >= self.inputs.len() {
             None
         } else {
             let input = &self.inputs[self.input_idx];
-            self.input_idx += 1;
             if UploadRgbBuffer::has_image_extension(&input) {
                 let input_path = std::path::Path::new(input);
                 let mut input_node = UploadRgbBuffer::new(&window);
@@ -90,6 +94,38 @@ impl IoGenerator {
     }
 }
 
+fn build_flow(window: &mut Window, io_generator: &mut IoGenerator, flow_index: usize){
+    let (input_node, output_node) = io_generator.current(&window).unwrap();
+
+    // Add input node.
+    window.add_node(input_node, flow_index);
+
+    // Visual system passes.
+    let node = Cataract::new(&window);
+    window.add_node(Box::new(node), flow_index);
+    let node = Lens::new(&window);
+    window.add_node(Box::new(node), flow_index);
+    let node = Retina::new(&window);
+    window.add_node(Box::new(node), flow_index);
+
+    // Add output node, if present.
+    if let Some(output_node) = output_node {
+        window.add_node(output_node, flow_index);
+    } else {
+        window.add_node(Box::new(Passthrough::new(&window)), flow_index)
+    }
+
+    // Display node.
+    let node = Display::new(&window);
+    window.add_node(Box::new(node), flow_index);
+
+    #[cfg(feature = "varjo")]{
+        let node = Varjo::new(&window);
+        window.add_node(Box::new(node), flow_index);
+        window.update_nodes();
+    }
+}
+
 pub fn main() {
     let config = cmd_parse();
 
@@ -98,44 +134,19 @@ pub fn main() {
     } else {
         None
     };
-    let mut window = Window::new(config.visible, remote, config.parameters);
+    let mut window = Window::new(config.visible, remote, config.parameters, 2 as usize);
 
     #[cfg(feature = "varjo")]
     let mut varjo = varjo::Varjo::new();
     #[cfg(feature = "varjo")]//TODO: used to reduce log spam, remove when no longer needed or replace with a better solution
     let mut log_counter = 0;
+    #[cfg(feature = "varjo")]
+    varjo.create_render_targets(&window);
 
     let mut io_generator = IoGenerator::new(config.inputs, config.output);
-    let (input_node, output_node) = io_generator.next(&window).unwrap();
-
-    // Add input node.
-    window.add_node(input_node);
-
-    // Visual system passes.
-    let node = Cataract::new(&window);
-    window.add_node(Box::new(node));
-    let node = Lens::new(&window);
-    window.add_node(Box::new(node));
-    let node = Retina::new(&window);
-    window.add_node(Box::new(node));
-
-    // Add output node, if present.
-    if let Some(output_node) = output_node {
-        window.add_node(output_node);
-    } else {
-        window.add_node(Box::new(Passthrough::new(&window)))
-    }
-
-    // Display node.
-    let node = Display::new(&window);
-    window.add_node(Box::new(node));
-
-    #[cfg(feature = "varjo")]{
-        varjo.create_render_targets(&window);
-        let node = Varjo::new(&window);
-        window.add_node(Box::new(node));
-        window.update_nodes();
-    }
+    
+    build_flow(&mut window, &mut io_generator, 0);
+    build_flow(&mut window, &mut io_generator, 1);
 
     let mut done = false;
     while !done {
@@ -159,13 +170,13 @@ pub fn main() {
 
         if io_generator.is_ready() {
             if let Some((input_node, output_node)) = io_generator.next(&window) {
-                window.replace_node(0, input_node);
+                window.replace_node(0, input_node, 0);
                 let output_node = if let Some(output_node) = output_node {
                     output_node
                 } else {
                     Box::new(Passthrough::new(&window))
                 };
-                window.replace_node(window.nodes_len() - 2, output_node);
+                window.replace_node(window.nodes_len() - 2, output_node, 0);
                 window.update_nodes();
             } else {
                 if !config.visible {

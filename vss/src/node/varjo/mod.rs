@@ -7,13 +7,11 @@ gfx_defines! {
         //u_proj_matrices: gfx::Global<[[[f32; 4];4];4]> = "u_proj_matrices", //TODO
         u_view_context_l: gfx::Global<[[f32; 4];4]> = "u_view_context_l",
         u_view_context_r: gfx::Global<[[f32; 4];4]> = "u_view_context_r",
-        u_view_focus_l: gfx::Global<[[f32; 4];4]> = "u_view_focus_l",
-        u_view_focus_r: gfx::Global<[[f32; 4];4]> = "u_view_focus_r",
-        u_proj_context_l: gfx::Global<[[f32; 4];4]> = "u_proj_context_l",
-        u_proj_context_r: gfx::Global<[[f32; 4];4]> = "u_proj_context_r",
-        u_proj_focus_l: gfx::Global<[[f32; 4];4]> = "u_proj_focus_l",
-        u_proj_focus_r: gfx::Global<[[f32; 4];4]> = "u_proj_focus_r",
+        u_view_focus: gfx::Global<[[f32; 4];4]> = "u_view_focus",
+        u_proj_context: gfx::Global<[[f32; 4];4]> = "u_proj_context",
+        u_proj_focus: gfx::Global<[[f32; 4];4]> = "u_proj_focus",
         u_resolution_out: gfx::Global<[f32; 2]> = "u_resolution_out",
+        u_right_eye: gfx::Global<u32> = "u_right_eye",
         s_source: gfx::TextureSampler<[f32; 4]> = "s_color",
         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
     }
@@ -44,13 +42,11 @@ impl Node for Varjo {
             pso_data: pipe::Data {
                 u_view_context_l: [[0.0; 4]; 4],
                 u_view_context_r: [[0.0; 4]; 4],
-                u_view_focus_l: [[0.0; 4]; 4],
-                u_view_focus_r: [[0.0; 4]; 4],
-                u_proj_context_l: [[0.0; 4]; 4],
-                u_proj_context_r: [[0.0; 4]; 4],
-                u_proj_focus_l: [[0.0; 4]; 4],
-                u_proj_focus_r: [[0.0; 4]; 4],
+                u_view_focus: [[0.0; 4]; 4],
+                u_proj_context: [[0.0; 4]; 4],
+                u_proj_focus: [[0.0; 4]; 4],
                 u_resolution_out: [1.0, 1.0],
+                u_right_eye: 0,
                 s_source: (src, sampler),
                 rt_color: dst,
             },
@@ -66,22 +62,20 @@ impl Node for Varjo {
         slots
     }
 
-    fn input(&mut self, head: &Head, gaze: &Gaze) -> Gaze {
-        if head.view.len() >= 4 && head.proj.len() >= 4 {
+    fn input(&mut self, head: &Head, gaze: &Gaze, flow_index: usize) -> Gaze {
+        if head.view.len() >= 4 && head.proj.len() >= 4  && flow_index < 2{
             self.pso_data.u_view_context_l = head.view[0].into();
             self.pso_data.u_view_context_r = head.view[1].into();
-            self.pso_data.u_view_focus_l = head.view[2].into();
-            self.pso_data.u_view_focus_r = head.view[3].into();
-            self.pso_data.u_proj_context_l = head.proj[0].into();
-            self.pso_data.u_proj_context_r = head.proj[1].into();
-            self.pso_data.u_proj_focus_l = head.proj[2].into();
-            self.pso_data.u_proj_focus_r = head.proj[3].into();
+            self.pso_data.u_view_focus = head.view[2 + flow_index].into();
+            self.pso_data.u_proj_context = head.proj[0 + flow_index].into();
+            self.pso_data.u_proj_focus = head.proj[2 + flow_index].into();
+            self.pso_data.u_right_eye = flow_index as u32;
         }
         gaze.clone()
     }
 
     fn render(&mut self, window: &Window) {
         let mut encoder = window.encoder().borrow_mut();
-        encoder.draw(&gfx::Slice::from_vertex_count(24), &self.pso, &self.pso_data);
+        encoder.draw(&gfx::Slice::from_vertex_count(12), &self.pso, &self.pso_data);
     }
 }
