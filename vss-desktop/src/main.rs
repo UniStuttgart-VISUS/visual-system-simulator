@@ -100,6 +100,11 @@ fn build_flow(window: &mut Window, io_generator: &mut IoGenerator, flow_index: u
     // Add input node.
     window.add_node(input_node, flow_index);
 
+    #[cfg(feature = "varjo")]{
+        let node = Seperator::new(&window);
+        window.add_node(Box::new(node), flow_index);
+    }
+
     // Visual system passes.
     let node = Cataract::new(&window);
     window.add_node(Box::new(node), flow_index);
@@ -120,7 +125,7 @@ fn build_flow(window: &mut Window, io_generator: &mut IoGenerator, flow_index: u
     window.add_node(Box::new(node), flow_index);
 
     #[cfg(feature = "varjo")]{
-        let node = Varjo::new(&window);
+        let node = Compositor::new(&window);
         window.add_node(Box::new(node), flow_index);
         window.update_nodes();
     }
@@ -134,7 +139,13 @@ pub fn main() {
     } else {
         None
     };
-    let mut window = Window::new(config.visible, remote, config.parameters, 2 as usize);
+    
+    #[cfg(not(feature = "varjo"))]
+    let flow_count = 1;
+    #[cfg(feature = "varjo")]
+    let flow_count = 4;
+
+    let mut window = Window::new(config.visible, remote, config.parameters, flow_count);
 
     #[cfg(feature = "varjo")]
     let mut varjo = varjo::Varjo::new();
@@ -145,8 +156,9 @@ pub fn main() {
 
     let mut io_generator = IoGenerator::new(config.inputs, config.output);
     
-    build_flow(&mut window, &mut io_generator, 0);
-    build_flow(&mut window, &mut io_generator, 1);
+    for index in 0 .. flow_count {
+        build_flow(&mut window, &mut io_generator, index);
+    }
 
     let mut done = false;
     while !done {

@@ -1,7 +1,7 @@
 uniform vec2 u_resolution_out;
-uniform uint u_right_eye;
+uniform uint u_flow_index;
 
-out vec3 v_tex;
+out vec2 v_tex;
 
 const vec2 vertices[6] = vec2[](
     vec2(0.0, 0.0),
@@ -13,23 +13,21 @@ const vec2 vertices[6] = vec2[](
 );
 
 void main() {
-    //have to use these coordinates for ndc so we can already pre-adjust them, z component serves to easier determine which matrix should be used
-    v_tex = vec3(vertices[gl_VertexID % 6] * 2.0 - 1.0, gl_VertexID/6);
-    vec2 pos = vertices[gl_VertexID % 6];
+    v_tex = vertices[gl_VertexID];
+    vec2 pos = vertices[gl_VertexID];
 
     float context_height = (u_resolution_out.x/2.0)/u_resolution_out.y; //assuming the context viewport has a ratio of 1:1
 
-    if(gl_VertexID < 6){
+    if(u_flow_index < 2){
         pos.y *= context_height;
     }else{
         pos.y *= 1.0-context_height;
         pos.y += context_height;
     }
 
-    pos.x *= 0.5;
-    if(u_right_eye == 1){
-        pos.x += 0.5;
+    if((u_flow_index % 2) == 0){
+        pos.x -= 1.0;
     }
 
-    gl_Position = vec4(pos * 2.0 - 1.0, 0.0, 1.0);
+    gl_Position = vec4(pos.x, pos.y * 2.0 - 1.0, 0.0, 1.0);
 }
