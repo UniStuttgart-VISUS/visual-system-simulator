@@ -141,7 +141,7 @@ public:
         varjo_SessionShutDown(m_session);
     }
 
-    void beginFrameSync()
+    bool beginFrameSync()
     {
         varjo_Event evt;
         while (varjo_PollEvent(m_session, &evt))
@@ -196,6 +196,7 @@ public:
                 std::copy(view.viewMatrix, view.viewMatrix + 16, m_projectionLayers[i].view.value);
             }
         }
+        return m_visible;
     }
 
     void endFrame()
@@ -257,12 +258,12 @@ API_EXPORT const char *varjo_render_targets(Varjo *varjo, VarjoRenderTarget **re
     }
 }
 
-API_EXPORT const char *varjo_begin_frame_sync(Varjo *varjo)
+API_EXPORT const char *varjo_begin_frame_sync(Varjo *varjo, bool *is_available)
 {
     assert(varjo != nullptr && "Varjo instance expected");
     try
     {
-        varjo->beginFrameSync();
+        *is_available = varjo->beginFrameSync();
         return nullptr;
     }
     catch (const std::exception &ex)

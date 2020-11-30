@@ -32,7 +32,7 @@ extern "C" {
         render_targets: *mut *mut VarjoRenderTarget,
         render_targets_size: *mut u32,
     ) -> *const c_char;
-    fn varjo_begin_frame_sync(varjo: VarjoPtr) -> *const c_char;
+    fn varjo_begin_frame_sync(varjo: VarjoPtr, is_available: *mut bool) -> *const c_char;
     fn varjo_current_swap_chain_index(
         varjo: VarjoPtr,
         current_swap_chain_index: *mut u32,
@@ -216,8 +216,11 @@ impl Varjo {
         varjo_gaze_data
     }
 
-    pub fn begin_frame_sync(&self) {
-        try_fail(unsafe { varjo_begin_frame_sync(self.varjo) }).unwrap();
+    pub fn begin_frame_sync(&self) -> bool{
+        let mut is_available = false;
+        try_fail(unsafe { varjo_begin_frame_sync(self.varjo, &mut is_available as *mut _) }).unwrap();
+
+        is_available
     }
 
     pub fn end_frame(&self) {

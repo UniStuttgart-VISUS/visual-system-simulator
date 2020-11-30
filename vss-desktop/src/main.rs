@@ -141,7 +141,7 @@ pub fn main() {
     while !done {
         #[cfg(feature = "varjo")]{
             varjo.logging_enabled = log_counter == 0;
-            varjo.begin_frame_sync();
+            if !varjo.begin_frame_sync() {continue;}
             let (varjo_target_color, varjo_target_depth) = varjo.get_current_render_target();
             window.replace_targets(varjo_target_color, varjo_target_depth, false);
             window.set_head(varjo.get_current_view_matrices(), varjo.get_current_proj_matrices());
@@ -154,7 +154,7 @@ pub fn main() {
 
         #[cfg(feature = "varjo")]{
             varjo.end_frame();
-            log_counter = (log_counter+1) % 60;
+            log_counter = (log_counter+1) % 10;
         }
 
         if io_generator.is_ready() {

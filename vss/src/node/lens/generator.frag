@@ -105,7 +105,7 @@ vec3 rayIntersectSphere(vec3 rPos, vec3 rDir, vec3 cPos, float cRad) {
 }
 
 void main() {
-	vec3 start, dir;
+	vec3 start = vec3(0.0, 0.0, 0.0), dir = vec3(0.0, 0.0, 0.0);
 	getRay(start, dir);
 	
 	float distance = length(vec3((v_tex.xy - 0.5) * TEXTURE_SCALE, TEXTURE_DISTANCE));
