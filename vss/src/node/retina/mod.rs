@@ -3,6 +3,8 @@ mod retina_map;
 use self::retina_map::generate_retina_map;
 use super::*;
 use gfx;
+use gfx::format::Rgba32F;
+
 
 gfx_defines! {
     pipeline pipe {
@@ -12,7 +14,11 @@ gfx_defines! {
         s_retina: gfx::TextureSampler<[f32; 4]> = "s_retina",
         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
         s_deflection: gfx::TextureSampler<[f32; 4]> = "s_deflection",
-        rt_deflection: gfx::RenderTarget<ColorFormat> = "rt_deflection",
+        rt_deflection: gfx::RenderTarget<Rgba32F> = "rt_deflection",
+        s_color_change: gfx::TextureSampler<[f32; 4]> = "s_color_change",
+        rt_color_change: gfx::RenderTarget<Rgba32F> = "rt_color_change",
+        s_color_uncertainty: gfx::TextureSampler<[f32; 4]> = "s_color_uncertainty",
+        rt_color_uncertainty: gfx::RenderTarget<Rgba32F> = "rt_color_uncertainty",
 
     }
 }
@@ -38,6 +44,8 @@ impl Node for Retina {
 
         let (_, src, dst) = factory.create_render_target(1, 1).unwrap();
         let (_, s_deflection, rt_deflection) = factory.create_render_target(1, 1).unwrap();
+        let (_, s_color_change, rt_color_change) = factory.create_render_target(1, 1).unwrap();
+        let (_, s_color_uncertainty, rt_color_uncertainty) = factory.create_render_target(1, 1).unwrap();
 
         Retina {
             pso,
@@ -49,6 +57,10 @@ impl Node for Retina {
                 rt_color: dst,
                 s_deflection:(s_deflection, sampler.clone()),
                 rt_deflection,
+                s_color_change:(s_color_change, sampler.clone()),
+                rt_color_change,
+                s_color_uncertainty:(s_color_uncertainty, sampler.clone()),
+                rt_color_uncertainty
             },
         }
     }
@@ -60,6 +72,10 @@ impl Node for Retina {
         self.pso_data.rt_color = slots.as_color();
         self.pso_data.s_deflection = slots.as_deflection_view();
         self.pso_data.rt_deflection = slots.as_deflection();
+        self.pso_data.s_color_change = slots.as_color_change_view();
+        self.pso_data.rt_color_change = slots.as_color_change();  
+        self.pso_data.s_color_uncertainty = slots.as_color_uncertainty_view();
+        self.pso_data.rt_color_uncertainty = slots.as_color_uncertainty();
 
         slots
     }

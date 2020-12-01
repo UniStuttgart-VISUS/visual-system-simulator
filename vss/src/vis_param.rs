@@ -1,7 +1,9 @@
 #[derive(Copy, Clone)]
 pub enum VisualizationType{
   Output,
-  Deflection
+  Deflection,
+  ColorChange,
+  ColorUncertainty
 }
 impl Default for VisualizationType{
   fn default() -> Self{
@@ -25,8 +27,8 @@ impl Default for VisualizationParameters{
       vis_type: VisualizationType::default(),
       heat_scale: 1.0,
       dir_calc_scale: 1.0,
-      test_depth_min: 200.0,
-      test_depth_max: 5000.0,
+      test_depth_min: 100.0,
+      test_depth_max: 1800.0,
     }
   }
 }

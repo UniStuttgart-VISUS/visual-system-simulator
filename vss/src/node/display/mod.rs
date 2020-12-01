@@ -7,10 +7,12 @@ gfx_defines! {
         u_resolution_in: gfx::Global<[f32; 2]> = "u_resolution_in",
         u_resolution_out: gfx::Global<[f32; 2]> = "u_resolution_out",
         s_source: gfx::TextureSampler<[f32; 4]> = "s_color",
-        s_deflection: gfx::TextureSampler<[f32; 4]> = "s_deflection",
         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
         u_vis_type: gfx::Global<i32> = "u_vis_type",
         u_heat_scale: gfx::Global<f32> = "u_heat_scale",
+        s_deflection: gfx::TextureSampler<[f32; 4]> = "s_deflection",
+        s_color_change: gfx::TextureSampler<[f32; 4]> = "s_color_change",
+        s_color_uncertainty: gfx::TextureSampler<[f32; 4]> = "s_color_uncertainty",
     }
 }
 
@@ -35,7 +37,17 @@ impl Node for Display {
         let (_, src, dst) = factory.create_render_target(1, 1).unwrap();
 
         // add deflection view
-        let (_, srv, _): (
+        let (_, s_deflection, _): (
+            _,
+            _,
+            gfx::handle::RenderTargetView<gfx_device_gl::Resources, [f32; 4]>,
+        ) = factory.create_render_target(1, 1).unwrap();
+        let (_, s_color_change, _): (
+            _,
+            _,
+            gfx::handle::RenderTargetView<gfx_device_gl::Resources, [f32; 4]>,
+        ) = factory.create_render_target(1, 1).unwrap();
+        let (_, s_color_uncertainty, _): (
             _,
             _,
             gfx::handle::RenderTargetView<gfx_device_gl::Resources, [f32; 4]>,
@@ -48,7 +60,9 @@ impl Node for Display {
                 u_resolution_in: [1.0, 1.0],
                 u_resolution_out: [1.0, 1.0],
                 s_source: (src, sampler.clone()),
-                s_deflection: (srv, sampler.clone()),
+                s_deflection: (s_deflection, sampler.clone()),
+                s_color_change:(s_color_change, sampler.clone()),
+                s_color_uncertainty:(s_color_uncertainty, sampler.clone()),
                 rt_color: dst,
                 u_vis_type: 0,
                 u_heat_scale: 1.0,
@@ -62,7 +76,10 @@ impl Node for Display {
         self.pso_data.u_resolution_out = slots.output_size_f32();
         self.pso_data.s_source = slots.as_color_view();
         self.pso_data.s_deflection = slots.as_deflection_view();
+        self.pso_data.s_color_change = slots.as_color_change_view();
+        self.pso_data.s_color_uncertainty = slots.as_color_uncertainty_view();
         self.pso_data.rt_color = slots.as_color();
+
         slots
     }
 

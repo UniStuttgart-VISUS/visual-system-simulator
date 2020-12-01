@@ -2,6 +2,7 @@ use super::*;
 use gfx;
 use std::io::Cursor;
 use std::path::Path;
+use gfx::format::Rgba32F;
 
 gfx_defines! {
     pipeline pipe {
@@ -11,7 +12,9 @@ gfx_defines! {
         s_rgb: gfx::TextureSampler<[f32; 4]> = "s_rgb",
         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
         rt_depth: gfx::RenderTarget<DepthFormat> = "rt_depth",
-        rt_deflection: gfx::RenderTarget<ColorFormat> = "rt_deflection",
+        rt_deflection: gfx::RenderTarget<Rgba32F> = "rt_deflection",
+        rt_color_change: gfx::RenderTarget<Rgba32F> = "rt_color_change",
+        rt_color_uncertainty: gfx::RenderTarget<Rgba32F> = "rt_color_uncertainty",
     }
 }
 
@@ -126,6 +129,9 @@ impl Node for UploadRgbBuffer {
         let (_, _, rt_color) = factory.create_render_target(1, 1).unwrap();
         let (_, _, rt_depth) = factory.create_render_target(1, 1).unwrap();
         let (_, _, rt_deflection) = factory.create_render_target(1, 1).unwrap();
+        let (_, _, rt_color_change) = factory.create_render_target(1, 1).unwrap();
+        let (_, _, rt_color_uncertainty) = factory.create_render_target(1, 1).unwrap();
+
 
         UploadRgbBuffer {
             buffer_next: RgbBuffer::default(),
@@ -140,7 +146,9 @@ impl Node for UploadRgbBuffer {
                 s_rgb: (rgb_view, sampler),
                 rt_color,
                 rt_depth,
-                rt_deflection
+                rt_deflection,
+                rt_color_change,
+                rt_color_uncertainty
             },
         }
     }
@@ -179,10 +187,13 @@ impl Node for UploadRgbBuffer {
             2.0 * ((self.pso_data.u_fov[0] / 2.0).tan() * height as f32 / width as f32).atan();
 
         let slots = slots.emplace_color_depth_output(window, width, height);
-        let (color, depth, deflection) = slots.as_color_depth_deflect();
+        let (color, depth, deflection, color_change, color_uncertainty) = slots.as_all_output();
         self.pso_data.rt_color = color;
         self.pso_data.rt_depth = depth;
         self.pso_data.rt_deflection = deflection;
+        self.pso_data.rt_color_change = color_change;
+        self.pso_data.rt_color_uncertainty = color_uncertainty;
+
         slots
     }
 
