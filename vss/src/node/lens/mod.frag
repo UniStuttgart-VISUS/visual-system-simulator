@@ -188,10 +188,10 @@ Simulation getColorSample(vec3 start, vec2 aim, float focalLength, float nAnteri
     // position where the ray hits the image, including depth
     vec3 target = getTargetLocation(start, dir);
 
+    // The color and the error values are sampled from the original textures
     vec4 color = getColorWithRay(target);
     vec4 color_change = texture(s_color_change, target.xy / ((target.z - VITREOUS_HUMOUR_RADIUS) * TEXTURE_SCALE) + 0.5);
     vec4 color_uncertainty = texture(s_color_uncertainty, target.xy / ((target.z - VITREOUS_HUMOUR_RADIUS) * TEXTURE_SCALE) + 0.5);
-    //Simulation sim = Simulation(color,to_dir_angle(target));
     Simulation sim = Simulation(
         color,
         color_change,
@@ -199,8 +199,6 @@ Simulation getColorSample(vec3 start, vec2 aim, float focalLength, float nAnteri
         (target.xy/target.z)*u_dir_calc_scale);
     return sim;
 }
-
-
 
 
 void main() {
@@ -221,18 +219,12 @@ void main() {
 
 
         // prepare accomodation
-        // We focus on all possible depths: for each pixel, the lens can focus on the individual depth
+        // This implementation focuses on all possible depths: for each pixel, the lens can focus on the individual depth
         // float focalLength = length(vec3(
         //     (v_tex.xy - 0.5) * TEXTURE_SCALE,
         //     u_depth_max - texture(s_depth, v_tex).r * (u_depth_max - u_depth_min)));     
-
-        // float focalLength = length(
-        //     vec3(
-        //         (v_tex.xy - 0.5) * TEXTURE_SCALE,
-        //         u_depth_min+(u_depth_max - u_depth_min)*u_dir_calc_scale/100
-        //         )
-        //     );       
-
+       
+        // This implementation focuses soley on the depth that is in the middle of the screen
         float focalLength = length(
             vec3(
                 (v_tex.xy - 0.5) * TEXTURE_SCALE,
@@ -291,32 +283,28 @@ void main() {
             rays[16] = getColorSample(start, vec2(0.0, 0.0), focalLength, nAnteriorChamberFactor);
         }
 
-        // dir sd ----------------------------------------------------
-        // calculate the mean target vector
-        // This is the "center" of the scatter
+        // calculate the mean color and target vector
+        // Thie mean target vector is the "center" of the scatter
         for (int i = 0; i < 17; i++) {
             avg_target += rays[i].target;
             color+=rays[i].color;
         }
-
         avg_target /= sampleCount;
         color /= sampleCount;
 
-
+// TODO: deflection. unfortunately it cannot be conveyed in an independent color target
+// TODO: Possibly reenable covariance
         vec2 diff_vec = vec2(0.0);
-        //vec2 col_change_vec = vec2(0.0);
         vec3 col_unc_prop = vec3(0.0);
         vec3 col_unc_new = vec3(0.0);
         vec2 dir_unc_prop = vec2(0.0);
         
         for (int i = 0; i < 17; i++) {
-
             // express the difference of the current target vector and the average
             diff_vec = rays[i].target-avg_target;
 
             // calculate the variance of the target scatters for each dimension    
             var_target += pow(diff_vec , vec2(2.0));
-            // covar_target =+ (diff_vec.x) * (diff_vec.y);
 
             col_unc_prop += rays[i].color_uncertainty.rgb;
             col_unc_new += pow(rays[i].color.rgb - color.rgb, vec3(2.0));
@@ -327,31 +315,12 @@ void main() {
         col_unc_new /= sampleCount;
         col_unc_prop /= sampleCount * sampleCount;
         dir_unc_prop /= sampleCount * sampleCount;
-        vec3 col_var = col_unc_prop + col_unc_new;
-        // vec3 col_var = col_unc_new;
-        // covar_target /= sampleCount;
 
+        vec3 col_var = col_unc_prop + col_unc_new;
         vec2 dir_unc = dir_unc_prop + var_target;
 
-        // Covariance matrix:
-        // ( Var(x)     , covar(x,y) )
-        // ( covar(y,x) , Var(y)     )
-        // since covar(y,x) and covar(x,y) are equal, that value is stored in covar_target
-        // instead of explicitly using the covariance matrix, and computing its determinant, we compute the resultintg value directly
-
-        // The Generalized Variance is the determinant of the Covariance matrix
-        //float gen_var = var_target.x * var_target.y - covar_target * covar_target;
-        //gen_var = sqrt(gen_var) ;
-
-        // the final color is the average of all samples
+        // the final color is the average of all samples (calculated above)
         rt_color = color;
-
-
-
-        //rt_deflection = vec4(gen_var);
-        //rt_deflection = vec4(sqrt(var_target.x * var_target.x + var_target.y * var_target.y)*u_dir_calc_scale);
-        // rt_color_change =       vec4(1.0,1.0,0.0,1.0);
-        // rt_color_uncertainty =  vec4(0.0,1.0,1.0,1.0);
 
 // TODO propagate color error ? (wenn man nur den absoluten fehler betrachtet, dann nicht)
         vec3 color_diff = rt_color.rgb - original_color;
@@ -377,10 +346,6 @@ void main() {
 
     } else {
         rt_color = texture(s_color, v_tex);
-        // rt_deflection =         vec4(1.0,0.0,0.0,1.0);
-        // rt_color_change =       vec4(0.0,1.0,0.0,1.0);
-        // rt_color_uncertainty =  vec4(0.0,0.0,1.0,1.0);
-        //rt_deflection =         texture(s_deflection, v_tex);
         rt_color_change =       texture(s_color_change, v_tex);
         rt_color_uncertainty =  texture(s_color_uncertainty, v_tex);
     }

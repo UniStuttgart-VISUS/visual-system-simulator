@@ -100,7 +100,7 @@ vec2 getPerceivedBrightness_sd(in vec3 color, in vec3 var_in) {
     float brightness = dot(weights, color);
     
     // since the brightness is the weighted sum of the vecor components, 
-    // its uncertainty is propagated by summing the swares of the weighted uncertainties
+    // its uncertainty is propagated by summing the sqares of the weighted uncertainties
     // \sigma_f^2 = a^2\sigma_A^2 + b^2\sigma_B^2 + ...
     vec3 weighted_var = pow(weights, vec3(2.0)) * var_in;
     float variance = weighted_var.r + weighted_var.g + weighted_var.b;

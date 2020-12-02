@@ -40,11 +40,13 @@ void applyBlurAndBloom(inout vec4 color, in vec4 retina, inout ErrorValues ev) {
     // max_rgb has some uncertainty. Unfortunately it cannot be modeled in the if condition
     if (max_rgb < .75) {
         float blur_scale = (0.75 - (retina.r + retina.g + retina.b) / 3.0) * 5.0;
-        //color = blur(v_tex, s_color, blur_scale, u_resolution);
+        //original calculation: 
+        //      color = blur(v_tex, s_color, blur_scale, u_resolution);
         color =  blur_sd(v_tex, s_color, blur_scale, u_resolution, ev.color_var, s_color_uncertainty);        
 
         // apply bloom
-        //color = color * (1.0 + getPerceivedBrightness(color.rgb) * (0.75 - max_rgb) * 0.5);
+        //original calculation: 
+        //      color = color * (1.0 + getPerceivedBrightness(color.rgb) * (0.75 - max_rgb) * 0.5);
         vec2 brightness = getPerceivedBrightness_sd(color.rgb, ev.color_var);
         float bloom_factor = 1. + brightness.x * (0.75 - max_rgb) * 0.5;
         // f = 1+ x*(0.75-y) *0.5
@@ -55,14 +57,10 @@ void applyBlurAndBloom(inout vec4 color, in vec4 retina, inout ErrorValues ev) {
              pow(-0.5 * (max_rgb-0.75) ,2.0) * brightness.y 
            + pow(-0.5 * brightness.x,2.0)    * max_rgb_var
             ;
-// TODO covariance
-
+// TODO possibly covariance
         ev.color_var = pow(bloom_factor ,2.0) * ev.color_var + (color.rgb*color.rgb) * bloom_factor_variance;
-
         // do the bloom
         color = color * bloom_factor;
-
-
     }
 }
 
@@ -118,6 +116,7 @@ void applyColorBlindness(inout vec4 color, in vec4 retina, inout ErrorValues ev)
     mat3 color_transformation = neutral * neutral_factor + weak_color * weak_color_factor + achromatopsia * achromatopsia_factor;
     color = vec4(color_transformation * color.rgb, color.a);
 
+    // square all elements of the matrix, since for the variance, the weights of the weighted sum need to be squared
     vec3 zwei = vec3(2.0);
     mat3 squared_color_transformation =
         mat3(
@@ -224,10 +223,4 @@ void main() {
             ev.color_var,
             dir_unc.y
         );
-
-
-    //rt_deflection = texture(s_deflection, v_tex);
-    //rt_deflection =         texture(s_deflection, v_tex);
-    // rt_color_change =       texture(s_color_change, v_tex);
-    // rt_color_uncertainty =  texture(s_color_uncertainty, v_tex);
 }

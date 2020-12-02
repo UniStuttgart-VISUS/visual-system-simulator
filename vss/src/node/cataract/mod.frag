@@ -84,26 +84,16 @@ void main() {
         /*
           This step produces large amounts of uncertainty in bright colors
         */
-        // f = x_1 * x_+2
+        
         rt_color = color * bloom_factor;
-
-        // s^2 = f^2 * ( s^2_1/x^2_1 + s^2_2/x^2_2) (relative variance)      
-        // s^2 = s^2_1*x^2_2 + s^2_2*x^2_1) (zeilenweise multiplikation)      
-// TODO covariance  
-        //color_var = rt_color.rgb*rt_color.rgb * ( color_var/(color.rgb*color.rgb) + vec3(bloom_factor_variance/(bloom_factor*bloom_factor)) );
-        color_var = 
-            color_var*(bloom_factor*bloom_factor) 
-          + vec3(bloom_factor_variance)*(color.rgb*color.rgb);
-
-        //color_var = color_var + vec3(bloom_factor_variance);
-        //color_var = vec3(bloom_factor_variance/(bloom_factor*bloom_factor));
-
+        // f = x_1 * x_+2
+        // s^2 = s^2_1*x^2_2 + s^2_2*x^2_1) 
+// TODO covariance  ?
+        color_var =  color_var*(bloom_factor*bloom_factor)  + vec3(bloom_factor_variance)*(color.rgb*color.rgb);
 
         lowerContrastBy_sd(rt_color,color_var, u_contrast_factor);
-        //lowerContrastBy(rt_color, u_contrast_factor);
 
-        vec3 color_diff = rt_color.rgb - original_color;
-        
+        vec3 color_diff = rt_color.rgb - original_color;        
 
         // update the rgb values of the textures with the new data. do not touch the alpha
         rt_color_change = 
@@ -122,12 +112,6 @@ void main() {
         rt_color_change.a = direction_uncertainty.y;
 
         rt_depth = vec4(texture(s_depth, v_tex)).r;
-        
-
-        // rt_color =              vec4(texture(s_color, v_tex));
-        rt_depth =              vec4(texture(s_depth, v_tex)).r;
-        // rt_color_change =       texture(s_color_change, v_tex);
-        // rt_color_uncertainty =  texture(s_color_uncertainty, v_tex);
 
     } else {
         rt_color =              vec4(texture(s_color, v_tex));

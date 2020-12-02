@@ -32,12 +32,12 @@ vec3 TurboColormap(in float x) {
 void main() {
     vec3 color = vec3(0.0);
     switch (u_vis_type) {
+// TODO this has to be done in different color spaces, e.g with cielab and perhaps use deltaE_00
         case 0:
             color =  texture(s_color, v_tex).rgb;
             break;
         case 1: // directional uncertainty
             float bar =  pow(texture(s_color_change, v_tex).a, 2.0) + pow(texture(s_color_uncertainty, v_tex).a, 2.0);
-            //color = sqrt(bar) * u_heat_scale;
             color = TurboColormap(sqrt(bar) * u_heat_scale);
             break;
         case 2: // color error
@@ -49,8 +49,6 @@ void main() {
             vec3 foo =  texture(s_color_uncertainty, v_tex).rgb;
             float combined_variance = foo.r + foo.g +foo.b;
             color = TurboColormap(sqrt(combined_variance) * u_heat_scale);
-            // TODO this has to be done in cielab and/or deltaE_00
-            //color = vec3(sqrt(foo.r*foo.r + foo.g*foo.g + foo.b*foo.b)) * u_heat_scale;
             break;
     }
     
