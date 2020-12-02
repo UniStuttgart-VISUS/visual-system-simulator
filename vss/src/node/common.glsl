@@ -4,8 +4,8 @@ float normpdf(in float x) {
     return 0.39894 * exp(-0.5 * x * x / (49.0)) / 7.0;
 }
 
-// blur function, blur-degree changeable by intensity parameter
-vec4 blur(in vec2 fragCoord, in sampler2D tex, float blur_scale, vec2 resolution) {
+
+vec4 blur(in vec2 fragCoord, in sampler2D tex, float blur_scale, vec2 resolution, inout vec3 var, in sampler2D vartex) {
     // declare stuff
     const int kSize = (BLUR_SIZE - 1) / 2;
     float kernel[BLUR_SIZE];
@@ -29,10 +29,47 @@ vec4 blur(in vec2 fragCoord, in sampler2D tex, float blur_scale, vec2 resolution
         }
     }
 
-    return vec4(final_colour / (Z * Z), 1.0);
+    // the average of the weighted samples and hence the result
+    vec3 avg = final_colour / (Z * Z);
+
+    // s^2 = sum( (df/dx_i * s_i)^2 ) + s^2_blur
+    //       ------------------------   ---------
+    //              var_in               var_new
+    vec3 var_in = vec3(0.0);
+    vec3 var_new = vec3(0.0);
+    vec3 pix = vec3(0.0);
+    float weight = 0;
+    for (int i = -kSize; i <= kSize; ++i) {
+        for (int j = -kSize; j <= kSize; ++j) {
+            weight = kernel[kSize + j] * kernel[kSize + i] / (Z * Z);
+            // propagated variance
+            var_in += texture(vartex, (fragCoord + vec2(float(i), float(j)) * blur_scale / resolution)).rgb * weight * weight;
+            // new variance
+            pix = texture(tex, (fragCoord + vec2(float(i), float(j)) * blur_scale / resolution)).rgb;
+            pix = pix - avg;
+            pix = pix * pix;
+            var_new += pix * weight; // TODO weight or weight^2 ?
+        }
+    }
+    // var_new = 1/N * sum( (q_i - q_avg)^2 )
+    // we have 9x9 samples
+    var_new = var_new/81;
+
+    // variances can be added
+    var = var_in + var_new;
+
+    return vec4(avg,1.0);
 }
 
-float getPerceivedBrightness(in vec3 color) {
+vec2 getPerceivedBrightness(in vec3 color, in vec3 var_in) {
     // The constants adjust the contribution of each color to the perceived brightness, according to the amount of reception in the eye. See https://www.w3.org/TR/AERT/#color-contrast
-    return dot(vec3(0.299, 0.587, 0.114), color);
+    vec3 weights = vec3(0.299, 0.587, 0.114);
+    float brightness = dot(weights, color);
+    
+    // since the brightness is the weighted sum of the vecor components, 
+    // its uncertainty is propagated by summing the sqares of the weighted uncertainties
+    // \sigma_f^2 = a^2\sigma_A^2 + b^2\sigma_B^2 + ...
+    vec3 weighted_var = pow(weights, vec3(2.0)) * var_in;
+    float variance = weighted_var.r + weighted_var.g + weighted_var.b;
+    return vec2(brightness,variance);
 }

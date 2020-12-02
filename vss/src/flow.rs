@@ -1,6 +1,8 @@
 use crate::*;
 use std::cell::RefCell;
 use cgmath::Matrix4;
+use gfx::format::Rgba32F;
+
 
 /// Represents properties of eye-tracking data.
 #[derive(Debug, Clone)]
@@ -44,6 +46,25 @@ impl Flow {
     }
     
     pub fn update_last_slot(&self, window: &Window) {
+        let mut factory = window.factory().borrow_mut();
+        let (width, height, ..) = window.target().get_dimensions();
+
+        let (deflection, deflection_view) = create_texture_render_target::<Rgba32F>(
+            &mut factory,
+            width as u32,
+            height as u32,
+        );
+        let (color_change, color_change_view) = create_texture_render_target::<Rgba32F>(
+            &mut factory,
+            width as u32,
+            height as u32,
+        );
+        let (color_uncertainty, color_uncertainty_view) = create_texture_render_target::<Rgba32F>(
+            &mut factory,
+            width as u32,
+            height as u32,
+        );
+
         let suggested_slot = 
             NodeSlots::new_io(
                 window,
@@ -51,6 +72,12 @@ impl Flow {
                 Slot::Rgb {
                     color: window.target(),
                     color_view: None,
+                    deflection,
+                    deflection_view,
+                    color_change, 
+                    color_change_view, 
+                    color_uncertainty, 
+                    color_uncertainty_view
                 },
             );
         // Negociate and swap.
@@ -63,15 +90,51 @@ impl Flow {
         let mut slot_b = NodeSlots::new(window);
         let nodes_len = self.nodes.borrow().len();
         for (idx, node) in self.nodes.borrow_mut().iter_mut().enumerate() {
+
             let suggested_slot = if idx + 1 == nodes_len {
                 // Suggest window as final output.
+                let mut factory = window.factory().borrow_mut();
+
+                let (width, height, ..) = window.target().get_dimensions();
+
+                let (color, color_view) = create_texture_render_target::<ColorFormat>(
+                    &mut factory,
+                    width as u32,
+                    height as u32,
+                );
+                let (deflection, deflection_view) = create_texture_render_target::<Rgba32F>(
+                    &mut factory,
+                    width as u32,
+                    height as u32,
+                );
+                let (color_change, color_change_view) = create_texture_render_target::<Rgba32F>(
+                    &mut factory,
+                    width as u32,
+                    height as u32,
+                );
+                let (color_uncertainty, color_uncertainty_view) = create_texture_render_target::<Rgba32F>(
+                    &mut factory,
+                    width as u32,
+                    height as u32,
+                );
+
+                drop(factory);
+
+                let output_slot = Slot::Rgb {
+                    color: window.target(),
+                    color_view: None,
+                    deflection,
+                    deflection_view,
+                    color_change, 
+                    color_change_view, 
+                    color_uncertainty, 
+                    color_uncertainty_view
+                };
+
                 NodeSlots::new_io(
                     window,
                     slot_b.take_output(),
-                    Slot::Rgb {
-                        color: window.target(),
-                        color_view: None,
-                    },
+                    output_slot
                 )
             } else {
                 // Suggest reusing output of the pre-predecessor.
@@ -91,11 +154,11 @@ impl Flow {
         }
     }
 
-    pub fn input(&self, head: &Head, gaze: &Gaze) {
+    pub fn input(&self, head: &Head, gaze: &Gaze, vis_param: &VisualizationParameters) {
         let mut gaze = gaze.clone();
         // Propagate to nodes.
         for node in self.nodes.borrow_mut().iter_mut().rev() {
-            gaze = node.input(head, &gaze);
+            gaze = node.input(head, &gaze, vis_param);
         }
     }
 
