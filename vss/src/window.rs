@@ -1,5 +1,6 @@
 use crate::*;
 use std::cell::RefCell;
+use cgmath::Matrix4;
 
 /// A factory to create device objects.
 pub type DeviceFactory = gfx_device_gl::Factory;
