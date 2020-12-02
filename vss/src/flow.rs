@@ -47,40 +47,32 @@ impl Flow {
     
     pub fn update_last_slot(&self, window: &Window) {
         if self.last_slot.borrow().is_some() {
-            let mut factory = window.factory().borrow_mut();
-            let (width, height, ..) = window.target().get_dimensions();
-    
-            let (deflection, deflection_view) = create_texture_render_target::<Rgba32F>(
-                &mut factory,
-                width as u32,
-                height as u32,
-            );
-            let (color_change, color_change_view) = create_texture_render_target::<Rgba32F>(
-                &mut factory,
-                width as u32,
-                height as u32,
-            );
-            let (color_uncertainty, color_uncertainty_view) = create_texture_render_target::<Rgba32F>(
-                &mut factory,
-                width as u32,
-                height as u32,
-            );
-
-            drop(factory);
-
+            let output = self.last_slot.borrow_mut().as_mut().unwrap().take_output();
             let suggested_slot = 
                 NodeSlots::new_io(
                     window,
                     self.last_slot.borrow_mut().as_mut().unwrap().take_input(),
-                    Slot::Rgb {
-                        color: window.target(),
-                        color_view: None,
-                        deflection,
-                        deflection_view,
-                        color_change, 
-                        color_change_view, 
-                        color_uncertainty, 
-                        color_uncertainty_view
+                    match output {
+                        Slot::Rgb{
+                            color: _,
+                            color_view,
+                            deflection,
+                            deflection_view,
+                            color_change,
+                            color_change_view,
+                            color_uncertainty,
+                            color_uncertainty_view
+                        } => Slot::Rgb {
+                            color: window.target(),
+                            color_view,
+                            deflection,
+                            deflection_view,
+                            color_change, 
+                            color_change_view, 
+                            color_uncertainty, 
+                            color_uncertainty_view
+                        },
+                        _ => Slot::Empty,
                     },
                 );
             // Negociate and swap.
