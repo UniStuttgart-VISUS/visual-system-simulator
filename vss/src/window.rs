@@ -1,7 +1,6 @@
-use cgmath::Matrix4;
-
 use crate::*;
 use std::cell::RefCell;
+use cgmath::Matrix4;
 
 /// A factory to create device objects.
 pub type DeviceFactory = gfx_device_gl::Factory;
@@ -33,6 +32,7 @@ pub struct Window {
 
     remote: Option<Remote>,
     flow: Vec<Flow>,
+    vis_param: RefCell<VisualizationParameters>
 }
 
 impl Window {
@@ -90,6 +90,7 @@ impl Window {
             last_gaze: RefCell::new(Gaze { x: 0.5, y: 0.5 }),
             active: RefCell::new(false),
             values: RefCell::new(values),
+            vis_param: RefCell::new(VisualizationParameters::default())
         }
     }
 }
@@ -178,6 +179,154 @@ impl Window {
                     glutin::WindowEvent::KeyboardInput {
                         input:
                             glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::H),
+                                ..
+                            },
+                        ..
+                    } => {
+                        let mut vp = self.vis_param.borrow_mut();
+                        vp.test_depth_max+=100.0;
+                        println!("Depth min,max [{},{}]",
+                            vp.test_depth_min,
+                            vp.test_depth_max
+                        );
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::L),
+                                ..
+                            },
+                        ..
+                    } => {
+                        let mut vp = self.vis_param.borrow_mut();
+                        vp.test_depth_max-=100.0;
+                        println!("Depth min,max [{},{}]",
+                            vp.test_depth_min,
+                            vp.test_depth_max
+                        );
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::J),
+                                ..
+                            },
+                        ..
+                    } => {
+                        let mut vp = self.vis_param.borrow_mut();
+                        vp.test_depth_min+=10.0;
+                        println!("Depth min,max [{},{}]",
+                            vp.test_depth_min,
+                            vp.test_depth_max
+                        );
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::K),
+                                ..
+                            },
+                        ..
+                    } => {
+                        let mut vp = self.vis_param.borrow_mut();
+                        vp.test_depth_min-=10.0;
+                        println!("Depth min,max [{},{}]",
+                            vp.test_depth_min,
+                            vp.test_depth_max
+                        );
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::A),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().dir_calc_scale+=0.5;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::D),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().dir_calc_scale-=0.5;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::W),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().heat_scale+=0.5;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::S),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().heat_scale-=0.5;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                virtual_keycode: Some(glutin::VirtualKeyCode::Key0),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().vis_type=VisualizationType::Output;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                virtual_keycode: Some(glutin::VirtualKeyCode::Key1),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().vis_type=VisualizationType::Deflection;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                virtual_keycode: Some(glutin::VirtualKeyCode::Key2),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().vis_type=VisualizationType::ColorChange;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                virtual_keycode: Some(glutin::VirtualKeyCode::Key3),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().vis_type=VisualizationType::ColorUncertainty;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
                                 virtual_keycode: Some(glutin::VirtualKeyCode::Escape),
                                 ..
                             },
@@ -239,7 +388,7 @@ impl Window {
 
         // Update input.
         for flow_index in 0 .. self.flow.len() {
-            self.flow[flow_index].input(&self.last_head.borrow(), &deferred_gaze, flow_index);
+            self.flow[flow_index].input(&self.last_head.borrow(), &deferred_gaze, &self.vis_param.borrow(), flow_index);
         }
         *self.last_gaze.borrow_mut() = deferred_gaze;
 

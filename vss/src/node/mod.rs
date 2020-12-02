@@ -50,7 +50,7 @@ pub trait Node {
 
     /// Handle input.
     #[allow(unused_variables)]
-    fn input(&mut self, head: &Head, gaze: &Gaze, flow_index: usize) -> Gaze {
+    fn input(&mut self, head: &Head, gaze: &Gaze, vis_param: &VisualizationParameters, flow_index: usize) -> Gaze {
         gaze.clone()
     }
 

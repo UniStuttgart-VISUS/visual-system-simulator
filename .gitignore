@@ -7,3 +7,7 @@ Cargo.lock
 
 # Local files.
 .local/
+
+# IntelliJ stuff
+.idea/
+*.iml

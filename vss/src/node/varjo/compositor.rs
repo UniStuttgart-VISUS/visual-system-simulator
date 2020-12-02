@@ -50,7 +50,7 @@ impl Node for Compositor {
         slots
     }
 
-    fn input(&mut self, _head: &Head, gaze: &Gaze, flow_index: usize) -> Gaze {
+    fn input(&mut self, _head: &Head, gaze: &Gaze, _vis_param: &VisualizationParameters, flow_index: usize) -> Gaze {
         if flow_index < 4 {
             self.pso_data.u_flow_index = flow_index as u32;
         }

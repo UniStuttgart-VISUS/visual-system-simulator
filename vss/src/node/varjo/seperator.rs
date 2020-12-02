@@ -66,7 +66,7 @@ impl Node for Seperator {
         slots
     }
 
-    fn input(&mut self, head: &Head, gaze: &Gaze, flow_index: usize) -> Gaze {
+    fn input(&mut self, head: &Head, gaze: &Gaze, _vis_param: &VisualizationParameters, flow_index: usize) -> Gaze {
         if head.view.len() >= 4 && head.proj.len() >= 4  && flow_index < 4{
             self.pso_data.u_view_context_l = head.view[0].into();
             self.pso_data.u_view_context_r = head.view[1].into();
