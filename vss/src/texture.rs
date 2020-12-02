@@ -124,6 +124,68 @@ pub fn load_texture_from_bytes(
     Ok((tex, view))
 }
 
+///
+/// Load bytes as texture into GPU
+///
+/// # Arguments
+///
+/// - `factory` - factory to generate commands for opengl command buffer
+/// - `data` - raw image data
+/// - `width` - width of the requested texture
+/// - `height` - height of the requested texture
+///
+/// # Return
+///
+/// Created Texture and shader RessourceView
+///
+pub fn load_highp_texture_from_bytes(
+    factory: &mut gfx_device_gl::Factory,
+    data: &[u8],
+    width: u32,
+    height: u32,
+) -> Result<
+    (
+        gfx::handle::Texture<Resources, gfx::format::R32_G32_B32_A32>,
+        gfx::handle::ShaderResourceView<Resources, [f32; 4]>,
+    ),
+    String,
+> {
+    let kind = texture::Kind::D2(
+        width as texture::Size,
+        height as texture::Size,
+        texture::AaMode::Single,
+    );
+
+    // inspired by https://github.com/PistonDevelopers/gfx_texture/blob/master/src/lib.rs#L157-L178
+    use gfx::memory::Typed;
+    use gfx::memory::Usage;
+    use gfx::{format, texture};
+
+    let surface = gfx::format::SurfaceType::R32_G32_B32;
+    let desc = texture::Info {
+        kind,
+        levels: 1 as texture::Level,
+        format: surface,
+        bind: gfx::memory::Bind::all(),
+        usage: Usage::Dynamic,
+    };
+
+    let cty = gfx::format::ChannelType::Float;
+    let raw = factory
+        .create_texture_raw(
+            desc,
+            Some(cty),
+            Some((&[&data], gfx::texture::Mipmap::Allocated)),
+        )
+        .unwrap();
+    let levels = (0, raw.get_info().levels - 1);
+    let tex = Typed::new(raw);
+    let view = factory
+        .view_texture_as_shader_resource::<(gfx::format::R32_G32_B32_A32, gfx::format::Float)>(&tex, levels, format::Swizzle::new())
+        .unwrap();
+    Ok((tex, view))
+}
+
 pub fn update_single_channel_texture(
     encoder: &mut gfx::Encoder<Resources, CommandBuffer>,
     texture: &gfx::handle::Texture<Resources, gfx::format::R8>,

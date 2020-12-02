@@ -22,6 +22,7 @@ pub struct Window {
 
     render_target: RefCell<RenderTargetColor>,
     main_depth: RefCell<RenderTargetDepth>,
+    should_swap_buffers: RefCell<bool>,
 
     last_head: RefCell<Head>,
     last_gaze: RefCell<Gaze>,
@@ -75,9 +76,12 @@ impl Window {
             encoder: RefCell::new(encoder),
             render_target: RefCell::new(render_target),
             main_depth: RefCell::new(main_depth),
+            should_swap_buffers: RefCell::new(true),
             last_head: RefCell::new(Head {
                 yaw: 0.0,
                 pitch: 0.0,
+                view: Vec::new(),
+                proj: Vec::new(),
             }),
             last_gaze: RefCell::new(Gaze { x: 0.5, y: 0.5 }),
             active: RefCell::new(false),
@@ -100,6 +104,10 @@ impl Window {
         self.flow.nodes_len()
     }
 
+    pub fn update_last_node(&mut self) {
+        self.flow.update_last_slot(&self);
+    }
+
     pub fn update_nodes(&mut self) {
         self.flow.negociate_slots(&self);
         self.flow.update_values(&self, &self.values.borrow());
@@ -108,6 +116,15 @@ impl Window {
     pub fn set_values(&self, values: ValueMap) {
         self.values.replace(values);
         self.flow.update_values(&self, &self.values.borrow());
+    }
+    
+    pub fn set_head(&self, view: Vec<Matrix4<f32>>, proj: Vec<Matrix4<f32>>) {
+        self.last_head.replace(Head {
+            yaw: 0.0,
+            pitch: 0.0,
+            view,
+            proj,
+        });
     }
 
     pub fn factory(&self) -> &RefCell<DeviceFactory> {
@@ -139,9 +156,10 @@ impl Window {
         self.render_target.borrow().clone()
     }
 
-    pub fn replace_targets(&self, target_color: RenderTargetColor, target_depth: RenderTargetDepth) {
+    pub fn replace_targets(&self, target_color: RenderTargetColor, target_depth: RenderTargetDepth, should_swap_buffers: bool) {
         self.render_target.replace(target_color);
         self.main_depth.replace(target_depth);
+        self.should_swap_buffers.replace(should_swap_buffers);
     }
 
     pub fn poll_events(&self) -> bool {
@@ -377,7 +395,9 @@ impl Window {
         self.flush(&mut self.encoder().borrow_mut());
         self.device.borrow_mut().cleanup();
 
-        self.windowed_context.swap_buffers().unwrap();
+        if *self.should_swap_buffers.borrow(){
+            self.windowed_context.swap_buffers().unwrap();
+        }
 
         if let Some(remote) = &self.remote {
             remote.send_frame();
