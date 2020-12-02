@@ -42,12 +42,12 @@ void applyBlurAndBloom(inout vec4 color, in vec4 retina, inout ErrorValues ev) {
         float blur_scale = (0.75 - (retina.r + retina.g + retina.b) / 3.0) * 5.0;
         //original calculation: 
         //      color = blur(v_tex, s_color, blur_scale, u_resolution);
-        color =  blur_sd(v_tex, s_color, blur_scale, u_resolution, ev.color_var, s_color_uncertainty);        
+        color =  blur(v_tex, s_color, blur_scale, u_resolution, ev.color_var, s_color_uncertainty);        
 
         // apply bloom
         //original calculation: 
         //      color = color * (1.0 + getPerceivedBrightness(color.rgb) * (0.75 - max_rgb) * 0.5);
-        vec2 brightness = getPerceivedBrightness_sd(color.rgb, ev.color_var);
+        vec2 brightness = getPerceivedBrightness(color.rgb, ev.color_var);
         float bloom_factor = 1. + brightness.x * (0.75 - max_rgb) * 0.5;
         // f = 1+ x*(0.75-y) *0.5
         // df/dx = -0.5(y-0.75)
@@ -130,7 +130,7 @@ void applyColorBlindness(inout vec4 color, in vec4 retina, inout ErrorValues ev)
 
 void applyNyctalopia(inout vec4 color, in vec4 retina, inout ErrorValues ev) {
 
-    vec2 brightness = getPerceivedBrightness_sd(color.rgb, ev.color_var);
+    vec2 brightness = getPerceivedBrightness(color.rgb, ev.color_var);
 
     //float night_blindness_factor = getPerceivedBrightness(color.rgb) * 5.0;
     float night_blindness_factor = brightness.x * 5;

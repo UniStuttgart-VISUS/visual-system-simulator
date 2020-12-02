@@ -19,26 +19,7 @@ out vec4 rt_color_change;
 out vec4 rt_color_uncertainty;
 
 
-float computeBloomFactor(in vec4 color, float blur) {
-    float fact = 1. + getPerceivedBrightness(color.rgb) * blur;
-    return fact;
-}
-
-// lowers the contrast of a color by the given percentage (value)
-// This impl. moves the lower two color values closer to the value of the higher one
-void lowerContrastBy(inout vec4 color, float value) {
-    if (color.r > color.g && color.r > color.b) {
-        color.g += (color.r - color.g) * value;
-        color.b += (color.r - color.b) * value;
-    } else if (color.g > color.r && color.g > color.b) {
-        color.r += (color.g - color.r) * value;
-        color.b += (color.g - color.b) * value;
-    } else {
-        color.r += (color.b - color.r) * value;
-        color.g += (color.b - color.g) * value;
-    }
-}
-void lowerContrastBy_sd(inout vec4 color, inout vec3 color_var, float value) {
+void lowerContrastBy(inout vec4 color, inout vec3 color_var, float value) {
     if (color.r > color.g && color.r > color.b) {
         color.g += (color.r - color.g) * value;
         color.b += (color.r - color.b) * value;
@@ -64,7 +45,7 @@ void main() {
         // inout parameter for bloom 
         vec3 color_var = vec3(0.0);
         // the 3.0 is used to strengthen the blur compared to the bloom effect
-        vec4 color =  blur_sd(v_tex, s_color, u_blur_factor * 3.0, u_resolution, color_var, s_color_uncertainty);        
+        vec4 color =  blur(v_tex, s_color, u_blur_factor * 3.0, u_resolution, color_var, s_color_uncertainty);        
         
         // this factor is used in the blur function to control the size of the blur
         // although it is not used in the normpdf function, stretching the position vecor for sampling is comparable to stretching the gaussian
@@ -74,7 +55,7 @@ void main() {
 
 
         // the /3. is used to weaken the bloom compared to the blur effect
-        vec2 brightness = getPerceivedBrightness_sd(color.rgb, color_var);
+        vec2 brightness = getPerceivedBrightness(color.rgb, color_var);
         
         float bloom_factor = 1. + brightness.x *  u_blur_factor / 3.;
         // f = a*x
@@ -91,7 +72,7 @@ void main() {
 // TODO covariance  ?
         color_var =  color_var*(bloom_factor*bloom_factor)  + vec3(bloom_factor_variance)*(color.rgb*color.rgb);
 
-        lowerContrastBy_sd(rt_color,color_var, u_contrast_factor);
+        lowerContrastBy(rt_color,color_var, u_contrast_factor);
 
         vec3 color_diff = rt_color.rgb - original_color;        
 
