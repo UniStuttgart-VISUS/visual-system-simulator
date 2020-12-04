@@ -4,25 +4,31 @@ use gfx;
 gfx_defines! {
     pipeline pipe {
         u_resolution_out: gfx::Global<[f32; 2]> = "u_resolution_out",
-        u_flow_index: gfx::Global<u32> = "u_flow_index",
+        u_viewport: gfx::Global<[f32; 4]> = "u_viewport",
         s_source: gfx::TextureSampler<[f32; 4]> = "s_color",
         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
     }
 }
 
-pub struct Compositor {
+pub struct VRCompositor {
     pso: gfx::PipelineState<Resources, pipe::Meta>,
     pso_data: pipe::Data<Resources>,
 }
 
-impl Node for Compositor {
+impl VRCompositor{
+    pub fn set_viewport(&mut self, x: f32, y: f32, width: f32, height: f32){
+        self.pso_data.u_viewport = [x, y, width, height];
+    }
+}
+
+impl Node for VRCompositor {
     fn new(window: &Window) -> Self {
         let mut factory = window.factory().borrow_mut();
 
         let pso = factory
             .create_pipeline_simple(
-                &include_glsl!("compositor.vert"),
-                &include_glsl!("compositor.frag"),
+                &include_glsl!("mod.vert"),
+                &include_glsl!("mod.frag"),
                 pipe::new(),
             )
             .unwrap();
@@ -30,11 +36,11 @@ impl Node for Compositor {
         let sampler = factory.create_sampler_linear();
         let (_, src, dst) = factory.create_render_target(1, 1).unwrap();
 
-        Compositor {
+        VRCompositor {
             pso,
             pso_data: pipe::Data {
                 u_resolution_out: [1.0, 1.0],
-                u_flow_index: 0,
+                u_viewport: [0.0, 0.0, 1.0, 1.0],
                 s_source: (src, sampler),
                 rt_color: dst,
             },
@@ -48,13 +54,6 @@ impl Node for Compositor {
         self.pso_data.s_source = slots.as_color_view();
         self.pso_data.rt_color = slots.as_color();
         slots
-    }
-
-    fn input(&mut self, _head: &Head, gaze: &Gaze, _vis_param: &VisualizationParameters, flow_index: usize) -> Gaze {
-        if flow_index < 4 {
-            self.pso_data.u_flow_index = flow_index as u32;
-        }
-        gaze.clone()
     }
 
     fn render(&mut self, window: &Window) {

@@ -1,6 +1,6 @@
 use crate::*;
 use std::cell::RefCell;
-use cgmath::Matrix4;
+use cgmath::{Matrix4, Vector3};
 
 /// A factory to create device objects.
 pub type DeviceFactory = gfx_device_gl::Factory;
@@ -84,6 +84,7 @@ impl Window {
             last_head: RefCell::new(Head {
                 yaw: 0.0,
                 pitch: 0.0,
+                position: Vector3::new(0.0, 0.0, 0.0),
                 view: Vec::new(),
                 proj: Vec::new(),
             }),
@@ -122,10 +123,11 @@ impl Window {
         self.flow.iter().for_each(|f| f.update_values(&self, &self.values.borrow()));
     }
     
-    pub fn set_head(&self, view: Vec<Matrix4<f32>>, proj: Vec<Matrix4<f32>>) {
+    pub fn set_head(&self, position: Vector3<f32>, view: Vec<Matrix4<f32>>, proj: Vec<Matrix4<f32>>) {
         self.last_head.replace(Head {
             yaw: 0.0,
             pitch: 0.0,
+            position,
             view,
             proj,
         });

@@ -1,6 +1,7 @@
 use crate::*;
 use std::cell::RefCell;
 use cgmath::Matrix4;
+use cgmath::Vector3;
 use gfx::format::Rgba32F;
 
 
@@ -15,6 +16,7 @@ pub struct Gaze {
 pub struct Head {
     pub yaw: f32,
     pub pitch: f32,
+    pub position: Vector3<f32>,
     pub view: Vec<Matrix4<f32>>,
     pub proj: Vec<Matrix4<f32>>,
 }

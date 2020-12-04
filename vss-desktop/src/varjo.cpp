@@ -124,7 +124,7 @@ public:
 
             varjo_Error err = varjo_GetError(m_session);
             if (err != varjo_NoError) {
-                printf("Failed to initialize Gaze: %s", varjo_GetErrorDesc(err));
+                printf("Failed to initialize Gaze: %s\n", varjo_GetErrorDesc(err));
             }else{
                 m_gazeAvailable = true;
             }
@@ -239,12 +239,13 @@ API_EXPORT void varjo_drop(Varjo **varjo)
     *varjo = nullptr;
 }
 
-API_EXPORT const char *varjo_render_targets(Varjo *varjo, VarjoRenderTarget **render_targets, uint32_t *render_target_size)
+API_EXPORT const char *varjo_render_targets(Varjo *varjo, VarjoRenderTarget **render_targets, varjo_Viewport **viewports, uint32_t *render_target_size)
 {
     assert(varjo != nullptr && "Varjo instance expected");
     try
     {
         *render_targets = varjo->m_renderTargets.data();
+        *viewports = varjo->m_viewports.data();
         *render_target_size = static_cast<uint32_t>(varjo->m_renderTargets.size());
         return nullptr;
     }
