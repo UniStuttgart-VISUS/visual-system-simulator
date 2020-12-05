@@ -18,11 +18,20 @@ struct VarjoRenderTarget {
 
 #[repr(C)]
 #[derive(Clone)]
+pub struct varjo_Viewport {
+    pub  x: u32,
+    pub  y: u32,
+    pub  width: u32,
+    pub  height: u32,
+}
+
+#[repr(C)]
+#[derive(Clone)]
 #[derive(Debug)]
 pub struct VarjoGazeData {
-    pub leftEye: [f32; 3],
-    pub rightEye: [f32; 3],
-    pub focusDistance: f32,
+    pub left_eye: [f32; 3],
+    pub right_eye: [f32; 3],
+    pub focus_distance: f32,
 }
 
 extern "C" {
@@ -30,6 +39,7 @@ extern "C" {
     fn varjo_render_targets(
         varjo: VarjoPtr,
         render_targets: *mut *mut VarjoRenderTarget,
+        viewports: *mut *mut varjo_Viewport,
         render_targets_size: *mut u32,
     ) -> *const c_char;
     fn varjo_begin_frame_sync(varjo: VarjoPtr, is_available: *mut bool) -> *const c_char;
@@ -87,19 +97,23 @@ impl Varjo {
         Self { varjo, render_targets_color: Vec::new(), render_targets_depth: Vec::new(), logging_enabled: true}
     }
 
-    pub fn create_render_targets(&mut self, window: &Window){
+    pub fn create_render_targets(&mut self, window: &Window) -> Vec<varjo_Viewport>{
         let mut render_targets = std::ptr::null_mut::<VarjoRenderTarget>();
+        let mut viewports = std::ptr::null_mut::<varjo_Viewport>();
         let mut render_targets_size = 0u32;
         try_fail(unsafe {
             varjo_render_targets(
                 self.varjo,
                 &mut render_targets as *mut *mut _,
+                &mut viewports as *mut *mut _,
                 &mut render_targets_size as *mut _,
             )
         })
         .unwrap();
         let render_targets =
             unsafe { std::slice::from_raw_parts(render_targets, render_targets_size as usize) };
+        let viewports =
+            unsafe { std::slice::from_raw_parts(viewports, render_targets_size as usize) };
 
         //let mut textures = Vec::new();
         //let mut depth_textures = Vec::new();
@@ -118,6 +132,7 @@ impl Varjo {
             self.render_targets_color.push(factory.view_texture_as_render_target(&color_texture, 0, None).unwrap());
             self.render_targets_depth.push(factory.view_texture_as_depth_stencil(&depth_texture, 0, None, gfx::texture::DepthStencilFlags::empty()).unwrap());
         }
+        viewports.to_vec()
     }
 
     pub fn get_current_render_target(&self) -> (RenderTargetColor, RenderTargetDepth){
@@ -195,9 +210,9 @@ impl Varjo {
     
     pub fn get_current_gaze(&self) -> VarjoGazeData{
         let mut varjo_gaze_data = VarjoGazeData{
-            leftEye: [0.0; 3],
-            rightEye: [0.0; 3],
-            focusDistance: 0.0,
+            left_eye: [0.0; 3],
+            right_eye: [0.0; 3],
+            focus_distance: 0.0,
         };
         let mut is_valid = false;
         try_fail(unsafe {

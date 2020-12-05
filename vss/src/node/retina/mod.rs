@@ -106,7 +106,7 @@ impl Node for Retina {
         };
     }
 
-    fn input(&mut self, _head: &Head, gaze: &Gaze, _vis_param: &VisualizationParameters) -> Gaze {
+    fn input(&mut self, _head: &Head, gaze: &Gaze, _vis_param: &VisualizationParameters, _flow_index: usize) -> Gaze {
         self.pso_data.u_gaze = [
             gaze.x * self.pso_data.u_resolution[0],
             gaze.y * self.pso_data.u_resolution[1],
