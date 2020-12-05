@@ -13,6 +13,8 @@ gfx_defines! {
         s_deflection: gfx::TextureSampler<[f32; 4]> = "s_deflection",
         s_color_change: gfx::TextureSampler<[f32; 4]> = "s_color_change",
         s_color_uncertainty: gfx::TextureSampler<[f32; 4]> = "s_color_uncertainty",
+        s_original: gfx::TextureSampler<[f32; 4]> = "s_original",
+
     }
 }
 
@@ -52,6 +54,11 @@ impl Node for Display {
             _,
             gfx::handle::RenderTargetView<gfx_device_gl::Resources, [f32; 4]>,
         ) = factory.create_render_target(1, 1).unwrap();
+        let (_, s_original, _): (
+            _,
+            _,
+            gfx::handle::RenderTargetView<gfx_device_gl::Resources, [f32; 4]>,
+        ) = factory.create_render_target(1, 1).unwrap();
 
         Display {
             pso,
@@ -63,6 +70,7 @@ impl Node for Display {
                 s_deflection: (s_deflection, sampler.clone()),
                 s_color_change:(s_color_change, sampler.clone()),
                 s_color_uncertainty:(s_color_uncertainty, sampler.clone()),
+                s_original:(s_original, sampler.clone()),
                 rt_color: dst,
                 u_vis_type: 0,
                 u_heat_scale: 1.0,
@@ -80,8 +88,16 @@ impl Node for Display {
         self.pso_data.s_color_uncertainty = slots.as_color_uncertainty_view();
         self.pso_data.rt_color = slots.as_color();
 
+
         slots
     }
+
+    fn negociate_slots_wk(&mut self, window: &Window, slots: NodeSlots, well_known: &WellKnownSlots) -> NodeSlots{
+        println!("negociate dispplay");
+        self.pso_data.s_original = well_known.get_original().expect("Nah, no original image?");
+        self.negociate_slots(window, slots)
+    }
+
 
     fn update_values(&mut self, _window: &Window, values: &ValueMap) {
         self.pso_data.u_stereo = if values

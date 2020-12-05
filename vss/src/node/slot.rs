@@ -1,6 +1,8 @@
 use super::*;
 use gfx;
 use gfx::format::Rgba32F;
+use std::cell::RefCell;
+
 
 pub type ColorFormat = (gfx::format::R8_G8_B8_A8, gfx::format::Unorm);
 pub type DepthFormat = (gfx::format::R32, gfx::format::Float);
@@ -561,5 +563,40 @@ impl NodeSlots {
         };
 
         [dimensions.0 as f32, dimensions.1 as f32]
+    }
+
+    
+}
+
+pub struct WellKnownSlots{
+    original_image: RefCell<Option<(gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>, gfx::handle::Sampler<gfx_device_gl::Resources>)>>
+
+} 
+
+impl WellKnownSlots{
+    pub fn new() -> Self{
+        WellKnownSlots{
+            original_image: RefCell::new(None)
+        }
+    }
+
+    pub fn get_original(
+        &self,
+    ) -> Option<(gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>, gfx::handle::Sampler<gfx_device_gl::Resources>)>
+     {
+        let guard =  RefCell::borrow(&self.original_image);
+        match *guard{
+            Some(ref original_image) => {
+                Some(original_image.clone())
+            },
+            None => None
+        }
+    }
+    pub fn set_original(
+        &self,
+        view: (gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>, gfx::handle::Sampler<gfx_device_gl::Resources>)
+    ) {       
+        let mut guard = RefCell::borrow_mut(&self.original_image);
+        *guard =  Some(view.clone());
     }
 }

@@ -23,6 +23,7 @@ pub struct Head {
 pub struct Flow {
     nodes: RefCell<Vec<Box<dyn Node>>>,
     last_slot: RefCell<Option<NodeSlots>>,
+    well_known: WellKnownSlots
 }
 
 impl Flow {
@@ -30,6 +31,7 @@ impl Flow {
         Flow {
             nodes: RefCell::new(Vec::new()),
             last_slot: RefCell::new(None),
+            well_known: WellKnownSlots::new()
         }
     }
 
@@ -81,7 +83,7 @@ impl Flow {
                 },
             );
         // Negociate and swap.
-        let new_last_slot = self.nodes.borrow_mut().last_mut().unwrap().negociate_slots(window, suggested_slot);
+        let new_last_slot = self.nodes.borrow_mut().last_mut().unwrap().negociate_slots_wk(window, suggested_slot, &self.well_known);
         self.last_slot.replace(Some(new_last_slot));
     }
 
@@ -141,7 +143,7 @@ impl Flow {
                 NodeSlots::new_io(window, slot_b.take_output(), slot_a.take_output())
             };
             // Negociate and swap.
-            slot_a = node.negociate_slots(window, suggested_slot);
+            slot_a = node.negociate_slots_wk(window, suggested_slot, &self.well_known);
             std::mem::swap(&mut slot_a, &mut slot_b);
         }
         self.last_slot.replace(Some(slot_b));

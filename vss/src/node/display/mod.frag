@@ -2,6 +2,7 @@ uniform sampler2D s_color;
 uniform sampler2D s_deflection;
 uniform sampler2D s_color_change;
 uniform sampler2D s_color_uncertainty;
+uniform sampler2D s_original;
 
 uniform int u_vis_type;
 uniform float u_heat_scale;
@@ -49,6 +50,9 @@ void main() {
             vec3 foo =  texture(s_color_uncertainty, v_tex).rgb;
             float combined_variance = foo.r + foo.g +foo.b;
             color = TurboColormap(sqrt(combined_variance) * u_heat_scale);
+            break;
+        case 4:
+            color =  texture(s_original, v_tex).rgb;
             break;
     }
     

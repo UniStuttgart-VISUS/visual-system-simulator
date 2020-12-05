@@ -56,6 +56,7 @@ vec4 blur(in vec2 fragCoord, in sampler2D tex, float blur_scale, vec2 resolution
     var_new = var_new/81;
 
     // variances can be added
+    //var = var_new;
     var = var_in + var_new;
 
     return vec4(avg,1.0);
