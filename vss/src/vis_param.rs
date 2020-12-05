@@ -3,7 +3,8 @@ pub enum VisualizationType{
   Output,
   Deflection,
   ColorChange,
-  ColorUncertainty
+  ColorUncertainty,
+  Original
 }
 impl Default for VisualizationType{
   fn default() -> Self{
