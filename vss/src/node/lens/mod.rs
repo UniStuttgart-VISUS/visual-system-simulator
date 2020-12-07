@@ -5,7 +5,6 @@ pub use generator::*;
 use super::*;
 use gfx;
 use std::f32;
-use std::io::Cursor;
 use gfx::format::Rgba32F;
 
 
@@ -189,7 +188,7 @@ impl Node for Lens {
         encoder.draw(&gfx::Slice::from_vertex_count(6), &self.pso, &self.pso_data);
     }
 
-    fn input(&mut self, _head: &Head, gaze: &Gaze, vis_param: &VisualizationParameters) -> Gaze {
+    fn input(&mut self, _head: &Head, gaze: &Gaze, vis_param: &VisualizationParameters, _flow_index: usize) -> Gaze {
         self.pso_data.u_dir_calc_scale = vis_param.dir_calc_scale;
         self.pso_data.u_depth_max = vis_param.test_depth_max;
         self.pso_data.u_depth_min = vis_param.test_depth_min;

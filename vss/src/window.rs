@@ -1,6 +1,6 @@
 use crate::*;
 use std::cell::RefCell;
-use cgmath::Matrix4;
+use cgmath::{Matrix4, Vector3};
 
 /// A factory to create device objects.
 pub type DeviceFactory = gfx_device_gl::Factory;
@@ -31,12 +31,12 @@ pub struct Window {
     values: RefCell<ValueMap>,
 
     remote: Option<Remote>,
-    flow: Flow,
+    flow: Vec<Flow>,
     vis_param: RefCell<VisualizationParameters>
 }
 
 impl Window {
-    pub fn new(visible: bool, remote: Option<Remote>, values: ValueMap) -> Self {
+    pub fn new(visible: bool, remote: Option<Remote>, values: ValueMap, flow_count: usize) -> Self {
         // Create a window and context.
         let gl_version = glutin::GlRequest::GlThenGles {
             opengles_version: (3, 2),
@@ -67,8 +67,11 @@ impl Window {
             device.with_gl(|gl| gl.Disable(gfx_gl::FRAMEBUFFER_SRGB));
         }
 
+        let mut flow = Vec::new();
+        flow.resize_with(flow_count, Flow::new);
+
         Window {
-            flow: Flow::new(),
+            flow,
             remote,
             windowed_context,
             events_loop: RefCell::new(events_loop),
@@ -81,6 +84,7 @@ impl Window {
             last_head: RefCell::new(Head {
                 yaw: 0.0,
                 pitch: 0.0,
+                position: Vector3::new(0.0, 0.0, 0.0),
                 view: Vec::new(),
                 proj: Vec::new(),
             }),
@@ -93,36 +97,37 @@ impl Window {
 }
 
 impl Window {
-    pub fn add_node(&mut self, node: Box<dyn Node>) {
-        self.flow.add_node(node);
+    pub fn add_node(&mut self, node: Box<dyn Node>, flow_index: usize) {
+        self.flow[flow_index].add_node(node);
     }
 
-    pub fn replace_node(&mut self, index: usize, node: Box<dyn Node>) {
-        self.flow.replace_node(index, node);
+    pub fn replace_node(&mut self, index: usize, node: Box<dyn Node>, flow_index: usize) {
+        self.flow[flow_index].replace_node(index, node);
     }
 
-    pub fn nodes_len(&self) -> usize {
-        self.flow.nodes_len()
+    pub fn nodes_len(&self) -> usize {//TODO: return vector of lengths
+        self.flow[0].nodes_len()
     }
 
     pub fn update_last_node(&mut self) {
-        self.flow.update_last_slot(&self);
+        self.flow.iter().for_each(|f| f.update_last_slot(&self));
     }
 
     pub fn update_nodes(&mut self) {
-        self.flow.negociate_slots(&self);
-        self.flow.update_values(&self, &self.values.borrow());
+        self.flow.iter().for_each(|f| f.negociate_slots(&self));
+        self.flow.iter().for_each(|f| f.update_values(&self, &self.values.borrow()));
     }
 
     pub fn set_values(&self, values: ValueMap) {
         self.values.replace(values);
-        self.flow.update_values(&self, &self.values.borrow());
+        self.flow.iter().for_each(|f| f.update_values(&self, &self.values.borrow()));
     }
     
-    pub fn set_head(&self, view: Vec<Matrix4<f32>>, proj: Vec<Matrix4<f32>>) {
+    pub fn set_head(&self, position: Vector3<f32>, view: Vec<Matrix4<f32>>, proj: Vec<Matrix4<f32>>) {
         self.last_head.replace(Head {
             yaw: 0.0,
             pitch: 0.0,
+            position,
             view,
             proj,
         });
@@ -409,18 +414,20 @@ impl Window {
                 &mut self.render_target.borrow_mut(),
                 &mut self.main_depth.borrow_mut(),
             );
-            self.flow.negociate_slots(&self);
-            self.flow.update_values(&self, &self.values.borrow());
+            self.flow.iter().for_each(|f| f.negociate_slots(&self));
+            self.flow.iter().for_each(|f| f.update_values(&self, &self.values.borrow()));
         }
 
         // Update input.
-        self.flow.input(&self.last_head.borrow(), &deferred_gaze, &self.vis_param.borrow());
+        for flow_index in 0 .. self.flow.len() {
+            self.flow[flow_index].input(&self.last_head.borrow(), &deferred_gaze, &self.vis_param.borrow(), flow_index);
+        }
         *self.last_gaze.borrow_mut() = deferred_gaze;
 
         self.encoder
             .borrow_mut()
             .clear(&self.render_target.borrow(), [68.0 / 255.0; 4]);
-        self.flow.render(&self);
+        self.flow.iter().for_each(|f| f.render(&self));
 
         use gfx::Device;
         self.flush(&mut self.encoder().borrow_mut());

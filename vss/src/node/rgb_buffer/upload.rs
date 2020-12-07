@@ -9,6 +9,7 @@ gfx_defines! {
         u_flags: gfx::Global<u32> = "u_flags",
         u_head: gfx::Global<[[f32; 4];4]> = "u_head",
         u_fov: gfx::Global<[f32; 2]> = "u_fov",
+        u_proj_view: gfx::Global<[[f32; 4];4]> = "u_proj_view",
         s_rgb: gfx::TextureSampler<[f32; 4]> = "s_rgb",
         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
         rt_depth: gfx::RenderTarget<DepthFormat> = "rt_depth",
@@ -23,6 +24,7 @@ bitflags! {
         const EQUIRECTANGULAR = 1;
         const VERTICALLY_FLIPPED = 2;
         const RGBD_HORIZONTAL = 4;
+        const VR_PROJECTION = 8;
     }
 }
 
@@ -54,6 +56,7 @@ pub struct UploadRgbBuffer {
     buffer_next: RgbBuffer,
     buffer_upload: bool,
     texture: Option<gfx::handle::Texture<Resources, gfx::format::R8_G8_B8_A8>>,
+    render_resolution: Option<[u32; 2]>,
 
     pso: gfx::PipelineState<Resources, pipe::Meta>,
     pso_data: pipe::Data<Resources>,
@@ -107,6 +110,14 @@ impl UploadRgbBuffer {
         self.buffer_upload = true;
     }
 
+    pub fn set_render_resolution(&mut self, render_resolution: Option<[u32; 2]>) {
+        self.render_resolution = render_resolution;
+    }
+
+    pub fn use_vr_projection(&mut self) {
+        self.pso_data.u_flags |= RgbInputFlags::VR_PROJECTION.bits;
+    }
+
     pub fn set_flags(&mut self, flags: RgbInputFlags) {
         self.pso_data.u_flags = flags.bits();
     }
@@ -137,12 +148,14 @@ impl Node for UploadRgbBuffer {
             buffer_next: RgbBuffer::default(),
             buffer_upload: false,
             texture: None,
+            render_resolution: None,
 
             pso,
             pso_data: pipe::Data {
                 u_flags: RgbInputFlags::empty().bits(),
                 u_head: [[0.0; 4]; 4],
                 u_fov: [90.0_f32.to_radians(), 59.0_f32.to_radians()],
+                u_proj_view: [[0.0; 4]; 4],
                 s_rgb: (rgb_view, sampler),
                 rt_color,
                 rt_depth,
@@ -171,15 +184,20 @@ impl Node for UploadRgbBuffer {
 
         let mut width = 1;
         let mut height = 1;
-        if let Some(texture) = &self.texture {
-            let info = texture.get_info().to_image_info(0);
-            width = info.width as u32;
-            height = info.height as u32;
-        }
-
-        let flags = RgbInputFlags::from_bits(self.pso_data.u_flags).unwrap();
-        if flags.contains(RgbInputFlags::RGBD_HORIZONTAL) {
-            height /= 2;
+        if let Some(resolution) = &self.render_resolution {
+            width = resolution[0];
+            height = resolution[1];
+        }else{
+            if let Some(texture) = &self.texture {
+                let info = texture.get_info().to_image_info(0);
+                width = info.width as u32;
+                height = info.height as u32;
+            }
+    
+            let flags = RgbInputFlags::from_bits(self.pso_data.u_flags).unwrap();
+            if flags.contains(RgbInputFlags::RGBD_HORIZONTAL) {
+                height /= 2;
+            }
         }
 
         // Compute vertical FOV from aspect ratio.
@@ -197,11 +215,12 @@ impl Node for UploadRgbBuffer {
         slots
     }
 
-    fn input(&mut self, head: &Head, gaze: &Gaze, _vis_param: &VisualizationParameters) -> Gaze {
+    fn input(&mut self, head: &Head, gaze: &Gaze, _vis_param: &VisualizationParameters, flow_index: usize) -> Gaze {
         use cgmath::Matrix4;
         self.pso_data.u_head = (Matrix4::from_angle_y(cgmath::Rad(head.yaw))
             * Matrix4::from_angle_x(cgmath::Rad(head.pitch)))
         .into();
+        self.pso_data.u_proj_view = (head.proj[flow_index] * (Matrix4::from_translation(-head.position) * head.view[flow_index])).into();
         gaze.clone()
     }
 
