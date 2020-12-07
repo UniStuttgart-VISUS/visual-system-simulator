@@ -10,6 +10,7 @@ mod texture;
 mod utils;
 mod value;
 mod window;
+mod vis_param;
 
 pub use self::flow::*;
 pub use self::node::*;
@@ -19,3 +20,4 @@ pub use self::utils::*;
 pub use self::value::*;
 pub use self::window::*;
 pub use self::window::*;
+pub use self::vis_param::*;

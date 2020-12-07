@@ -1,5 +1,6 @@
 use crate::*;
 use std::cell::RefCell;
+use cgmath::{Matrix4, Vector3};
 
 /// A factory to create device objects.
 pub type DeviceFactory = gfx_device_gl::Factory;
@@ -22,6 +23,7 @@ pub struct Window {
 
     render_target: RefCell<RenderTargetColor>,
     main_depth: RefCell<RenderTargetDepth>,
+    should_swap_buffers: RefCell<bool>,
 
     last_head: RefCell<Head>,
     last_gaze: RefCell<Gaze>,
@@ -29,11 +31,12 @@ pub struct Window {
     values: RefCell<ValueMap>,
 
     remote: Option<Remote>,
-    flow: Flow,
+    flow: Vec<Flow>,
+    vis_param: RefCell<VisualizationParameters>
 }
 
 impl Window {
-    pub fn new(visible: bool, remote: Option<Remote>, values: ValueMap) -> Self {
+    pub fn new(visible: bool, remote: Option<Remote>, values: ValueMap, flow_count: usize) -> Self {
         // Create a window and context.
         let gl_version = glutin::GlRequest::GlThenGles {
             opengles_version: (3, 2),
@@ -64,8 +67,11 @@ impl Window {
             device.with_gl(|gl| gl.Disable(gfx_gl::FRAMEBUFFER_SRGB));
         }
 
+        let mut flow = Vec::new();
+        flow.resize_with(flow_count, Flow::new);
+
         Window {
-            flow: Flow::new(),
+            flow,
             remote,
             windowed_context,
             events_loop: RefCell::new(events_loop),
@@ -74,38 +80,57 @@ impl Window {
             encoder: RefCell::new(encoder),
             render_target: RefCell::new(render_target),
             main_depth: RefCell::new(main_depth),
+            should_swap_buffers: RefCell::new(true),
             last_head: RefCell::new(Head {
                 yaw: 0.0,
                 pitch: 0.0,
+                position: Vector3::new(0.0, 0.0, 0.0),
+                view: Vec::new(),
+                proj: Vec::new(),
             }),
             last_gaze: RefCell::new(Gaze { x: 0.5, y: 0.5 }),
             active: RefCell::new(false),
             values: RefCell::new(values),
+            vis_param: RefCell::new(VisualizationParameters::default())
         }
     }
 }
 
 impl Window {
-    pub fn add_node(&mut self, node: Box<dyn Node>) {
-        self.flow.add_node(node);
+    pub fn add_node(&mut self, node: Box<dyn Node>, flow_index: usize) {
+        self.flow[flow_index].add_node(node);
     }
 
-    pub fn replace_node(&mut self, index: usize, node: Box<dyn Node>) {
-        self.flow.replace_node(index, node);
+    pub fn replace_node(&mut self, index: usize, node: Box<dyn Node>, flow_index: usize) {
+        self.flow[flow_index].replace_node(index, node);
     }
 
-    pub fn nodes_len(&self) -> usize {
-        self.flow.nodes_len()
+    pub fn nodes_len(&self) -> usize {//TODO: return vector of lengths
+        self.flow[0].nodes_len()
+    }
+
+    pub fn update_last_node(&mut self) {
+        self.flow.iter().for_each(|f| f.update_last_slot(&self));
     }
 
     pub fn update_nodes(&mut self) {
-        self.flow.negociate_slots(&self);
-        self.flow.update_values(&self, &self.values.borrow());
+        self.flow.iter().for_each(|f| f.negociate_slots(&self));
+        self.flow.iter().for_each(|f| f.update_values(&self, &self.values.borrow()));
     }
 
     pub fn set_values(&self, values: ValueMap) {
         self.values.replace(values);
-        self.flow.update_values(&self, &self.values.borrow());
+        self.flow.iter().for_each(|f| f.update_values(&self, &self.values.borrow()));
+    }
+    
+    pub fn set_head(&self, position: Vector3<f32>, view: Vec<Matrix4<f32>>, proj: Vec<Matrix4<f32>>) {
+        self.last_head.replace(Head {
+            yaw: 0.0,
+            pitch: 0.0,
+            position,
+            view,
+            proj,
+        });
     }
 
     pub fn factory(&self) -> &RefCell<DeviceFactory> {
@@ -137,9 +162,10 @@ impl Window {
         self.render_target.borrow().clone()
     }
 
-    pub fn replace_targets(&self, target_color: RenderTargetColor, target_depth: RenderTargetDepth) {
+    pub fn replace_targets(&self, target_color: RenderTargetColor, target_depth: RenderTargetDepth, should_swap_buffers: bool) {
         self.render_target.replace(target_color);
         self.main_depth.replace(target_depth);
+        self.should_swap_buffers.replace(should_swap_buffers);
     }
 
     pub fn poll_events(&self) -> bool {
@@ -152,6 +178,184 @@ impl Window {
         self.events_loop.borrow_mut().poll_events(|event| {
             if let glutin::Event::WindowEvent { event, .. } = event {
                 match event {
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::H),
+                                ..
+                            },
+                        ..
+                    } => {
+                        let mut vp = self.vis_param.borrow_mut();
+                        vp.test_depth_max+=100.0;
+                        println!("Depth min,max [{},{}]",
+                            vp.test_depth_min,
+                            vp.test_depth_max
+                        );
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::L),
+                                ..
+                            },
+                        ..
+                    } => {
+                        let mut vp = self.vis_param.borrow_mut();
+                        vp.test_depth_max-=100.0;
+                        println!("Depth min,max [{},{}]",
+                            vp.test_depth_min,
+                            vp.test_depth_max
+                        );
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::J),
+                                ..
+                            },
+                        ..
+                    } => {
+                        let mut vp = self.vis_param.borrow_mut();
+                        vp.test_depth_min+=10.0;
+                        println!("Depth min,max [{},{}]",
+                            vp.test_depth_min,
+                            vp.test_depth_max
+                        );
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::K),
+                                ..
+                            },
+                        ..
+                    } => {
+                        let mut vp = self.vis_param.borrow_mut();
+                        vp.test_depth_min-=10.0;
+                        println!("Depth min,max [{},{}]",
+                            vp.test_depth_min,
+                            vp.test_depth_max
+                        );
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::A),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().dir_calc_scale+=0.5;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::D),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().dir_calc_scale-=0.5;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::W),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().heat_scale+=0.5;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::S),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().heat_scale-=0.5;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                virtual_keycode: Some(glutin::VirtualKeyCode::Key0),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().vis_type=VisualizationType::Output;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                virtual_keycode: Some(glutin::VirtualKeyCode::Key1),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().vis_type=VisualizationType::Deflection;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                virtual_keycode: Some(glutin::VirtualKeyCode::Key2),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().vis_type=VisualizationType::ColorChange;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                virtual_keycode: Some(glutin::VirtualKeyCode::Key3),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().vis_type=VisualizationType::ColorUncertainty;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                virtual_keycode: Some(glutin::VirtualKeyCode::Key4),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().vis_type=VisualizationType::Original;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                virtual_keycode: Some(glutin::VirtualKeyCode::Key5),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().vis_type=VisualizationType::OverlayOutput;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                virtual_keycode: Some(glutin::VirtualKeyCode::Key6),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().vis_type=VisualizationType::OverlayInput;
+                    },
                     glutin::WindowEvent::KeyboardInput {
                         input:
                             glutin::KeyboardInput {
@@ -210,24 +414,28 @@ impl Window {
                 &mut self.render_target.borrow_mut(),
                 &mut self.main_depth.borrow_mut(),
             );
-            self.flow.negociate_slots(&self);
-            self.flow.update_values(&self, &self.values.borrow());
+            self.flow.iter().for_each(|f| f.negociate_slots(&self));
+            self.flow.iter().for_each(|f| f.update_values(&self, &self.values.borrow()));
         }
 
         // Update input.
-        self.flow.input(&self.last_head.borrow(), &deferred_gaze);
+        for flow_index in 0 .. self.flow.len() {
+            self.flow[flow_index].input(&self.last_head.borrow(), &deferred_gaze, &self.vis_param.borrow(), flow_index);
+        }
         *self.last_gaze.borrow_mut() = deferred_gaze;
 
         self.encoder
             .borrow_mut()
             .clear(&self.render_target.borrow(), [68.0 / 255.0; 4]);
-        self.flow.render(&self);
+        self.flow.iter().for_each(|f| f.render(&self));
 
         use gfx::Device;
         self.flush(&mut self.encoder().borrow_mut());
         self.device.borrow_mut().cleanup();
 
-        self.windowed_context.swap_buffers().unwrap();
+        if *self.should_swap_buffers.borrow(){
+            self.windowed_context.swap_buffers().unwrap();
+        }
 
         if let Some(remote) = &self.remote {
             remote.send_frame();

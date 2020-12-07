@@ -31,17 +31,24 @@ impl IoGenerator {
         *self.input_processed.read().unwrap()
     }
 
-    fn next(&mut self, window: &Window) -> Option<IoNodePair> {
+    fn next(&mut self, window: &Window, render_resolution: Option<[u32; 2]>) -> Option<IoNodePair> {
+        self.input_idx += 1;
+        self.current(&window, render_resolution)
+    }
+
+    fn current(&mut self, window: &Window, render_resolution: Option<[u32; 2]>) -> Option<IoNodePair> {
         if self.input_idx >= self.inputs.len() {
             None
         } else {
             let input = &self.inputs[self.input_idx];
-            self.input_idx += 1;
             if UploadRgbBuffer::has_image_extension(&input) {
                 let input_path = std::path::Path::new(input);
                 let mut input_node = UploadRgbBuffer::new(&window);
                 input_node.upload_image(load(input_path));
                 input_node.set_flags(RgbInputFlags::from_extension(&input));
+                input_node.set_render_resolution(render_resolution);
+                #[cfg(feature = "varjo")]
+                input_node.use_vr_projection();
                 let output_node = if let Some(output) = &self.output {
                     let mut output_node = DownloadRgbBuffer::new(&window);
                     let input_info = InputInfo {
@@ -90,6 +97,33 @@ impl IoGenerator {
     }
 }
 
+fn build_flow(window: &mut Window, io_generator: &mut IoGenerator, flow_index: usize, render_resolution: Option<[u32; 2]>){
+    let (input_node, output_node) = io_generator.current(&window, render_resolution).unwrap();
+
+    // Add input node.
+    window.add_node(input_node, flow_index);
+
+    // Visual system passes.
+    let node = Cataract::new(&window);
+    window.add_node(Box::new(node), flow_index);
+    let node = Lens::new(&window);
+    window.add_node(Box::new(node), flow_index);
+    let node = Retina::new(&window);
+    window.add_node(Box::new(node), flow_index);
+
+    // Add output node, if present.
+    if let Some(output_node) = output_node {
+        window.add_node(output_node, flow_index);
+    } else {
+        window.add_node(Box::new(Passthrough::new(&window)), flow_index)
+    }
+
+    // Display node.
+    let node = Display::new(&window);
+    window.add_node(Box::new(node), flow_index);
+}
+
+#[cfg(not(feature = "varjo"))]
 pub fn main() {
     let config = cmd_parse();
 
@@ -98,65 +132,104 @@ pub fn main() {
     } else {
         None
     };
-    let mut window = Window::new(config.visible, remote, config.parameters);
+    
+    let flow_count = 1;
 
-    #[cfg(feature = "varjo")]
-    let varjo = varjo::Varjo::new();
+    let mut window = Window::new(config.visible, remote, config.parameters, flow_count);
 
     let mut io_generator = IoGenerator::new(config.inputs, config.output);
-    let (input_node, output_node) = io_generator.next(&window).unwrap();
-
-    // Add input node.
-    window.add_node(input_node);
-
-    // Visual system passes.
-    let node = Cataract::new(&window);
-    window.add_node(Box::new(node));
-    let node = Lens::new(&window);
-    window.add_node(Box::new(node));
-    let node = Retina::new(&window);
-    window.add_node(Box::new(node));
-
-    // Add output node, if present.
-    if let Some(output_node) = output_node {
-        window.add_node(output_node);
-    } else {
-        window.add_node(Box::new(Passthrough::new(&window)))
-    }
-
-    // Display node.
-    let node = Display::new(&window);
-    window.add_node(Box::new(node));
-
-    #[cfg(feature = "varjo")]{
-        //XXX: get and store all render targets
+    
+    for index in 0 .. flow_count {
+        build_flow(&mut window, &mut io_generator, index, None);
     }
 
     let mut done = false;
     while !done {
-        #[cfg(feature = "varjo")]
-        varjo.begin_frame_sync();
 
-        #[cfg(feature = "varjo")]{
-            //XXX: reuse render targets
-            let (varjo_target, varjo_target_depth) = varjo.render_targets(&window);
-            window.replace_targets(varjo_target, varjo_target_depth);
-            window.update_nodes();
-        }
         done = window.poll_events();
 
-        #[cfg(feature = "varjo")]
-        varjo.end_frame();
-
         if io_generator.is_ready() {
-            if let Some((input_node, output_node)) = io_generator.next(&window) {
-                window.replace_node(0, input_node);
+            if let Some((input_node, output_node)) = io_generator.next(&window, None) {
+                window.replace_node(0, input_node, 0);
                 let output_node = if let Some(output_node) = output_node {
                     output_node
                 } else {
                     Box::new(Passthrough::new(&window))
                 };
-                window.replace_node(window.nodes_len() - 2, output_node);
+                window.replace_node(window.nodes_len() - 2, output_node, 0);
+                window.update_nodes();
+            } else {
+                if !config.visible {
+                    // Exit once all inputs have been processed, unless visible.
+                    done = true;
+                }
+            }
+        }
+    }
+}
+
+#[cfg(feature = "varjo")]
+pub fn main() {
+    let config = cmd_parse();
+
+    let remote = if let Some(port) = config.port {
+        Some(Remote::new(port))
+    } else {
+        None
+    };
+    
+    let flow_count = 4; //TODO take this number from the varjo api instead ? (for example the size of the viewports vector)
+    let mut window = Window::new(config.visible, remote, config.parameters, flow_count);
+
+    let mut varjo = varjo::Varjo::new();
+    let mut log_counter = 0; //TODO: used to reduce log spam, remove when no longer needed or replace with a better solution
+    let varjo_viewports = varjo.create_render_targets(&window);
+
+    let mut io_generator = IoGenerator::new(config.inputs, config.output);
+
+    for index in 0 .. flow_count {
+        let viewport = &varjo_viewports[index];
+        build_flow(&mut window, &mut io_generator, index, Some([viewport.width, viewport.height]));
+        let mut node = VRCompositor::new(&window);
+        node.set_viewport(viewport.x as f32, viewport.y as f32, viewport.width as f32, viewport.height as f32);
+        window.add_node(Box::new(node), index);
+    }
+
+    let mut done = false;
+    while !done {
+        varjo.logging_enabled = log_counter == 0;
+
+        let varjo_should_render = varjo.begin_frame_sync();
+
+        if varjo_should_render {
+            let (varjo_target_color, varjo_target_depth) = varjo.get_current_render_target();
+            window.replace_targets(varjo_target_color, varjo_target_depth, false);
+
+            let view_matrices = varjo.get_current_view_matrices();
+            let head_position = 0.5 * (view_matrices[0].w.truncate() + view_matrices[1].w.truncate());
+            window.set_head(head_position, view_matrices, varjo.get_current_proj_matrices());
+
+            varjo.get_current_gaze();//TODO use this
+        }
+        
+        window.update_last_node();
+        
+        done = window.poll_events();
+
+        if varjo_should_render {
+            varjo.end_frame();
+            log_counter = (log_counter+1) % 10;
+        }
+
+        if io_generator.is_ready() {
+            if let Some((input_node, output_node)) = io_generator.next(&window, None) {
+                window.replace_node(0, input_node, 0);
+                let output_node = if let Some(output_node) = output_node {
+                    output_node
+                } else {
+                    Box::new(Passthrough::new(&window))
+                };
+                window.replace_node(window.nodes_len() - 2, output_node, 0);
                 window.update_nodes();
             } else {
                 if !config.visible {
