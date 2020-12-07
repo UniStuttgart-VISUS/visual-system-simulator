@@ -90,7 +90,6 @@ impl Node for Cataract {
         slots
     }
     fn negociate_slots_wk(&mut self, window: &Window, slots: NodeSlots, well_known: &WellKnownSlots) -> NodeSlots{
-        println!("negociate cataract");
         let mut slots = self.negociate_slots(window, slots);
         well_known.set_original(slots.as_color_depth_view().0);
         slots

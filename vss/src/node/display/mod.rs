@@ -93,7 +93,6 @@ impl Node for Display {
     }
 
     fn negociate_slots_wk(&mut self, window: &Window, slots: NodeSlots, well_known: &WellKnownSlots) -> NodeSlots{
-        println!("negociate dispplay");
         self.pso_data.s_original = well_known.get_original().expect("Nah, no original image?");
         self.negociate_slots(window, slots)
     }
