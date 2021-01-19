@@ -49,7 +49,7 @@ void main() {
     rt_color = vec4(texture(s_rgb, tex).rgb, 1.0);
     rt_depth = depth;
 
-    //rt_deflection =         vec4(0.0,0.0,0.0,1.0);
+    rt_deflection =         vec4(0.0);
     rt_color_change =       vec4(0.0);
     rt_color_uncertainty =  vec4(0.0);
 }

@@ -14,7 +14,7 @@ uniform sampler2D s_color_uncertainty;
 in vec2 v_tex;
 out vec4 rt_color;
 out float rt_depth;
-//out vec4 rt_deflection;
+out vec4 rt_deflection;
 out vec4 rt_color_change;
 out vec4 rt_color_uncertainty;
 
@@ -44,16 +44,11 @@ void main() {
 
         // inout parameter for bloom 
         vec3 color_var = vec3(0.0);
+        vec2 dir_var = vec2(0.0);
         // the 3.0 is used to strengthen the blur compared to the bloom effect
-        vec4 color =  blur(v_tex, s_color, u_blur_factor * 3.0, u_resolution, color_var, s_color_uncertainty);        
+        vec4 color =  blur(v_tex, s_color, u_blur_factor * 3.0, u_resolution, color_var, s_color_uncertainty, dir_var, s_deflection);        
         
         // this factor is used in the blur function to control the size of the blur
-        // although it is not used in the normpdf function, stretching the position vecor for sampling is comparable to stretching the gaussian
-        // therefore, we can assume this factor multiplies the sd of the standard gaussian distribution (1)
-        //vec2 direction_uncertainty = vec2(u_blur_factor * 3.0);
-        vec2 direction_uncertainty = vec2(0.0);
-
-
         // the /3. is used to weaken the bloom compared to the blur effect
         vec2 brightness = getPerceivedBrightness(color.rgb, color_var);
         
@@ -64,33 +59,21 @@ void main() {
 
         /*
           This step produces large amounts of uncertainty in bright colors
-        */
-        
+        */        
         rt_color = color * bloom_factor;
         // f = x_1 * x_+2
         // s^2 = s^2_1*x^2_2 + s^2_2*x^2_1) 
-// TODO covariance  ?
         color_var =  color_var*(bloom_factor*bloom_factor)  + vec3(bloom_factor_variance)*(color.rgb*color.rgb);
+// TODO covariance ?
 
         lowerContrastBy(rt_color,color_var, u_contrast_factor);
 
         vec3 color_diff = rt_color.rgb - original_color;        
 
         // update the rgb values of the textures with the new data. do not touch the alpha
-        rt_color_change = 
-            vec4(
-                texture(s_color_change, v_tex).rgb + color_diff,
-                texture(s_color_change, v_tex).a
-            );
-        rt_color_uncertainty = 
-            vec4(
-                color_var,
-                texture(s_color_uncertainty, v_tex).a
-            );
-
-        // split the direction into the alpha components of the other two textures
-        rt_color_change.a = direction_uncertainty.x;
-        rt_color_change.a = direction_uncertainty.y;
+        rt_color_change = vec4(texture(s_color_change, v_tex).rgb + color_diff, 0.0);
+        rt_color_uncertainty = vec4( color_var, 0.0 );
+        rt_deflection = vec4(texture(s_deflection, v_tex).rg, dir_var);
 
         rt_depth = vec4(texture(s_depth, v_tex)).r;
 
@@ -99,5 +82,6 @@ void main() {
         rt_depth =              vec4(texture(s_depth, v_tex)).r;
         rt_color_change =       texture(s_color_change, v_tex);
         rt_color_uncertainty =  texture(s_color_uncertainty, v_tex);
+        rt_deflection =         texture(s_deflection, v_tex);
     }
 }

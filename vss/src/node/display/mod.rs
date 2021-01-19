@@ -1,5 +1,6 @@
 use super::*;
 use gfx;
+use serde::ser::{Serialize,Serializer};
 
 gfx_defines! {
     pipeline pipe {
@@ -17,6 +18,8 @@ gfx_defines! {
 
     }
 }
+
+
 
 pub struct Display {
     pso: gfx::PipelineState<Resources, pipe::Meta>,
@@ -148,3 +151,26 @@ impl Node for Display {
         }
     }
 }
+
+// #[derive(Serialize)]
+// pub struct NewPipe{
+//     u_stereo:i32,
+//     u_resolution_in: i32,
+//     u_resolution_out: i32,
+//     u_vis_type: i32,
+//     u_heat_scale: i32,
+// }
+
+// impl pipe::Data<Resources>{
+//     pub fn update(&mut self, new_pipe: NewPipe){
+//         self.u_stereo = new_pipe.u_stereo;
+//     }
+// }
+
+// impl Serialize for pipe::Data<Resources>{
+//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//     where S: Serializer 
+//     {
+//         serializer.
+//     }
+// }

@@ -42,7 +42,8 @@ void applyBlurAndBloom(inout vec4 color, in vec4 retina, inout ErrorValues ev) {
         float blur_scale = (0.75 - (retina.r + retina.g + retina.b) / 3.0) * 5.0;
         //original calculation: 
         //      color = blur(v_tex, s_color, blur_scale, u_resolution);
-        color =  blur(v_tex, s_color, blur_scale, u_resolution, ev.color_var, s_color_uncertainty);        
+        color = blur(v_tex, s_color, blur_scale, u_resolution, ev.color_var, s_color_uncertainty, ev.position_var, s_deflection);   
+// TODO propagate directional uncertainty
 
         // apply bloom
         //original calculation: 
@@ -197,7 +198,7 @@ void main() {
     vec3 original_color = rt_color.rgb;
     vec3 color_error = texture(s_color_change, v_tex).rgb;
     vec3 color_var = texture(s_color_uncertainty, v_tex).rgb;
-    vec2 position_var = vec2( texture(s_color_change, v_tex).a, texture(s_color_uncertainty, v_tex).a );
+    vec2 position_var = texture(s_deflection, v_tex).ba;
     ErrorValues ev = ErrorValues(
         color_error,
         color_var,
@@ -209,18 +210,10 @@ void main() {
     //glaucoma should be one of the last ones because it could decrease the brightness a lot
     glaucoma(rt_color, retina_mask, ev);
 
-// TODO impl
-    vec2 dir_unc = vec2(0.0);
-
     vec3 color_diff = rt_color.rgb - original_color;
-    rt_color_change =    
-        vec4(
-            texture(s_color_change, v_tex).rgb + color_diff,
-            dir_unc.x
-        );
-    rt_color_uncertainty = 
-        vec4(
-            ev.color_var,
-            dir_unc.y
-        );
+    rt_color_change = vec4(texture(s_color_change, v_tex).rgb + color_diff,0.0);
+    rt_color_uncertainty = vec4(ev.color_var, 0.0);
+    rt_deflection = vec4(texture(s_deflection, v_tex).rg, ev.position_var);
+    // rt_deflection = texture(s_deflection, v_tex).rgba;
+
 }

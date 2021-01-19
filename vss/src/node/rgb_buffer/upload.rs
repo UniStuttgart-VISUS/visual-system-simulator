@@ -220,7 +220,7 @@ impl Node for UploadRgbBuffer {
         self.pso_data.u_head = (Matrix4::from_angle_y(cgmath::Rad(head.yaw))
             * Matrix4::from_angle_x(cgmath::Rad(head.pitch)))
         .into();
-        self.pso_data.u_proj_view = (head.proj[flow_index] * (Matrix4::from_translation(-head.position) * head.view[flow_index])).into();
+        //self.pso_data.u_proj_view = (head.proj[flow_index] * (Matrix4::from_translation(-head.position) * head.view[flow_index])).into();
         gaze.clone()
     }
 

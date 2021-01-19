@@ -5,7 +5,7 @@ float normpdf(in float x) {
 }
 
 
-vec4 blur(in vec2 fragCoord, in sampler2D tex, float blur_scale, vec2 resolution, inout vec3 var, in sampler2D vartex) {
+vec4 blur(in vec2 fragCoord, in sampler2D tex, float blur_scale, vec2 resolution, inout vec3 col_var, in sampler2D col_vartex, inout vec2 dir_var,in sampler2D dir_vartex) {
     // declare stuff
     const int kSize = (BLUR_SIZE - 1) / 2;
     float kernel[BLUR_SIZE];
@@ -35,29 +35,33 @@ vec4 blur(in vec2 fragCoord, in sampler2D tex, float blur_scale, vec2 resolution
     // s^2 = sum( (df/dx_i * s_i)^2 ) + s^2_blur
     //       ------------------------   ---------
     //              var_in               var_new
-    vec3 var_in = vec3(0.0);
-    vec3 var_new = vec3(0.0);
+    vec3 col_var_in = vec3(0.0);
+    vec3 col_var_new = vec3(0.0);
+    vec2 dir_var_in = vec2(0.0);
+    vec2 dir_var_new = vec2(0.0);
     vec3 pix = vec3(0.0);
     float weight = 0;
     for (int i = -kSize; i <= kSize; ++i) {
         for (int j = -kSize; j <= kSize; ++j) {
             weight = kernel[kSize + j] * kernel[kSize + i] / (Z * Z);
             // propagated variance
-            var_in += texture(vartex, (fragCoord + vec2(float(i), float(j)) * blur_scale / resolution)).rgb * weight * weight;
+            col_var_in += texture(col_vartex, (fragCoord + vec2(float(i), float(j)) * blur_scale / resolution)).rgb * weight;// * weight;
+            dir_var_in += texture(dir_vartex, (fragCoord + vec2(float(i), float(j)) * blur_scale / resolution)).ba * weight;// * weight;
             // new variance
             pix = texture(tex, (fragCoord + vec2(float(i), float(j)) * blur_scale / resolution)).rgb;
             pix = pix - avg;
             pix = pix * pix;
-            var_new += pix * weight; // TODO weight or weight^2 ?
+            col_var_new += pix * weight;
         }
     }
-    // var_new = 1/N * sum( (q_i - q_avg)^2 )
-    // we have 9x9 samples
-    var_new = var_new/81;
 
-    // variances can be added
-    //var = var_new;
-    var = var_in + var_new;
+    // although it is not used in the normpdf function, stretching the position vecor for sampling is comparable to stretching the gaussian
+    // therefore, we can assume this factor multiplies the variance of the standard gaussian distribution ( sigma^2 = 1)
+    dir_var_new = vec2(blur_scale*blur_scale/(resolution*resolution));
+
+    // variances can now be added
+    col_var = col_var_in + col_var_new;
+    dir_var = dir_var_in + dir_var_new;
 
     return vec4(avg,1.0);
 }

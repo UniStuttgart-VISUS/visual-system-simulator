@@ -1,8 +1,12 @@
+#include "common.glsl"
+
 uniform sampler2D s_color;
 uniform sampler2D s_deflection;
 uniform sampler2D s_color_change;
 uniform sampler2D s_color_uncertainty;
 uniform sampler2D s_original;
+uniform vec2 u_resolution_in;
+
 
 uniform int u_vis_type;
 uniform float u_heat_scale;
@@ -69,16 +73,42 @@ vec3 TurboColormap(in float x) {
   );
 }
 
+vec3 RetinalGanglion(){
+    float gray_own = getPerceivedBrightness(texture(s_original, v_tex).rgb, vec3(0.0)).r;
+    float gray_others = 0;
+    for (int i = -1; i <= 1; i++) {
+        for (int j = -1; j <= 1; j++) {
+            if(i!=0||j!=0){ // exclude i=j=0
+                gray_others += getPerceivedBrightness(texture(s_original, v_tex + vec2(float(i), float(j))*2 / u_resolution_in).rgb,vec3(0.0)).r;
+            }
+        }
+    }
+    gray_others /= 8;
+    if(gray_own-gray_others > 0.0){
+        // ON stimulating
+        return vec3(1.0,0.0,0.0) * 8 * ( gray_own-gray_others ) * u_heat_scale;
+    }
+    else {//if (gray_own-gray_others < -0.001){
+        // OFF stimulating
+        return vec3(0.0,0.0,1.0) * 8 * abs( gray_own-gray_others ) * u_heat_scale;
+    }
+    // else{
+    //     return vec3(1.0,0.0,1.0) * 50 * abs( gray_own-gray_others );
+    // }
+}
+
 void main() {
     vec3 color = vec3(0.0);
     switch (u_vis_type) {
 // TODO this has to be done in different color spaces, e.g with cielab and perhaps use deltaE_00
-        case 0:
+        case 0:  // simulated image
             color =  texture(s_color, v_tex).rgb;
             break;
         case 1: // directional uncertainty
-            float bar =  pow(texture(s_color_change, v_tex).a, 2.0) + pow(texture(s_color_uncertainty, v_tex).a, 2.0);
-            color = ViridisColormap(sqrt(bar) * u_heat_scale);
+            //float bar =  pow(texture(s_deflection, v_tex).r, 2.0) + pow(texture(s_deflection, v_tex).g, 2.0);
+            float bar =  pow(texture(s_deflection, v_tex).b, 2.0) + pow(texture(s_deflection, v_tex).a, 2.0);
+            color = ViridisColormap(sqrt(bar) * 1080 * u_heat_scale);
+            // color = vec3(sqrt(bar) * 1080 * u_heat_scale);
             break;
         case 2: // color error
             vec3 err =  texture(s_color_change, v_tex).rgb;
@@ -90,12 +120,15 @@ void main() {
             float combined_variance = foo.r + foo.g +foo.b;
             color = ViridisColormap(sqrt(combined_variance) * u_heat_scale);
             break;
-        case 4:
+        case 4: // original image
             color =  texture(s_original, v_tex).rgb;
             break;
         case 5:
         case 6:
+            // without positional correction
             vec3 unc_val =  texture(s_color_uncertainty, v_tex).rgb;
+            // with positional correction
+            // vec3 unc_val =  texture(s_color_uncertainty, v_tex-texture(s_deflection, v_tex).rg).rgb;
             float hm_val = unc_val.r + unc_val.g + unc_val.b;
             hm_val = sqrt(hm_val) * u_heat_scale;
             if (hm_val > 0.25) {
@@ -110,6 +143,10 @@ void main() {
                 }
             }
             break;
+        case 7: // retinal ganglia ON/OFF
+            color = RetinalGanglion();    
+            break;
+
     }
     
     if (v_tex.x < 0.0 || v_tex.y < 0.0 ||
