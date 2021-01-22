@@ -157,12 +157,19 @@ public:
 
             varjo_Error err = varjo_GetError(m_session);
             if (err != varjo_NoError) {
-                printf("Failed to initialize Gaze: %s\n", varjo_GetErrorDesc(err));
+                printf("Using default Gaze Data; Failed to initialize Gaze: %s\n", varjo_GetErrorDesc(err));
             }else{
                 m_gazeAvailable = true;
+                m_gazeData.leftEye[0] = 0.0;
+                m_gazeData.leftEye[1] = 0.0;
+                m_gazeData.leftEye[2] = 1.0;
+                m_gazeData.rightEye[0] = 0.0;
+                m_gazeData.rightEye[1] = 0.0;
+                m_gazeData.rightEye[2] = 1.0;
+                m_gazeData.focusDistance = 1.0;
             }
         }else{
-            printf("Gaze tracking is not allowed!\n");
+            printf("Using default Gaze Data; Gaze tracking is not allowed!\n");
         }
     }
 
@@ -373,33 +380,37 @@ API_EXPORT const char *varjo_current_gaze_data(Varjo *varjo, bool *is_valid, Var
     {
         *is_valid = false;
 
-        /*if (!varjo->m_gazeAvailable) return nullptr;
-        
-        varjo_SyncProperties(varjo->m_session);
+        if (varjo->m_gazeAvailable){
+            varjo_SyncProperties(varjo->m_session);
 
-        // Get gaze and check that it is valid
-        varjo_Gaze gaze = varjo_GetGaze(varjo->m_session);
-        if (gaze.status == varjo_GazeStatus_Invalid) return nullptr;
+            // Get gaze and check that it is valid
+            varjo_Gaze gaze = varjo_GetGaze(varjo->m_session);
+            if (gaze.status == varjo_GazeStatus_Invalid) return nullptr;
 
-        varjo->m_gazeData.leftEye[0] = gaze.leftEye.forward[0];
-        varjo->m_gazeData.leftEye[1] = gaze.leftEye.forward[1];
-        varjo->m_gazeData.leftEye[2] = gaze.leftEye.forward[2];
-        varjo->m_gazeData.rightEye[0] = gaze.rightEye.forward[0];
-        varjo->m_gazeData.rightEye[1] = gaze.rightEye.forward[1];
-        varjo->m_gazeData.rightEye[2] = gaze.rightEye.forward[2];
-        varjo->m_gazeData.focusDistance = gaze.focusDistance;*/
+            if(gaze.leftStatus == varjo_GazeEyeStatus_Compensated || gaze.leftStatus == varjo_GazeEyeStatus_Tracked){
+                varjo->m_gazeData.leftEye[0] = gaze.leftEye.forward[0];
+                varjo->m_gazeData.leftEye[1] = gaze.leftEye.forward[1];
+                varjo->m_gazeData.leftEye[2] = gaze.leftEye.forward[2];
+            }
+            if(gaze.rightStatus == varjo_GazeEyeStatus_Compensated || gaze.rightStatus == varjo_GazeEyeStatus_Tracked){
+                varjo->m_gazeData.rightEye[0] = gaze.rightEye.forward[0];
+                varjo->m_gazeData.rightEye[1] = gaze.rightEye.forward[1];
+                varjo->m_gazeData.rightEye[2] = gaze.rightEye.forward[2];
+            }
+            varjo->m_gazeData.focusDistance = gaze.focusDistance;
+        }else{
+            time_t seconds = time(NULL);
+            size_t index = (seconds % 29);
+            varjo->m_gazeData.leftEye[0] = sample_gaze_data[index*7 + 0];
+            varjo->m_gazeData.leftEye[1] = sample_gaze_data[index*7 + 1];
+            varjo->m_gazeData.leftEye[2] = sample_gaze_data[index*7 + 2];
+            varjo->m_gazeData.rightEye[0] = sample_gaze_data[index*7 + 3];
+            varjo->m_gazeData.rightEye[1] = sample_gaze_data[index*7 + 4];
+            varjo->m_gazeData.rightEye[2] = sample_gaze_data[index*7 + 5];
+            varjo->m_gazeData.focusDistance = sample_gaze_data[index*7 + 6];
+        }
 
-        time_t seconds = time(NULL);
-        size_t index = (seconds % 29);
-        varjo->m_gazeData.leftEye[0] = sample_gaze_data[index*7 + 0];
-        varjo->m_gazeData.leftEye[1] = sample_gaze_data[index*7 + 1];
-        varjo->m_gazeData.leftEye[2] = sample_gaze_data[index*7 + 2];
-        varjo->m_gazeData.rightEye[0] = sample_gaze_data[index*7 + 3];
-        varjo->m_gazeData.rightEye[1] = sample_gaze_data[index*7 + 4];
-        varjo->m_gazeData.rightEye[2] = sample_gaze_data[index*7 + 5];
-        varjo->m_gazeData.focusDistance = sample_gaze_data[index*7 + 6];
         *gaze_data = varjo->m_gazeData;
-
         *is_valid = true;
         return nullptr;
     }
