@@ -1,6 +1,6 @@
 use crate::*;
 use std::cell::RefCell;
-use cgmath::{Matrix4, Vector3};
+use cgmath::{Vector3};
 
 /// A factory to create device objects.
 pub type DeviceFactory = gfx_device_gl::Factory;
@@ -25,10 +25,8 @@ pub struct Window {
     main_depth: RefCell<RenderTargetDepth>,
     should_swap_buffers: RefCell<bool>,
 
-    last_head: RefCell<Head>,
-    last_gaze: RefCell<Gaze>,
     active: RefCell<bool>,
-    values: RefCell<ValueMap>,
+    values: Vec<RefCell<ValueMap>>,
 
     remote: Option<Remote>,
     flow: Vec<Flow>,
@@ -36,7 +34,7 @@ pub struct Window {
 }
 
 impl Window {
-    pub fn new(visible: bool, remote: Option<Remote>, values: ValueMap, flow_count: usize) -> Self {
+    pub fn new(visible: bool, remote: Option<Remote>, values: Vec<RefCell<ValueMap>>, flow_count: usize) -> Self {
         // Create a window and context.
         let gl_version = glutin::GlRequest::GlThenGles {
             opengles_version: (3, 2),
@@ -81,16 +79,8 @@ impl Window {
             render_target: RefCell::new(render_target),
             main_depth: RefCell::new(main_depth),
             should_swap_buffers: RefCell::new(true),
-            last_head: RefCell::new(Head {
-                yaw: 0.0,
-                pitch: 0.0,
-                position: Vector3::new(0.0, 0.0, 0.0),
-                view: Vec::new(),
-                proj: Vec::new(),
-            }),
-            last_gaze: RefCell::new(Gaze { x: 0.5, y: 0.5 }),
             active: RefCell::new(false),
-            values: RefCell::new(values),
+            values: values,
             vis_param: RefCell::new(VisualizationParameters::default())
         }
     }
@@ -114,23 +104,28 @@ impl Window {
     }
 
     pub fn update_nodes(&mut self) {
-        self.flow.iter().for_each(|f| f.negociate_slots(&self));
-        self.flow.iter().for_each(|f| f.update_values(&self, &self.values.borrow()));
+        for (i, f) in self.flow.iter().enumerate(){
+            f.negociate_slots(&self);
+            f.update_values(&self, &self.values[i].borrow());
+        }
     }
 
-    pub fn set_values(&self, values: ValueMap) {
-        self.values.replace(values);
-        self.flow.iter().for_each(|f| f.update_values(&self, &self.values.borrow()));
+    pub fn set_values(&self, values: ValueMap, flow_index: usize) {
+        self.values[flow_index].replace(values);
+        self.flow[flow_index].update_values(&self, &self.values[flow_index].borrow());
     }
     
-    pub fn set_head(&self, position: Vector3<f32>, view: Vec<Matrix4<f32>>, proj: Vec<Matrix4<f32>>) {
-        self.last_head.replace(Head {
-            yaw: 0.0,
-            pitch: 0.0,
-            position,
-            view,
-            proj,
-        });
+    pub fn set_value(&self, key: String, value: Value, flow_index: usize) {
+        self.values[flow_index].borrow_mut().insert(key, value);
+        self.flow[flow_index].update_values(&self, &self.values[flow_index].borrow());
+    }
+    
+    pub fn set_head(&self, new_head: Head, flow_index: usize) {
+        self.flow[flow_index].last_head.replace(new_head);
+    }
+
+    pub fn set_gaze(&self, new_gaze: Gaze, flow_index: usize) {
+        self.flow[flow_index].last_gaze.replace(new_gaze);
     }
 
     pub fn factory(&self) -> &RefCell<DeviceFactory> {
@@ -152,6 +147,7 @@ impl Window {
             Gaze {
                 x: gaze_x.as_f64().unwrap_or(0.0) as f32,
                 y: gaze_y.as_f64().unwrap_or(0.0) as f32,
+                direction: Vector3::new(0.0, 0.0, 0.0),
             }
         } else {
             gaze
@@ -172,7 +168,7 @@ impl Window {
         let mut done = false;
         let mut deferred_size = None;
         let mut deferred_gaze =
-            Self::override_gaze(self.last_gaze.borrow().clone(), &self.values.borrow());
+            Self::override_gaze(self.flow[0].last_gaze.borrow().clone(), &self.values[0].borrow());//TODO: FIX THIS (don't just use the first flow)
 
         // Poll for window events.
         self.events_loop.borrow_mut().poll_events(|event| {
@@ -350,23 +346,24 @@ impl Window {
                                 Gaze {
                                     x: position.x as f32 / window_size.width as f32,
                                     y: 1.0 - (position.y as f32 / window_size.height as f32),
+                                    direction: Vector3::new(0.0, 0.0, 0.0),
                                 },
-                                &self.values.borrow(),
+                                &self.values[0].borrow(),//TODO: FIX THIS (don't just use the first flow)
                             );
-                            let last_head = &mut self.last_head.borrow_mut();
+                            let last_head = &mut self.flow[0].last_head.borrow_mut();
                             last_head.yaw = position.x as f32 / window_size.width as f32
                                 * std::f32::consts::PI
                                 * 2.0
                                 - 0.5;
                             last_head.pitch = position.y as f32 / window_size.height as f32
                                 * std::f32::consts::PI
-                                - 0.5;
+                                - 0.5;//50 mm lens
                         }
                     }
                     glutin::WindowEvent::CursorLeft { .. } => {
                         if *self.active.borrow() {
                             deferred_gaze =
-                                Self::override_gaze(Gaze { x: 0.5, y: 0.5 }, &self.values.borrow());
+                                Self::override_gaze(Gaze { x: 0.5, y: 0.5, direction: Vector3::new(0.0, 0.0, 0.0)}, &self.values[0].borrow());//TODO: FIX THIS (don't just use the first flow)
                         }
                     }
                     _ => (),
@@ -384,15 +381,18 @@ impl Window {
                 &mut self.render_target.borrow_mut(),
                 &mut self.main_depth.borrow_mut(),
             );
-            self.flow.iter().for_each(|f| f.negociate_slots(&self));
-            self.flow.iter().for_each(|f| f.update_values(&self, &self.values.borrow()));
+            for (i, f) in self.flow.iter().enumerate(){
+                f.negociate_slots(&self);
+                f.update_values(&self, &self.values[i].borrow());
+            }
         }
 
         // Update input.
         for flow_index in 0 .. self.flow.len() {
-            self.flow[flow_index].input(&self.last_head.borrow(), &deferred_gaze, &self.vis_param.borrow(), flow_index);
+            //self.flow[flow_index].input(&self.last_head.borrow(), &deferred_gaze, &self.vis_param.borrow(), flow_index);
+            self.flow[flow_index].input(&self.vis_param.borrow());
         }
-        *self.last_gaze.borrow_mut() = deferred_gaze;
+        //*self.flow[0].last_gaze.borrow_mut() = deferred_gaze; //TODO fix this for window input
 
         self.encoder
             .borrow_mut()

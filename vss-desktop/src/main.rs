@@ -3,6 +3,8 @@ mod node;
 #[cfg(feature = "varjo")]
 mod varjo;
 
+use std::cell::RefCell;
+
 use vss::*;
 
 use crate::cmd::*;
@@ -169,6 +171,44 @@ pub fn main() {
 }
 
 #[cfg(feature = "varjo")]
+pub fn set_varjo_data(window: &mut Window, last_fov: &mut Vec<(f32, f32)>, varjo: &mut varjo::Varjo){
+    let (varjo_target_color, varjo_target_depth) = varjo.get_current_render_target();
+    window.replace_targets(varjo_target_color, varjo_target_depth, false);
+
+    let view_matrices = varjo.get_current_view_matrices();
+    let proj_matrices = varjo.get_current_proj_matrices();
+    let head_position = 0.5 * (view_matrices[0].w.truncate() + view_matrices[1].w.truncate());
+    let (left_gaze, right_gaze, _focus_distance) = varjo.get_current_gaze();
+
+    for index in 0 .. 4 {
+        let fov_x = 2.0*(1.0/proj_matrices[index][0][0]).atan();// * 180.0 / 3.1415926535;
+        let fov_y = 2.0*(1.0/proj_matrices[index][1][1]).atan();// * 180.0 / 3.1415926535;
+        if last_fov[index].0 != fov_x || last_fov[index].1 != fov_y {
+            window.set_value("fov_x".to_string(), Value::Number(fov_x as f64), index);
+            window.set_value("fov_y".to_string(), Value::Number(fov_y as f64), index);
+            window.set_value("proj_matrix".to_string(), Value::Matrix(proj_matrices[index%2]), index);
+            last_fov[index].0 = fov_x;
+            last_fov[index].1 = fov_y;
+        }
+        window.set_head(Head{
+            yaw: 0.0,
+            pitch: 0.0,
+            position: head_position,
+            view: view_matrices[index],
+            proj: proj_matrices[index],
+        },index);
+
+        let direction = if index%2 == 0 {left_gaze} else {right_gaze};
+        let screenspace_dir = proj_matrices[index] * direction.extend(1.0);
+        window.set_gaze(Gaze{
+            x: screenspace_dir.x/screenspace_dir.w/2.0 + 0.5,
+            y: screenspace_dir.y/screenspace_dir.w/2.0 + 0.5,
+            direction,
+        }, index);
+    }
+}
+
+#[cfg(feature = "varjo")]
 pub fn main() {
     let config = cmd_parse();
 
@@ -177,13 +217,23 @@ pub fn main() {
     } else {
         None
     };
-    
+
     let flow_count = 4; //TODO take this number from the varjo api instead ? (for example the size of the viewports vector)
-    let mut window = Window::new(config.visible, remote, config.parameters, flow_count);
+    let mut parameters = Vec::new();
+    for _ in 0 .. flow_count {
+        let mut value_map = ValueMap::new();
+        for (key, val) in config.parameters.iter() {
+            value_map.insert((*key).clone(), (*val).clone());
+        }
+        parameters.push(RefCell::new(value_map));
+    }
+
+    let mut window = Window::new(config.visible, remote, parameters, flow_count);
 
     let mut varjo = varjo::Varjo::new();
     let mut log_counter = 0; //TODO: used to reduce log spam, remove when no longer needed or replace with a better solution
     let varjo_viewports = varjo.create_render_targets(&window);
+    let mut varjo_fov = vec![(100.0, 70.0); 4];
 
     let mut io_generator = IoGenerator::new(config.inputs, config.output);
 
@@ -202,14 +252,7 @@ pub fn main() {
         let varjo_should_render = varjo.begin_frame_sync();
 
         if varjo_should_render {
-            let (varjo_target_color, varjo_target_depth) = varjo.get_current_render_target();
-            window.replace_targets(varjo_target_color, varjo_target_depth, false);
-
-            let view_matrices = varjo.get_current_view_matrices();
-            let head_position = 0.5 * (view_matrices[0].w.truncate() + view_matrices[1].w.truncate());
-            window.set_head(head_position, view_matrices, varjo.get_current_proj_matrices());
-
-            varjo.get_current_gaze();//TODO use this
+            set_varjo_data(&mut window, &mut varjo_fov, &mut varjo);
         }
         
         window.update_last_node();

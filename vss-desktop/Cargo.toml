@@ -21,12 +21,12 @@ serde_json = "*"
 ac_ffmpeg = { package = "ac-ffmpeg", version = "0.15.3", optional = true }
 log = "0.4.11"
 simple-logging = "2.0.2"
-cgmath = "0.17"
+cgmath = "0.18"
 
 [build-dependencies]
 cc = "^1.0.61"
 
 [features]
-default = []
+default = ["varjo"]
 video = ["ac_ffmpeg"]
 varjo = []

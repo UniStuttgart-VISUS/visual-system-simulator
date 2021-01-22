@@ -2,6 +2,7 @@ mod retina_map;
 
 use self::retina_map::generate_retina_map;
 use super::*;
+use cgmath::{Matrix4, Point3, SquareMatrix, Vector3};
 use gfx;
 use gfx::format::Rgba32F;
 
@@ -9,7 +10,7 @@ use gfx::format::Rgba32F;
 gfx_defines! {
     pipeline pipe {
         u_resolution: gfx::Global<[f32; 2]> = "u_resolution",
-        u_gaze: gfx::Global<[f32; 2]> = "u_gaze",
+        u_proj: gfx::Global<[[f32; 4];4]> = "u_proj",
         s_source: gfx::TextureSampler<[f32; 4]> = "s_color",
         s_retina: gfx::TextureSampler<[f32; 4]> = "s_retina",
         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
@@ -19,7 +20,6 @@ gfx_defines! {
         rt_color_change: gfx::RenderTarget<Rgba32F> = "rt_color_change",
         s_color_uncertainty: gfx::TextureSampler<[f32; 4]> = "s_color_uncertainty",
         rt_color_uncertainty: gfx::RenderTarget<Rgba32F> = "rt_color_uncertainty",
-
     }
 }
 
@@ -39,7 +39,7 @@ impl Node for Retina {
             )
             .unwrap();
 
-        let (_, mask_view) = load_texture_from_bytes(&mut factory, &[255; 4], 1, 1).unwrap();
+        let (_, mask_view) = load_cubemap_from_bytes(&mut factory, &[&[255; 4]; 6], 1).unwrap();
         let sampler = factory.create_sampler_linear();
 
         let (_, src, dst) = factory.create_render_target(1, 1).unwrap();
@@ -51,7 +51,7 @@ impl Node for Retina {
             pso,
             pso_data: pipe::Data {
                 u_resolution: [1.0, 1.0],
-                u_gaze: [0.0, 0.0],
+                u_proj: Matrix4::from_scale(1.0).into(),
                 s_source: (src, sampler.clone()),
                 s_retina: (mask_view, sampler.clone()),
                 rt_color: dst,
@@ -60,7 +60,7 @@ impl Node for Retina {
                 s_color_change:(s_color_change, sampler.clone()),
                 rt_color_change,
                 s_color_uncertainty:(s_color_uncertainty, sampler.clone()),
-                rt_color_uncertainty
+                rt_color_uncertainty,
             },
         }
     }
@@ -82,23 +82,57 @@ impl Node for Retina {
 
     fn update_values(&mut self, window: &Window, values: &ValueMap) {
         let mut factory = window.factory().borrow_mut();
-        if let Some(Value::Image(retina_map_path)) = values.get("retina_map_path") {
-            let (_, retinamap_view) = load_texture(&mut factory, load(retina_map_path)).unwrap();
-            let sampler = self.pso_data.s_retina.clone().1;
-            //XXX: check resolution!
-
-            self.pso_data.s_retina = (retinamap_view, sampler);
+        let mut image_data = Vec::new();
+        if let Some(Value::Image(retina_map_pos_x_path)) = values.get("retina_map_pos_x_path") {
+            image_data.push(load(retina_map_pos_x_path));
+        }
+        if let Some(Value::Image(retina_map_neg_x_path)) = values.get("retina_map_neg_x_path") {
+            image_data.push(load(retina_map_neg_x_path));
+        }
+        if let Some(Value::Image(retina_map_pos_y_path)) = values.get("retina_map_pos_y_path") {
+            image_data.push(load(retina_map_pos_y_path));
+        }
+        if let Some(Value::Image(retina_map_neg_y_path)) = values.get("retina_map_neg_y_path") {
+            image_data.push(load(retina_map_neg_y_path));
+        }
+        if let Some(Value::Image(retina_map_pos_z_path)) = values.get("retina_map_pos_z_path") {
+            image_data.push(load(retina_map_pos_z_path));
+        }
+        if let Some(Value::Image(retina_map_neg_z_path)) = values.get("retina_map_neg_z_path") {
+            image_data.push(load(retina_map_neg_z_path));
+        }
+        if image_data.len() == 6 {
+            let (_, retinamap_view) = load_cubemap(&mut factory, image_data).unwrap();
+            self.pso_data.s_retina = (retinamap_view, self.pso_data.s_retina.clone().1);
         } else {
-            let target_resolution = (
-                self.pso_data.u_resolution[0] as u32,
-                self.pso_data.u_resolution[1] as u32,
+            let proj_val = Value::Matrix(Matrix4::from_scale(1.0));
+            let projection = values.get("proj_matrix").unwrap_or(&proj_val).as_matrix().unwrap();
+            let res_x = (self.pso_data.u_resolution[0] * 2.0 * projection[0][0]) as f32;
+            let res_y = (self.pso_data.u_resolution[1] * 2.0 * projection[1][1]) as f32;
+            let resolution = (res_x.max(res_y) + 1.0) as u32;
+            let cubemap_resolution = (
+                resolution,
+                resolution,
             );
-            let retina_map = generate_retina_map(target_resolution, &values);
-            let (_, retinamap_view) = load_texture_from_bytes(
+
+            //orientations directly taken from https://www.khronos.org/opengl/wiki/Cubemap_Texture
+            let retina_map_pos_x = generate_retina_map(cubemap_resolution, &[-Vector3::unit_z(), -Vector3::unit_y(),  Vector3::unit_x()], &values);
+            let retina_map_neg_x = generate_retina_map(cubemap_resolution, &[ Vector3::unit_z(),  Vector3::unit_y(), -Vector3::unit_x()], &values);
+            let retina_map_pos_y = generate_retina_map(cubemap_resolution, &[ Vector3::unit_x(),  Vector3::unit_z(),  Vector3::unit_y()], &values);
+            let retina_map_neg_y = generate_retina_map(cubemap_resolution, &[ Vector3::unit_x(), -Vector3::unit_z(), -Vector3::unit_y()], &values);
+            let retina_map_pos_z = generate_retina_map(cubemap_resolution, &[ Vector3::unit_x(), -Vector3::unit_y(),  Vector3::unit_z()], &values);
+            let retina_map_neg_z = generate_retina_map(cubemap_resolution, &[-Vector3::unit_x(), -Vector3::unit_y(), -Vector3::unit_z()], &values);
+            //save latest retina map
+            //let _ = image::save_buffer(&Path::new("last.retina_pos_x.png"), &retina_map_pos_x, cubemap_resolution.0, cubemap_resolution.1, image::ColorType::Rgba8);
+            //let _ = image::save_buffer(&Path::new("last.retina_neg_x.png"), &retina_map_neg_x, cubemap_resolution.0, cubemap_resolution.1, image::ColorType::Rgba8);
+            //let _ = image::save_buffer(&Path::new("last.retina_pos_y.png"), &retina_map_pos_y, cubemap_resolution.0, cubemap_resolution.1, image::ColorType::Rgba8);
+            //let _ = image::save_buffer(&Path::new("last.retina_neg_y.png"), &retina_map_neg_y, cubemap_resolution.0, cubemap_resolution.1, image::ColorType::Rgba8);
+            //let _ = image::save_buffer(&Path::new("last.retina_pos_z.png"), &retina_map_pos_z, cubemap_resolution.0, cubemap_resolution.1, image::ColorType::Rgba8);
+            //let _ = image::save_buffer(&Path::new("last.retina_neg_z.png"), &retina_map_neg_z, cubemap_resolution.0, cubemap_resolution.1, image::ColorType::Rgba8);
+            let (_, retinamap_view) = load_cubemap_from_bytes(
                 &mut factory,
-                &retina_map,
-                target_resolution.0,
-                target_resolution.1,
+                &[&retina_map_pos_x, &retina_map_neg_x, &retina_map_pos_y, &retina_map_neg_y, &retina_map_pos_z, &retina_map_neg_z],
+                cubemap_resolution.0,
             )
             .unwrap();
 
@@ -106,11 +140,11 @@ impl Node for Retina {
         };
     }
 
-    fn input(&mut self, _head: &Head, gaze: &Gaze, _vis_param: &VisualizationParameters, _flow_index: usize) -> Gaze {
-        self.pso_data.u_gaze = [
-            gaze.x * self.pso_data.u_resolution[0],
-            gaze.y * self.pso_data.u_resolution[1],
-        ];
+    fn input(&mut self, head: &Head, gaze: &Gaze, _vis_param: &VisualizationParameters) -> Gaze {
+        let gaze_rotation = Matrix4::look_to_lh(Point3::new(0.0, 0.0, 0.0), gaze.direction, Vector3::unit_y());
+        //let gaze_rotation = Matrix4::from_scale(1.0);
+        self.pso_data.u_proj = (gaze_rotation * head.proj.invert().unwrap()).into();
+        //self.pso_data.u_proj = (head.proj * (Matrix4::from_translation(-head.position) * head.view)).into();
         gaze.clone()
     }
 

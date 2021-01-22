@@ -20,5 +20,10 @@
 	"nyctalopia_int": 0,
 	"presbyopia_onoff": false,
 	"presbyopia_near_point": 0,
-	"retina_map_path" : null
+	"retina_map_pos_x_path" : null,
+	"retina_map_neg_x_path" : null,
+	"retina_map_pos_y_path" : null,
+	"retina_map_neg_y_path" : null,
+	"retina_map_pos_z_path" : null,
+	"retina_map_neg_z_path" : null
 }

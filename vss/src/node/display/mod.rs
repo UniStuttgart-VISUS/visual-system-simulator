@@ -96,7 +96,7 @@ impl Node for Display {
         }
     }
 
-    fn input(&mut self, _head: &Head, gaze: &Gaze, vis_param: &VisualizationParameters, _flow_index: usize) -> Gaze {
+    fn input(&mut self, _head: &Head, gaze: &Gaze, vis_param: &VisualizationParameters) -> Gaze {
         let ratio = [
             self.pso_data.u_resolution_out[0] / self.pso_data.u_resolution_in[0],
             self.pso_data.u_resolution_out[1] / self.pso_data.u_resolution_in[1],
@@ -116,6 +116,7 @@ impl Node for Display {
         Gaze {
             x: scale[0] * gaze.x - offset[0],
             y: scale[1] * gaze.y - offset[1],
+            direction: gaze.direction,
         }
     }
 
