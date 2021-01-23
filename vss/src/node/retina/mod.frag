@@ -193,7 +193,7 @@ void main() {
     vec3 color_covar = texture(s_covariances, v_tex).rgb;
 
     vec2 dir_var = texture(s_deflection, v_tex).ba;
-    float dir_covar = texture(s_color_uncertainty, v_tex).a;
+    float dir_covar = texture(s_covariances, v_tex).a;
 
     mat3 S_col = covarMatFromVec(color_var, color_covar);
     mat2 S_pos =covarMatFromVec(dir_var, dir_covar);
