@@ -4,7 +4,39 @@ float normpdf(in float x) {
     return 0.39894 * exp(-0.5 * x * x / (49.0)) / 7.0;
 }
 
-vec4 blur(in vec2 fragCoord, in sampler2D tex, float blur_scale, vec2 resolution, inout vec3 col_var, inout vec3 col_covar, in sampler2D col_vartex, inout vec2 dir_var,in sampler2D dir_vartex) {
+
+
+mat3 covarMatFromVec(in vec3 var, in vec3 covar){
+    return mat3(
+        var.r       , covar.x     , covar.y      ,
+        covar.x     , var.g       , covar.z      ,
+        covar.y     , covar.z     , var.b
+    ); 
+}
+
+mat2 covarMatFromVec(in vec2 var, in float covar){
+    return mat2(
+        var.x , covar , 
+        covar , var.y       
+    ); 
+}
+
+void covarMatToVec(in mat3 cvmat, inout vec3 var, inout vec3 covar){
+    var     = vec3(cvmat[0][0],cvmat[1][1],cvmat[2][2]);
+    covar   = vec3(cvmat[1][0],cvmat[2][0],cvmat[2][1]);
+}
+
+void covarMatToVec(in mat2 cvmat, inout vec2 var, inout float covar){
+    var     = vec2(cvmat[0][0],cvmat[1][1]);
+    covar   = cvmat[1][0];
+}
+
+
+
+
+//vec4 blur(in vec2 fragCoord, in sampler2D tex, float blur_scale, vec2 resolution, inout vec3 col_var, inout vec3 col_covar, in sampler2D col_vartex, inout vec2 dir_var,in sampler2D dir_vartex) {
+vec4 blur(in vec2 fragCoord, in sampler2D tex, float blur_scale, vec2 resolution, inout mat3 S_col, inout mat2 S_pos, in sampler2D s_col_var, in sampler2D s_covariance, in sampler2D s_pos_var) {
+
     // declare stuff
     const int kSize = (BLUR_SIZE - 1) / 2;
     float kernel[BLUR_SIZE];
@@ -39,7 +71,10 @@ vec4 blur(in vec2 fragCoord, in sampler2D tex, float blur_scale, vec2 resolution
     vec3 col_var_new = vec3(0.0);
     vec3 col_covar_new = vec3(0.0);
     vec2 dir_var_in = vec2(0.0);
+    float dir_covar_in = 0.0;
     vec2 dir_var_new = vec2(0.0);
+    float dir_covar_new = 0.0;
+
     vec3 pix = vec3(0.0);
     vec3 diff = vec3(0.0);
     float weight = 0;
@@ -47,15 +82,21 @@ vec4 blur(in vec2 fragCoord, in sampler2D tex, float blur_scale, vec2 resolution
     for (int i = -kSize; i <= kSize; ++i) {
         for (int j = -kSize; j <= kSize; ++j) {
             weight = kernel[kSize + j] * kernel[kSize + i] / (Z * Z);
+
+            vec4 covars = texture(s_covariance, (fragCoord + vec2(float(i), float(j)) * blur_scale / resolution)) * weight;
+
             // propagated variance
-            col_var_in += texture(col_vartex, (fragCoord + vec2(float(i), float(j)) * blur_scale / resolution)).rgb * weight;
-            dir_var_in += texture(dir_vartex, (fragCoord + vec2(float(i), float(j)) * blur_scale / resolution)).ba * weight;
-            col_covar_var_in += texture(dir_vartex, (fragCoord + vec2(float(i), float(j)) * blur_scale / resolution)).rgb * weight;
+            col_var_in += texture(s_col_var, (fragCoord + vec2(float(i), float(j)) * blur_scale / resolution)).rgb * weight;
+            dir_var_in += texture(s_pos_var, (fragCoord + vec2(float(i), float(j)) * blur_scale / resolution)).ba * weight;
+
+            col_covar_var_in += covars.rgb;
+            dir_covar_in += covars.a;
+            
             // new variance
             pix = texture(tex, (fragCoord + vec2(float(i), float(j)) * blur_scale / resolution)).rgb;
             diff = pix - avg;
             col_covar_new += vec3(diff.r*diff.g, diff.r*diff.b, diff.g*diff.b) *weight;
-            //reuse for cariance
+
             diff = diff * diff;
             col_var_new += diff * weight;
         }
@@ -66,27 +107,18 @@ vec4 blur(in vec2 fragCoord, in sampler2D tex, float blur_scale, vec2 resolution
     dir_var_new = vec2(blur_scale*blur_scale/(resolution*resolution));
 
     // variances can now be added
-    col_var = col_var_in + col_var_new;
-    dir_var = dir_var_in + dir_var_new;
-    col_covar = col_covar_var_in + col_covar_new;
+    vec3 col_var = col_var_in + col_var_new;
+    vec3 col_covar = col_covar_var_in + col_covar_new;
+
+    vec2 dir_var = dir_var_in + dir_var_new;
+    float dir_covar = dir_covar_in + dir_covar_new;
+
+
+     S_col = covarMatFromVec(col_var, col_covar);
+     S_pos = covarMatFromVec(dir_var, dir_covar);
 
     return vec4(avg,1.0);
 }
-
-
-mat3 covarMatFromVec(in vec3 var, in vec3 covar){
-    return mat3(
-        var.r       , covar.x     , covar.y      ,
-        covar.x     , var.g       , covar.z      ,
-        covar.y     , covar.z     , var.b
-    ); 
-}
-
-void covarMatToVec(in mat3 cvmat, inout vec3 var, inout vec3 covar){
-    var     = vec3(cvmat[0][0],cvmat[1][1],cvmat[2][2]);
-    covar   = vec3(cvmat[1][0],cvmat[2][0],cvmat[2][1]);
-}
-
 
 
 
@@ -108,21 +140,8 @@ void applyBloom(inout vec3 color, in float blur_factor, inout mat3 S) {
     vec3 weights = vec3(0.299, 0.587, 0.114);
     float brightness = dot(weights, color);
    
-    // to calculate the brightness of the bloom, we use the following formula
-    // bloom = color.rgb * brightness
-    // formula for brightness see above
-
-    // Some shortcuts to bring the below formula on one screen page
-    vec3 wsq = pow(weights, vec3(2.0));
-    vec3 csq = pow(color, vec3(2.0));
-
-    // The derivative of the "own" channel, e.g. for red: (2*r*w_r+g*w_g+b*w_b) 
-    // dotp per dimension: r*w_r+g*w_g+b*w_b 
-    // added vector: for each dimension its 2*_*_ part.
-    vec3 ch_dvt =  vec3(dot(weights, color))+(weights * color);
-
     // the constant factor to scale the bloom compared to the blur
-    float c =  blur_factor / 3.;
+    float c =  blur_factor;
 
     // expands to color.r*weights.r+color.g*weights.g+color.b*weights.b
     float dotp =  dot(weights, color);

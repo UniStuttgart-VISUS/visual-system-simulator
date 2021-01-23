@@ -282,6 +282,8 @@ Simulation getColorSample(vec3 start, vec2 aim, float focalLength, float nAnteri
     RefractInfo ri = rayIntersectEllipsoid(start, dir, OUTER_CORNEA_CENTER, OUTER_CORNEA_RADIUS);
     start = ri.position;
 
+    // we modeled the cornea as an ellipsoid instead of a sphere.
+    // although the lens can also contribute to a asigmatism, the result is the same, as if the cornea would introduce all the error 
     // start = rayIntersectSphere(start, dir, OUTER_CORNEA_CENTER, OUTER_CORNEA_RADIUS);
 
 

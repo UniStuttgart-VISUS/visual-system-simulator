@@ -43,25 +43,29 @@ void lowerContrastBy(inout vec4 color, inout mat3 S, float value) {
     }
 }
 
+
 void main() {
     if (1 == u_active) {
         vec3 original_color = texture(s_color, v_tex).rgb;
         vec3 color_var = texture(s_color_uncertainty, v_tex).rgb;
         vec3 color_covar = texture(s_covariances, v_tex).rgb;
         vec2 dir_var = texture(s_deflection, v_tex).ba;
+        float dir_covar = texture(s_covariances, v_tex).a;
+        
+        mat3 S_col = covarMatFromVec(color_var, color_covar);
+        mat2 S_pos =covarMatFromVec(dir_var, dir_covar);
 
         // the 3.0 is used to strengthen the blur compared to the bloom effect
-        // vec4 color =  blur(v_tex, s_color, u_blur_factor * 3.0, u_resolution, color_var, s_color_uncertainty, dir_var, s_deflection);        
-        vec4 color =  blur(v_tex, s_color, u_blur_factor * 3.0, u_resolution, color_var, color_covar, s_color_uncertainty, dir_var, s_deflection);        
+        vec4 color =  blur(v_tex, s_color, u_blur_factor * 3.0, u_resolution, S_col, S_pos, s_color_uncertainty, s_covariances, s_deflection);        
         
-        mat3 S = covarMatFromVec(color_var, color_covar);
 
-        applyBloom(color.rgb, u_blur_factor, S);
+        applyBloom(color.rgb, u_blur_factor/3, S_col);
         rt_color = color;
 
-        lowerContrastBy(rt_color,S, u_contrast_factor);
+        lowerContrastBy(rt_color,S_col, u_contrast_factor);
 
-        covarMatToVec(S, color_var, color_covar);
+        covarMatToVec(S_col, color_var, color_covar);
+        covarMatToVec(S_pos, dir_var, dir_covar);
 
         // update the rgb values of the textures with the new data. do not touch the alpha
         rt_color_change = vec4(texture(s_color_change, v_tex).rgb + ( rt_color.rgb - original_color), 0.0);
@@ -69,7 +73,7 @@ void main() {
         rt_deflection = vec4(texture(s_deflection, v_tex).rg, dir_var);
 
         rt_depth = vec4(texture(s_depth, v_tex)).r;
-        rt_covariances = vec4(color_covar, texture(s_covariances, v_tex).a);
+        rt_covariances = vec4(color_covar, dir_covar);
 
 
     } else {
