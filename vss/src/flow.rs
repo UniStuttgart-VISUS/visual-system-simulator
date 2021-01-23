@@ -65,7 +65,9 @@ impl Flow {
                             color_change,
                             color_change_view,
                             color_uncertainty,
-                            color_uncertainty_view
+                            color_uncertainty_view,
+                            covariances,
+                            covariances_view
                         } => Slot::Rgb {
                             color: window.target(),
                             color_view,
@@ -74,7 +76,9 @@ impl Flow {
                             color_change, 
                             color_change_view, 
                             color_uncertainty, 
-                            color_uncertainty_view
+                            color_uncertainty_view,
+                            covariances,
+                            covariances_view
                         },
                         _ => Slot::Empty,
                     },
@@ -114,6 +118,11 @@ impl Flow {
                     width as u32,
                     height as u32,
                 );
+                let (covariances, covariances_view) = create_texture_render_target::<Rgba32F>(
+                    &mut factory,
+                    width as u32,
+                    height as u32,
+                );
 
                 drop(factory);
 
@@ -125,7 +134,9 @@ impl Flow {
                     color_change, 
                     color_change_view, 
                     color_uncertainty, 
-                    color_uncertainty_view
+                    color_uncertainty_view,
+                    covariances,
+                    covariances_view
                 };
 
                 NodeSlots::new_io(

@@ -5,6 +5,8 @@ uniform sampler2D s_deflection;
 uniform sampler2D s_color_change;
 uniform sampler2D s_color_uncertainty;
 uniform sampler2D s_original;
+uniform sampler2D s_covariances;
+
 uniform vec2 u_resolution_in;
 
 
@@ -74,12 +76,12 @@ vec3 TurboColormap(in float x) {
 }
 
 vec3 RetinalGanglion(){
-    float gray_own = getPerceivedBrightness(texture(s_original, v_tex).rgb, vec3(0.0)).r;
+    float gray_own = getPerceivedBrightness(texture(s_original, v_tex).rgb);
     float gray_others = 0;
     for (int i = -1; i <= 1; i++) {
         for (int j = -1; j <= 1; j++) {
             if(i!=0||j!=0){ // exclude i=j=0
-                gray_others += getPerceivedBrightness(texture(s_original, v_tex + vec2(float(i), float(j))*2 / u_resolution_in).rgb,vec3(0.0)).r;
+                gray_others += getPerceivedBrightness(texture(s_original, v_tex + vec2(float(i), float(j))*2 / u_resolution_in).rgb);
             }
         }
     }
@@ -144,7 +146,15 @@ void main() {
             }
             break;
         case 7: // retinal ganglia ON/OFF
-            color = RetinalGanglion();    
+            // color = RetinalGanglion();  
+
+            float cov =  texture(s_color_uncertainty, v_tex).r + texture(s_color_uncertainty, v_tex).g + texture(s_color_uncertainty, v_tex).b 
+            -(texture(s_covariances, v_tex).r + texture(s_covariances, v_tex).g + texture(s_covariances, v_tex).b);
+
+            // float cov =  texture(s_covariances, v_tex).r + texture(s_covariances, v_tex).g + texture(s_covariances, v_tex).b;
+
+            color = ViridisColormap(sqrt(abs(cov))* u_heat_scale);
+
             break;
 
     }

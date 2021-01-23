@@ -11,12 +11,16 @@ uniform sampler2D s_retina;
 uniform sampler2D s_deflection;
 uniform sampler2D s_color_change;
 uniform sampler2D s_color_uncertainty;
+uniform sampler2D s_covariances;
+
 
 in vec2 v_tex;
 out vec4 rt_color;
 out vec4 rt_deflection;
 out vec4 rt_color_change;
 out vec4 rt_color_uncertainty;
+out vec4 rt_covariances;
+
 
 struct ErrorValues
 {
@@ -42,25 +46,26 @@ void applyBlurAndBloom(inout vec4 color, in vec4 retina, inout ErrorValues ev) {
         float blur_scale = (0.75 - (retina.r + retina.g + retina.b) / 3.0) * 5.0;
         //original calculation: 
         //      color = blur(v_tex, s_color, blur_scale, u_resolution);
-        color = blur(v_tex, s_color, blur_scale, u_resolution, ev.color_var, s_color_uncertainty, ev.position_var, s_deflection);   
+        vec3 nonsense = vec3(0.0);
+        color = blur(v_tex, s_color, blur_scale, u_resolution, ev.color_var, nonsense, s_color_uncertainty, ev.position_var, s_deflection);   
 // TODO propagate directional uncertainty
 
         // apply bloom
         //original calculation: 
         //      color = color * (1.0 + getPerceivedBrightness(color.rgb) * (0.75 - max_rgb) * 0.5);
-        vec2 brightness = getPerceivedBrightness(color.rgb, ev.color_var);
-        float bloom_factor = 1. + brightness.x * (0.75 - max_rgb) * 0.5;
-        // f = 1+ x*(0.75-y) *0.5
-        // df/dx = -0.5(y-0.75)
-        // df/dy = -0.5x
-        // s^2 = sum( (df/dx_i * s_i)^2 )
-        float bloom_factor_variance = 
-             pow(-0.5 * (max_rgb-0.75) ,2.0) * brightness.y 
-           + pow(-0.5 * brightness.x,2.0)    * max_rgb_var
-            ;
-// TODO possibly covariance
-        ev.color_var = pow(bloom_factor ,2.0) * ev.color_var + (color.rgb*color.rgb) * bloom_factor_variance;
-        // do the bloom
+        float brightness = getPerceivedBrightness(color.rgb);
+        float bloom_factor = 1. + brightness * (0.75 - max_rgb) * 0.5;
+//         // f = 1+ x*(0.75-y) *0.5
+//         // df/dx = -0.5(y-0.75)
+//         // df/dy = -0.5x
+//         // s^2 = sum( (df/dx_i * s_i)^2 )
+//         float bloom_factor_variance = 
+//              pow(-0.5 * (max_rgb-0.75) ,2.0) * brightness.y 
+//            + pow(-0.5 * brightness.x,2.0)    * max_rgb_var
+//             ;
+// // TODO possibly covariance
+//         ev.color_var = pow(bloom_factor ,2.0) * ev.color_var + (color.rgb*color.rgb) * bloom_factor_variance;
+//         // do the bloom
         color = color * bloom_factor;
     }
 }
@@ -131,11 +136,12 @@ void applyColorBlindness(inout vec4 color, in vec4 retina, inout ErrorValues ev)
 
 void applyNyctalopia(inout vec4 color, in vec4 retina, inout ErrorValues ev) {
 
-    vec2 brightness = getPerceivedBrightness(color.rgb, ev.color_var);
+    float brightness = getPerceivedBrightness(color.rgb);
 
     //float night_blindness_factor = getPerceivedBrightness(color.rgb) * 5.0;
-    float night_blindness_factor = brightness.x * 5;
-    float nfb_var = brightness.y * 5 * 5; 
+    // float night_blindness_factor = brightness.x * 5;
+    float night_blindness_factor = brightness * 5;
+    // float nfb_var = brightness.y * 5 * 5; 
     if (night_blindness_factor < 1.0) {
         color = retina.a * color + (1.0 - retina.a) * night_blindness_factor * color;
 
@@ -143,12 +149,12 @@ void applyNyctalopia(inout vec4 color, in vec4 retina, inout ErrorValues ev) {
         // df/dx    = a - (1-a) * y
         // df/dy    = -(1-a) * x
         // s^2      = sum( (df/dx_i * s_i)^2 )
-        float dfdx_factor = retina.a - (1-retina.a) * night_blindness_factor;
-        vec3 dfdy_factor = vec3(-1 * (1-retina.a) ) * color.rgb;
-        ev.color_var = 
-                pow(dfdx_factor, 2.0)       * ev.color_var 
-              + pow(dfdy_factor, vec3(2.0)) * nfb_var
-              ;
+        // float dfdx_factor = retina.a - (1-retina.a) * night_blindness_factor;
+        // vec3 dfdy_factor = vec3(-1 * (1-retina.a) ) * color.rgb;
+        // ev.color_var = 
+        //         pow(dfdx_factor, 2.0)       * ev.color_var 
+        //       + pow(dfdy_factor, vec3(2.0)) * nfb_var
+        //       ;
     }
 }
 
@@ -215,5 +221,5 @@ void main() {
     rt_color_uncertainty = vec4(ev.color_var, 0.0);
     rt_deflection = vec4(texture(s_deflection, v_tex).rg, ev.position_var);
     // rt_deflection = texture(s_deflection, v_tex).rgba;
-
+    rt_covariances = texture(s_covariances, v_tex);
 }

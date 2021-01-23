@@ -54,18 +54,25 @@ uniform sampler2D s_cornea;
 uniform sampler2D s_deflection;
 uniform sampler2D s_color_change;
 uniform sampler2D s_color_uncertainty;
+uniform sampler2D s_covariances;
+
 
 in vec2 v_tex;
 out vec4 rt_color;
 out vec4 rt_deflection;
 out vec4 rt_color_change;
 out vec4 rt_color_uncertainty;
+out vec4 rt_covariances;
+
 
 struct Simulation
 {
   vec4 color;
   vec4 color_change;
   vec4 color_uncertainty;
+  vec4 color_covariance;
+  vec2 dir_unc;
+  float dir_covar;
   vec2 target;
 };
 
@@ -289,10 +296,18 @@ Simulation getColorSample(vec3 start, vec2 aim, float focalLength, float nAnteri
     vec4 color = getColorWithRay(target);
     vec4 color_change = texture(s_color_change, target.xy / ((target.z - VITREOUS_HUMOUR_RADIUS) * TEXTURE_SCALE) + 0.5);
     vec4 color_uncertainty = texture(s_color_uncertainty, target.xy / ((target.z - VITREOUS_HUMOUR_RADIUS) * TEXTURE_SCALE) + 0.5);
+    vec4 color_covariance = texture(s_covariances, target.xy / ((target.z - VITREOUS_HUMOUR_RADIUS) * TEXTURE_SCALE) + 0.5);
+    vec4 deflection = texture(s_deflection, target.xy / ((target.z - VITREOUS_HUMOUR_RADIUS) * TEXTURE_SCALE) + 0.5);
+    vec2 dir_change = deflection.rg;
+    vec2 dir_unc = deflection.ba;
+    float dir_covar = color_covariance.a;
     Simulation sim = Simulation(
         color,
         color_change,
         color_uncertainty,
+        color_covariance,
+        dir_unc,
+        dir_covar,
         target.xy/target.z
         // target.xy / ((target.z - VITREOUS_HUMOUR_RADIUS) * TEXTURE_SCALE) + 0.5
         );
@@ -309,14 +324,9 @@ void main() {
 
         float sampleCount = 0.0;
         vec4 color = vec4(0.0);
-   
-        // // dir sd
         vec2 avg_target = vec2(0.0);
-        vec2 var_target = vec2(0.0);
-        // since we have only two dimensions, the covariance can be calculated as a single float
-        float covar_target = 0.0;
 
-
+   
         // prepare accomodation
         // This implementation focuses on all possible depths: for each pixel, the lens can focus on the individual depth
         float focalLength = length(vec3(
@@ -392,56 +402,70 @@ void main() {
         color /= sampleCount;
 
 // TODO: Possibly reenable covariance
-        vec2 diff_vec = vec2(0.0);
+        vec2 dir_diff = vec2(0.0);
+        vec3 col_diff = vec3(0.0);
+
         vec3 col_unc_prop = vec3(0.0);
-        vec3 col_unc_new = vec3(0.0);
+        vec3 col_covar_prop = vec3(0.0);
         vec2 dir_unc_prop = vec2(0.0);
+        float dir_covar_prop = 0.0;
+
+        vec3 col_unc_new = vec3(0.0);
+        vec3 col_covar_new = vec3(0.0);
+        vec2 dir_unc_new = vec2(0.0);
+        float dir_covar_new = 0.0;
+
         
         for (int i = 0; i < 17; i++) {
-            // express the difference of the current target vector and the average
-            diff_vec = rays[i].target-avg_target;
 
-            // calculate the variance of the target scatters for each dimension    
-            var_target += pow(diff_vec , vec2(2.0));
-            // var_target += diff_vec ;
+            dir_diff = rays[i].target-avg_target;
+            col_diff = rays[i].color.rgb - color.rgb;
+
+            col_unc_new += pow(col_diff, vec3(2.0));
+            col_covar_new += vec3(col_diff.r*col_diff.g, col_diff.r*col_diff.b, col_diff.g*col_diff.b);
+            dir_unc_new += pow(dir_diff , vec2(2.0));
+            dir_covar_new += dir_diff.x * dir_diff.y;
 
             col_unc_prop += rays[i].color_uncertainty.rgb;
-            col_unc_new += pow(rays[i].color.rgb - color.rgb, vec3(2.0));
-            dir_unc_prop += vec2(rays[i].color_change.a, rays[i].color_uncertainty.a);
+            col_covar_prop += rays[i].color_covariance.rgb;
+            dir_unc_prop += rays[i].dir_unc;
+            dir_covar_prop += rays[i].color_covariance.a;
+
         }
 
-        var_target /= sampleCount;
         col_unc_new /= sampleCount;
-        col_unc_prop /= sampleCount * sampleCount;
-        dir_unc_prop /= sampleCount * sampleCount;
+        col_covar_new /= sampleCount;
+        dir_unc_new /= sampleCount;
+        dir_covar_new /= sampleCount;
+
+        col_unc_prop /= sampleCount;        
+        col_covar_prop /= sampleCount;        
+        dir_unc_prop /= sampleCount;
+        dir_covar_prop /= sampleCount;
+
 
         vec3 col_var = col_unc_prop + col_unc_new;
-        //vec2 dir_unc = dir_unc_prop + var_target;
-        vec2 dir_unc = var_target;
+        vec3 col_covar = col_covar_prop + col_covar_new;
+        vec2 dir_var = dir_unc_prop + dir_unc_new;
+        float dir_covar = dir_covar_prop + dir_covar_new;
 
         // the final color is the average of all samples (calculated above)
         rt_color = color;
-
+        
         vec3 color_diff = rt_color.rgb - original_color;
         vec2 deflection = (v_tex.xy - 0.5) * TEXTURE_SCALE - avg_target;
 
-        /*
-            For writing back the values:
-            - The uncertainty was calculated from the input uncertainties and the uncertainty introdced here.
-              Therefore the old uncertainty is replaced
-            - The change introduced here has to be added to the change already present and therefore needs to be added.
-        */
         rt_color_change =    vec4(texture(s_color_change, v_tex).rgb + color_diff,0.0);
         rt_color_uncertainty = vec4(col_var, 0.0);        
-        rt_deflection = vec4(texture(s_deflection, v_tex).rg + deflection, dir_unc);
+        rt_deflection = vec4(texture(s_deflection, v_tex).rg + deflection, dir_var);
+        rt_covariances = vec4(col_covar, dir_covar);
 
     } else {
         rt_color = texture(s_color, v_tex);
         rt_color_change =       texture(s_color_change, v_tex);
         rt_color_uncertainty =  texture(s_color_uncertainty, v_tex);
         rt_deflection =         texture(s_deflection, v_tex);
-
-
+        rt_covariances = texture(s_covariances, v_tex);
     }
 
 }

@@ -15,6 +15,7 @@ gfx_defines! {
         s_color_change: gfx::TextureSampler<[f32; 4]> = "s_color_change",
         s_color_uncertainty: gfx::TextureSampler<[f32; 4]> = "s_color_uncertainty",
         s_original: gfx::TextureSampler<[f32; 4]> = "s_original",
+        s_covariances: gfx::TextureSampler<[f32; 4]> = "s_covariances",
 
     }
 }
@@ -63,6 +64,12 @@ impl Node for Display {
             gfx::handle::RenderTargetView<gfx_device_gl::Resources, [f32; 4]>,
         ) = factory.create_render_target(1, 1).unwrap();
 
+        let (_, s_covariances, _):(
+            _,
+            _,
+            gfx::handle::RenderTargetView<gfx_device_gl::Resources, [f32; 4]>,
+        ) = factory.create_render_target(1, 1).unwrap();
+
         Display {
             pso,
             pso_data: pipe::Data {
@@ -74,6 +81,7 @@ impl Node for Display {
                 s_color_change:(s_color_change, sampler.clone()),
                 s_color_uncertainty:(s_color_uncertainty, sampler.clone()),
                 s_original:(s_original, sampler.clone()),
+                s_covariances: (s_covariances, sampler.clone()),
                 rt_color: dst,
                 u_vis_type: 0,
                 u_heat_scale: 1.0,
@@ -89,8 +97,9 @@ impl Node for Display {
         self.pso_data.s_deflection = slots.as_deflection_view();
         self.pso_data.s_color_change = slots.as_color_change_view();
         self.pso_data.s_color_uncertainty = slots.as_color_uncertainty_view();
+        self.pso_data.s_covariances = slots.as_covariances_view();
+        
         self.pso_data.rt_color = slots.as_color();
-
 
         slots
     }
