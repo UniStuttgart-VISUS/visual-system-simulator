@@ -401,7 +401,6 @@ void main() {
         avg_target /= sampleCount;
         color /= sampleCount;
 
-// TODO: Possibly reenable covariance
         vec2 dir_diff = vec2(0.0);
         vec3 col_diff = vec3(0.0);
 

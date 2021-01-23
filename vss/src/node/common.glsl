@@ -112,14 +112,6 @@ void applyBloom(inout vec3 color, in float blur_factor, inout mat3 S) {
     // bloom = color.rgb * brightness
     // formula for brightness see above
 
-    // with the genral formula for uncertainty of several (possibly dependent variables) 
-    //u^2 = \sum_{i=1}^N\left(\frac{\partial f}{\partial x_i}\cdot u_i\right)^2 + 2\sum_{i=1}^{N-1}\sum_{k=i+1}^N\frac{\partial f}{\partial x_i}\ \frac{\partial f}{\partial x_k}\cdot u_{x_i, x_k}
-    // we get
-    // u_bloom^2 = u_g^2*(r*w_r+2*g*w_g+b*w_b)^2+g^2*u_r^2*w_r^2+2*(g*u_1*w_r*(r*w_r+2*g*w_g+b*w_b)+g*u_3*w_b*(r*w_r+2*g*w_g+b*w_b)+g^2*u_2*w_b*w_r)+g^2*u_b^2*w_b^2
-    // Hint: you might want to plot these somewhere instead of trying to reason about it here
-
-    // mat3 S = covarMatFromVec(var_in,cv);
-
     // Some shortcuts to bring the below formula on one screen page
     vec3 wsq = pow(weights, vec3(2.0));
     vec3 csq = pow(color, vec3(2.0));
@@ -128,21 +120,9 @@ void applyBloom(inout vec3 color, in float blur_factor, inout mat3 S) {
     // dotp per dimension: r*w_r+g*w_g+b*w_b 
     // added vector: for each dimension its 2*_*_ part.
     vec3 ch_dvt =  vec3(dot(weights, color))+(weights * color);
-    // float variance = vec3(
-    //     pow(ch_dvt.r,2) * var_in.r + csq.r*wsq.g*var_in.g + csq.r*wsq.b*var_in.b + 2*( ch_dvt.r*color.r*weights.g*cv.x + ch_dvt.r*color.r*weights.b*cv.y + csq.r*weights.g*weights.b*cv.z)    ,
-    //     pow(ch_dvt.g,2) * var_in.g + csq.g*wsq.r*var_in.r + csq.g*wsq.b*var_in.b + 2*( ch_dvt.g*color.g*weights.r*cv.x + ch_dvt.g*color.g*weights.b*cv.z + csq.g*weights.b*weights.r*cv.y)    ,
-    //     pow(ch_dvt.b,2) * var_in.b + csq.b*wsq.r*var_in.r + csq.b*wsq.g*var_in.g + 2*( ch_dvt.b*color.b*weights.r*cv.y + ch_dvt.b*color.b*weights.g*cv.z + csq.b*weights.g*weights.r*cv.x)    
-    //     );
-
-    // mat3 J = mat3(
-    //     ch_dvt.r            ,   weights.g*color.r   ,   weights.b*color.r   ,
-    //     weights.r*color.g   ,   ch_dvt.g            ,   weights.b*color.g   ,
-    //     weights.r*color.b   ,   weights.g*color.g   ,   ch_dvt.b
-    // );
 
     // the constant factor to scale the bloom compared to the blur
     float c =  blur_factor / 3.;
-
 
     // expands to color.r*weights.r+color.g*weights.g+color.b*weights.b
     float dotp =  dot(weights, color);
