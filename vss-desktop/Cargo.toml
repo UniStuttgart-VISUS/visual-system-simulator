@@ -27,6 +27,6 @@ cgmath = "0.18"
 cc = "^1.0.61"
 
 [features]
-default = ["varjo"]
+default = []
 video = ["ac_ffmpeg"]
 varjo = []

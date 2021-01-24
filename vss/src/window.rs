@@ -1,6 +1,7 @@
 use crate::*;
 use std::cell::RefCell;
-use cgmath::{Vector3};
+use cgmath::{Matrix4, Vector4, SquareMatrix};
+use glutin::{ElementState, MouseButton, dpi::{LogicalPosition}};
 
 /// A factory to create device objects.
 pub type DeviceFactory = gfx_device_gl::Factory;
@@ -24,6 +25,9 @@ pub struct Window {
     render_target: RefCell<RenderTargetColor>,
     main_depth: RefCell<RenderTargetDepth>,
     should_swap_buffers: RefCell<bool>,
+    cursor_pos: RefCell<LogicalPosition>,
+    override_view: RefCell<bool>,
+    override_gaze: RefCell<bool>,
 
     active: RefCell<bool>,
     values: Vec<RefCell<ValueMap>>,
@@ -68,6 +72,8 @@ impl Window {
         let mut flow = Vec::new();
         flow.resize_with(flow_count, Flow::new);
 
+        //TODO set perspective from values here ?
+
         Window {
             flow,
             remote,
@@ -79,6 +85,9 @@ impl Window {
             render_target: RefCell::new(render_target),
             main_depth: RefCell::new(main_depth),
             should_swap_buffers: RefCell::new(true),
+            cursor_pos: RefCell::new(LogicalPosition{x:0.0, y:0.0}),
+            override_view: RefCell::new(false),
+            override_gaze: RefCell::new(false),
             active: RefCell::new(false),
             values: values,
             vis_param: RefCell::new(VisualizationParameters::default())
@@ -120,12 +129,8 @@ impl Window {
         self.flow[flow_index].update_values(&self, &self.values[flow_index].borrow());
     }
     
-    pub fn set_head(&self, new_head: Head, flow_index: usize) {
-        self.flow[flow_index].last_head.replace(new_head);
-    }
-
-    pub fn set_gaze(&self, new_gaze: Gaze, flow_index: usize) {
-        self.flow[flow_index].last_gaze.replace(new_gaze);
+    pub fn set_perspective(&self, new_perspective: EyePerspective, flow_index: usize) {
+        self.flow[flow_index].last_perspective.replace(new_perspective);
     }
 
     pub fn factory(&self) -> &RefCell<DeviceFactory> {
@@ -142,18 +147,6 @@ impl Window {
         encoder.flush(device.deref_mut());
     }
 
-    fn override_gaze(gaze: Gaze, values: &ValueMap) -> Gaze {
-        if let (Some(gaze_x), Some(gaze_y)) = (values.get("gaze_x"), values.get("gaze_y")) {
-            Gaze {
-                x: gaze_x.as_f64().unwrap_or(0.0) as f32,
-                y: gaze_y.as_f64().unwrap_or(0.0) as f32,
-                direction: Vector3::new(0.0, 0.0, 0.0),
-            }
-        } else {
-            gaze
-        }
-    }
-
     pub fn target(&self) -> gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat> {
         self.render_target.borrow().clone()
     }
@@ -167,8 +160,6 @@ impl Window {
     pub fn poll_events(&self) -> bool {
         let mut done = false;
         let mut deferred_size = None;
-        let mut deferred_gaze =
-            Self::override_gaze(self.flow[0].last_gaze.borrow().clone(), &self.values[0].borrow());//TODO: FIX THIS (don't just use the first flow)
 
         // Poll for window events.
         self.events_loop.borrow_mut().poll_events(|event| {
@@ -340,30 +331,27 @@ impl Window {
                     }
                     glutin::WindowEvent::CursorMoved { position, .. } => {
                         if *self.active.borrow() {
-                            let window_size =
-                                &self.windowed_context.window().get_inner_size().unwrap();
-                            deferred_gaze = Self::override_gaze(
-                                Gaze {
-                                    x: position.x as f32 / window_size.width as f32,
-                                    y: 1.0 - (position.y as f32 / window_size.height as f32),
-                                    direction: Vector3::new(0.0, 0.0, 0.0),
-                                },
-                                &self.values[0].borrow(),//TODO: FIX THIS (don't just use the first flow)
-                            );
-                            let last_head = &mut self.flow[0].last_head.borrow_mut();
-                            last_head.yaw = position.x as f32 / window_size.width as f32
-                                * std::f32::consts::PI
-                                * 2.0
-                                - 0.5;
-                            last_head.pitch = position.y as f32 / window_size.height as f32
-                                * std::f32::consts::PI
-                                - 0.5;//50 mm lens
+                            self.cursor_pos.replace(position);
                         }
                     }
                     glutin::WindowEvent::CursorLeft { .. } => {
                         if *self.active.borrow() {
-                            deferred_gaze =
-                                Self::override_gaze(Gaze { x: 0.5, y: 0.5, direction: Vector3::new(0.0, 0.0, 0.0)}, &self.values[0].borrow());//TODO: FIX THIS (don't just use the first flow)
+                            self.override_view.replace(false);
+                            self.override_gaze.replace(false);
+                            //reset gaze ?
+                        }
+                    }
+                    glutin::WindowEvent::MouseInput { state, button, .. } => {
+                        if *self.active.borrow() {
+                            match button {
+                                MouseButton::Left => {
+                                    self.override_view.replace(state == ElementState::Pressed);
+                                }
+                                MouseButton::Right => {
+                                    self.override_gaze.replace(state == ElementState::Pressed);
+                                }
+                                _ => {}
+                            }
                         }
                     }
                     _ => (),
@@ -384,15 +372,39 @@ impl Window {
             for (i, f) in self.flow.iter().enumerate(){
                 f.negociate_slots(&self);
                 f.update_values(&self, &self.values[i].borrow());
+                f.last_perspective.borrow_mut().proj = cgmath::perspective(
+                    cgmath::Deg(70.0), (size.width/size.height) as f32, 0.05, 1000.0);
             }
         }
 
         // Update input.
-        for flow_index in 0 .. self.flow.len() {
-            //self.flow[flow_index].input(&self.last_head.borrow(), &deferred_gaze, &self.vis_param.borrow(), flow_index);
-            self.flow[flow_index].input(&self.vis_param.borrow());
+        for f in self.flow.iter(){
+            if *self.override_view.borrow() || *self.override_gaze.borrow() {
+                let window_size = &self.windowed_context.window().get_inner_size().unwrap();
+                let cursor_pos = self.cursor_pos.borrow();
+                let yaw = cursor_pos.x as f32 / window_size.width as f32
+                    * std::f32::consts::PI
+                    * 2.0
+                    - 0.5;
+                let pitch = cursor_pos.y as f32 / window_size.height as f32
+                    * std::f32::consts::PI
+                    - 0.5;//50 mm lens
+                let view = Matrix4::from_angle_x(cgmath::Rad(pitch)) * Matrix4::from_angle_y(cgmath::Rad(yaw));
+
+                let mut perspective = f.last_perspective.borrow_mut();
+
+                if *self.override_view.borrow() {
+                    if !*self.override_gaze.borrow(){
+                        perspective.gaze = (view * perspective.view.invert().unwrap() * perspective.gaze.extend(1.0)).truncate();
+                    }
+                    perspective.view = view;
+                }
+                if *self.override_gaze.borrow() {
+                    perspective.gaze = (perspective.view * view.invert().unwrap() * Vector4::unit_z()).truncate();
+                }
+            }
+            f.input(&self.vis_param.borrow());
         }
-        //*self.flow[0].last_gaze.borrow_mut() = deferred_gaze; //TODO fix this for window input
 
         self.encoder
             .borrow_mut()

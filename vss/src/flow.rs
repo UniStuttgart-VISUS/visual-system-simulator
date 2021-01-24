@@ -1,33 +1,23 @@
 use crate::*;
 use std::cell::RefCell;
-use cgmath::Matrix4;
+use cgmath::{Matrix4};
 use cgmath::Vector3;
 use gfx::format::Rgba32F;
 
-
 /// Represents properties of eye-tracking data.
 #[derive(Debug, Clone)]
-pub struct Gaze {
-    pub x: f32,//remove
-    pub y: f32,//remove
-    pub direction: Vector3<f32>,
-}
-
-/// Represents properties of eye-tracking data.
-pub struct Head {
-    pub yaw: f32,//remove
-    pub pitch: f32,//remove
+pub struct EyePerspective {
     pub position: Vector3<f32>,
     pub view: Matrix4<f32>,
     pub proj: Matrix4<f32>,
+    pub gaze: Vector3<f32>,
 }
 
 /// A flow encapsulates simulation nodes, i.e., all simulation and rendering.
 pub struct Flow {
     nodes: RefCell<Vec<Box<dyn Node>>>,
     last_slot: RefCell<Option<NodeSlots>>,
-    pub last_head: RefCell<Head>,
-    pub last_gaze: RefCell<Gaze>,
+    pub last_perspective: RefCell<EyePerspective>,
 }
 
 impl Flow {
@@ -35,17 +25,11 @@ impl Flow {
         Flow {
             nodes: RefCell::new(Vec::new()),
             last_slot: RefCell::new(None),
-            last_head: RefCell::new(Head {
-                yaw: 0.0,
-                pitch: 0.0,
+            last_perspective: RefCell::new(EyePerspective {
                 position: Vector3::new(0.0, 0.0, 0.0),
                 view: Matrix4::from_scale(1.0),
-                proj: Matrix4::from_scale(1.0),
-            }),
-            last_gaze: RefCell::new(Gaze {
-                x: 0.5,
-                y: 0.5,
-                direction: Vector3::new(0.0, 0.0, 0.0),
+                proj: cgmath::perspective(cgmath::Deg(70.0), 1.0, 0.05, 1000.0),
+                gaze: Vector3::new(0.0, 0.0, 1.0),
             }),
         }
     }
@@ -165,12 +149,12 @@ impl Flow {
     }
 
     pub fn input(&self, vis_param: &VisualizationParameters) {
-        let mut gaze = self.last_gaze.borrow().clone();
+        let mut perspective = self.last_perspective.borrow().clone();
         // Propagate to nodes.
         for node in self.nodes.borrow_mut().iter_mut().rev() {
-            gaze = node.input(&self.last_head.borrow(), &gaze, vis_param);
+            perspective = node.input( &perspective, vis_param);
         }
-        self.last_gaze.replace(gaze);
+        self.last_perspective.replace(perspective);
     }
 
     pub fn render(&self, window: &Window) {

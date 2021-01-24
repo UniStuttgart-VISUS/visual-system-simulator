@@ -230,8 +230,8 @@ impl Node for UploadVideo {
         self.uploader.update_values(window, values);
     }
 
-    fn input(&mut self, head: &Head, gaze: &Gaze, vis_param: &VisualizationParameters) -> Gaze {
-        self.uploader.input(head, gaze, vis_param)
+    fn input(&mut self, perspective: &EyePerspective, vis_param: &VisualizationParameters) -> EyePerspective {
+        self.uploader.input(perspective, vis_param)
     }
 
     fn render(&mut self, window: &Window) {

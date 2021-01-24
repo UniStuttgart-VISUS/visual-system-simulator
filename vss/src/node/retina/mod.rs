@@ -140,12 +140,12 @@ impl Node for Retina {
         };
     }
 
-    fn input(&mut self, head: &Head, gaze: &Gaze, _vis_param: &VisualizationParameters) -> Gaze {
-        let gaze_rotation = Matrix4::look_to_lh(Point3::new(0.0, 0.0, 0.0), gaze.direction, Vector3::unit_y());
+    fn input(&mut self, perspective: &EyePerspective, _vis_param: &VisualizationParameters) -> EyePerspective {
+        let gaze_rotation = Matrix4::look_to_lh(Point3::new(0.0, 0.0, 0.0), perspective.gaze, Vector3::unit_y());
         //let gaze_rotation = Matrix4::from_scale(1.0);
-        self.pso_data.u_proj = (gaze_rotation * head.proj.invert().unwrap()).into();
+        self.pso_data.u_proj = (gaze_rotation * perspective.proj.invert().unwrap()).into();
         //self.pso_data.u_proj = (head.proj * (Matrix4::from_translation(-head.position) * head.view)).into();
-        gaze.clone()
+        perspective.clone()
     }
 
     fn render(&mut self, window: &Window) {

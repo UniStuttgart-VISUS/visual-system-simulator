@@ -49,8 +49,6 @@ impl IoGenerator {
                 input_node.upload_image(load(input_path));
                 input_node.set_flags(RgbInputFlags::from_extension(&input));
                 input_node.set_render_resolution(render_resolution);
-                #[cfg(feature = "varjo")]
-                input_node.use_vr_projection();
                 let output_node = if let Some(output) = &self.output {
                     let mut output_node = DownloadRgbBuffer::new(&window);
                     let input_info = InputInfo {
@@ -137,7 +135,7 @@ pub fn main() {
     
     let flow_count = 1;
 
-    let mut window = Window::new(config.visible, remote, config.parameters, flow_count);
+    let mut window = Window::new(config.visible, remote, vec![RefCell::new(config.parameters)], flow_count);
 
     let mut io_generator = IoGenerator::new(config.inputs, config.output);
     
@@ -190,21 +188,12 @@ pub fn set_varjo_data(window: &mut Window, last_fov: &mut Vec<(f32, f32)>, varjo
             last_fov[index].0 = fov_x;
             last_fov[index].1 = fov_y;
         }
-        window.set_head(Head{
-            yaw: 0.0,
-            pitch: 0.0,
+        window.set_perspective(EyePerspective{
             position: head_position,
             view: view_matrices[index],
             proj: proj_matrices[index],
+            gaze: if index%2 == 0 {left_gaze} else {right_gaze},
         },index);
-
-        let direction = if index%2 == 0 {left_gaze} else {right_gaze};
-        let screenspace_dir = proj_matrices[index] * direction.extend(1.0);
-        window.set_gaze(Gaze{
-            x: screenspace_dir.x/screenspace_dir.w/2.0 + 0.5,
-            y: screenspace_dir.y/screenspace_dir.w/2.0 + 0.5,
-            direction,
-        }, index);
     }
 }
 
