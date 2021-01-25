@@ -11,7 +11,7 @@ mod retina;
 mod rgb_buffer;
 mod slot;
 mod yuv_buffer;
-mod varjo;
+mod vr_compositor;
 
 pub use self::cataract::*;
 pub use self::display::*;
@@ -21,7 +21,7 @@ pub use self::retina::*;
 pub use self::rgb_buffer::*;
 pub use self::slot::*;
 pub use self::yuv_buffer::*;
-pub use self::varjo::*;
+pub use self::vr_compositor::*;
 
 use self::macros::*;
 
@@ -44,13 +44,17 @@ pub trait Node {
     /// possibly re-using suggested `slots` (for efficiency).
     fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots;
 
+    fn negociate_slots_wk(&mut self, window: &Window, slots: NodeSlots, well_known: &WellKnownSlots) -> NodeSlots{
+        self.negociate_slots(window, slots)
+    }
+
     /// Set new parameters for this effect
     #[allow(unused_variables)]
     fn update_values(&mut self, window: &Window, values: &ValueMap) {}
 
     /// Handle input.
     #[allow(unused_variables)]
-    fn input(&mut self, head: &Head, gaze: &Gaze, vis_param: &VisualizationParameters) -> Gaze {
+    fn input(&mut self, head: &Head, gaze: &Gaze, vis_param: &VisualizationParameters, flow_index: usize) -> Gaze {
         gaze.clone()
     }
 

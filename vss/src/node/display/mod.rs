@@ -1,5 +1,6 @@
 use super::*;
 use gfx;
+use serde::ser::{Serialize,Serializer};
 
 gfx_defines! {
     pipeline pipe {
@@ -13,8 +14,13 @@ gfx_defines! {
         s_deflection: gfx::TextureSampler<[f32; 4]> = "s_deflection",
         s_color_change: gfx::TextureSampler<[f32; 4]> = "s_color_change",
         s_color_uncertainty: gfx::TextureSampler<[f32; 4]> = "s_color_uncertainty",
+        s_original: gfx::TextureSampler<[f32; 4]> = "s_original",
+        s_covariances: gfx::TextureSampler<[f32; 4]> = "s_covariances",
+
     }
 }
+
+
 
 pub struct Display {
     pso: gfx::PipelineState<Resources, pipe::Meta>,
@@ -52,6 +58,17 @@ impl Node for Display {
             _,
             gfx::handle::RenderTargetView<gfx_device_gl::Resources, [f32; 4]>,
         ) = factory.create_render_target(1, 1).unwrap();
+        let (_, s_original, _): (
+            _,
+            _,
+            gfx::handle::RenderTargetView<gfx_device_gl::Resources, [f32; 4]>,
+        ) = factory.create_render_target(1, 1).unwrap();
+
+        let (_, s_covariances, _):(
+            _,
+            _,
+            gfx::handle::RenderTargetView<gfx_device_gl::Resources, [f32; 4]>,
+        ) = factory.create_render_target(1, 1).unwrap();
 
         Display {
             pso,
@@ -63,6 +80,8 @@ impl Node for Display {
                 s_deflection: (s_deflection, sampler.clone()),
                 s_color_change:(s_color_change, sampler.clone()),
                 s_color_uncertainty:(s_color_uncertainty, sampler.clone()),
+                s_original:(s_original, sampler.clone()),
+                s_covariances: (s_covariances, sampler.clone()),
                 rt_color: dst,
                 u_vis_type: 0,
                 u_heat_scale: 1.0,
@@ -78,10 +97,18 @@ impl Node for Display {
         self.pso_data.s_deflection = slots.as_deflection_view();
         self.pso_data.s_color_change = slots.as_color_change_view();
         self.pso_data.s_color_uncertainty = slots.as_color_uncertainty_view();
+        self.pso_data.s_covariances = slots.as_covariances_view();
+        
         self.pso_data.rt_color = slots.as_color();
 
         slots
     }
+
+    fn negociate_slots_wk(&mut self, window: &Window, slots: NodeSlots, well_known: &WellKnownSlots) -> NodeSlots{
+        self.pso_data.s_original = well_known.get_original().expect("Nah, no original image?");
+        self.negociate_slots(window, slots)
+    }
+
 
     fn update_values(&mut self, _window: &Window, values: &ValueMap) {
         self.pso_data.u_stereo = if values
@@ -96,7 +123,7 @@ impl Node for Display {
         }
     }
 
-    fn input(&mut self, _head: &Head, gaze: &Gaze, vis_param: &VisualizationParameters) -> Gaze {
+    fn input(&mut self, _head: &Head, gaze: &Gaze, vis_param: &VisualizationParameters, _flow_index: usize) -> Gaze {
         let ratio = [
             self.pso_data.u_resolution_out[0] / self.pso_data.u_resolution_in[0],
             self.pso_data.u_resolution_out[1] / self.pso_data.u_resolution_in[1],
@@ -133,3 +160,26 @@ impl Node for Display {
         }
     }
 }
+
+// #[derive(Serialize)]
+// pub struct NewPipe{
+//     u_stereo:i32,
+//     u_resolution_in: i32,
+//     u_resolution_out: i32,
+//     u_vis_type: i32,
+//     u_heat_scale: i32,
+// }
+
+// impl pipe::Data<Resources>{
+//     pub fn update(&mut self, new_pipe: NewPipe){
+//         self.u_stereo = new_pipe.u_stereo;
+//     }
+// }
+
+// impl Serialize for pipe::Data<Resources>{
+//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//     where S: Serializer 
+//     {
+//         serializer.
+//     }
+// }

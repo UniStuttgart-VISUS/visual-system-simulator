@@ -5,7 +5,6 @@ pub use generator::*;
 use super::*;
 use gfx;
 use std::f32;
-use std::io::Cursor;
 use gfx::format::Rgba32F;
 
 
@@ -38,6 +37,8 @@ gfx_defines! {
         rt_color_change: gfx::RenderTarget<Rgba32F> = "rt_color_change",
         s_color_uncertainty: gfx::TextureSampler<[f32; 4]> = "s_color_uncertainty",
         rt_color_uncertainty: gfx::RenderTarget<Rgba32F> = "rt_color_uncertainty",
+        s_covariances: gfx::TextureSampler<[f32; 4]> = "s_covariances",
+        rt_covariances: gfx::RenderTarget<Rgba32F> = "rt_covariances",
 
         u_dir_calc_scale: gfx::Global<f32> = "u_dir_calc_scale",
     }
@@ -77,6 +78,7 @@ impl Node for Lens {
         let (_, s_deflection, rt_deflection) = factory.create_render_target(1, 1).unwrap();
         let (_, s_color_change, rt_color_change) = factory.create_render_target(1, 1).unwrap();
         let (_, s_color_uncertainty, rt_color_uncertainty) = factory.create_render_target(1, 1).unwrap();
+        let (_, s_covariances, rt_covariances) = factory.create_render_target(1, 1).unwrap();
 
 
         Lens {
@@ -104,6 +106,8 @@ impl Node for Lens {
                 rt_color_change,
                 s_color_uncertainty:(s_color_uncertainty, sampler.clone()),
                 rt_color_uncertainty,
+                s_covariances: (s_covariances, sampler.clone()),
+                rt_covariances,
                 u_dir_calc_scale: 1.0
             },
         }
@@ -136,6 +140,9 @@ impl Node for Lens {
         self.pso_data.rt_color_change = slots.as_color_change();  
         self.pso_data.s_color_uncertainty = slots.as_color_uncertainty_view();
         self.pso_data.rt_color_uncertainty = slots.as_color_uncertainty();
+        self.pso_data.s_covariances = slots.as_covariances_view();
+        self.pso_data.rt_covariances = slots.as_covariances();
+        
         slots
     }
 
@@ -189,7 +196,7 @@ impl Node for Lens {
         encoder.draw(&gfx::Slice::from_vertex_count(6), &self.pso, &self.pso_data);
     }
 
-    fn input(&mut self, _head: &Head, gaze: &Gaze, vis_param: &VisualizationParameters) -> Gaze {
+    fn input(&mut self, _head: &Head, gaze: &Gaze, vis_param: &VisualizationParameters, _flow_index: usize) -> Gaze {
         self.pso_data.u_dir_calc_scale = vis_param.dir_calc_scale;
         self.pso_data.u_depth_max = vis_param.test_depth_max;
         self.pso_data.u_depth_min = vis_param.test_depth_min;

@@ -11,3 +11,5 @@ Cargo.lock
 # IntelliJ stuff
 .idea/
 *.iml
+
+/dependencies/

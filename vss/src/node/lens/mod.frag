@@ -54,18 +54,25 @@ uniform sampler2D s_cornea;
 uniform sampler2D s_deflection;
 uniform sampler2D s_color_change;
 uniform sampler2D s_color_uncertainty;
+uniform sampler2D s_covariances;
+
 
 in vec2 v_tex;
 out vec4 rt_color;
 out vec4 rt_deflection;
 out vec4 rt_color_change;
 out vec4 rt_color_uncertainty;
+out vec4 rt_covariances;
+
 
 struct Simulation
 {
   vec4 color;
   vec4 color_change;
   vec4 color_uncertainty;
+  vec4 color_covariance;
+  vec2 dir_unc;
+  float dir_covar;
   vec2 target;
 };
 
@@ -160,6 +167,97 @@ vec3 rayIntersectSphere(vec3 rPos, vec3 rDir, vec3 cPos, float cRad) {
     }
 }
 
+
+struct RefractInfo{
+    vec3 position;
+    vec3 normal;
+};
+
+RefractInfo rayIntersectEllipsoid(vec3 rPos, vec3 rDir, vec3 cPos, float cRad) {
+
+
+    float mul = 0.1 * u_dir_calc_scale;
+
+    //using vectors instead of floats allows us to calculate with rotated ellipses
+    vec3 a = vec3(cRad  , 0         ,    0) * 0.96;
+    vec3 b = vec3(0     , cRad      ,    0) ;//* 1.1;
+    vec3 c = vec3(0     , 0         , cRad);
+
+    //rotation for testing purposes
+    // mat3 rot = mat3(
+    //     cos(mul), -sin(mul), 0,
+    //     sin(mul), cos(mul) , 0,
+    //            0,         0, 1
+    // );
+
+    // a = rot * a;
+    // b = rot * b;
+    // c = rot * c;
+
+
+    // inspired by http://www.illusioncatalyst.com/notes_files/mathematics/line_nu_sphere_intersection.php
+
+    vec3 an = normalize(a);
+    vec3 bn = normalize(b);
+    vec3 cn = normalize(c);
+
+    // moving the ellipsoid according to its center
+    mat4 T = mat4(
+        1, 0, 0, cPos.x,
+        0, 1, 0, cPos.y,
+        0, 0, 1, cPos.z,
+        0, 0, 0, 1
+    );
+
+    mat4 R = mat4(
+        an.x, bn.x, cn.x, 0,
+        an.y, bn.y, cn.y, 0,
+        an.z, bn.z, cn.z, 0,
+        0   , 0   , 0   , 1
+    );
+
+    mat4 S = mat4(
+        length(a), 0, 0, 0,
+        0, length(b), 0, 0,
+        0, 0, length(c), 0,
+        0, 0, 0, 1
+    );
+
+    // mat4 S = mat4(
+    //     cRad, 0, 0, 0,
+    //     0, cRad, 0, 0,
+    //     0, 0, cRad, 0,
+    //     0, 0, 0, 1
+    // );
+
+    mat4 M = T*R*S;
+    mat4 iM = inverse(M);
+
+    vec4 srPos = iM * vec4(rPos,0);
+    vec4 srDir = iM * vec4(rDir,0);
+    vec4 scPos = iM * vec4(cPos,0);
+    
+    // since we transformed everything, sphere position is the origin and its radius is 1
+    vec3 sTarget = rayIntersectSphere(srPos.xyz, srDir.xyz, scPos.xyz, 1);
+
+    // now we need to transform the result to get the position in the original space
+    vec4 target = M * vec4(sTarget,0);
+
+    // to calculate the normal, we use n = x_0/a^2 , y_0/b^2, z_0/c^2 with the ellipsoid centered at the origin
+    vec3 rel_target = target.xyz - cPos;
+    vec3 normal = vec3(rel_target.x/pow(length(a),2), rel_target.y/pow(length(b),2), rel_target.z/pow(length(c),2));
+    // vec3 normal = rel_target;
+
+    // return target.xyz;
+
+    return RefractInfo(
+        target.xyz,
+        normal
+    );
+    
+    // return sTarget.xyz;
+}
+
 vec2 to_dir_angle(in vec3 dir){		
 	vec2 pt;
     pt.x = atan(dir.x/dir.z)*u_dir_calc_scale;
@@ -167,7 +265,7 @@ vec2 to_dir_angle(in vec3 dir){
     return pt;
 }
 
-// sends the ray through all four surfaces in the optical system and returns the color
+// sends the ray through all four surfaces in the optical system and returns the color, position, error and uncertainty
 // of the texture at the intersection point.
 Simulation getColorSample(vec3 start, vec2 aim, float focalLength, float nAnteriorChamberFactor) {
     vec3 dir = normalize(vec3(aim, VITREOUS_HUMOUR_RADIUS) - start);
@@ -181,8 +279,16 @@ Simulation getColorSample(vec3 start, vec2 aim, float focalLength, float nAnteri
     start = rayIntersectSphere(start, dir, INNER_CORNEA_CENTER, INNER_CORNEA_RADIUS);
     dir = refract(dir, -normalize(start - INNER_CORNEA_CENTER), getNAnteriorChamber(nAnteriorChamberFactor) / N_CORNEA);
 
-    start = rayIntersectSphere(start, dir, OUTER_CORNEA_CENTER, OUTER_CORNEA_RADIUS);
-    dir = refract(dir, -normalize(start - OUTER_CORNEA_CENTER), N_CORNEA / N_AIR);
+    RefractInfo ri = rayIntersectEllipsoid(start, dir, OUTER_CORNEA_CENTER, OUTER_CORNEA_RADIUS);
+    start = ri.position;
+
+    // we modeled the cornea as an ellipsoid instead of a sphere.
+    // although the lens can also contribute to a asigmatism, the result is the same, as if the cornea would introduce all the error 
+    // start = rayIntersectSphere(start, dir, OUTER_CORNEA_CENTER, OUTER_CORNEA_RADIUS);
+
+
+    dir = refract(dir, -normalize(ri.normal), N_CORNEA / N_AIR);
+    // dir = refract(dir, -normalize(start - OUTER_CORNEA_CENTER), N_CORNEA / N_AIR);
     dir = applyCorneaImperfection(start, dir);
 
     // position where the ray hits the image, including depth
@@ -192,11 +298,21 @@ Simulation getColorSample(vec3 start, vec2 aim, float focalLength, float nAnteri
     vec4 color = getColorWithRay(target);
     vec4 color_change = texture(s_color_change, target.xy / ((target.z - VITREOUS_HUMOUR_RADIUS) * TEXTURE_SCALE) + 0.5);
     vec4 color_uncertainty = texture(s_color_uncertainty, target.xy / ((target.z - VITREOUS_HUMOUR_RADIUS) * TEXTURE_SCALE) + 0.5);
+    vec4 color_covariance = texture(s_covariances, target.xy / ((target.z - VITREOUS_HUMOUR_RADIUS) * TEXTURE_SCALE) + 0.5);
+    vec4 deflection = texture(s_deflection, target.xy / ((target.z - VITREOUS_HUMOUR_RADIUS) * TEXTURE_SCALE) + 0.5);
+    vec2 dir_change = deflection.rg;
+    vec2 dir_unc = deflection.ba;
+    float dir_covar = color_covariance.a;
     Simulation sim = Simulation(
         color,
         color_change,
         color_uncertainty,
-        (target.xy/target.z)*u_dir_calc_scale);
+        color_covariance,
+        dir_unc,
+        dir_covar,
+        target.xy/target.z
+        // target.xy / ((target.z - VITREOUS_HUMOUR_RADIUS) * TEXTURE_SCALE) + 0.5
+        );
     return sim;
 }
 
@@ -210,27 +326,22 @@ void main() {
 
         float sampleCount = 0.0;
         vec4 color = vec4(0.0);
-   
-        // // dir sd
         vec2 avg_target = vec2(0.0);
-        vec2 var_target = vec2(0.0);
-        // since we have only two dimensions, the covariance can be calculated as a single float
-        float covar_target = 0.0;
 
-
+   
         // prepare accomodation
         // This implementation focuses on all possible depths: for each pixel, the lens can focus on the individual depth
-        // float focalLength = length(vec3(
-        //     (v_tex.xy - 0.5) * TEXTURE_SCALE,
-        //     u_depth_max - texture(s_depth, v_tex).r * (u_depth_max - u_depth_min)));     
+        float focalLength = length(vec3(
+            (v_tex.xy - 0.5) * TEXTURE_SCALE,
+            u_depth_max - texture(s_depth, v_tex).r * (u_depth_max - u_depth_min)));     
        
         // This implementation focuses soley on the depth that is in the middle of the screen
-        float focalLength = length(
-            vec3(
-                (v_tex.xy - 0.5) * TEXTURE_SCALE,
-                u_depth_max - texture(s_depth, vec2(0.5,0.5)).r * (u_depth_max - u_depth_min)
-            )
-        );  
+        // float focalLength = length(
+        //     vec3(
+        //         (v_tex.xy - 0.5) * TEXTURE_SCALE,
+        //         u_depth_max - texture(s_depth, vec2(0.5,0.5)).r * (u_depth_max - u_depth_min)
+        //     )
+        // );  
 
 
         float nAnteriorChamberFactor = 1.0;
@@ -292,62 +403,70 @@ void main() {
         avg_target /= sampleCount;
         color /= sampleCount;
 
-// TODO: deflection. unfortunately it cannot be conveyed in an independent color target
-// TODO: Possibly reenable covariance
-        vec2 diff_vec = vec2(0.0);
+        vec2 dir_diff = vec2(0.0);
+        vec3 col_diff = vec3(0.0);
+
         vec3 col_unc_prop = vec3(0.0);
-        vec3 col_unc_new = vec3(0.0);
+        vec3 col_covar_prop = vec3(0.0);
         vec2 dir_unc_prop = vec2(0.0);
+        float dir_covar_prop = 0.0;
+
+        vec3 col_unc_new = vec3(0.0);
+        vec3 col_covar_new = vec3(0.0);
+        vec2 dir_unc_new = vec2(0.0);
+        float dir_covar_new = 0.0;
+
         
         for (int i = 0; i < 17; i++) {
-            // express the difference of the current target vector and the average
-            diff_vec = rays[i].target-avg_target;
 
-            // calculate the variance of the target scatters for each dimension    
-            var_target += pow(diff_vec , vec2(2.0));
+            dir_diff = rays[i].target-avg_target;
+            col_diff = rays[i].color.rgb - color.rgb;
+
+            col_unc_new += pow(col_diff, vec3(2.0));
+            col_covar_new += vec3(col_diff.r*col_diff.g, col_diff.r*col_diff.b, col_diff.g*col_diff.b);
+            dir_unc_new += pow(dir_diff , vec2(2.0));
+            dir_covar_new += dir_diff.x * dir_diff.y;
 
             col_unc_prop += rays[i].color_uncertainty.rgb;
-            col_unc_new += pow(rays[i].color.rgb - color.rgb, vec3(2.0));
-            dir_unc_prop += vec2(rays[i].color_change.a, rays[i].color_uncertainty.a);
+            col_covar_prop += rays[i].color_covariance.rgb;
+            dir_unc_prop += rays[i].dir_unc;
+            dir_covar_prop += rays[i].color_covariance.a;
+
         }
 
-        var_target /= sampleCount;
         col_unc_new /= sampleCount;
-        col_unc_prop /= sampleCount * sampleCount;
-        dir_unc_prop /= sampleCount * sampleCount;
+        col_covar_new /= sampleCount;
+        dir_unc_new /= sampleCount;
+        dir_covar_new /= sampleCount;
+
+        col_unc_prop /= sampleCount;        
+        col_covar_prop /= sampleCount;        
+        dir_unc_prop /= sampleCount;
+        dir_covar_prop /= sampleCount;
+
 
         vec3 col_var = col_unc_prop + col_unc_new;
-        vec2 dir_unc = dir_unc_prop + var_target;
+        vec3 col_covar = col_covar_prop + col_covar_new;
+        vec2 dir_var = dir_unc_prop + dir_unc_new;
+        float dir_covar = dir_covar_prop + dir_covar_new;
 
         // the final color is the average of all samples (calculated above)
         rt_color = color;
-
-// TODO propagate color error ? (wenn man nur den absoluten fehler betrachtet, dann nicht)
+        
         vec3 color_diff = rt_color.rgb - original_color;
-        // vec3 color_diff = rt_color.rgb - rays[16].color.rgb;
+        vec2 deflection = (v_tex.xy - 0.5) * TEXTURE_SCALE - avg_target;
 
-
-        /*
-            For writing back the values:
-            - The uncertainty was calculated from the input uncertainties and the uncertainty introdced here.
-              Therefore the old uncertainty is replaced
-            - The change introduced here has to be added to the change already present and therefore needs to be added.
-        */
-        rt_color_change =    
-            vec4(
-                texture(s_color_change, v_tex).rgb + color_diff,
-                dir_unc.x
-            );
-        rt_color_uncertainty = 
-            vec4(
-                col_var,
-                dir_unc.y
-            );
+        rt_color_change =    vec4(texture(s_color_change, v_tex).rgb + color_diff,0.0);
+        rt_color_uncertainty = vec4(col_var, 0.0);        
+        rt_deflection = vec4(texture(s_deflection, v_tex).rg + deflection, dir_var);
+        rt_covariances = vec4(col_covar, dir_covar);
 
     } else {
         rt_color = texture(s_color, v_tex);
         rt_color_change =       texture(s_color_change, v_tex);
         rt_color_uncertainty =  texture(s_color_uncertainty, v_tex);
+        rt_deflection =         texture(s_deflection, v_tex);
+        rt_covariances = texture(s_covariances, v_tex);
     }
 
 }
