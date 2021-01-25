@@ -1,6 +1,5 @@
 use super::*;
 use gfx;
-use serde::ser::{Serialize,Serializer};
 
 gfx_defines! {
     pipeline pipe {
@@ -123,27 +122,11 @@ impl Node for Display {
         }
     }
 
-    fn input(&mut self, _head: &Head, gaze: &Gaze, vis_param: &VisualizationParameters, _flow_index: usize) -> Gaze {
-        let ratio = [
-            self.pso_data.u_resolution_out[0] / self.pso_data.u_resolution_in[0],
-            self.pso_data.u_resolution_out[1] / self.pso_data.u_resolution_in[1],
-        ];
-        let offset = [
-            0.5 * (ratio[0] - ratio[1]).max(0.0),
-            0.5 * (ratio[1] - ratio[0]).max(0.0),
-        ];
-        let scale = [
-            ratio[0] / ratio[0].min(ratio[1]),
-            ratio[1] / ratio[0].min(ratio[1]),
-        ];
-
+    fn input(&mut self, perspective: &EyePerspective, vis_param: &VisualizationParameters) -> EyePerspective {
         self.pso_data.u_vis_type = ((vis_param.vis_type) as u32) as i32;
         self.pso_data.u_heat_scale = vis_param.heat_scale;
 
-        Gaze {
-            x: scale[0] * gaze.x - offset[0],
-            y: scale[1] * gaze.y - offset[1],
-        }
+        perspective.clone()
     }
 
     fn render(&mut self, window: &Window) {
@@ -160,26 +143,3 @@ impl Node for Display {
         }
     }
 }
-
-// #[derive(Serialize)]
-// pub struct NewPipe{
-//     u_stereo:i32,
-//     u_resolution_in: i32,
-//     u_resolution_out: i32,
-//     u_vis_type: i32,
-//     u_heat_scale: i32,
-// }
-
-// impl pipe::Data<Resources>{
-//     pub fn update(&mut self, new_pipe: NewPipe){
-//         self.u_stereo = new_pipe.u_stereo;
-//     }
-// }
-
-// impl Serialize for pipe::Data<Resources>{
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where S: Serializer 
-//     {
-//         serializer.
-//     }
-// }

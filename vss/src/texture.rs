@@ -124,6 +124,83 @@ pub fn load_texture_from_bytes(
     Ok((tex, view))
 }
 
+pub fn load_cubemap(
+    factory: &mut gfx_device_gl::Factory,
+    mut data: Vec<Cursor<Vec<u8>>>,
+) -> Result<
+    (
+        gfx::handle::Texture<Resources, gfx::format::R8_G8_B8_A8>,
+        gfx::handle::ShaderResourceView<Resources, [f32; 4]>,
+    ),
+    String,
+> {
+    let mut raw_data: [Vec<u8>; 6] = Default::default();
+    let mut last_width = 0;
+    for i in 0..6 {
+        let img = image::load(data.remove(0), image::ImageFormat::Png)
+            .unwrap()
+            .flipv()
+            .to_rgba();
+        let (width, height) = img.dimensions();
+        let raw = img.into_raw();
+        raw_data[i] = raw;
+        assert!(width == height, "width must be equal to height in cubemaps");
+        if i > 0 {
+            assert!(width == last_width, "sizes of all cubemap sides must be equal");
+        }
+        last_width = width;
+    }
+
+    load_cubemap_from_bytes(factory, &[raw_data[0].as_slice(), raw_data[1].as_slice(), raw_data[2].as_slice(), raw_data[3].as_slice(), raw_data[4].as_slice(), raw_data[5].as_slice()], last_width)
+}
+
+//copy of load_texture_from_bytes
+pub fn load_cubemap_from_bytes(
+    factory: &mut gfx_device_gl::Factory,
+    data: &[&[u8];6],
+    width: u32,
+) -> Result<
+    (
+        gfx::handle::Texture<Resources, gfx::format::R8_G8_B8_A8>,
+        gfx::handle::ShaderResourceView<Resources, [f32; 4]>,
+    ),
+    String,
+> {
+    let kind = texture::Kind::Cube(
+        width as texture::Size,
+    );
+
+    // inspired by https://github.com/PistonDevelopers/gfx_texture/blob/master/src/lib.rs#L157-L178
+    use gfx::memory::Typed;
+    use gfx::memory::Usage;
+    use gfx::{format, texture};
+
+    let surface = gfx::format::SurfaceType::R8_G8_B8_A8;
+    let desc = texture::Info {
+        kind,
+        levels: 1 as texture::Level,
+        format: surface,
+        bind: gfx::memory::Bind::all(),
+        usage: Usage::Dynamic,
+    };
+
+    let cty = gfx::format::ChannelType::Unorm;
+    let raw = factory
+        .create_texture_raw(
+            desc,
+            Some(cty),
+            Some((data, gfx::texture::Mipmap::Allocated)),
+        )
+        .unwrap();
+    let levels = (0, raw.get_info().levels - 1);
+    let tex = Typed::new(raw);
+    let view = factory
+        .view_texture_as_shader_resource::<ColorFormat>(&tex, levels, format::Swizzle::new())
+        .unwrap();
+    Ok((tex, view))
+}
+
+
 ///
 /// Load bytes as texture into GPU
 ///

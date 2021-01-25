@@ -16,8 +16,5 @@ glutin = "0.21"
 glsl-include = "0.3"
 ws = "0.9"
 image = "0.23"
-cgmath = "0.17"
+cgmath = "0.18"
 bitflags = "1.2"
-
-
-serde = "1.0.118"

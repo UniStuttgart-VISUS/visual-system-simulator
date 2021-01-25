@@ -75,7 +75,7 @@ impl Node for Cataract {
     }
 
     fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
-        let mut slots = slots
+        let slots = slots
             .to_color_depth_input(window)
             .to_color_depth_output(window);
         self.pso_data.u_resolution = slots.output_size_f32();
@@ -99,7 +99,7 @@ impl Node for Cataract {
         slots
     }
     fn negociate_slots_wk(&mut self, window: &Window, slots: NodeSlots, well_known: &WellKnownSlots) -> NodeSlots{
-        let mut slots = self.negociate_slots(window, slots);
+        let slots = self.negociate_slots(window, slots);
         well_known.set_original(slots.as_color_depth_view().0);
         slots
     }

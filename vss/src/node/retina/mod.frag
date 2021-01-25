@@ -4,10 +4,10 @@
 #define GLAUCOMA_COLOR vec4(0.02, 0.02, 0.02, 1.0);
 
 uniform vec2 u_resolution;
-uniform vec2 u_gaze;
+uniform mat4 u_proj;
 
 uniform sampler2D s_color;
-uniform sampler2D s_retina;
+uniform samplerCube s_retina;
 uniform sampler2D s_deflection;
 uniform sampler2D s_color_change;
 uniform sampler2D s_color_uncertainty;
@@ -162,8 +162,10 @@ void glaucoma(inout vec4 color, in vec4 retina_mask, inout ErrorValues ev) {
 
 
 void main() {
-    vec2 gaze_offset = vec2(0.5, 0.5) - (u_gaze / u_resolution);
-    vec4 retina_mask = texture(s_retina, v_tex + gaze_offset);
+    vec3 fragment_dir = normalize((u_proj * vec4(v_tex*2.0-1.0, 0.9, 1.0)).xyz);
+    vec4 retina_mask = texture(s_retina, fragment_dir);
+    //vec4 world_dir = inverse(u_proj) * vec4(v_tex * 2.0 - 1.0, 0.9, 1.0);
+    //vec4 retina_mask = texture(s_retina, normalize(world_dir.xyz)/world_dir.w);
 
     /*
         Since there is no uncertainty att play here, we can overwrite all previous efforts with 0.
