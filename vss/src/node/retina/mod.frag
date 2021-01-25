@@ -11,56 +11,51 @@ uniform samplerCube s_retina;
 uniform sampler2D s_deflection;
 uniform sampler2D s_color_change;
 uniform sampler2D s_color_uncertainty;
+uniform sampler2D s_covariances;
+
 
 in vec2 v_tex;
 out vec4 rt_color;
 out vec4 rt_deflection;
 out vec4 rt_color_change;
 out vec4 rt_color_uncertainty;
+out vec4 rt_covariances;
+
 
 struct ErrorValues
 {
   vec3 color_change;
-  vec3 color_var;
-  vec2 position_var;
+  mat3 S_col;
+  mat2 S_pos;
 };
 
 void applyBlurAndBloom(inout vec4 color, in vec4 retina, inout ErrorValues ev) {
     float max_rgb = max(max(retina.r, retina.g), retina.b);
     float max_rgb_var = 0.0;
+
     if( retina.r >= retina.g && retina.r >= retina.b ){
-        max_rgb_var = ev.color_var.r;
+        max_rgb_var = ev.S_col[0][0];
     }
     else if( retina.g >= retina.r && retina.g >= retina.b ){
-        max_rgb_var = ev.color_var.g;
+        max_rgb_var = ev.S_col[1][1];
     }
     if( retina.b >= retina.g && retina.b >= retina.r ){
-        max_rgb_var = ev.color_var.b;
+        max_rgb_var = ev.S_col[2][2];
     }
-    // max_rgb has some uncertainty. Unfortunately it cannot be modeled in the if condition
+    // The decision of max_rgb has some uncertainty. 
+    // Unfortunately it can hardly be modeled in the if condition, so we just use the decision as-is.
     if (max_rgb < .75) {
+        // luckily we can assume that the retina values do not have any uncertainty attached
         float blur_scale = (0.75 - (retina.r + retina.g + retina.b) / 3.0) * 5.0;
-        //original calculation: 
-        //      color = blur(v_tex, s_color, blur_scale, u_resolution);
-        color =  blur(v_tex, s_color, blur_scale, u_resolution, ev.color_var, s_color_uncertainty);        
+        color =  blur(v_tex, s_color, blur_scale, u_resolution, ev.S_col, ev.S_pos, s_color_uncertainty, s_covariances, s_deflection);        
 
         // apply bloom
         //original calculation: 
         //      color = color * (1.0 + getPerceivedBrightness(color.rgb) * (0.75 - max_rgb) * 0.5);
-        vec2 brightness = getPerceivedBrightness(color.rgb, ev.color_var);
-        float bloom_factor = 1. + brightness.x * (0.75 - max_rgb) * 0.5;
-        // f = 1+ x*(0.75-y) *0.5
-        // df/dx = -0.5(y-0.75)
-        // df/dy = -0.5x
-        // s^2 = sum( (df/dx_i * s_i)^2 )
-        float bloom_factor_variance = 
-             pow(-0.5 * (max_rgb-0.75) ,2.0) * brightness.y 
-           + pow(-0.5 * brightness.x,2.0)    * max_rgb_var
-            ;
-// TODO possibly covariance
-        ev.color_var = pow(bloom_factor ,2.0) * ev.color_var + (color.rgb*color.rgb) * bloom_factor_variance;
-        // do the bloom
-        color = color * bloom_factor;
+
+        // although this is not the blur factor per se, this is re-used in the bluum under this name
+        float blur_factor = (0.75 - max_rgb) * 0.5;
+        applyBloom(color.rgb, blur_factor, ev.S_col);
     }
 }
 
@@ -125,29 +120,30 @@ void applyColorBlindness(inout vec4 color, in vec4 retina, inout ErrorValues ev)
             pow(color_transformation[2], zwei)
             );
 
-    ev.color_var = squared_color_transformation * ev.color_var;
+    ev.S_col = squared_color_transformation * ev.S_col;
 }
 
 void applyNyctalopia(inout vec4 color, in vec4 retina, inout ErrorValues ev) {
 
-    vec2 brightness = getPerceivedBrightness(color.rgb, ev.color_var);
+    float brightness = getPerceivedBrightness(color.rgb);
 
     //float night_blindness_factor = getPerceivedBrightness(color.rgb) * 5.0;
-    float night_blindness_factor = brightness.x * 5;
-    float nfb_var = brightness.y * 5 * 5; 
+    // float night_blindness_factor = brightness.x * 5;
+    float night_blindness_factor = brightness * 5;
+    // float nfb_var = brightness.y * 5 * 5; 
     if (night_blindness_factor < 1.0) {
         color = retina.a * color + (1.0 - retina.a) * night_blindness_factor * color;
 
-        // f        = a * x + (1-a) * y * x
-        // df/dx    = a - (1-a) * y
-        // df/dy    = -(1-a) * x
-        // s^2      = sum( (df/dx_i * s_i)^2 )
-        float dfdx_factor = retina.a - (1-retina.a) * night_blindness_factor;
-        vec3 dfdy_factor = vec3(-1 * (1-retina.a) ) * color.rgb;
-        ev.color_var = 
-                pow(dfdx_factor, 2.0)       * ev.color_var 
-              + pow(dfdy_factor, vec3(2.0)) * nfb_var
-              ;
+        // The weights from the brightness function
+        vec3 weights = vec3(0.299, 0.587, 0.114);
+
+        mat3 J = mat3(
+            5*(1-retina.a)*(color.b*weights.b+color.g*weights.g+color.r*weights.r)+5*(1-retina.a)*color.r*weights.r+retina.a,	5*(1-retina.a)*color.r*weights.g,	5*(1-retina.a)*color.r*weights.b,
+            5*(1-retina.a)*color.g*weights.r,	5*(1-retina.a)*(color.b*weights.b+color.g*weights.g+color.r*weights.r)+5*(1-retina.a)*color.g*weights.g+retina.a,	5*(1-retina.a)*color.g*weights.b,
+            5*(1-retina.a)*color.b*weights.r,	5*(1-retina.a)*color.b*weights.g,	5*(1-retina.a)*(color.b*weights.b+color.g*weights.g+color.r*weights.r)+5*(1-retina.a)*color.b*weights.b+retina.a
+	    );
+        mat3 Jt = transpose(J);
+        ev.S_col = J*ev.S_col*Jt;
     }
 }
 
@@ -160,11 +156,9 @@ void glaucoma(inout vec4 color, in vec4 retina_mask, inout ErrorValues ev) {
     maxValue *= 4.0;
     if (maxValue < 1.0) {
         color = (maxValue) * (color) + (1.0 - maxValue) * GLAUCOMA_COLOR;
-        ev.color_var *= maxValue*maxValue;
+        ev.S_col *= maxValue*maxValue;
     }
 }
-
-
 
 
 void main() {
@@ -173,7 +167,6 @@ void main() {
     //vec4 world_dir = inverse(u_proj) * vec4(v_tex * 2.0 - 1.0, 0.9, 1.0);
     //vec4 retina_mask = texture(s_retina, normalize(world_dir.xyz)/world_dir.w);
 
-// TODO handle early termination direction
     /*
         Since there is no uncertainty att play here, we can overwrite all previous efforts with 0.
         The color changehas have to be added to the previously recorded changes.
@@ -199,30 +192,33 @@ void main() {
     vec3 original_color = rt_color.rgb;
     vec3 color_error = texture(s_color_change, v_tex).rgb;
     vec3 color_var = texture(s_color_uncertainty, v_tex).rgb;
-    vec2 position_var = vec2( texture(s_color_change, v_tex).a, texture(s_color_uncertainty, v_tex).a );
+    vec3 color_covar = texture(s_covariances, v_tex).rgb;
+
+    vec2 dir_var = texture(s_deflection, v_tex).ba;
+    float dir_covar = texture(s_covariances, v_tex).a;
+
+    mat3 S_col = covarMatFromVec(color_var, color_covar);
+    mat2 S_pos =covarMatFromVec(dir_var, dir_covar);
+
     ErrorValues ev = ErrorValues(
         color_error,
-        color_var,
-        position_var);
+        S_col,
+        S_pos
+    );
 
     applyBlurAndBloom(rt_color, retina_mask, ev);
     applyNyctalopia(rt_color, retina_mask, ev);
     applyColorBlindness(rt_color, retina_mask, ev);
-    //glaucoma should be one of the last ones because it could decrease the brightness a lot
+    // //glaucoma should be one of the last ones because it could decrease the brightness a lot
     glaucoma(rt_color, retina_mask, ev);
 
-// TODO impl
-    vec2 dir_unc = vec2(0.0);
-
+    covarMatToVec(ev.S_col, color_var, color_covar);
+    covarMatToVec(ev.S_pos, dir_var, dir_covar);
+    
     vec3 color_diff = rt_color.rgb - original_color;
-    rt_color_change =    
-        vec4(
-            texture(s_color_change, v_tex).rgb + color_diff,
-            dir_unc.x
-        );
-    rt_color_uncertainty = 
-        vec4(
-            ev.color_var,
-            dir_unc.y
-        );
+    rt_color_change = vec4(texture(s_color_change, v_tex).rgb + color_diff,0.0);
+    rt_color_uncertainty = vec4(color_var, 0.0);
+    rt_deflection = vec4(texture(s_deflection, v_tex).rg, dir_var);
+    // rt_deflection = texture(s_deflection, v_tex).rgba;
+    rt_covariances = vec4(color_covar, dir_covar);
 }

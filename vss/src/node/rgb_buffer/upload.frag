@@ -13,6 +13,8 @@ out float rt_depth;
 out vec4 rt_deflection;
 out vec4 rt_color_change;
 out vec4 rt_color_uncertainty;
+out vec4 rt_covariances;
+
 
 void main() {
     float depth = 0.5;
@@ -46,7 +48,8 @@ void main() {
     rt_color = vec4(texture(s_rgb, tex).rgb, 1.0);
     rt_depth = depth;
 
-    //rt_deflection =         vec4(0.0,0.0,0.0,1.0);
+    rt_deflection =         vec4(0.0);
     rt_color_change =       vec4(0.0);
     rt_color_uncertainty =  vec4(0.0);
+    rt_covariances =        vec4(0.0);
 }

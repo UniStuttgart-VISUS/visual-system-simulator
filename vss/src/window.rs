@@ -316,6 +316,46 @@ impl Window {
                     glutin::WindowEvent::KeyboardInput {
                         input:
                             glutin::KeyboardInput {
+                                virtual_keycode: Some(glutin::VirtualKeyCode::Key4),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().vis_type=VisualizationType::Original;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                virtual_keycode: Some(glutin::VirtualKeyCode::Key5),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().vis_type=VisualizationType::OverlayOutput;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                virtual_keycode: Some(glutin::VirtualKeyCode::Key6),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().vis_type=VisualizationType::OverlayInput;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                virtual_keycode: Some(glutin::VirtualKeyCode::Key7),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().vis_type=VisualizationType::Ganglion;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
                                 virtual_keycode: Some(glutin::VirtualKeyCode::Escape),
                                 ..
                             },

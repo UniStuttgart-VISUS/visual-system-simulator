@@ -18,6 +18,7 @@ pub struct Flow {
     nodes: RefCell<Vec<Box<dyn Node>>>,
     last_slot: RefCell<Option<NodeSlots>>,
     pub last_perspective: RefCell<EyePerspective>,
+    well_known: WellKnownSlots
 }
 
 impl Flow {
@@ -31,6 +32,7 @@ impl Flow {
                 proj: cgmath::perspective(cgmath::Deg(70.0), 1.0, 0.05, 1000.0),
                 gaze: Vector3::new(0.0, 0.0, 1.0),
             }),
+            well_known: WellKnownSlots::new()
         }
     }
 
@@ -62,7 +64,9 @@ impl Flow {
                             color_change,
                             color_change_view,
                             color_uncertainty,
-                            color_uncertainty_view
+                            color_uncertainty_view,
+                            covariances,
+                            covariances_view
                         } => Slot::Rgb {
                             color: window.target(),
                             color_view,
@@ -71,13 +75,15 @@ impl Flow {
                             color_change, 
                             color_change_view, 
                             color_uncertainty, 
-                            color_uncertainty_view
+                            color_uncertainty_view,
+                            covariances,
+                            covariances_view
                         },
                         _ => Slot::Empty,
                     },
                 );
             // Negociate and swap.
-            let new_last_slot = self.nodes.borrow_mut().last_mut().unwrap().negociate_slots(window, suggested_slot);
+            let new_last_slot = self.nodes.borrow_mut().last_mut().unwrap().negociate_slots_wk(window, suggested_slot, &self.well_known);
             self.last_slot.replace(Some(new_last_slot));
         }else{
             self.negociate_slots(window);
@@ -111,6 +117,11 @@ impl Flow {
                     width as u32,
                     height as u32,
                 );
+                let (covariances, covariances_view) = create_texture_render_target::<Rgba32F>(
+                    &mut factory,
+                    width as u32,
+                    height as u32,
+                );
 
                 drop(factory);
 
@@ -122,7 +133,9 @@ impl Flow {
                     color_change, 
                     color_change_view, 
                     color_uncertainty, 
-                    color_uncertainty_view
+                    color_uncertainty_view,
+                    covariances,
+                    covariances_view
                 };
 
                 NodeSlots::new_io(
@@ -135,7 +148,7 @@ impl Flow {
                 NodeSlots::new_io(window, slot_b.take_output(), slot_a.take_output())
             };
             // Negociate and swap.
-            slot_a = node.negociate_slots(window, suggested_slot);
+            slot_a = node.negociate_slots_wk(window, suggested_slot, &self.well_known);
             std::mem::swap(&mut slot_a, &mut slot_b);
         }
         self.last_slot.replace(Some(slot_b));

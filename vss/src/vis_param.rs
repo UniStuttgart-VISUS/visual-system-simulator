@@ -3,7 +3,11 @@ pub enum VisualizationType{
   Output,
   Deflection,
   ColorChange,
-  ColorUncertainty
+  ColorUncertainty,
+  Original,
+  OverlayOutput,
+  OverlayInput,
+  Ganglion
 }
 impl Default for VisualizationType{
   fn default() -> Self{
