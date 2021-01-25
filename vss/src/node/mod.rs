@@ -44,7 +44,7 @@ pub trait Node {
     /// possibly re-using suggested `slots` (for efficiency).
     fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots;
 
-    fn negociate_slots_wk(&mut self, window: &Window, slots: NodeSlots, well_known: &WellKnownSlots) -> NodeSlots{
+    fn negociate_slots_wk(&mut self, window: &Window, slots: NodeSlots, _well_known: &WellKnownSlots) -> NodeSlots{
         self.negociate_slots(window, slots)
     }
 
@@ -54,8 +54,8 @@ pub trait Node {
 
     /// Handle input.
     #[allow(unused_variables)]
-    fn input(&mut self, head: &Head, gaze: &Gaze, vis_param: &VisualizationParameters, flow_index: usize) -> Gaze {
-        gaze.clone()
+    fn input(&mut self, perspective: &EyePerspective, vis_param: &VisualizationParameters) -> EyePerspective {
+        perspective.clone()
     }
 
     /// Render the node.

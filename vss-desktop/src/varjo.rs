@@ -3,7 +3,7 @@ use log::LevelFilter;
 
 use vss::*;
 use vss::gfx::Factory;
-use cgmath::{Matrix4};
+use cgmath::{Matrix4, Vector3};
 
 type VarjoPtr = *mut c_void;
 
@@ -208,7 +208,7 @@ impl Varjo {
         matrices
     }
     
-    pub fn get_current_gaze(&self) -> VarjoGazeData{
+    pub fn get_current_gaze(&self) -> (Vector3<f32>, Vector3<f32>, f32){
         let mut varjo_gaze_data = VarjoGazeData{
             left_eye: [0.0; 3],
             right_eye: [0.0; 3],
@@ -228,7 +228,7 @@ impl Varjo {
             log::info!("{:?}", varjo_gaze_data);
         }
 
-        varjo_gaze_data
+        (Vector3::from(varjo_gaze_data.left_eye), Vector3::from(varjo_gaze_data.right_eye), varjo_gaze_data.focus_distance)
     }
 
     pub fn begin_frame_sync(&self) -> bool{

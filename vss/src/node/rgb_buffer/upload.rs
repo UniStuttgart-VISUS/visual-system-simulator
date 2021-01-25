@@ -7,8 +7,8 @@ use gfx::format::Rgba32F;
 gfx_defines! {
     pipeline pipe {
         u_flags: gfx::Global<u32> = "u_flags",
-        u_head: gfx::Global<[[f32; 4];4]> = "u_head",
-        u_fov: gfx::Global<[f32; 2]> = "u_fov",
+        u_head: gfx::Global<[[f32; 4];4]> = "u_head",//TODO remove, was replace by u_proj_view
+        u_fov: gfx::Global<[f32; 2]> = "u_fov",//TODO remove, was replace by u_proj_view
         u_proj_view: gfx::Global<[[f32; 4];4]> = "u_proj_view",
         s_rgb: gfx::TextureSampler<[f32; 4]> = "s_rgb",
         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
@@ -25,7 +25,6 @@ bitflags! {
         const EQUIRECTANGULAR = 1;
         const VERTICALLY_FLIPPED = 2;
         const RGBD_HORIZONTAL = 4;
-        const VR_PROJECTION = 8;
     }
 }
 
@@ -113,10 +112,6 @@ impl UploadRgbBuffer {
 
     pub fn set_render_resolution(&mut self, render_resolution: Option<[u32; 2]>) {
         self.render_resolution = render_resolution;
-    }
-
-    pub fn use_vr_projection(&mut self) {
-        self.pso_data.u_flags |= RgbInputFlags::VR_PROJECTION.bits;
     }
 
     pub fn set_flags(&mut self, flags: RgbInputFlags) {
@@ -219,13 +214,10 @@ impl Node for UploadRgbBuffer {
         slots
     }
 
-    fn input(&mut self, head: &Head, gaze: &Gaze, _vis_param: &VisualizationParameters, flow_index: usize) -> Gaze {
+    fn input(&mut self, perspective: &EyePerspective, _vis_param: &VisualizationParameters) -> EyePerspective {
         use cgmath::Matrix4;
-        self.pso_data.u_head = (Matrix4::from_angle_y(cgmath::Rad(head.yaw))
-            * Matrix4::from_angle_x(cgmath::Rad(head.pitch)))
-        .into();
-        //self.pso_data.u_proj_view = (head.proj[flow_index] * (Matrix4::from_translation(-head.position) * head.view[flow_index])).into();
-        gaze.clone()
+        self.pso_data.u_proj_view = (perspective.proj * (Matrix4::from_translation(-perspective.position) * perspective.view)).into();
+        perspective.clone()
     }
 
     fn render(&mut self, window: &Window) {

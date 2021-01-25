@@ -5,16 +5,18 @@ mod nyctalopia;
 mod osterberg;
 mod receptor_density;
 
+use cgmath::Vector3;
+
 use crate::*;
 
-pub fn generate_retina_map(resolution: (u32, u32), values: &ValueMap) -> Box<[u8]> {
+pub fn generate_retina_map(resolution: (u32, u32), orientation: &[Vector3<f32>; 3], values: &ValueMap) -> Box<[u8]> {
     let mut maps: Vec<image::ImageBuffer<image::Rgba<u8>, Vec<u8>>> = Vec::new();
 
     // glaucoma
     if let Some(Value::Bool(true)) = values.get("glaucoma_onoff") {
         let severity = values.get("glaucoma_fov").unwrap().as_f64().unwrap() as u8;
         //let glaucoma_scotomasize = values.get("glaucoma_scotomasize"].as_u64().unwrap();
-        let glaucoma = glaucoma::generate_simple(resolution, severity);
+        let glaucoma = glaucoma::generate_simple(resolution, orientation, severity);
         maps.push(glaucoma);
     }
 
@@ -49,7 +51,7 @@ pub fn generate_retina_map(resolution: (u32, u32), values: &ValueMap) -> Box<[u8
                 .unwrap()
                 .as_f64()
                 .unwrap() as u8;
-            let macular_degeneration = macular_degeneration::generate_simple(resolution, severity);
+            let macular_degeneration = macular_degeneration::generate_simple(resolution, orientation, severity);
             maps.push(macular_degeneration);
         } else if let Some(Value::Bool(true)) = values.get("maculardegeneration_vadvanced") {
             // parameters set in advanced mode
@@ -64,9 +66,8 @@ pub fn generate_retina_map(resolution: (u32, u32), values: &ValueMap) -> Box<[u8
                 .as_f64()
                 .unwrap();
             // interpret parameters
-            let radius = radius * (resolution.0 as f64) / 300.0;
             let severity = 1.0 - 0.5 * (1.0 - severity / 100.0).powi(2);
-            let macular_degeneration = macular_degeneration::generate(resolution, radius, severity);
+            let macular_degeneration = macular_degeneration::generate(resolution, orientation, radius/100.0, severity);
             maps.push(macular_degeneration);
         }
     }
