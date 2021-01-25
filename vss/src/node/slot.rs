@@ -1,5 +1,5 @@
 use super::*;
-use gfx;
+use gfx::{self};
 use gfx::format::Rgba32F;
 use std::cell::RefCell;
 

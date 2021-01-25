@@ -46,9 +46,10 @@ uniform float u_far_point;
 uniform float u_near_vision_factor;
 uniform float u_far_vision_factor;
 uniform float u_dir_calc_scale;
+uniform mat4 u_proj;
 
 uniform sampler2D s_color;
-uniform sampler2D s_normal;
+uniform samplerCube s_normal;
 uniform sampler2D s_depth;
 uniform sampler2D s_cornea;
 uniform sampler2D s_deflection;
@@ -318,10 +319,10 @@ Simulation getColorSample(vec3 start, vec2 aim, float focalLength, float nAnteri
 
 
 void main() {
-
     if (1 == u_active) {
         rt_color = vec4(0.5);
-        vec3 start = (texture(s_normal, v_tex) * 2.0 - 1.0).xyz * VITREOUS_HUMOUR_RADIUS;
+        vec3 fragment_dir = normalize((u_proj * vec4(v_tex*2.0-1.0, 0.9, 1.0)).xyz);
+        vec3 start = texture(s_normal, fragment_dir).xyz * VITREOUS_HUMOUR_RADIUS;
         vec3 original_color = texture(s_color, v_tex).rgb;
 
         float sampleCount = 0.0;

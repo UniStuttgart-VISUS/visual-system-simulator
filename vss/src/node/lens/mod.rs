@@ -1,5 +1,6 @@
 mod generator;
 
+use cgmath::{Matrix4, Point3, SquareMatrix, Vector3};
 pub use generator::*;
 
 use super::*;
@@ -26,6 +27,7 @@ gfx_defines! {
         // determines the bluriness of objects that are too far to focus
         // should be between 0 and 2
         u_far_vision_factor: gfx::Global<f32> = "u_far_vision_factor",
+        u_proj: gfx::Global<[[f32; 4];4]> = "u_proj",
         s_color: gfx::TextureSampler<[f32; 4]> = "s_color",
         s_depth: gfx::TextureSampler<f32> = "s_depth",
         s_normal: gfx::TextureSampler<[f32; 4]> = "s_normal",
@@ -95,6 +97,7 @@ impl Node for Lens {
                 u_far_point: f32::INFINITY,
                 u_near_vision_factor: 0.0,
                 u_far_vision_factor: 0.0,
+                u_proj: Matrix4::from_scale(1.0).into(),
                 s_color: (src, sampler.clone()),
                 s_depth: (srv, sampler.clone()),
                 s_normal: (normal_view, sampler.clone()),
@@ -126,7 +129,7 @@ impl Node for Lens {
         let mut factory = window.factory().borrow_mut();
         let normal_texture = factory
         .view_texture_as_shader_resource::<(gfx::format::R32_G32_B32_A32, gfx::format::Float)>(
-            &self.generator.texture,
+            &self.generator.cube_texture,
             (0, 0),
             format::Swizzle::new(),
         )
@@ -200,6 +203,8 @@ impl Node for Lens {
         self.pso_data.u_dir_calc_scale = vis_param.dir_calc_scale;
         self.pso_data.u_depth_max = vis_param.test_depth_max;
         self.pso_data.u_depth_min = vis_param.test_depth_min;
+        let gaze_rotation = Matrix4::look_to_lh(Point3::new(0.0, 0.0, 0.0), perspective.gaze, Vector3::unit_y());
+        self.pso_data.u_proj = (gaze_rotation * perspective.proj.invert().unwrap()).into();
         perspective.clone()
     }
 }

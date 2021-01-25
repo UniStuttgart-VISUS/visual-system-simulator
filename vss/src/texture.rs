@@ -200,6 +200,51 @@ pub fn load_cubemap_from_bytes(
     Ok((tex, view))
 }
 
+//copy of load_cubemap_from_bytes
+pub fn load_highp_cubemap_from_bytes(
+    factory: &mut gfx_device_gl::Factory,
+    data: &[&[u8];6],
+    width: u32,
+) -> Result<
+    (
+        gfx::handle::Texture<Resources, gfx::format::R32_G32_B32_A32>,
+        gfx::handle::ShaderResourceView<Resources, [f32; 4]>,
+    ),
+    String,
+> {
+    let kind = texture::Kind::Cube(
+        width as texture::Size,
+    );
+
+    // inspired by https://github.com/PistonDevelopers/gfx_texture/blob/master/src/lib.rs#L157-L178
+    use gfx::memory::Typed;
+    use gfx::memory::Usage;
+    use gfx::{format, texture};
+
+    let surface = gfx::format::SurfaceType::R32_G32_B32_A32;
+    let desc = texture::Info {
+        kind,
+        levels: 1 as texture::Level,
+        format: surface,
+        bind: gfx::memory::Bind::all(),
+        usage: Usage::Dynamic,
+    };
+
+    let cty = gfx::format::ChannelType::Float;
+    let raw = factory
+        .create_texture_raw(
+            desc,
+            Some(cty),
+            Some((data, gfx::texture::Mipmap::Allocated)),
+        )
+        .unwrap();
+    let levels = (0, raw.get_info().levels - 1);
+    let tex = Typed::new(raw);
+    let view = factory
+        .view_texture_as_shader_resource::<(gfx::format::R32_G32_B32_A32, gfx::format::Float)>(&tex, levels, format::Swizzle::new())
+        .unwrap();
+    Ok((tex, view))
+}
 
 ///
 /// Load bytes as texture into GPU

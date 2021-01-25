@@ -123,7 +123,7 @@ impl Node for Retina {
 
             //orientations directly taken from https://www.khronos.org/opengl/wiki/Cubemap_Texture
             let retina_map_pos_x = generate_retina_map(cubemap_resolution, &[-Vector3::unit_z(), -Vector3::unit_y(),  Vector3::unit_x()], &values);
-            let retina_map_neg_x = generate_retina_map(cubemap_resolution, &[ Vector3::unit_z(),  Vector3::unit_y(), -Vector3::unit_x()], &values);
+            let retina_map_neg_x = generate_retina_map(cubemap_resolution, &[ Vector3::unit_z(), -Vector3::unit_y(), -Vector3::unit_x()], &values);
             let retina_map_pos_y = generate_retina_map(cubemap_resolution, &[ Vector3::unit_x(),  Vector3::unit_z(),  Vector3::unit_y()], &values);
             let retina_map_neg_y = generate_retina_map(cubemap_resolution, &[ Vector3::unit_x(), -Vector3::unit_z(), -Vector3::unit_y()], &values);
             let retina_map_pos_z = generate_retina_map(cubemap_resolution, &[ Vector3::unit_x(), -Vector3::unit_y(),  Vector3::unit_z()], &values);

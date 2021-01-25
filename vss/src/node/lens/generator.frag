@@ -31,6 +31,10 @@
 #define INNER_LENS_TIP_B 3.777299048943033E-6
 #define INNER_LENS_TIP_C 7.03207918882336
 
+uniform vec3 u_up;
+uniform vec3 u_right;
+uniform vec3 u_forward;
+
 in vec2 v_tex;
 out vec4 rt_color;
 
@@ -80,8 +84,11 @@ vec3 getInnerLensCenter(float distance) {
 
 void getRay(inout vec3 start, inout vec3 dir){
 	// TODO subtract (0.5, 0.5) ?
-	start = vec3((v_tex.xy - 0.5) * TEXTURE_SCALE, TEXTURE_DISTANCE + VITREOUS_HUMOUR_RADIUS);
-	dir = normalize(vec3(0.0, 0.0, VITREOUS_HUMOUR_RADIUS) - start);
+	vec3 cube_pos = u_right * (v_tex.x*2.0-1.0) + u_up * (v_tex.y*2.0-1.0) + u_forward;
+	start = normalize(cube_pos)*1000 + vec3(0.0, 0.0, VITREOUS_HUMOUR_RADIUS);
+	dir = -normalize(cube_pos);
+	//start = vec3((v_tex.xy - 0.5) * TEXTURE_SCALE, TEXTURE_DISTANCE + VITREOUS_HUMOUR_RADIUS);
+	//dir = normalize(vec3(0.0, 0.0, VITREOUS_HUMOUR_RADIUS) - start);
 }
 
 //rPos = ray position
@@ -107,8 +114,9 @@ vec3 rayIntersectSphere(vec3 rPos, vec3 rDir, vec3 cPos, float cRad) {
 void main() {
 	vec3 start = vec3(0.0, 0.0, 0.0), dir = vec3(0.0, 0.0, 0.0);
 	getRay(start, dir);
-	
-	float distance = length(vec3((v_tex.xy - 0.5) * TEXTURE_SCALE, TEXTURE_DISTANCE));
+
+	float distance = length(dir*1000);
+	//float distance = length(vec3((v_tex.xy - 0.5) * TEXTURE_SCALE, TEXTURE_DISTANCE));
 
 	start = rayIntersectSphere(start, dir, OUTER_CORNEA_CENTER, OUTER_CORNEA_RADIUS);
 	dir = refract(dir, normalize(start - OUTER_CORNEA_CENTER), N_AIR/N_CORNEA);
