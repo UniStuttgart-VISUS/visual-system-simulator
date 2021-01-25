@@ -359,6 +359,16 @@ impl Window {
                     glutin::WindowEvent::KeyboardInput {
                         input:
                             glutin::KeyboardInput {
+                                virtual_keycode: Some(glutin::VirtualKeyCode::Key7),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().vis_type=VisualizationType::Ganglion;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
                                 virtual_keycode: Some(glutin::VirtualKeyCode::Escape),
                                 ..
                             },

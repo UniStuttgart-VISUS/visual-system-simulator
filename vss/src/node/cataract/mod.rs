@@ -18,6 +18,9 @@ gfx_defines! {
         rt_color_change: gfx::RenderTarget<Rgba32F> = "rt_color_change",
         s_color_uncertainty: gfx::TextureSampler<[f32; 4]> = "s_color_uncertainty",
         rt_color_uncertainty: gfx::RenderTarget<Rgba32F> = "rt_color_uncertainty",
+        s_covariances: gfx::TextureSampler<[f32; 4]> = "s_covariances",
+        rt_covariances: gfx::RenderTarget<Rgba32F> = "rt_covariances",
+
     }
 }
 
@@ -45,6 +48,7 @@ impl Node for Cataract {
         let (_, s_deflection, rt_deflection) = factory.create_render_target(1, 1).unwrap();
         let (_, s_color_change, rt_color_change) = factory.create_render_target(1, 1).unwrap();
         let (_, s_color_uncertainty, rt_color_uncertainty) = factory.create_render_target(1, 1).unwrap();
+        let (_, s_covariances, rt_covariances) = factory.create_render_target(1, 1).unwrap();
 
 
         Cataract {
@@ -63,7 +67,9 @@ impl Node for Cataract {
                 s_color_change:(s_color_change, sampler.clone()),
                 rt_color_change,
                 s_color_uncertainty:(s_color_uncertainty, sampler.clone()),
-                rt_color_uncertainty
+                rt_color_uncertainty,
+                s_covariances: (s_covariances, sampler.clone()),
+                rt_covariances
             },
         }
     }
@@ -87,6 +93,9 @@ impl Node for Cataract {
         self.pso_data.rt_color_change = slots.as_color_change();  
         self.pso_data.s_color_uncertainty = slots.as_color_uncertainty_view();
         self.pso_data.rt_color_uncertainty = slots.as_color_uncertainty();
+        self.pso_data.s_covariances = slots.as_covariances_view();
+        self.pso_data.rt_covariances = slots.as_covariances();
+
         slots
     }
     fn negociate_slots_wk(&mut self, window: &Window, slots: NodeSlots, well_known: &WellKnownSlots) -> NodeSlots{

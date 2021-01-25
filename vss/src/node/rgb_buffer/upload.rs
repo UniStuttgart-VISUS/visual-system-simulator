@@ -16,6 +16,7 @@ gfx_defines! {
         rt_deflection: gfx::RenderTarget<Rgba32F> = "rt_deflection",
         rt_color_change: gfx::RenderTarget<Rgba32F> = "rt_color_change",
         rt_color_uncertainty: gfx::RenderTarget<Rgba32F> = "rt_color_uncertainty",
+        rt_covariances: gfx::RenderTarget<Rgba32F> = "rt_covariances",
     }
 }
 
@@ -142,6 +143,7 @@ impl Node for UploadRgbBuffer {
         let (_, _, rt_deflection) = factory.create_render_target(1, 1).unwrap();
         let (_, _, rt_color_change) = factory.create_render_target(1, 1).unwrap();
         let (_, _, rt_color_uncertainty) = factory.create_render_target(1, 1).unwrap();
+        let (_,  _,rt_covariances) = factory.create_render_target(1, 1).unwrap();
 
 
         UploadRgbBuffer {
@@ -161,7 +163,8 @@ impl Node for UploadRgbBuffer {
                 rt_depth,
                 rt_deflection,
                 rt_color_change,
-                rt_color_uncertainty
+                rt_color_uncertainty,
+                rt_covariances
             },
         }
     }
@@ -205,12 +208,13 @@ impl Node for UploadRgbBuffer {
             2.0 * ((self.pso_data.u_fov[0] / 2.0).tan() * height as f32 / width as f32).atan();
 
         let slots = slots.emplace_color_depth_output(window, width, height);
-        let (color, depth, deflection, color_change, color_uncertainty) = slots.as_all_output();
+        let (color, depth, deflection, color_change, color_uncertainty, covariances) = slots.as_all_output();
         self.pso_data.rt_color = color;
         self.pso_data.rt_depth = depth;
         self.pso_data.rt_deflection = deflection;
         self.pso_data.rt_color_change = color_change;
         self.pso_data.rt_color_uncertainty = color_uncertainty;
+        self.pso_data.rt_covariances = covariances;
 
         slots
     }
@@ -220,7 +224,7 @@ impl Node for UploadRgbBuffer {
         self.pso_data.u_head = (Matrix4::from_angle_y(cgmath::Rad(head.yaw))
             * Matrix4::from_angle_x(cgmath::Rad(head.pitch)))
         .into();
-        self.pso_data.u_proj_view = (head.proj[flow_index] * (Matrix4::from_translation(-head.position) * head.view[flow_index])).into();
+        //self.pso_data.u_proj_view = (head.proj[flow_index] * (Matrix4::from_translation(-head.position) * head.view[flow_index])).into();
         gaze.clone()
     }
 

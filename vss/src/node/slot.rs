@@ -19,6 +19,8 @@ pub enum Slot {
         color_change_view: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>,
         color_uncertainty: gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba32F>,
         color_uncertainty_view: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>,
+        covariances: gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba32F>,
+        covariances_view: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>,
     },
     RgbDepth {
         color: gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat>,
@@ -31,6 +33,8 @@ pub enum Slot {
         color_change_view: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>,
         color_uncertainty: gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba32F>,
         color_uncertainty_view: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>,
+        covariances: gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba32F>,
+        covariances_view: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>,
     },
     // XXX: Stereo
 }
@@ -87,7 +91,7 @@ impl NodeSlots {
             }
             Slot::Rgb { .. } => self,
             Slot::RgbDepth {
-                color, color_view, deflection, deflection_view, color_change, color_change_view, color_uncertainty, color_uncertainty_view, ..
+                color, color_view, deflection, deflection_view, color_change, color_change_view, color_uncertainty, color_uncertainty_view, covariances, covariances_view, ..
             } => Self {
                 input: Slot::Rgb {
                     color,
@@ -97,7 +101,9 @@ impl NodeSlots {
                     color_change, 
                     color_change_view, 
                     color_uncertainty, 
-                    color_uncertainty_view
+                    color_uncertainty_view,
+                    covariances,
+                    covariances_view
                 },
                 output: self.output,
                 sampler: self.sampler,
@@ -149,6 +155,11 @@ impl NodeSlots {
                     width as u32,
                     height as u32,
                 );
+                let (covariances, covariances_view) = create_texture_render_target::<Rgba32F>(
+                    &mut factory,
+                    width as u32,
+                    height as u32,
+                );
 
                 Self {
                     input: self.input,
@@ -160,14 +171,16 @@ impl NodeSlots {
                         color_change, 
                         color_change_view, 
                         color_uncertainty, 
-                        color_uncertainty_view
+                        color_uncertainty_view,
+                        covariances,
+                        covariances_view
                     },
                     sampler: self.sampler,
                 }
             }
             Slot::Rgb { .. } => self,
             Slot::RgbDepth {
-                color, color_view, deflection, deflection_view, color_change, color_change_view, color_uncertainty, color_uncertainty_view, ..
+                color, color_view, deflection, deflection_view, color_change, color_change_view, color_uncertainty, color_uncertainty_view, covariances, covariances_view, ..
             } => {
                 Self {
                 input: self.input,
@@ -179,7 +192,9 @@ impl NodeSlots {
                     color_change, 
                     color_change_view, 
                     color_uncertainty, 
-                    color_uncertainty_view
+                    color_uncertainty_view,
+                    covariances,
+                    covariances_view
                 },
                 sampler: self.sampler,
             }},
@@ -223,6 +238,11 @@ impl NodeSlots {
                     width as u32,
                     height as u32,
                 );
+                let (covariances, covariances_view) = create_texture_render_target::<Rgba32F>(
+                    &mut factory,
+                    width as u32,
+                    height as u32,
+                );
 
                 Self {
                     input: self.input,
@@ -236,13 +256,15 @@ impl NodeSlots {
                         color_change, 
                         color_change_view, 
                         color_uncertainty, 
-                        color_uncertainty_view
+                        color_uncertainty_view,                    
+                        covariances,
+                        covariances_view
                     },
                     sampler: self.sampler,
                 }
             }
             Slot::Rgb {                 
-                color, color_view, deflection, deflection_view, color_change, color_change_view, color_uncertainty, color_uncertainty_view, ..
+                color, color_view, deflection, deflection_view, color_change, color_change_view, color_uncertainty, color_uncertainty_view, covariances, covariances_view, ..
             } => {
                 // Guess missing depth, based on color.
                 let mut factory = window.factory().borrow_mut();
@@ -264,7 +286,9 @@ impl NodeSlots {
                         color_change, 
                         color_change_view, 
                         color_uncertainty, 
-                        color_uncertainty_view
+                        color_uncertainty_view,
+                        covariances,
+                        covariances_view
                     },
                     sampler: self.sampler,
                 }
@@ -295,6 +319,11 @@ impl NodeSlots {
             width as u32,
             height as u32,
         );
+        let (covariances, covariances_view) = create_texture_render_target::<Rgba32F>(
+            &mut factory,
+            width as u32,
+            height as u32,
+        );
 
         Self {
             input: self.input,
@@ -306,7 +335,9 @@ impl NodeSlots {
                 color_change, 
                 color_change_view, 
                 color_uncertainty, 
-                color_uncertainty_view
+                color_uncertainty_view,
+                covariances,
+                covariances_view
             },
             sampler: self.sampler,
         }
@@ -340,6 +371,11 @@ impl NodeSlots {
             width as u32,
             height as u32,
         );
+        let (covariances, covariances_view) = create_texture_render_target::<Rgba32F>(
+            &mut factory,
+            width as u32,
+            height as u32,
+        );
 
         Self {
             input: self.input,
@@ -353,7 +389,9 @@ impl NodeSlots {
                 color_change, 
                 color_change_view, 
                 color_uncertainty, 
-                color_uncertainty_view
+                color_uncertainty_view,
+                covariances,
+                covariances_view
             },
             sampler: self.sampler,
         }
@@ -386,6 +424,16 @@ impl NodeSlots {
             }
             Slot::RgbDepth { color_uncertainty, .. } => color_uncertainty.clone(),
             Slot::Rgb { color_uncertainty, .. } => color_uncertainty.clone(),
+        }
+    }
+
+    pub fn as_covariances(&self) -> gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba32F> {
+        match &self.output {
+            Slot::Empty => {
+                panic!("RGB output expected");
+            }
+            Slot::RgbDepth { covariances, .. } => covariances.clone(),
+            Slot::Rgb { covariances, .. } => covariances.clone(),
         }
     }
 
@@ -477,6 +525,27 @@ impl NodeSlots {
         }
     }
 
+    pub fn as_covariances_view(
+        &self,
+    ) -> (
+        gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>,
+        gfx::handle::Sampler<gfx_device_gl::Resources>,
+    ) {
+        match &self.input {
+            Slot::Empty => {
+                panic!("RGB input expected");
+            }
+            Slot::Rgb { covariances_view, .. } => (
+                covariances_view.clone(),
+                self.sampler.clone(),
+            ),
+            Slot::RgbDepth { covariances_view,.. } => (
+                covariances_view.clone(),
+                self.sampler.clone(),
+            ),
+        }
+    }
+
     pub fn as_color_depth(
         &self,
     ) -> (
@@ -499,13 +568,15 @@ impl NodeSlots {
         gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba32F>,
         gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba32F>,
         gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba32F>,
+        gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba32F>,
+
     ) {
         match &self.output {
             Slot::Empty | Slot::Rgb { .. } => {
                 panic!("RGBD output expected");
             }
-            Slot::RgbDepth { color, depth, deflection, color_change, color_uncertainty, .. } 
-            => (color.clone(), depth.clone(), deflection.clone(), color_change.clone(), color_uncertainty.clone()),
+            Slot::RgbDepth { color, depth, deflection, color_change, color_uncertainty, covariances, .. } 
+            => (color.clone(), depth.clone(), deflection.clone(), color_change.clone(), color_uncertainty.clone(),covariances.clone()),
         }
     }
 
