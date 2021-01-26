@@ -32,7 +32,7 @@ impl Default for VisualizationParameters{
       heat_scale: 1.0,
       dir_calc_scale: 1.0,
       test_depth_min: 100.0,
-      test_depth_max: 1800.0,
+      test_depth_max: 300.0,
     }
   }
 }

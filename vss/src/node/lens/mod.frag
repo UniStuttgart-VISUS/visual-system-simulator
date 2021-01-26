@@ -176,23 +176,34 @@ struct RefractInfo{
 RefractInfo rayIntersectEllipsoid(vec3 rPos, vec3 rDir, vec3 cPos, float cRad) {
 
 
-    float mul = 0.1 * u_dir_calc_scale;
+    float mul = 0.25 * u_dir_calc_scale;
 
     //using vectors instead of floats allows us to calculate with rotated ellipses
     vec3 a = vec3(cRad  , 0         ,    0) * 0.96;
-    vec3 b = vec3(0     , cRad      ,    0) ;//* 1.1;
+    vec3 b = vec3(0     , cRad      ,    0);// * (1.1+mul);
     vec3 c = vec3(0     , 0         , cRad);
 
     //rotation for testing purposes
+    mat3 rot = mat3(
+        cos(mul), -sin(mul), 0,
+        sin(mul), cos(mul) , 0,
+               0,         0, 1
+    );
+
     // mat3 rot = mat3(
-    //     cos(mul), -sin(mul), 0,
-    //     sin(mul), cos(mul) , 0,
-    //            0,         0, 1
+    //     0, -1, 0,
+    //     1, 0, 0,
+    //     0, 0, 1
+    // );
+    // mat3 rot = mat3(
+    //     1, 0, 0,
+    //     0, 1, 0,
+    //     0, 0, 1
     // );
 
-    // a = rot * a;
-    // b = rot * b;
-    // c = rot * c;
+    a = rot * a;
+    b = rot * b;
+    c = rot * c;
 
 
     // inspired by http://www.illusioncatalyst.com/notes_files/mathematics/line_nu_sphere_intersection.php
@@ -203,10 +214,10 @@ RefractInfo rayIntersectEllipsoid(vec3 rPos, vec3 rDir, vec3 cPos, float cRad) {
 
     // moving the ellipsoid according to its center
     mat4 T = mat4(
-        1, 0, 0, cPos.x,
-        0, 1, 0, cPos.y,
-        0, 0, 1, cPos.z,
-        0, 0, 0, 1
+        1.0, 0, 0, cPos.x,
+        0, 1.0, 0, cPos.y,
+        0, 0, 1.0, cPos.z,
+        0, 0, 0, 1.0
     );
 
     mat4 R = mat4(
@@ -220,7 +231,7 @@ RefractInfo rayIntersectEllipsoid(vec3 rPos, vec3 rDir, vec3 cPos, float cRad) {
         length(a), 0, 0, 0,
         0, length(b), 0, 0,
         0, 0, length(c), 0,
-        0, 0, 0, 1
+        0, 0, 0, 1.0
     );
 
     // mat4 S = mat4(
@@ -230,29 +241,42 @@ RefractInfo rayIntersectEllipsoid(vec3 rPos, vec3 rDir, vec3 cPos, float cRad) {
     //     0, 0, 0, 1
     // );
 
-    mat4 M = T*R*S;
-    mat4 iM = inverse(M);
+    // mat4 M = T;//*R*S;
+    // mat4 iM = inverse(M);
 
-    vec4 srPos = iM * vec4(rPos,0);
-    vec4 srDir = iM * vec4(rDir,0);
-    vec4 scPos = iM * vec4(cPos,0);
+    vec4 srPos = vec4(rPos,1.0f) * inverse(R)  * inverse(T) * inverse(S);
+    vec4 srDir = vec4(rDir,1.0f) * inverse(R)  * inverse(S);
+    // vec4 scPos = vec4(cPos,1.0f) * iM;
+
+///
+    // vec3 srPos = rPos - cPos;
+    // vec3 srDir = rDir;// - cPos;
     
     // since we transformed everything, sphere position is the origin and its radius is 1
-    vec3 sTarget = rayIntersectSphere(srPos.xyz, srDir.xyz, scPos.xyz, 1);
+    vec3 sTarget = rayIntersectSphere(srPos.xyz, srDir.xyz, vec3(0.0), 1.0);
+    // vec3 sTarget = rayIntersectSphere(rPos.xyz, rDir.xyz, cPos, cRad);
+    // sTarget = sTarget * rot;
 
     // now we need to transform the result to get the position in the original space
-    vec4 target = M * vec4(sTarget,0);
+    // vec4 target = vec4(sTarget,1.0f) * iM;
+    // vec4 target = vec4(sTarget,1);
+
+    // vec3 rel_target = sTarget.xyz - cPos;
+    vec4 rel_target = vec4(sTarget,1.0) * S;
+
 
     // to calculate the normal, we use n = x_0/a^2 , y_0/b^2, z_0/c^2 with the ellipsoid centered at the origin
-    vec3 rel_target = target.xyz - cPos;
-    vec3 normal = vec3(rel_target.x/pow(length(a),2), rel_target.y/pow(length(b),2), rel_target.z/pow(length(c),2));
-    // vec3 normal = rel_target;
+    // normal for ellipsoid
+    vec4 normal = vec4(rel_target.x/pow(length(a),2), rel_target.y/pow(length(b),2), rel_target.z/pow(length(c),2), 1.0);
+    normal = normal * R;
 
-    // return target.xyz;
+    vec3 world_target = ((( vec4(sTarget, 1.0) * S ) * T) * R).rgb;
+    // vec3 world_target = ((( vec4(sTarget, 1.0) * S ) * T) ).rgb;
+
 
     return RefractInfo(
-        target.xyz,
-        normal
+        world_target.xyz,
+        normal.xyz
     );
     
     // return sTarget.xyz;
