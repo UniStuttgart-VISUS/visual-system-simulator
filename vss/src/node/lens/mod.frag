@@ -178,47 +178,42 @@ RefractInfo rayIntersectEllipsoid(vec3 rPos, vec3 rDir, vec3 cPos, float cRad) {
 
     float mul = 0.25 * u_dir_calc_scale;
 
-    //using vectors instead of floats allows us to calculate with rotated ellipses
+    // We start of by defining the three main axis of the ellispoid.
     vec3 a = vec3(cRad  , 0         ,    0) * 0.96;
     vec3 b = vec3(0     , cRad      ,    0);// * (1.1+mul);
     vec3 c = vec3(0     , 0         , cRad);
 
-    //rotation for testing purposes
+    // Now we allow for rotation along the Z axis (viewing direction)
+    // This enables us to simulate Atigmatism obliquus, with the main axis not in line with world-coordinates
+
+    // The matrix for rotating the cornea elipsoid
     mat3 rot = mat3(
         cos(mul), -sin(mul), 0,
         sin(mul), cos(mul) , 0,
                0,         0, 1
     );
 
-    // mat3 rot = mat3(
-    //     0, -1, 0,
-    //     1, 0, 0,
-    //     0, 0, 1
-    // );
-    // mat3 rot = mat3(
-    //     1, 0, 0,
-    //     0, 1, 0,
-    //     0, 0, 1
-    // );
-
+    // rotate the ellispoid (main axis)
     a = rot * a;
     b = rot * b;
     c = rot * c;
 
-
+    // Now that the ellipsoid is defined, we prepare to transform the whole space, so that the ellipsoid
+    // becomes a up-oriented-unit-sphere (|a|=|b|=|c| ; a = a.x, r=1), and center in the origin.
     // inspired by http://www.illusioncatalyst.com/notes_files/mathematics/line_nu_sphere_intersection.php
 
-    vec3 an = normalize(a);
-    vec3 bn = normalize(b);
-    vec3 cn = normalize(c);
 
-    // moving the ellipsoid according to its center
+
     mat4 T = mat4(
         1.0, 0, 0, cPos.x,
         0, 1.0, 0, cPos.y,
         0, 0, 1.0, cPos.z,
         0, 0, 0, 1.0
     );
+
+    vec3 an = normalize(a);
+    vec3 bn = normalize(b);
+    vec3 cn = normalize(c);
 
     mat4 R = mat4(
         an.x, bn.x, cn.x, 0,
@@ -234,52 +229,34 @@ RefractInfo rayIntersectEllipsoid(vec3 rPos, vec3 rDir, vec3 cPos, float cRad) {
         0, 0, 0, 1.0
     );
 
-    // mat4 S = mat4(
-    //     cRad, 0, 0, 0,
-    //     0, cRad, 0, 0,
-    //     0, 0, cRad, 0,
-    //     0, 0, 0, 1
-    // );
-
-    // mat4 M = T;//*R*S;
-    // mat4 iM = inverse(M);
-
+    // Transform the Ray according to the inverse transformation, that once created the ellipsoid from the sphere
+    // We do **not** translate the direction component of the ray, since it would change the direction of the ray and hence the resulting normal
     vec4 srPos = vec4(rPos,1.0f) * inverse(R)  * inverse(T) * inverse(S);
     vec4 srDir = vec4(rDir,1.0f) * inverse(R)  * inverse(S);
-    // vec4 scPos = vec4(cPos,1.0f) * iM;
-
-///
-    // vec3 srPos = rPos - cPos;
-    // vec3 srDir = rDir;// - cPos;
-    
-    // since we transformed everything, sphere position is the origin and its radius is 1
+        
+    // Since we transformed everything, sphere position is now the origin and its radius is 1
     vec3 sTarget = rayIntersectSphere(srPos.xyz, srDir.xyz, vec3(0.0), 1.0);
-    // vec3 sTarget = rayIntersectSphere(rPos.xyz, rDir.xyz, cPos, cRad);
-    // sTarget = sTarget * rot;
-
-    // now we need to transform the result to get the position in the original space
-    // vec4 target = vec4(sTarget,1.0f) * iM;
-    // vec4 target = vec4(sTarget,1);
-
-    // vec3 rel_target = sTarget.xyz - cPos;
+    
+    // We can gradually transform everything back to its original state.
+    // The first step is scaling the space to once again get the original ellipsoid shape
+    // This is used for calculating the normal. However, the normal caluclation assumes a,b,c, to be aligned with
+    //   the coordinate axis, so apply the rotation to the normal instead
     vec4 rel_target = vec4(sTarget,1.0) * S;
 
-
     // to calculate the normal, we use n = x_0/a^2 , y_0/b^2, z_0/c^2 with the ellipsoid centered at the origin
-    // normal for ellipsoid
     vec4 normal = vec4(rel_target.x/pow(length(a),2), rel_target.y/pow(length(b),2), rel_target.z/pow(length(c),2), 1.0);
+    // restore the original ellipsoid rotation
     normal = normal * R;
 
+    // the intersection point of the ray with the ellipsoid. All transformations applied initially to the ray-position
+    // are now applied as inverted matrices (so the original ones, that created the ellipsoid) and in inverse order.
     vec3 world_target = ((( vec4(sTarget, 1.0) * S ) * T) * R).rgb;
-    // vec3 world_target = ((( vec4(sTarget, 1.0) * S ) * T) ).rgb;
 
 
     return RefractInfo(
         world_target.xyz,
         normal.xyz
     );
-    
-    // return sTarget.xyz;
 }
 
 vec2 to_dir_angle(in vec3 dir){		
