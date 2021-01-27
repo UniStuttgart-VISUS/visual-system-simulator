@@ -27,7 +27,9 @@ gfx_defines! {
         // determines the bluriness of objects that are too far to focus
         // should be between 0 and 2
         u_far_vision_factor: gfx::Global<f32> = "u_far_vision_factor",
-        u_proj: gfx::Global<[[f32; 4];4]> = "u_proj",
+        u_inv_proj: gfx::Global<[[f32; 4];4]> = "u_inv_proj",
+        u_normalmap_proj: gfx::Global<[[f32; 4];4]> = "u_normalmap_proj",
+        u_texture_proj: gfx::Global<[[f32; 4];4]> = "u_texture_proj",
         s_color: gfx::TextureSampler<[f32; 4]> = "s_color",
         s_depth: gfx::TextureSampler<f32> = "s_depth",
         s_normal: gfx::TextureSampler<[f32; 4]> = "s_normal",
@@ -97,7 +99,9 @@ impl Node for Lens {
                 u_far_point: f32::INFINITY,
                 u_near_vision_factor: 0.0,
                 u_far_vision_factor: 0.0,
-                u_proj: Matrix4::from_scale(1.0).into(),
+                u_inv_proj: Matrix4::from_scale(1.0).into(),
+                u_normalmap_proj: Matrix4::from_scale(1.0).into(),
+                u_texture_proj: Matrix4::from_scale(1.0).into(),
                 s_color: (src, sampler.clone()),
                 s_depth: (srv, sampler.clone()),
                 s_normal: (normal_view, sampler.clone()),
@@ -125,7 +129,7 @@ impl Node for Lens {
         self.pso_data.s_depth = depth_view;
 
         let size = slots.output_size_f32();
-        self.generator.generate(window, size[0] as u16, size[1] as u16);
+        self.generator.generate(window, size[0] as u16);
         let mut factory = window.factory().borrow_mut();
         let normal_texture = factory
         .view_texture_as_shader_resource::<(gfx::format::R32_G32_B32_A32, gfx::format::Float)>(
@@ -203,8 +207,12 @@ impl Node for Lens {
         self.pso_data.u_dir_calc_scale = vis_param.dir_calc_scale;
         self.pso_data.u_depth_max = vis_param.test_depth_max;
         self.pso_data.u_depth_min = vis_param.test_depth_min;
+        let inverse_proj = perspective.proj.invert().unwrap();
         let gaze_rotation = Matrix4::look_to_lh(Point3::new(0.0, 0.0, 0.0), perspective.gaze, Vector3::unit_y());
-        self.pso_data.u_proj = (gaze_rotation * perspective.proj.invert().unwrap()).into();
+        let gaze_axis_rotation = Matrix4::from_axis_angle(perspective.gaze, cgmath::Deg(180.0));
+        self.pso_data.u_inv_proj = inverse_proj.into();
+        self.pso_data.u_normalmap_proj = (gaze_axis_rotation * gaze_rotation * inverse_proj).into();
+        self.pso_data.u_texture_proj = (perspective.proj * gaze_axis_rotation).into();
         perspective.clone()
     }
 }

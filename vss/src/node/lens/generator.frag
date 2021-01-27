@@ -133,5 +133,5 @@ void main() {
 
 	start = rayIntersectSphere(start, dir, VITREOUS_HUMOUR_CENTER, VITREOUS_HUMOUR_RADIUS);
 
-	rt_color = vec4(normalize(start)/2.+0.5, 1.0);
+	rt_color = vec4(start, 1.0);
 }

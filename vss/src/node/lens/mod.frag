@@ -46,7 +46,9 @@ uniform float u_far_point;
 uniform float u_near_vision_factor;
 uniform float u_far_vision_factor;
 uniform float u_dir_calc_scale;
-uniform mat4 u_proj;
+uniform mat4 u_inv_proj;
+uniform mat4 u_normalmap_proj;
+uniform mat4 u_texture_proj;
 
 uniform sampler2D s_color;
 uniform samplerCube s_normal;
@@ -145,7 +147,8 @@ vec3 getTargetLocation(in vec3 start, in vec3 dir){
 
 // intesects the ray with the image and returns the color of the texture at this position
 vec4 getColorWithRay(in vec3 target) {
-    return texture(s_color, target.xy / ((target.z - VITREOUS_HUMOUR_RADIUS) * TEXTURE_SCALE) + 0.5);
+    vec4 tex_sample = u_texture_proj * vec4(target - vec3(0.0, 0.0, VITREOUS_HUMOUR_RADIUS), 1.0);
+    return texture(s_color, tex_sample.xy/tex_sample.w / 2.0 + 0.5);
 }
 
 //rPos = ray position
@@ -321,8 +324,8 @@ Simulation getColorSample(vec3 start, vec2 aim, float focalLength, float nAnteri
 void main() {
     if (1 == u_active) {
         rt_color = vec4(0.5);
-        vec3 fragment_dir = normalize((u_proj * vec4(v_tex*2.0-1.0, 0.9, 1.0)).xyz);
-        vec3 start = texture(s_normal, fragment_dir).xyz * VITREOUS_HUMOUR_RADIUS;
+        vec3 fragment_dir = -normalize((u_normalmap_proj * vec4(v_tex*2.0-1.0, 0.9, 1.0)).xyz);
+        vec3 start = texture(s_normal, fragment_dir).xyz;
         vec3 original_color = texture(s_color, v_tex).rgb;
 
         float sampleCount = 0.0;
@@ -332,9 +335,9 @@ void main() {
    
         // prepare accomodation
         // This implementation focuses on all possible depths: for each pixel, the lens can focus on the individual depth
-        float focalLength = length(vec3(
-            (v_tex.xy - 0.5) * TEXTURE_SCALE,
-            u_depth_max - texture(s_depth, v_tex).r * (u_depth_max - u_depth_min)));     
+        float depth_value = texture(s_depth, v_tex).r;
+        vec4 depth_vec = u_inv_proj * vec4(0.0, 0.0, depth_value-1.0, 1.0);
+        float focalLength = mix(u_depth_max, u_depth_min, depth_vec.z/depth_vec.w);
        
         // This implementation focuses soley on the depth that is in the middle of the screen
         // float focalLength = length(
@@ -342,7 +345,7 @@ void main() {
         //         (v_tex.xy - 0.5) * TEXTURE_SCALE,
         //         u_depth_max - texture(s_depth, vec2(0.5,0.5)).r * (u_depth_max - u_depth_min)
         //     )
-        // );  
+        // );
 
 
         float nAnteriorChamberFactor = 1.0;

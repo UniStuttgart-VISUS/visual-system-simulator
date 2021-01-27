@@ -55,8 +55,10 @@ impl NormalMapGenerator {
         encoder.draw(&gfx::Slice::from_vertex_count(6), &self.pso, &self.pso_data);
     }
 
-    pub fn generate(&mut self, window: &Window, width: texture::Size, height: texture::Size){
+    pub fn generate(&mut self, window: &Window, width: texture::Size){
         let mut factory = window.factory().borrow_mut();
+        //let mut temp = Vec::with_capacity((16*width*width) as usize);
+        //temp.resize((16*width*width) as usize, 0);
         let (cube_texture, _) = load_highp_cubemap_from_bytes(&mut factory, &[&[255; 16*1000*1000]; 6], 1000).unwrap();
         self.cube_texture = cube_texture;
         
