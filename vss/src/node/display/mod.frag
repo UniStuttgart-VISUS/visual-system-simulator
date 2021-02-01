@@ -11,6 +11,7 @@ uniform vec2 u_resolution_in;
 
 
 uniform int u_vis_type;
+uniform int u_flow_idx;
 uniform float u_heat_scale;
 
 in vec2 v_tex;
@@ -104,7 +105,12 @@ void main() {
     switch (u_vis_type) {
 // TODO this has to be done in different color spaces, e.g with cielab and perhaps use deltaE_00
         case 0:  // simulated image
-            color =  texture(s_color, v_tex).rgb;
+            if( u_flow_idx == 0 ){
+                color =  texture(s_color, v_tex).rgb;
+            }
+            else{
+                color =  texture(s_color, v_tex).bgr;
+            }
             break;
         case 1: // directional uncertainty
             //float bar =  pow(texture(s_deflection, v_tex).r, 2.0) + pow(texture(s_deflection, v_tex).g, 2.0);

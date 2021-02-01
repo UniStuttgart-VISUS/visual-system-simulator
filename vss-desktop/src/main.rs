@@ -133,14 +133,36 @@ pub fn main() {
         None
     };
     
-    let flow_count = 1;
+    let flow_count = 2;
 
-    let mut window = Window::new(config.visible, remote, vec![RefCell::new(config.parameters)], flow_count);
+    let mut parameters = Vec::new();
+    for idx in 0 .. flow_count {
+        let mut value_map = ValueMap::new();
+        for (key, val) in config.parameters.iter() {
+            value_map.insert((*key).clone(), (*val).clone());
+        }
+        value_map.insert("flow_id".into(),Value::Number(idx as f64));
+        parameters.push(RefCell::new(value_map));
+    }
+
+    let mut window = Window::new(config.visible, remote, parameters, flow_count);
 
     let mut io_generator = IoGenerator::new(config.inputs, config.output);
     
+    // let viewports = vec![
+    //     (0, 0, 1280, 720),
+    //     (1280, 0, 1280, 720)
+    // ];
+
+    let mut desktop = SharedStereoDesktop::new();
+
     for index in 0 .. flow_count {
+        // build_flow(&mut window, &mut io_generator, index, None);
+        // let viewport = &viewports[index];
         build_flow(&mut window, &mut io_generator, index, None);
+        let mut node = desktop.get_stereo_desktop_node(&window);
+        // node.set_viewport(viewport.0 as f32, viewport.1 as f32, viewport.2 as f32, viewport.3 as f32);
+        window.add_node(Box::new(node), index);
     }
 
     let mut done = false;

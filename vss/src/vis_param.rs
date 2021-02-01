@@ -9,6 +9,7 @@ pub enum VisualizationType{
   OverlayInput,
   Ganglion
 }
+
 impl Default for VisualizationType{
   fn default() -> Self{
     VisualizationType::Output
@@ -22,8 +23,8 @@ pub struct VisualizationParameters{
   pub dir_calc_scale : f32,
   pub test_depth_min : f32,
   pub test_depth_max : f32,
-  pub astigmatism_strength: f32
-
+  pub astigmatism_strength: f32,
+  pub eye_idx: u32
 }
 
 impl Default for VisualizationParameters{
@@ -34,7 +35,8 @@ impl Default for VisualizationParameters{
       dir_calc_scale: 1.0,
       test_depth_min: 100.0,
       test_depth_max: 300.0,
-      astigmatism_strength: 0.0
+      astigmatism_strength: 0.0,
+      eye_idx: 0
     }
   }
 }

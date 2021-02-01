@@ -169,6 +169,19 @@ impl Window {
                         input:
                             glutin::KeyboardInput {
                                 state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::Space),
+                                ..
+                            },
+                        ..
+                    } => {
+                        let mut vp = self.vis_param.borrow_mut();
+                        // println!("Space: eye was {}",(vp.eye_idx as u32));
+                        vp.eye_idx = (vp.eye_idx+1)%2
+                    },                
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
                                 virtual_keycode: Some(glutin::VirtualKeyCode::H),
                                 ..
                             },
