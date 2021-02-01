@@ -41,6 +41,8 @@ gfx_defines! {
         rt_covariances: gfx::RenderTarget<Rgba32F> = "rt_covariances",
 
         u_dir_calc_scale: gfx::Global<f32> = "u_dir_calc_scale",
+        u_astigmatism_strength: gfx::Global<f32> = "u_astigmatism_strength",
+
     }
 }
 
@@ -108,7 +110,8 @@ impl Node for Lens {
                 rt_color_uncertainty,
                 s_covariances: (s_covariances, sampler.clone()),
                 rt_covariances,
-                u_dir_calc_scale: 1.0
+                u_dir_calc_scale: 1.0,
+                u_astigmatism_strength: 0.0
             },
         }
     }
@@ -200,6 +203,7 @@ impl Node for Lens {
         self.pso_data.u_dir_calc_scale = vis_param.dir_calc_scale;
         self.pso_data.u_depth_max = vis_param.test_depth_max;
         self.pso_data.u_depth_min = vis_param.test_depth_min;
+        self.pso_data.u_astigmatism_strength = vis_param.astigmatism_strength;
         perspective.clone()
     }
 }

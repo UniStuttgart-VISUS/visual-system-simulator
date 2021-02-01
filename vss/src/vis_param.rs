@@ -22,6 +22,7 @@ pub struct VisualizationParameters{
   pub dir_calc_scale : f32,
   pub test_depth_min : f32,
   pub test_depth_max : f32,
+  pub astigmatism_strength: f32
 
 }
 
@@ -33,6 +34,7 @@ impl Default for VisualizationParameters{
       dir_calc_scale: 1.0,
       test_depth_min: 100.0,
       test_depth_max: 300.0,
+      astigmatism_strength: 0.0
     }
   }
 }

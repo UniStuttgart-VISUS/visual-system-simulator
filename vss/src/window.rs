@@ -276,6 +276,28 @@ impl Window {
                     glutin::WindowEvent::KeyboardInput {
                         input:
                             glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::Q),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().astigmatism_strength-=0.5;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::E),
+                                ..
+                            },
+                        ..
+                    } => {
+                        self.vis_param.borrow_mut().astigmatism_strength+=0.5;
+                    },
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
                                 virtual_keycode: Some(glutin::VirtualKeyCode::Key0),
                                 ..
                             },

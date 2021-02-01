@@ -62,7 +62,7 @@ void main() {
         applyBloom(color.rgb, u_blur_factor/3, S_col);
         rt_color = color;
 
-        lowerContrastBy(rt_color,S_col, u_contrast_factor);
+        // lowerContrastBy(rt_color,S_col, u_contrast_factor);
 
         covarMatToVec(S_col, color_var, color_covar);
         covarMatToVec(S_pos, dir_var, dir_covar);

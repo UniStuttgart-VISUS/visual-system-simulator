@@ -46,6 +46,7 @@ uniform float u_far_point;
 uniform float u_near_vision_factor;
 uniform float u_far_vision_factor;
 uniform float u_dir_calc_scale;
+uniform float u_astigmatism_strength;
 
 uniform sampler2D s_color;
 uniform sampler2D s_normal;
@@ -180,7 +181,7 @@ RefractInfo rayIntersectEllipsoid(vec3 rPos, vec3 rDir, vec3 cPos, float cRad) {
 
     // We start of by defining the three main axis of the ellispoid.
     vec3 a = vec3(cRad  , 0         ,    0) * 0.96;
-    vec3 b = vec3(0     , cRad      ,    0);// * (1.1+mul);
+    vec3 b = vec3(0     , cRad      ,    0) * (1.0 + 0.025 * u_astigmatism_strength);
     vec3 c = vec3(0     , 0         , cRad);
 
     // Now we allow for rotation along the Z axis (viewing direction)
