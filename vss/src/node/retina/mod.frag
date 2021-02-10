@@ -44,6 +44,7 @@ void applyBlurAndBloom(inout vec4 color, in vec4 retina, inout ErrorValues ev) {
     }
     // The decision of max_rgb has some uncertainty. 
     // Unfortunately it can hardly be modeled in the if condition, so we just use the decision as-is.
+    // Adding Blur and Bloom when cones are missing is an approximation towards the loss of visual acuity and increased glare associated with achromatopsia
     if (max_rgb < .75) {
         // luckily we can assume that the retina values do not have any uncertainty attached
         float blur_scale = (0.75 - (retina.r + retina.g + retina.b) / 3.0) * 5.0;
@@ -53,7 +54,7 @@ void applyBlurAndBloom(inout vec4 color, in vec4 retina, inout ErrorValues ev) {
         //original calculation: 
         //      color = color * (1.0 + getPerceivedBrightness(color.rgb) * (0.75 - max_rgb) * 0.5);
 
-        // although this is not the blur factor per se, this is re-used in the bluum under this name
+        // although this is not the blur factor per se, this is re-used in the bloom under this name
         float blur_factor = (0.75 - max_rgb) * 0.5;
         applyBloom(color.rgb, blur_factor, ev.S_col);
     }
