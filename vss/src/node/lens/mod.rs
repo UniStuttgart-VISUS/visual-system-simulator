@@ -42,6 +42,8 @@ gfx_defines! {
 
         u_dir_calc_scale: gfx::Global<f32> = "u_dir_calc_scale",
         u_astigmatism_strength: gfx::Global<f32> = "u_astigmatism_strength",
+        u_lens_position: gfx::Global<[f32; 2]> = "u_lens_position",
+
 
     }
 }
@@ -111,7 +113,8 @@ impl Node for Lens {
                 s_covariances: (s_covariances, sampler.clone()),
                 rt_covariances,
                 u_dir_calc_scale: 1.0,
-                u_astigmatism_strength: 0.0
+                u_astigmatism_strength: 0.0,
+                u_lens_position: [0.0,0.0]
             },
         }
     }
@@ -204,6 +207,8 @@ impl Node for Lens {
         self.pso_data.u_depth_max = vis_param.test_depth_max;
         self.pso_data.u_depth_min = vis_param.test_depth_min;
         self.pso_data.u_astigmatism_strength = vis_param.astigmatism_strength;
+        self.pso_data.u_lens_position[0] = vis_param.eye_position.0;
+        self.pso_data.u_lens_position[1] = vis_param.eye_position.1;
         perspective.clone()
     }
 }

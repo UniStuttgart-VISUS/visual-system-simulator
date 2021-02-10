@@ -24,7 +24,10 @@ pub struct VisualizationParameters{
   pub test_depth_min : f32,
   pub test_depth_max : f32,
   pub astigmatism_strength: f32,
-  pub eye_idx: u32
+  pub eye_idx: u32,
+  pub edit_eye_position: u32,
+  pub eye_position: (f32,f32),
+  pub previous_mouse_position: (f32,f32)
 }
 
 impl Default for VisualizationParameters{
@@ -32,11 +35,17 @@ impl Default for VisualizationParameters{
     Self{
       vis_type: VisualizationType::default(),
       heat_scale: 1.0,
-      dir_calc_scale: 1.0,
-      test_depth_min: 100.0,
-      test_depth_max: 300.0,
+      dir_calc_scale: 0.0,
+      // test_depth_min: 100.0,
+      // test_depth_max: 300.0,
+      test_depth_min: 200.0,
+      test_depth_max: 5000.0,
       astigmatism_strength: 0.0,
-      eye_idx: 0
+      eye_idx: 0,
+      edit_eye_position: 0,
+      eye_position: (0.0,0.0),
+      previous_mouse_position: (0.0,0.0)
+
     }
   }
 }

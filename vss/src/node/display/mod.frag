@@ -79,10 +79,14 @@ vec3 TurboColormap(in float x) {
 vec3 RetinalGanglion(){
     float gray_own = getPerceivedBrightness(texture(s_original, v_tex).rgb);
     float gray_others = 0;
+
+    // float scale = length((v_tex)-0.5)*32;
+    float scale = 2;
+
     for (int i = -1; i <= 1; i++) {
         for (int j = -1; j <= 1; j++) {
             if(i!=0||j!=0){ // exclude i=j=0
-                gray_others += getPerceivedBrightness(texture(s_original, v_tex + vec2(float(i), float(j))*2 / u_resolution_in).rgb);
+                gray_others += getPerceivedBrightness(texture(s_original, v_tex + vec2(float(i), float(j))*scale / u_resolution_in).rgb);
             }
         }
     }
@@ -105,12 +109,12 @@ void main() {
     switch (u_vis_type) {
 // TODO this has to be done in different color spaces, e.g with cielab and perhaps use deltaE_00
         case 0:  // simulated image
-            if( u_flow_idx == 0 ){
+            // if( u_flow_idx == 0 ){
                 color =  texture(s_color, v_tex).rgb;
-            }
-            else{
-                color =  texture(s_color, v_tex).bgr;
-            }
+            // }
+            // else{
+            //     color =  texture(s_color, v_tex).bgr;
+            // }
             break;
         case 1: // directional uncertainty
             //float bar =  pow(texture(s_deflection, v_tex).r, 2.0) + pow(texture(s_deflection, v_tex).g, 2.0);
@@ -152,14 +156,14 @@ void main() {
             }
             break;
         case 7: // retinal ganglia ON/OFF
-            // color = RetinalGanglion();  
+            color = RetinalGanglion();  
 
-            float cov =  texture(s_color_uncertainty, v_tex).r + texture(s_color_uncertainty, v_tex).g + texture(s_color_uncertainty, v_tex).b 
-            -(texture(s_covariances, v_tex).r + texture(s_covariances, v_tex).g + texture(s_covariances, v_tex).b);
+            // float cov =  texture(s_color_uncertainty, v_tex).r + texture(s_color_uncertainty, v_tex).g + texture(s_color_uncertainty, v_tex).b 
+            // -(texture(s_covariances, v_tex).r + texture(s_covariances, v_tex).g + texture(s_covariances, v_tex).b);
 
-            // float cov =  texture(s_covariances, v_tex).r + texture(s_covariances, v_tex).g + texture(s_covariances, v_tex).b;
+            // // float cov =  texture(s_covariances, v_tex).r + texture(s_covariances, v_tex).g + texture(s_covariances, v_tex).b;
 
-            color = ViridisColormap(sqrt(abs(cov))* u_heat_scale);
+            // color = ViridisColormap(sqrt(abs(cov))* u_heat_scale);
 
             break;
 

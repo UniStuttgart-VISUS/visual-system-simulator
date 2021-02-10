@@ -167,6 +167,39 @@ impl Window {
                 match event {
                     glutin::WindowEvent::KeyboardInput {
                         input:
+                            glutin::KeyboardInput {state,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::LShift),
+                                ..
+                            },
+                        ..
+                    } => {
+                        match state{
+                            glutin::ElementState::Pressed => {
+                                let mut vp = self.vis_param.borrow_mut();
+                                vp.edit_eye_position = 1;
+                            },
+                            glutin::ElementState::Released => {
+                                let mut vp = self.vis_param.borrow_mut();
+                                vp.edit_eye_position = 0;
+                            },
+                        }
+                    }, 
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::R),
+                                ..
+                            },
+                        ..
+                    } => {
+                        let mut vp = self.vis_param.borrow_mut();
+                        if vp.edit_eye_position > 0 {
+                            vp.eye_position = (0.0, 0.0);
+                        }
+                    }, 
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
                             glutin::KeyboardInput {
                                 state: glutin::ElementState::Pressed,
                                 virtual_keycode: Some(glutin::VirtualKeyCode::Space),
@@ -407,6 +440,20 @@ impl Window {
                     glutin::WindowEvent::CursorMoved { position, .. } => {
                         if *self.active.borrow() {
                             self.cursor_pos.replace(position);
+                            let mut vp = self.vis_param.borrow_mut();
+                            match vp.edit_eye_position {
+                                1 => {
+                                    vp.previous_mouse_position = (position.x as f32 * 0.1, position.y as f32 * 0.1);
+                                    vp.edit_eye_position = 2;
+                                },
+                                2 => {
+                                    let (p_x,p_y) = vp.previous_mouse_position;
+                                    let (c_x,c_y) = (position.x as f32 * 0.1, position.y as f32 * 0.1);
+                                    vp.eye_position = (c_x - p_x, c_y - p_y);
+                                    // println!("{:?}",vp.eye_position);
+                                },
+                                _ => {}
+                            }
                         }
                     }
                     glutin::WindowEvent::CursorLeft { .. } => {

@@ -139,7 +139,12 @@ pub fn main() {
     for idx in 0 .. flow_count {
         let mut value_map = ValueMap::new();
         for (key, val) in config.parameters.iter() {
-            value_map.insert((*key).clone(), (*val).clone());
+            if idx == 0 && key.eq("myopiahyperopia_mnh"){
+                value_map.insert("myopiahyperopia_mnh".into(), Value::Number(50.0));
+            }
+            else{
+                value_map.insert((*key).clone(), (*val).clone());
+            }
         }
         value_map.insert("flow_id".into(),Value::Number(idx as f64));
         parameters.push(RefCell::new(value_map));
