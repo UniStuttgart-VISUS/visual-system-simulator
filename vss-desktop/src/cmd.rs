@@ -25,6 +25,8 @@ pub struct Config {
     pub output: Option<mustache::Template>,
     pub inputs: Vec<String>,
     pub parameters: ValueMap,
+    pub parameters_r: Option<ValueMap>,
+    pub parameters_l: Option<ValueMap>,
 }
 
 impl Default for Config {
@@ -35,6 +37,9 @@ impl Default for Config {
             output: None,
             inputs: Vec::new(),
             parameters: std::collections::HashMap::new(),
+            parameters_r: None,
+            parameters_l: None,
+
         }
     }
 }
@@ -99,6 +104,22 @@ pub fn cmd_parse() -> Config {
                 .help("Sets the configuration parameters for simulation"),
         )
         .arg(
+            Arg::with_name("config_right")
+                .long("config_right")
+                .short("cr")
+                .value_name("FILE|JSON")
+                .number_of_values(1)
+                .help("Sets the configuration parameters for the right eye"),
+        )
+        .arg(
+            Arg::with_name("config_left")
+                .long("config_left")
+                .short("cl")
+                .value_name("FILE|JSON")
+                .number_of_values(1)
+                .help("Sets the configuration parameters for the left eye"),
+        )
+        .arg(
             Arg::with_name("gaze")
                 .long("gaze")
                 .short("g")
@@ -156,6 +177,17 @@ pub fn cmd_parse() -> Config {
         default.parameters
     };
 
+    let mut parameters_r = if let Some(config_str) = matches.value_of("config_right") {
+        Some(from_json_obj(config_str).expect("Invalid JSON"))
+    } else {
+        None
+    };
+    let mut parameters_l = if let Some(config_str) = matches.value_of("config_left") {
+        Some(from_json_obj(config_str).expect("Invalid JSON"))
+    } else {
+        None
+    };
+
     if let Some(gaze) = matches.values_of("gaze") {
         let gaze = gaze
             .map(|t| t.trim().parse::<f64>().unwrap())
@@ -201,5 +233,7 @@ pub fn cmd_parse() -> Config {
         output,
         inputs,
         parameters,
+        parameters_r,
+        parameters_l
     }
 }

@@ -46,8 +46,10 @@ uniform float u_far_point;
 uniform float u_near_vision_factor;
 uniform float u_far_vision_factor;
 uniform float u_dir_calc_scale;
-uniform float u_astigmatism_strength;
+uniform float u_astigmatism_ecc_mm;
+uniform float u_astigmatism_angle_deg;
 uniform vec2 u_lens_position;
+uniform float u_eye_distance_center;
 
 uniform sampler2D s_color;
 uniform sampler2D s_normal;
@@ -178,12 +180,12 @@ struct RefractInfo{
 RefractInfo rayIntersectEllipsoid(vec3 rPos, vec3 rDir, vec3 cPos, float cRad) {
 
 
-    float mul = 0.25 * u_dir_calc_scale;
+    float mul = radians(u_astigmatism_angle_deg);
     // float mul = 0.25 * 0;
 
-    // We start of by defining the three main axis of the ellispoid.
+    // We start off by defining the three main axis of the ellispoid.
     vec3 a = vec3(cRad  , 0         ,    0);// * 0.96;
-    vec3 b = vec3(0     , cRad      ,    0) * (1.0 + 0.025 * u_astigmatism_strength);
+    vec3 b = vec3(0     , cRad - u_astigmatism_ecc_mm ,    0);
     vec3 c = vec3(0     , 0         , cRad);
 
     // Now we allow for rotation along the Z axis (viewing direction)
@@ -288,7 +290,7 @@ Simulation getColorSample(vec3 start, vec2 aim, float focalLength, float nAnteri
     // dir = refract(dir, -normalize(start - OUTER_CORNEA_CENTER), N_CORNEA / N_AIR);
     dir = applyCorneaImperfection(start, dir);
 
-    start += vec3(u_lens_position, 0);
+    start += vec3(u_lens_position, 0) + vec3(u_eye_distance_center,0,0);
 
     // position where the ray hits the image, including depth
     vec3 target = getTargetLocation(start, dir);

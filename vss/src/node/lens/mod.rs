@@ -41,10 +41,10 @@ gfx_defines! {
         rt_covariances: gfx::RenderTarget<Rgba32F> = "rt_covariances",
 
         u_dir_calc_scale: gfx::Global<f32> = "u_dir_calc_scale",
-        u_astigmatism_strength: gfx::Global<f32> = "u_astigmatism_strength",
+        u_astigmatism_ecc_mm: gfx::Global<f32> = "u_astigmatism_ecc_mm",
+        u_astigmatism_angle_deg: gfx::Global<f32> = "u_astigmatism_angle_deg",
         u_lens_position: gfx::Global<[f32; 2]> = "u_lens_position",
-
-
+        u_eye_distance_center: gfx::Global<f32> = "u_eye_distance_center",
     }
 }
 
@@ -113,8 +113,10 @@ impl Node for Lens {
                 s_covariances: (s_covariances, sampler.clone()),
                 rt_covariances,
                 u_dir_calc_scale: 1.0,
-                u_astigmatism_strength: 0.0,
-                u_lens_position: [0.0,0.0]
+                u_astigmatism_ecc_mm: 0.0,
+                u_astigmatism_angle_deg: 0.0,
+                u_lens_position: [0.0,0.0],
+                u_eye_distance_center: 0.0,
             },
         }
     }
@@ -195,6 +197,20 @@ impl Node for Lens {
                 }
             }
         }
+
+        if let Some(Value::Number(astigmatism_dpt)) = values.get("astigmatism_dpt") {
+            // dpt to eccentricity in mm: 0.2 mm ~ 1dpt
+            // the actual formula is more complex but requires many parameters that are specific to an eye
+            // since our values for the eye parametes are far from realistic, i would argue this is sufficient
+            self.pso_data.u_astigmatism_ecc_mm = 0.2 * (*astigmatism_dpt as f32);
+        }
+        if let Some(Value::Number(astigmatism_angle_deg)) = values.get("astigmatism_angle_deg") {
+            self.pso_data.u_astigmatism_angle_deg = *astigmatism_angle_deg as f32;
+        }
+        if let Some(Value::Number(eye_distance_center)) = values.get("eye_distance_center") {
+            self.pso_data.u_eye_distance_center = *eye_distance_center as f32;
+        }
+
     }
 
     fn render(&mut self, window: &Window) {
@@ -206,7 +222,6 @@ impl Node for Lens {
         self.pso_data.u_dir_calc_scale = vis_param.dir_calc_scale;
         self.pso_data.u_depth_max = vis_param.test_depth_max;
         self.pso_data.u_depth_min = vis_param.test_depth_min;
-        self.pso_data.u_astigmatism_strength = vis_param.astigmatism_strength;
         self.pso_data.u_lens_position[0] = vis_param.eye_position.0;
         self.pso_data.u_lens_position[1] = vis_param.eye_position.1;
         perspective.clone()

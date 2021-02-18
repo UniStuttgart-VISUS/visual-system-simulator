@@ -22,6 +22,7 @@ gfx_defines! {
         rt_color_uncertainty: gfx::RenderTarget<Rgba32F> = "rt_color_uncertainty",
         s_covariances: gfx::TextureSampler<[f32; 4]> = "s_covariances",
         rt_covariances: gfx::RenderTarget<Rgba32F> = "rt_covariances",
+        u_achromatopsia_blur_factor: gfx::Global<f32> = "u_achromatopsia_blur_factor",
     }
 }
 
@@ -65,7 +66,8 @@ impl Node for Retina {
                 s_color_uncertainty:(s_color_uncertainty, sampler.clone()),
                 rt_color_uncertainty,
                 s_covariances: (s_covariances, sampler.clone()),
-                rt_covariances
+                rt_covariances,
+                u_achromatopsia_blur_factor: 1.0
             },
         }
     }
@@ -106,6 +108,9 @@ impl Node for Retina {
         }
         if let Some(Value::Image(retina_map_neg_z_path)) = values.get("retina_map_neg_z_path") {
             image_data.push(load(retina_map_neg_z_path));
+        }
+        if let Some(Value::Number(achromatopsia_blur_factor)) = values.get("achromatopsia_blur_factor") {
+            self.pso_data.u_achromatopsia_blur_factor = *achromatopsia_blur_factor as f32;
         }
         if image_data.len() == 6 {
             let (_, retinamap_view) = load_cubemap(&mut factory, image_data).unwrap();

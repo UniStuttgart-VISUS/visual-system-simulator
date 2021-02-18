@@ -138,13 +138,28 @@ pub fn main() {
     let mut parameters = Vec::new();
     for idx in 0 .. flow_count {
         let mut value_map = ValueMap::new();
-        for (key, val) in config.parameters.iter() {
-            if idx == 0 && key.eq("myopiahyperopia_mnh"){
-                value_map.insert("myopiahyperopia_mnh".into(), Value::Number(50.0));
+        let iter = match (config.parameters_r.clone(), config.parameters_l.clone()) {
+            (Some(param_r), Some(param_l)) =>{
+                if idx == 0 {
+                    param_r.into_iter()
+                }
+                else{
+                    param_l.into_iter()
+                }
             }
-            else{
-                value_map.insert((*key).clone(), (*val).clone());
+            _ => {
+                config.parameters.clone().into_iter()
             }
+        };
+        // for (key, val) in  config.parameters.clone().into_iter() {
+        for (key, val) in iter {
+            value_map.insert((key).clone(), (val).clone());
+
+            // if idx == 0 && key.eq("myopiahyperopia_mnh"){
+            //     value_map.insert("myopiahyperopia_mnh".into(), Value::Number(50.0));
+            // }
+            // else{
+            // }
         }
         value_map.insert("flow_id".into(),Value::Number(idx as f64));
         parameters.push(RefCell::new(value_map));
@@ -155,18 +170,20 @@ pub fn main() {
     let mut io_generator = IoGenerator::new(config.inputs, config.output);
     
     // let viewports = vec![
-    //     (0, 0, 1280, 720),
-    //     (1280, 0, 1280, 720)
+    //     (0, 0, 640, 360),
+    //     (640, 0, 640, 360)
     // ];
 
     let mut desktop = SharedStereoDesktop::new();
 
     for index in 0 .. flow_count {
-        // build_flow(&mut window, &mut io_generator, index, None);
-        // let viewport = &viewports[index];
         build_flow(&mut window, &mut io_generator, index, None);
         let mut node = desktop.get_stereo_desktop_node(&window);
+
+        // let mut node = VRCompositor::new(&window);
+        // let viewport = &viewports[index];
         // node.set_viewport(viewport.0 as f32, viewport.1 as f32, viewport.2 as f32, viewport.3 as f32);
+
         window.add_node(Box::new(node), index);
     }
 

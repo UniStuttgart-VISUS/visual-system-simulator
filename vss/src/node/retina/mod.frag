@@ -5,6 +5,7 @@
 
 uniform vec2 u_resolution;
 uniform mat4 u_proj;
+uniform float u_achromatopsia_blur_factor;
 
 uniform sampler2D s_color;
 uniform samplerCube s_retina;
@@ -12,7 +13,6 @@ uniform sampler2D s_deflection;
 uniform sampler2D s_color_change;
 uniform sampler2D s_color_uncertainty;
 uniform sampler2D s_covariances;
-
 
 in vec2 v_tex;
 out vec4 rt_color;
@@ -46,7 +46,7 @@ void applyBlurAndBloom(inout vec4 color, in vec4 retina, inout ErrorValues ev) {
     // Unfortunately it can hardly be modeled in the if condition, so we just use the decision as-is.
     if (max_rgb < .75) {
         // luckily we can assume that the retina values do not have any uncertainty attached
-        float blur_scale = (0.75 - (retina.r + retina.g + retina.b) / 3.0) * 5.0;
+        float blur_scale = (0.75 - (retina.r + retina.g + retina.b) / 3.0) * 5.0 * u_achromatopsia_blur_factor;
         color =  blur(v_tex, s_color, blur_scale, u_resolution, ev.S_col, ev.S_pos, s_color_uncertainty, s_covariances, s_deflection);        
 
         // apply bloom
