@@ -135,6 +135,12 @@ pub fn cmd_parse() -> Config {
                 .help("Forces window visibility"),
         )
         .arg(
+            Arg::with_name("vis_type")
+                .long("vis_type")
+                .number_of_values(1)
+                .help("The type of visualization rendered to file"),
+        )
+        .arg(
             Arg::with_name("output")
                 .long("output")
                 .short("o")
@@ -187,6 +193,17 @@ pub fn cmd_parse() -> Config {
     } else {
         None
     };
+
+    if let Some(vis_type) = matches.value_of("vis_type") {
+        let vis_type = vis_type.parse::<u16>().expect("Invalid vis_type") as f64;
+        parameters.insert("file_vis_type".to_string(), Value::Number(vis_type));
+        if let Some(parameters_r) = &mut parameters_r{
+            parameters_r.insert("file_vis_type".to_string(), Value::Number(vis_type));
+        }
+        if let Some(parameters_l) = &mut parameters_l{
+            parameters_l.insert("file_vis_type".to_string(), Value::Number(vis_type));
+        }
+    } 
 
     if let Some(gaze) = matches.values_of("gaze") {
         let gaze = gaze

@@ -74,6 +74,22 @@ impl Window {
 
         //TODO set perspective from values here ?
 
+        let mut vis_param = VisualizationParameters::default();
+        if let Some(Value::Number(file_vis_type)) = values[0].borrow().get("file_vis_type") {
+            vis_param.vis_type = match *file_vis_type as i32{
+                0 => VisualizationType::Output,
+                1 => VisualizationType::Deflection,
+                2 => VisualizationType::ColorChange,
+                3 => VisualizationType::ColorUncertainty,
+                4 => VisualizationType::Original,
+                5 => VisualizationType::OverlayOutput,
+                6 => VisualizationType::OverlayInput,
+                7 => VisualizationType::Ganglion,
+                _ => panic!("No file_vis_type of {} found", file_vis_type)
+            };
+        }
+        let mut vis_param = RefCell::new(vis_param);
+
         Window {
             flow,
             remote,
@@ -90,7 +106,7 @@ impl Window {
             override_gaze: RefCell::new(false),
             active: RefCell::new(false),
             values: values,
-            vis_param: RefCell::new(VisualizationParameters::default())
+            vis_param
         }
     }
 }

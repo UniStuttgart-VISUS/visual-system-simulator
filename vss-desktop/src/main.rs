@@ -35,10 +35,10 @@ impl IoGenerator {
 
     fn next(&mut self, window: &Window, render_resolution: Option<[u32; 2]>) -> Option<IoNodePair> {
         self.input_idx += 1;
-        self.current(&window, render_resolution)
+        self.current(&window, render_resolution,0)
     }
 
-    fn current(&mut self, window: &Window, render_resolution: Option<[u32; 2]>) -> Option<IoNodePair> {
+    fn current(&mut self, window: &Window, render_resolution: Option<[u32; 2]>, flow_index: usize) -> Option<IoNodePair> {
         if self.input_idx >= self.inputs.len() {
             None
         } else {
@@ -70,7 +70,8 @@ impl IoGenerator {
                             .unwrap()
                             .to_os_string()
                             .into_string()
-                            .unwrap(),
+                            .unwrap() 
+                            + &format!("_{}", flow_index),
                         extension: input_path
                             .extension()
                             .unwrap()
@@ -98,7 +99,7 @@ impl IoGenerator {
 }
 
 fn build_flow(window: &mut Window, io_generator: &mut IoGenerator, flow_index: usize, render_resolution: Option<[u32; 2]>){
-    let (input_node, output_node) = io_generator.current(&window, render_resolution).unwrap();
+    let (input_node, output_node) = io_generator.current(&window, render_resolution, flow_index).unwrap();
 
     // Add input node.
     window.add_node(input_node, flow_index);
@@ -113,14 +114,18 @@ fn build_flow(window: &mut Window, io_generator: &mut IoGenerator, flow_index: u
 
     // Add output node, if present.
     if let Some(output_node) = output_node {
+        // Display node.
+        let node = Display::new(&window);
+        window.add_node(Box::new(node), flow_index);
         window.add_node(output_node, flow_index);
     } else {
-        window.add_node(Box::new(Passthrough::new(&window)), flow_index)
+        // window.add_node(Box::new(Passthrough::new(&window)), flow_index)
+        // Display node.
+        let node = Display::new(&window);
+        window.add_node(Box::new(node), flow_index);
     }
 
-    // Display node.
-    let node = Display::new(&window);
-    window.add_node(Box::new(node), flow_index);
+
 }
 
 #[cfg(not(feature = "varjo"))]
@@ -160,15 +165,15 @@ pub fn main() {
             // }
             // else{
             // }
-        }
+        }  
         value_map.insert("flow_id".into(),Value::Number(idx as f64));
         parameters.push(RefCell::new(value_map));
     }
 
     let mut window = Window::new(config.visible, remote, parameters, flow_count);
 
-    let mut io_generator = IoGenerator::new(config.inputs, config.output);
-    
+    let is_output_hack_used = config.output.is_some();
+
     // let viewports = vec![
     //     (0, 0, 640, 360),
     //     (640, 0, 640, 360)
@@ -177,6 +182,8 @@ pub fn main() {
     let mut desktop = SharedStereoDesktop::new();
 
     for index in 0 .. flow_count {
+        let mut io_generator = IoGenerator::new(config.inputs.clone(), config.output.clone());
+
         build_flow(&mut window, &mut io_generator, index, None);
         let mut node = desktop.get_stereo_desktop_node(&window);
 
@@ -187,29 +194,49 @@ pub fn main() {
         window.add_node(Box::new(node), index);
     }
 
+
     let mut done = false;
+    window.update_last_node();
+
     while !done {
 
         done = window.poll_events();
 
-        if io_generator.is_ready() {
-            if let Some((input_node, output_node)) = io_generator.next(&window, None) {
-                window.replace_node(0, input_node, 0);
-                let output_node = if let Some(output_node) = output_node {
-                    output_node
-                } else {
-                    Box::new(Passthrough::new(&window))
-                };
-                window.replace_node(window.nodes_len() - 2, output_node, 0);
-                window.update_nodes();
-            } else {
-                if !config.visible {
-                    // Exit once all inputs have been processed, unless visible.
-                    done = true;
-                }
-            }
+        if !config.visible || is_output_hack_used {
+            // Exit once all inputs have been processed, unless visible.
+            done = true;
         }
+
+        /*  
+            The above hack works only with still images
+            The original solution below has several problems:
+            - it is only used for video
+            - There needs to be an io generator for each eye to provide them with independent input
+            - one io generator shoult be able to multtiplex its output to both eyes
+            - if one generator is ready, to we already trigger the render step or do we wait for both?
+        */
+
+        // if io_generator.is_ready() {            
+        //     if let Some((input_node, output_node)) = io_generator.next(&window, None) {
+        //         window.replace_node(0, input_node, 0);
+        //         let output_node = if let Some(output_node) = output_node {
+        //             output_node
+        //         } else {
+        //             Box::new(Passthrough::new(&window))
+        //         };
+        //         window.replace_node(window.nodes_len() - 2, output_node, 0);
+        //         window.update_nodes();
+        //     } else {
+        // ...
+        //     }
+        // }
     }
+
+    // writing the image to file might not be done yet, so we wait a second
+    // this async behaviour stems from the callback used in the download buffer
+    use std::{thread, time};
+    let a_second = time::Duration::from_secs(1);
+    thread::sleep(a_second);
 }
 
 #[cfg(feature = "varjo")]

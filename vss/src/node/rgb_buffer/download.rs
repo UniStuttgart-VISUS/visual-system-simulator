@@ -69,6 +69,7 @@ impl Node for DownloadRgbBuffer {
     }
 
     fn negociate_slots(&mut self, _window: &Window, slots: NodeSlots) -> NodeSlots {
+        println!("negociate_slots called");
         self.input = slots.clone().take_input();
         slots.to_passthrough()
     }
