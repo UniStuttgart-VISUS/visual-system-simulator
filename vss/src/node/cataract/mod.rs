@@ -20,7 +20,7 @@ gfx_defines! {
         rt_color_uncertainty: gfx::RenderTarget<Rgba32F> = "rt_color_uncertainty",
         s_covariances: gfx::TextureSampler<[f32; 4]> = "s_covariances",
         rt_covariances: gfx::RenderTarget<Rgba32F> = "rt_covariances",
-
+        u_track_error: gfx::Global<i32> = "u_track_error",
     }
 }
 
@@ -69,7 +69,8 @@ impl Node for Cataract {
                 s_color_uncertainty:(s_color_uncertainty, sampler.clone()),
                 rt_color_uncertainty,
                 s_covariances: (s_covariances, sampler.clone()),
-                rt_covariances
+                rt_covariances,
+                u_track_error: 0
             },
         }
     }
@@ -125,5 +126,9 @@ impl Node for Cataract {
     fn render(&mut self, window: &Window) {
         let mut encoder = window.encoder().borrow_mut();
         encoder.draw(&gfx::Slice::from_vertex_count(6), &self.pso, &self.pso_data);
+    }
+    fn input(&mut self, perspective: &EyePerspective, vis_param: &VisualizationParameters) -> EyePerspective {        
+        self.pso_data.u_track_error = vis_param.has_to_track_error() as i32;        
+        perspective.clone()
     }
 }

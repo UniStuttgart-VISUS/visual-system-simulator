@@ -184,7 +184,7 @@ pub fn main() {
     for index in 0 .. flow_count {
         let mut io_generator = IoGenerator::new(config.inputs.clone(), config.output.clone());
 
-        build_flow(&mut window, &mut io_generator, index, None);
+        build_flow(&mut window, &mut io_generator, index, config.resolution);
         let mut node = desktop.get_stereo_desktop_node(&window);
 
         // let mut node = VRCompositor::new(&window);

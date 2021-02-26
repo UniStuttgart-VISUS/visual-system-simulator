@@ -23,6 +23,8 @@ gfx_defines! {
         s_covariances: gfx::TextureSampler<[f32; 4]> = "s_covariances",
         rt_covariances: gfx::RenderTarget<Rgba32F> = "rt_covariances",
         u_achromatopsia_blur_factor: gfx::Global<f32> = "u_achromatopsia_blur_factor",
+        u_track_error: gfx::Global<i32> = "u_track_error",
+
     }
 }
 
@@ -67,7 +69,9 @@ impl Node for Retina {
                 rt_color_uncertainty,
                 s_covariances: (s_covariances, sampler.clone()),
                 rt_covariances,
-                u_achromatopsia_blur_factor: 1.0
+                u_achromatopsia_blur_factor: 1.0,
+                u_track_error: 0
+
             },
         }
     }
@@ -151,11 +155,12 @@ impl Node for Retina {
         };
     }
 
-    fn input(&mut self, perspective: &EyePerspective, _vis_param: &VisualizationParameters) -> EyePerspective {
+    fn input(&mut self, perspective: &EyePerspective, vis_param: &VisualizationParameters) -> EyePerspective {
         let gaze_rotation = Matrix4::look_to_lh(Point3::new(0.0, 0.0, 0.0), perspective.gaze, Vector3::unit_y());
         //let gaze_rotation = Matrix4::from_scale(1.0);
         self.pso_data.u_proj = (gaze_rotation * perspective.proj.invert().unwrap()).into();
         //self.pso_data.u_proj = (head.proj * (Matrix4::from_translation(-head.position) * head.view)).into();
+        self.pso_data.u_track_error = vis_param.has_to_track_error() as i32;
         perspective.clone()
     }
 

@@ -45,6 +45,8 @@ gfx_defines! {
         u_astigmatism_angle_deg: gfx::Global<f32> = "u_astigmatism_angle_deg",
         u_lens_position: gfx::Global<[f32; 2]> = "u_lens_position",
         u_eye_distance_center: gfx::Global<f32> = "u_eye_distance_center",
+        u_track_error: gfx::Global<i32> = "u_track_error",
+
     }
 }
 
@@ -117,6 +119,7 @@ impl Node for Lens {
                 u_astigmatism_angle_deg: 0.0,
                 u_lens_position: [0.0,0.0],
                 u_eye_distance_center: 0.0,
+                u_track_error: 0
             },
         }
     }
@@ -224,6 +227,7 @@ impl Node for Lens {
         self.pso_data.u_depth_min = vis_param.test_depth_min;
         self.pso_data.u_lens_position[0] = vis_param.eye_position.0;
         self.pso_data.u_lens_position[1] = vis_param.eye_position.1;
+        self.pso_data.u_track_error = vis_param.has_to_track_error() as i32;        
         perspective.clone()
     }
 }

@@ -6,6 +6,7 @@
 uniform vec2 u_resolution;
 uniform mat4 u_proj;
 uniform float u_achromatopsia_blur_factor;
+uniform int u_track_error;
 
 uniform sampler2D s_color;
 uniform samplerCube s_retina;
@@ -48,8 +49,12 @@ void applyBlurAndBloom(inout vec4 color, in vec4 retina, inout ErrorValues ev) {
     if (max_rgb < .75) {
         // luckily we can assume that the retina values do not have any uncertainty attached
         float blur_scale = (0.75 - (retina.r + retina.g + retina.b) / 3.0) * 5.0 * u_achromatopsia_blur_factor;
-        color =  blur(v_tex, s_color, blur_scale, u_resolution, ev.S_col, ev.S_pos, s_color_uncertainty, s_covariances, s_deflection);        
-
+        if(u_track_error==1){
+            color =  blur_with_error(v_tex, s_color, blur_scale, u_resolution, ev.S_col, ev.S_pos, s_color_uncertainty, s_covariances, s_deflection);        
+        }
+        else{
+            color =  blur(v_tex, s_color, blur_scale, u_resolution);     
+        }
         // apply bloom
         //original calculation: 
         //      color = color * (1.0 + getPerceivedBrightness(color.rgb) * (0.75 - max_rgb) * 0.5);
@@ -112,16 +117,18 @@ void applyColorBlindness(inout vec4 color, in vec4 retina, inout ErrorValues ev)
     mat3 color_transformation = neutral * neutral_factor + weak_color * weak_color_factor + achromatopsia * achromatopsia_factor;
     color = vec4(color_transformation * color.rgb, color.a);
 
-    // square all elements of the matrix, since for the variance, the weights of the weighted sum need to be squared
-    vec3 zwei = vec3(2.0);
-    mat3 squared_color_transformation =
-        mat3(
-            pow(color_transformation[0], zwei),
-            pow(color_transformation[1], zwei),
-            pow(color_transformation[2], zwei)
-            );
+    if(u_track_error==1){
+        // square all elements of the matrix, since for the variance, the weights of the weighted sum need to be squared
+        vec3 zwei = vec3(2.0);
+        mat3 squared_color_transformation =
+            mat3(
+                pow(color_transformation[0], zwei),
+                pow(color_transformation[1], zwei),
+                pow(color_transformation[2], zwei)
+                );
 
-    ev.S_col = squared_color_transformation * ev.S_col;
+        ev.S_col = squared_color_transformation * ev.S_col;
+    }    
 }
 
 void applyNyctalopia(inout vec4 color, in vec4 retina, inout ErrorValues ev) {
@@ -135,16 +142,18 @@ void applyNyctalopia(inout vec4 color, in vec4 retina, inout ErrorValues ev) {
     if (night_blindness_factor < 1.0) {
         color = retina.a * color + (1.0 - retina.a) * night_blindness_factor * color;
 
-        // The weights from the brightness function
-        vec3 weights = vec3(0.299, 0.587, 0.114);
+        if(u_track_error==1){
+            // The weights from the brightness function
+            vec3 weights = vec3(0.299, 0.587, 0.114);
 
-        mat3 J = mat3(
-            5*(1-retina.a)*(color.b*weights.b+color.g*weights.g+color.r*weights.r)+5*(1-retina.a)*color.r*weights.r+retina.a,	5*(1-retina.a)*color.r*weights.g,	5*(1-retina.a)*color.r*weights.b,
-            5*(1-retina.a)*color.g*weights.r,	5*(1-retina.a)*(color.b*weights.b+color.g*weights.g+color.r*weights.r)+5*(1-retina.a)*color.g*weights.g+retina.a,	5*(1-retina.a)*color.g*weights.b,
-            5*(1-retina.a)*color.b*weights.r,	5*(1-retina.a)*color.b*weights.g,	5*(1-retina.a)*(color.b*weights.b+color.g*weights.g+color.r*weights.r)+5*(1-retina.a)*color.b*weights.b+retina.a
-	    );
-        mat3 Jt = transpose(J);
-        ev.S_col = J*ev.S_col*Jt;
+            mat3 J = mat3(
+                5*(1-retina.a)*(color.b*weights.b+color.g*weights.g+color.r*weights.r)+5*(1-retina.a)*color.r*weights.r+retina.a,	5*(1-retina.a)*color.r*weights.g,	5*(1-retina.a)*color.r*weights.b,
+                5*(1-retina.a)*color.g*weights.r,	5*(1-retina.a)*(color.b*weights.b+color.g*weights.g+color.r*weights.r)+5*(1-retina.a)*color.g*weights.g+retina.a,	5*(1-retina.a)*color.g*weights.b,
+                5*(1-retina.a)*color.b*weights.r,	5*(1-retina.a)*color.b*weights.g,	5*(1-retina.a)*(color.b*weights.b+color.g*weights.g+color.r*weights.r)+5*(1-retina.a)*color.b*weights.b+retina.a
+            );
+            mat3 Jt = transpose(J);
+            ev.S_col = J*ev.S_col*Jt;
+        }
     }
 }
 
@@ -213,13 +222,15 @@ void main() {
     // //glaucoma should be one of the last ones because it could decrease the brightness a lot
     glaucoma(rt_color, retina_mask, ev);
 
-    covarMatToVec(ev.S_col, color_var, color_covar);
-    covarMatToVec(ev.S_pos, dir_var, dir_covar);
-    
-    vec3 color_diff = rt_color.rgb - original_color;
-    rt_color_change = vec4(texture(s_color_change, v_tex).rgb + color_diff,0.0);
-    rt_color_uncertainty = vec4(color_var, 0.0);
-    rt_deflection = vec4(texture(s_deflection, v_tex).rg, dir_var);
-    // rt_deflection = texture(s_deflection, v_tex).rgba;
-    rt_covariances = vec4(color_covar, dir_covar);
+    if(u_track_error==1){
+        covarMatToVec(ev.S_col, color_var, color_covar);
+        covarMatToVec(ev.S_pos, dir_var, dir_covar);
+        
+        vec3 color_diff = rt_color.rgb - original_color;
+        rt_color_change = vec4(texture(s_color_change, v_tex).rgb + color_diff,0.0);
+        rt_color_uncertainty = vec4(color_var, 0.0);
+        rt_deflection = vec4(texture(s_deflection, v_tex).rg, dir_var);
+        // rt_deflection = texture(s_deflection, v_tex).rgba;
+        rt_covariances = vec4(color_covar, dir_covar);
+    }
 }
