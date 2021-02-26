@@ -106,7 +106,6 @@ pub fn cmd_parse() -> Config {
         .arg(
             Arg::with_name("config_right")
                 .long("config_right")
-                .short("cr")
                 .value_name("FILE|JSON")
                 .number_of_values(1)
                 .help("Sets the configuration parameters for the right eye"),
@@ -114,7 +113,6 @@ pub fn cmd_parse() -> Config {
         .arg(
             Arg::with_name("config_left")
                 .long("config_left")
-                .short("cl")
                 .value_name("FILE|JSON")
                 .number_of_values(1)
                 .help("Sets the configuration parameters for the left eye"),
