@@ -22,6 +22,7 @@ pub struct InputInfo {
 pub struct Config {
     pub port: Option<u16>,
     pub visible: bool,
+    pub resolution: Option<[u32; 2]>,
     pub output: Option<mustache::Template>,
     pub inputs: Vec<String>,
     pub parameters: ValueMap,
@@ -34,6 +35,7 @@ impl Default for Config {
         Config {
             port: Some(9009),
             visible: false,
+            resolution: None,
             output: None,
             inputs: Vec::new(),
             parameters: std::collections::HashMap::new(),
@@ -126,6 +128,13 @@ pub fn cmd_parse() -> Config {
                 .help("Sets the fallback gaze position"),
         )
         .arg(
+            Arg::with_name("res")
+                .long("res")
+                .value_names(&["X", "Y"])
+                .number_of_values(2)
+                .help("Sets the internal render resolution"),
+        )
+        .arg(
             Arg::with_name("show")
                 .long("show")
                 .short("s")
@@ -211,6 +220,14 @@ pub fn cmd_parse() -> Config {
         parameters.insert("gaze_y".to_string(), Value::Number(gaze[1]));
     };
 
+    let mut resolution = default.resolution;
+    if let Some(res) = matches.values_of("res") {
+        let res = res
+            .map(|t| t.trim().parse::<f64>().unwrap())
+            .collect::<Vec<f64>>();
+        resolution = Some([res[0] as u32, res[1] as u32]);
+    };
+
     let mut visible = default.visible;
     if matches.is_present("show") {
         visible = true;
@@ -245,6 +262,7 @@ pub fn cmd_parse() -> Config {
     Config {
         port,
         visible,
+        resolution,
         output,
         inputs,
         parameters,

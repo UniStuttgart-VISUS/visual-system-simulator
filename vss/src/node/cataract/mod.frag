@@ -51,7 +51,7 @@ void main() {
 
         vec4 color;
 
-        if(u_track_error){
+        if( u_track_error == 1 ){
             vec3 original_color = texture(s_color, v_tex).rgb;
             vec3 color_var = texture(s_color_uncertainty, v_tex).rgb;
             vec3 color_covar = texture(s_covariances, v_tex).rgb;
