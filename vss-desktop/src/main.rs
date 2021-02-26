@@ -3,6 +3,9 @@ mod node;
 #[cfg(feature = "varjo")]
 mod varjo;
 
+#[cfg(feature = "openxr")]
+mod openxr;
+
 use std::cell::RefCell;
 
 use vss::*;
@@ -128,7 +131,7 @@ fn build_flow(window: &mut Window, io_generator: &mut IoGenerator, flow_index: u
 
 }
 
-#[cfg(not(feature = "varjo"))]
+#[cfg(not(any(feature = "varjo", feature = "openxr")))]
 pub fn main() {
     let config = cmd_parse();
 
@@ -237,6 +240,66 @@ pub fn main() {
     use std::{thread, time};
     let a_second = time::Duration::from_secs(1);
     thread::sleep(a_second);
+}
+
+#[cfg(feature = "openxr")]
+pub fn main() {
+    let oxr = openxr::OpenXR::new();
+    let config = cmd_parse();
+
+    let remote = if let Some(port) = config.port {
+        Some(Remote::new(port))
+    } else {
+        None
+    };
+    
+    let flow_count = 2;
+
+    let mut parameters = Vec::new();
+    for idx in 0 .. flow_count {
+        let mut value_map = ValueMap::new();
+        let iter = match (config.parameters_r.clone(), config.parameters_l.clone()) {
+            (Some(param_r), Some(param_l)) =>{
+                if idx == 0 {
+                    param_r.into_iter()
+                }
+                else{
+                    param_l.into_iter()
+                }
+            }
+            _ => {
+                config.parameters.clone().into_iter()
+            }
+        };
+        for (key, val) in iter {
+            value_map.insert((key).clone(), (val).clone());
+        }  
+        value_map.insert("flow_id".into(),Value::Number(idx as f64));
+        parameters.push(RefCell::new(value_map));
+    }
+
+    let mut window = Window::new(config.visible, remote, parameters, flow_count);
+
+    oxr.initialize();
+
+    let mut desktop = SharedStereoDesktop::new();
+
+    for index in 0 .. flow_count {
+        let mut io_generator = IoGenerator::new(config.inputs.clone(), config.output.clone());
+
+        build_flow(&mut window, &mut io_generator, index, config.resolution);
+        let mut node = desktop.get_stereo_desktop_node(&window);
+
+        window.add_node(Box::new(node), index);
+    }
+
+
+    let mut done = false;
+    window.update_last_node();
+
+    while !done {
+        done = window.poll_events();
+    }
 }
 
 #[cfg(feature = "varjo")]
