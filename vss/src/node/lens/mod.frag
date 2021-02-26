@@ -46,6 +46,10 @@ uniform float u_far_point;
 uniform float u_near_vision_factor;
 uniform float u_far_vision_factor;
 uniform float u_dir_calc_scale;
+uniform float u_astigmatism_ecc_mm;
+uniform float u_astigmatism_angle_deg;
+uniform vec2 u_lens_position;
+uniform float u_eye_distance_center;
 
 uniform sampler2D s_color;
 uniform sampler2D s_normal;
@@ -137,7 +141,7 @@ float getDepth(vec2 pos) {
 }
 
 vec3 getTargetLocation(in vec3 start, in vec3 dir){
-    float t = (getDepth(v_tex) + VITREOUS_HUMOUR_RADIUS - start.z) / dir.z;
+    float t = (getDepth(v_tex+(u_lens_position/(vec2(1920,1080)/2))) + VITREOUS_HUMOUR_RADIUS - start.z) / dir.z;
     start += dir * t;
     return start;
 }
@@ -176,43 +180,50 @@ struct RefractInfo{
 RefractInfo rayIntersectEllipsoid(vec3 rPos, vec3 rDir, vec3 cPos, float cRad) {
 
 
-    float mul = 0.1 * u_dir_calc_scale;
+    float mul = radians(u_astigmatism_angle_deg);
+    // float mul = 0.25 * 0;
 
-    //using vectors instead of floats allows us to calculate with rotated ellipses
-    vec3 a = vec3(cRad  , 0         ,    0) * 0.96;
-    vec3 b = vec3(0     , cRad      ,    0) ;//* 1.1;
+    // We start off by defining the three main axis of the ellispoid.
+    vec3 a = vec3(cRad  , 0         ,    0);// * 0.96;
+    vec3 b = vec3(0     , cRad - u_astigmatism_ecc_mm ,    0);
     vec3 c = vec3(0     , 0         , cRad);
 
-    //rotation for testing purposes
-    // mat3 rot = mat3(
-    //     cos(mul), -sin(mul), 0,
-    //     sin(mul), cos(mul) , 0,
-    //            0,         0, 1
-    // );
+    // Now we allow for rotation along the Z axis (viewing direction)
+    // This enables us to simulate Atigmatism obliquus, with the main axis not in line with world-coordinates
 
-    // a = rot * a;
-    // b = rot * b;
-    // c = rot * c;
+    // The matrix for rotating the cornea elipsoid
+    mat3 rot = mat3(
+        cos(mul), sin(mul), 0,
+        -sin(mul), cos(mul) , 0,
+               0,         0, 1
+    );
 
+    // rotate the ellispoid (main axis)
+    a = rot * a;
+    b = rot * b;
+    c = rot * c;
 
+    // Now that the ellipsoid is defined, we prepare to transform the whole space, so that the ellipsoid
+    // becomes a up-oriented-unit-sphere (|a|=|b|=|c| ; a = a.x, r=1), and center in the origin.
     // inspired by http://www.illusioncatalyst.com/notes_files/mathematics/line_nu_sphere_intersection.php
+
+
+
+    mat4 T = mat4(
+        1.0, 0, 0, 0,
+        0, 1.0, 0, 0,
+        0, 0, 1.0, 0,
+        cPos.x, cPos.y, cPos.z, 1.0
+    );
 
     vec3 an = normalize(a);
     vec3 bn = normalize(b);
     vec3 cn = normalize(c);
 
-    // moving the ellipsoid according to its center
-    mat4 T = mat4(
-        1, 0, 0, cPos.x,
-        0, 1, 0, cPos.y,
-        0, 0, 1, cPos.z,
-        0, 0, 0, 1
-    );
-
     mat4 R = mat4(
-        an.x, bn.x, cn.x, 0,
-        an.y, bn.y, cn.y, 0,
-        an.z, bn.z, cn.z, 0,
+        an.x, an.y, an.z, 0,
+        bn.x, bn.y, bn.z, 0,
+        cn.x, cn.y, cn.z, 0,
         0   , 0   , 0   , 1
     );
 
@@ -220,49 +231,37 @@ RefractInfo rayIntersectEllipsoid(vec3 rPos, vec3 rDir, vec3 cPos, float cRad) {
         length(a), 0, 0, 0,
         0, length(b), 0, 0,
         0, 0, length(c), 0,
-        0, 0, 0, 1
+        0, 0, 0, 1.0
     );
 
-    // mat4 S = mat4(
-    //     cRad, 0, 0, 0,
-    //     0, cRad, 0, 0,
-    //     0, 0, cRad, 0,
-    //     0, 0, 0, 1
-    // );
-
-    mat4 M = T*R*S;
-    mat4 iM = inverse(M);
-
-    vec4 srPos = iM * vec4(rPos,0);
-    vec4 srDir = iM * vec4(rDir,0);
-    vec4 scPos = iM * vec4(cPos,0);
+    // Transform the Ray according to the inverse transformation, that once created the ellipsoid from the sphere
+    // We do **not** translate the direction component of the ray, since it would change the direction of the ray and hence the resulting normal
+    vec4 srPos =  inverse(S) * inverse(T) * inverse(R) * vec4(rPos,1.0f) ;
+    vec4 srDir =  inverse(S) * inverse(R) * vec4(rDir,1.0f);
+        
+    // Since we transformed everything, sphere position is now the origin and its radius is 1
+    vec3 sTarget = rayIntersectSphere(srPos.xyz, srDir.xyz, vec3(0.0), 1.0);
     
-    // since we transformed everything, sphere position is the origin and its radius is 1
-    vec3 sTarget = rayIntersectSphere(srPos.xyz, srDir.xyz, scPos.xyz, 1);
-
-    // now we need to transform the result to get the position in the original space
-    vec4 target = M * vec4(sTarget,0);
+    // We can gradually transform everything back to its original state.
+    // The first step is scaling the space to once again get the original ellipsoid shape
+    // This is used for calculating the normal. However, the normal caluclation assumes a,b,c, to be aligned with
+    //   the coordinate axis, so apply the rotation to the normal instead
+    vec4 rel_target = S * vec4(sTarget,1.0) ;
 
     // to calculate the normal, we use n = x_0/a^2 , y_0/b^2, z_0/c^2 with the ellipsoid centered at the origin
-    vec3 rel_target = target.xyz - cPos;
-    vec3 normal = vec3(rel_target.x/pow(length(a),2), rel_target.y/pow(length(b),2), rel_target.z/pow(length(c),2));
-    // vec3 normal = rel_target;
+    vec4 normal = vec4(rel_target.x/pow(length(a),2), rel_target.y/pow(length(b),2), rel_target.z/pow(length(c),2), 1.0);
+    // restore the original ellipsoid rotation
+    normal = R * normal;
 
-    // return target.xyz;
+    // the intersection point of the ray with the ellipsoid. All transformations applied initially to the ray-position
+    // are now applied as inverted matrices (so the original ones, that created the ellipsoid) and in inverse order.
+    vec3 world_target = (R*(T*(S * vec4(sTarget, 1.0)))).rgb;
+
 
     return RefractInfo(
-        target.xyz,
-        normal
+        world_target.xyz,
+        normal.xyz
     );
-    
-    // return sTarget.xyz;
-}
-
-vec2 to_dir_angle(in vec3 dir){		
-	vec2 pt;
-    pt.x = atan(dir.x/dir.z)*u_dir_calc_scale;
-    pt.y = atan(dir.y/dir.z)*u_dir_calc_scale;
-    return pt;
 }
 
 // sends the ray through all four surfaces in the optical system and returns the color, position, error and uncertainty
@@ -290,6 +289,8 @@ Simulation getColorSample(vec3 start, vec2 aim, float focalLength, float nAnteri
     dir = refract(dir, -normalize(ri.normal), N_CORNEA / N_AIR);
     // dir = refract(dir, -normalize(start - OUTER_CORNEA_CENTER), N_CORNEA / N_AIR);
     dir = applyCorneaImperfection(start, dir);
+
+    start += vec3(u_lens_position, 0) + vec3(u_eye_distance_center,0,0);
 
     // position where the ray hits the image, including depth
     vec3 target = getTargetLocation(start, dir);

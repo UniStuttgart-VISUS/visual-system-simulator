@@ -15,7 +15,7 @@ gfx_defines! {
         s_color_uncertainty: gfx::TextureSampler<[f32; 4]> = "s_color_uncertainty",
         s_original: gfx::TextureSampler<[f32; 4]> = "s_original",
         s_covariances: gfx::TextureSampler<[f32; 4]> = "s_covariances",
-
+        u_flow_idx: gfx::Global<i32> = "u_flow_idx",
     }
 }
 
@@ -84,6 +84,7 @@ impl Node for Display {
                 rt_color: dst,
                 u_vis_type: 0,
                 u_heat_scale: 1.0,
+                u_flow_idx: 0
             },
         }
     }
@@ -119,7 +120,9 @@ impl Node for Display {
             1
         } else {
             0
-        }
+        };
+
+        self.pso_data.u_flow_idx = values.get("flow_id").unwrap_or(&Value::Number(0.0)).as_f64().unwrap_or(0.0) as i32;
     }
 
     fn input(&mut self, perspective: &EyePerspective, vis_param: &VisualizationParameters) -> EyePerspective {

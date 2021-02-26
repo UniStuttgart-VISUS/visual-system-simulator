@@ -11,6 +11,7 @@ uniform vec2 u_resolution_in;
 
 
 uniform int u_vis_type;
+uniform int u_flow_idx;
 uniform float u_heat_scale;
 
 in vec2 v_tex;
@@ -76,27 +77,64 @@ vec3 TurboColormap(in float x) {
 }
 
 vec3 RetinalGanglion(){
-    float gray_own = getPerceivedBrightness(texture(s_original, v_tex).rgb);
+
+    vec2 pos_pixel = v_tex*u_resolution_in;
+    vec2 dist_center = (u_resolution_in*0.5 - pos_pixel)/u_resolution_in;
+    float fieldsize_px = u_heat_scale * ( 2 + sqrt(dist_center.x*dist_center.x + dist_center.y*dist_center.y));
+    float num_fields = u_resolution_in.x/fieldsize_px;
+
+    vec2 rgc_center_pixels = round(pos_pixel/fieldsize_px) * fieldsize_px + fieldsize_px/2 ;
+    vec2 rgc_center = rgc_center_pixels / u_resolution_in;
+
+    float gray_own = getPerceivedBrightness(texture(s_original, rgc_center).rgb);
     float gray_others = 0;
-    for (int i = -1; i <= 1; i++) {
-        for (int j = -1; j <= 1; j++) {
+    for (int i = -4; i <= 4; i++) {
+        for (int j = -4; j <= 4; j++) {
             if(i!=0||j!=0){ // exclude i=j=0
-                gray_others += getPerceivedBrightness(texture(s_original, v_tex + vec2(float(i), float(j))*2 / u_resolution_in).rgb);
+                gray_others += getPerceivedBrightness(texture(s_original, rgc_center + vec2(float(i), float(j))*(fieldsize_px/2) / u_resolution_in).rgb);
             }
         }
     }
-    gray_others /= 8;
-    if(gray_own-gray_others > 0.0){
+    gray_others /= 80;
+    if(gray_own-gray_others > 0.1){
         // ON stimulating
-        return vec3(1.0,0.0,0.0) * 8 * ( gray_own-gray_others ) * u_heat_scale;
+        return vec3(1.0,0.0,0.0);// * 80 * ( gray_own-gray_others );// * u_heat_scale;
     }
-    else {//if (gray_own-gray_others < -0.001){
+    else if (gray_own-gray_others < -0.1){
         // OFF stimulating
-        return vec3(0.0,0.0,1.0) * 8 * abs( gray_own-gray_others ) * u_heat_scale;
+        return vec3(0.0,0.0,1.0);// * 80 * abs( gray_own-gray_others );// * u_heat_scale;
     }
-    // else{
-    //     return vec3(1.0,0.0,1.0) * 50 * abs( gray_own-gray_others );
+    else{
+        return vec3(0.0, 0.0, 0.0);
+    }
+
+//------------------
+    // float gray_own = getPerceivedBrightness(texture(s_original, v_tex).rgb);
+    // float gray_others = 0;
+
+    // // float scale = length((v_tex)-0.5)*32;
+    // float scale = u_heat_scale;
+
+    // for (int i = -1; i <= 1; i++) {
+    //     for (int j = -1; j <= 1; j++) {
+    //         if(i!=0||j!=0){ // exclude i=j=0
+    //             gray_others += getPerceivedBrightness(texture(s_original, v_tex + vec2(float(i), float(j))*scale / u_resolution_in).rgb);
+    //         }
+    //     }
     // }
+    // gray_others /= 8;
+    // if(gray_own-gray_others > 0.0){
+    //     // ON stimulating
+    //     return vec3(1.0,0.0,0.0) * 8 * ( gray_own-gray_others ) * u_heat_scale;
+    // }
+    // else {//if (gray_own-gray_others < -0.001){
+    //     // OFF stimulating
+    //     return vec3(0.0,0.0,1.0) * 8 * abs( gray_own-gray_others ) * u_heat_scale;
+    // }
+    // // else{
+    // //     return vec3(1.0,0.0,1.0) * 50 * abs( gray_own-gray_others );
+    // // }
+    // // return vec3(v_tex,0);
 }
 
 void main() {
@@ -104,7 +142,12 @@ void main() {
     switch (u_vis_type) {
 // TODO this has to be done in different color spaces, e.g with cielab and perhaps use deltaE_00
         case 0:  // simulated image
-            color =  texture(s_color, v_tex).rgb;
+            // if( u_flow_idx == 0 ){
+                color =  texture(s_color, v_tex).rgb;
+            // }
+            // else{
+            //     color =  texture(s_color, v_tex).bgr;
+            // }
             break;
         case 1: // directional uncertainty
             //float bar =  pow(texture(s_deflection, v_tex).r, 2.0) + pow(texture(s_deflection, v_tex).g, 2.0);
@@ -118,9 +161,20 @@ void main() {
             color = ViridisColormap(sqrt(combined_error) * u_heat_scale);
             break;
         case 3: // color uncertainty
+            // vec3 cvm_var = texture(s_color_uncertainty, v_tex).rgb;
+            // vec3 cvm_covar = texture(s_covariances, v_tex).rgb;
+
+            // mat3 cvm = mat3(
+            //     cvm_var.r, cvm_covar.r, cvm_covar.g, 
+            //     cvm_covar.r, cvm_var.g, cvm_covar.b,
+            //     cvm_covar.g, cvm_covar.b, cvm_var.b
+            // );
+            // color = ViridisColormap(abs(determinant(cvm)) * u_heat_scale);
+
             vec3 foo =  texture(s_color_uncertainty, v_tex).rgb;
             float combined_variance = foo.r + foo.g +foo.b;
-            color = ViridisColormap(sqrt(combined_variance) * u_heat_scale);
+            color = ViridisColormap(sqrt(combined_variance) / u_heat_scale);
+            
             break;
         case 4: // original image
             color =  texture(s_original, v_tex).rgb;
@@ -145,13 +199,13 @@ void main() {
                 }
             }
             break;
-        case 7: // retinal ganglia ON/OFF
+        case 7: // retinal ganglion ON/OFF
             // color = RetinalGanglion();  
 
             float cov =  texture(s_color_uncertainty, v_tex).r + texture(s_color_uncertainty, v_tex).g + texture(s_color_uncertainty, v_tex).b 
             -(texture(s_covariances, v_tex).r + texture(s_covariances, v_tex).g + texture(s_covariances, v_tex).b);
 
-            // float cov =  texture(s_covariances, v_tex).r + texture(s_covariances, v_tex).g + texture(s_covariances, v_tex).b;
+            // // float cov =  texture(s_covariances, v_tex).r + texture(s_covariances, v_tex).g + texture(s_covariances, v_tex).b;
 
             color = ViridisColormap(sqrt(abs(cov))* u_heat_scale);
 

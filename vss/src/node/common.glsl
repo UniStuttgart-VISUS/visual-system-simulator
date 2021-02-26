@@ -149,10 +149,10 @@ void applyBloom(inout vec3 color, in float blur_factor, inout mat3 S) {
     /*
     Generates the jacobi matrix for color * (1. + brightness *  c) for all channels
     jacobian ([
-        r*(1+(w_r*r+w_g*g+w_b*b)*c), 
-        g*(1+(w_r*r+w_g*g+w_b*b)*c), 
-        b*(1+(w_r*r+w_g*g+w_b*b)*c)
-        ], [r,g,b]);
+        x_r*(1+(w_r*x_r+w_g*x_g+w_b*x_b)*c), 
+        x_g*(1+(w_r*x_r+w_g*x_g+w_b*x_b)*c), 
+        x_b*(1+(w_r*x_r+w_g*x_g+w_b*x_b)*c)
+        ], [x_r,x_g,x_b]);
 	)
     (Use wxMaxima to compute)
     */

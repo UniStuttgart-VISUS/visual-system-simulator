@@ -3,6 +3,8 @@ use std::cell::RefCell;
 use cgmath::{Matrix4};
 use cgmath::Vector3;
 use gfx::format::Rgba32F;
+use cgmath::Rad;
+use std::ops::Mul;
 
 /// Represents properties of eye-tracking data.
 #[derive(Debug, Clone)]
@@ -18,7 +20,8 @@ pub struct Flow {
     nodes: RefCell<Vec<Box<dyn Node>>>,
     last_slot: RefCell<Option<NodeSlots>>,
     pub last_perspective: RefCell<EyePerspective>,
-    well_known: WellKnownSlots
+    well_known: WellKnownSlots,
+    configured_view: RefCell<Matrix4<f32>>,
 }
 
 impl Flow {
@@ -32,7 +35,8 @@ impl Flow {
                 proj: cgmath::perspective(cgmath::Deg(70.0), 1.0, 0.05, 1000.0),
                 gaze: Vector3::new(0.0, 0.0, 1.0),
             }),
-            well_known: WellKnownSlots::new()
+            well_known: WellKnownSlots::new(),
+            configured_view:  RefCell::new(Matrix4::from_scale(1.0)),
         }
     }
 
@@ -155,6 +159,21 @@ impl Flow {
     }
 
     pub fn update_values(&self, window: &Window, values: &ValueMap) {
+        let mut perspective = self.last_perspective.borrow_mut();
+        let mut configured_view = Matrix4::from_scale(1.0);
+        // if the eye has strabism, it needs some angle offset
+        if let Some(Value::Number(eye_axis_rot_x)) = values.get("eye_axis_rot_x") {
+            
+            configured_view = configured_view.mul(Matrix4::from_angle_x(Rad(*eye_axis_rot_x as f32)));
+        }
+        if let Some(Value::Number(eye_axis_rot_y)) = values.get("eye_axis_rot_y") {
+            configured_view = configured_view.mul(Matrix4::from_angle_y(Rad(*eye_axis_rot_y as f32)));
+        }
+
+        perspective.view = configured_view.mul(perspective.view );
+
+        self.configured_view.replace(configured_view);
+
         // Propagate to nodes.
         for node in self.nodes.borrow_mut().iter_mut() {
             node.update_values(window, &values);
@@ -163,11 +182,13 @@ impl Flow {
 
     pub fn input(&self, vis_param: &VisualizationParameters) {
         let mut perspective = self.last_perspective.borrow().clone();
+        perspective.view = self.configured_view.borrow().mul(perspective.view );
+
         // Propagate to nodes.
         for node in self.nodes.borrow_mut().iter_mut().rev() {
             perspective = node.input( &perspective, vis_param);
         }
-        self.last_perspective.replace(perspective);
+        //self.last_perspective.replace(perspective);
     }
 
     pub fn render(&self, window: &Window) {
