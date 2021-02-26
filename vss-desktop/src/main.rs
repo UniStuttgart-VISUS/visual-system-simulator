@@ -99,7 +99,6 @@ impl IoGenerator {
 }
 
 fn build_flow(window: &mut Window, io_generator: &mut IoGenerator, flow_index: usize, render_resolution: Option<[u32; 2]>){
-    println!("res: {} {}", render_resolution.unwrap()[0], render_resolution.unwrap()[1]);
     let (input_node, output_node) = io_generator.current(&window, render_resolution, flow_index).unwrap();
 
     // Add input node.
