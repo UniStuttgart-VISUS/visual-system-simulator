@@ -49,3 +49,17 @@ impl Default for VisualizationParameters{
     }
   }
 }
+
+impl VisualizationParameters{
+  pub fn has_to_track_error( &self) -> bool{
+    match self.vis_type {
+      VisualizationType::Deflection 
+      | VisualizationType::ColorChange
+      | VisualizationType::ColorUncertainty
+      | VisualizationType::OverlayInput
+      | VisualizationType::OverlayInput
+      => true,
+      _ => false
+    }
+  }
+}

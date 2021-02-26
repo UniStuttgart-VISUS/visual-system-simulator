@@ -31,11 +31,38 @@ void covarMatToVec(in mat2 cvmat, inout vec2 var, inout float covar){
     covar   = cvmat[1][0];
 }
 
+vec4 blur(in vec2 fragCoord, in sampler2D tex, float blur_scale, vec2 resolution) {
+        // declare stuff
+    const int kSize = (BLUR_SIZE - 1) / 2;
+    float kernel[BLUR_SIZE];
+    vec3 final_colour = vec3(0.0);
 
+    // create the 1-D kernel
+    float Z = 0.0;
+    for (int j = 0; j <= kSize; ++j) {
+        kernel[kSize + j] = kernel[kSize - j] = normpdf(float(j));
+    }
+
+    // get the normalization factor (as the gaussian has been clamped)
+    for (int j = 0; j < BLUR_SIZE; ++j) {
+        Z += kernel[j];
+    }
+
+    //read out the texels
+    for (int i = -kSize; i <= kSize; ++i) {
+        for (int j = -kSize; j <= kSize; ++j) {
+            final_colour += kernel[kSize + j] * kernel[kSize + i] * texture(tex, (fragCoord + vec2(float(i), float(j)) * blur_scale / resolution)).rgb;
+        }
+    }
+
+    // the average of the weighted samples and hence the result
+    vec3 avg = final_colour / (Z * Z);
+    return vec4(avg,0);
+}
 
 
 //vec4 blur(in vec2 fragCoord, in sampler2D tex, float blur_scale, vec2 resolution, inout vec3 col_var, inout vec3 col_covar, in sampler2D col_vartex, inout vec2 dir_var,in sampler2D dir_vartex) {
-vec4 blur(in vec2 fragCoord, in sampler2D tex, float blur_scale, vec2 resolution, inout mat3 S_col, inout mat2 S_pos, in sampler2D s_col_var, in sampler2D s_covariance, in sampler2D s_pos_var) {
+vec4 blur_with_error(in vec2 fragCoord, in sampler2D tex, float blur_scale, vec2 resolution, inout mat3 S_col, inout mat2 S_pos, in sampler2D s_col_var, in sampler2D s_covariance, in sampler2D s_pos_var) {
 
     // declare stuff
     const int kSize = (BLUR_SIZE - 1) / 2;
