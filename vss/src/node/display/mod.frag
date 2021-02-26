@@ -161,24 +161,20 @@ void main() {
             color = ViridisColormap(sqrt(combined_error) * u_heat_scale);
             break;
         case 3: // color uncertainty
-            vec3 cvm_var = texture(s_color_uncertainty, v_tex).rgb;
-            vec3 cvm_covar = texture(s_covariances, v_tex).rgb;
+            // vec3 cvm_var = texture(s_color_uncertainty, v_tex).rgb;
+            // vec3 cvm_covar = texture(s_covariances, v_tex).rgb;
 
-            mat3 cvm = mat3(
-                cvm_var.r, cvm_covar.r, cvm_covar.g, 
-                cvm_covar.r, cvm_var.g, cvm_covar.b,
-                cvm_covar.g, cvm_covar.b, cvm_var.b
-            );
             // mat3 cvm = mat3(
-            //     cvm_var.r, cvm_covar.r, 0.0, 
-            //     cvm_covar.r, cvm_var.g, 0.0,
-            //     0.0, 0.0, cvm_var.b
+            //     cvm_var.r, cvm_covar.r, cvm_covar.g, 
+            //     cvm_covar.r, cvm_var.g, cvm_covar.b,
+            //     cvm_covar.g, cvm_covar.b, cvm_var.b
             // );
-            color = ViridisColormap(abs(determinant(cvm)) * u_heat_scale);
+            // color = ViridisColormap(abs(determinant(cvm)) * u_heat_scale);
 
-            // vec3 foo =  texture(s_color_uncertainty, v_tex).rgb;
-            // float combined_variance = foo.r + foo.g +foo.b;
-            // color = ViridisColormap(sqrt(combined_variance) / u_heat_scale);
+            vec3 foo =  texture(s_color_uncertainty, v_tex).rgb;
+            float combined_variance = foo.r + foo.g +foo.b;
+            color = ViridisColormap(sqrt(combined_variance) / u_heat_scale);
+            
             break;
         case 4: // original image
             color =  texture(s_original, v_tex).rgb;
