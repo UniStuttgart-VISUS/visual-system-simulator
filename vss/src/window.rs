@@ -157,6 +157,10 @@ impl Window {
         &self.encoder
     }
 
+    pub fn device(&self) -> & RefCell<gfx_device_gl::Device> {
+        &self.device
+    }
+
     pub fn flush(&self, encoder: &mut DeviceEncoder) {
         use std::ops::DerefMut;
         let mut device = self.device.borrow_mut();
