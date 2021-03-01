@@ -244,7 +244,7 @@ pub fn main() {
 
 #[cfg(feature = "openxr")]
 pub fn main() {
-    let oxr = openxr::OpenXR::new();
+    let mut oxr = openxr::OpenXR::new();
     let config = cmd_parse();
 
     let remote = if let Some(port) = config.port {
@@ -285,26 +285,31 @@ pub fn main() {
     oxr.initialize();
     dbg!("Post init");
 
-    
-
-    // let mut desktop = SharedStereoDesktop::new();
-
-    // for index in 0 .. flow_count {
-    //     let mut io_generator = IoGenerator::new(config.inputs.clone(), config.output.clone());
-
-    //     build_flow(&mut window, &mut io_generator, index, config.resolution);
-    //     let mut node = desktop.get_stereo_desktop_node(&window);
-
-    //     window.add_node(Box::new(node), index);
-    // }
 
 
-    // let mut done = false;
-    // window.update_last_node();
 
-    // while !done {
-    //     done = window.poll_events();
-    // }
+    let mut desktop = SharedStereoDesktop::new();
+
+    for index in 0 .. flow_count {
+        let mut io_generator = IoGenerator::new(config.inputs.clone(), config.output.clone());
+
+        build_flow(&mut window, &mut io_generator, index, config.resolution);
+        let mut node = desktop.get_stereo_desktop_node(&window);
+
+        window.add_node(Box::new(node), index);
+    }
+
+
+    let mut done = false;
+    window.update_last_node();
+
+    oxr.create_session(&window);
+    oxr.create_render_targets(&window);
+
+
+    while !done {
+        done = window.poll_events();
+    }
 }
 
 #[cfg(feature = "varjo")]

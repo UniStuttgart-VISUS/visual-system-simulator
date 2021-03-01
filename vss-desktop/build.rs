@@ -95,18 +95,18 @@ fn main() {
             build.flag("-EHsc");
         }
         build
-            .includes(include_dirs)
+            .includes(include_dirs.clone())
             .file("src/openxr.cpp")
             .compile("vss-desktop-cc");
+
 
         for dir in lib_dirs {
             println!("cargo:rustc-link-search=native={}", dir.to_str().unwrap());
         }
 
         println!("cargo:rustc-link-lib=pathcch");
-        println!("cargo:rustc-link-lib=static=openxr_loader");
 
         link("vss-desktop-cc", "static");
-        link("openxr_loader", "static")
+        link("openxr_loader", "static");
     }
 }
