@@ -280,26 +280,31 @@ pub fn main() {
 
     let mut window = Window::new(config.visible, remote, parameters, flow_count);
 
+    
+    dbg!("Pre init");
     oxr.initialize();
+    dbg!("Post init");
 
-    let mut desktop = SharedStereoDesktop::new();
+    
 
-    for index in 0 .. flow_count {
-        let mut io_generator = IoGenerator::new(config.inputs.clone(), config.output.clone());
+    // let mut desktop = SharedStereoDesktop::new();
 
-        build_flow(&mut window, &mut io_generator, index, config.resolution);
-        let mut node = desktop.get_stereo_desktop_node(&window);
+    // for index in 0 .. flow_count {
+    //     let mut io_generator = IoGenerator::new(config.inputs.clone(), config.output.clone());
 
-        window.add_node(Box::new(node), index);
-    }
+    //     build_flow(&mut window, &mut io_generator, index, config.resolution);
+    //     let mut node = desktop.get_stereo_desktop_node(&window);
+
+    //     window.add_node(Box::new(node), index);
+    // }
 
 
-    let mut done = false;
-    window.update_last_node();
+    // let mut done = false;
+    // window.update_last_node();
 
-    while !done {
-        done = window.poll_events();
-    }
+    // while !done {
+    //     done = window.poll_events();
+    // }
 }
 
 #[cfg(feature = "varjo")]

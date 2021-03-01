@@ -32,7 +32,7 @@ fn openxr_dirs() -> Result<(Vec<PathBuf>, Vec<PathBuf>), std::env::VarError> {
         }
     };
     let link_paths = {
-        let dir = std::path::PathBuf::from("E:\\Steam\\steamapps\\common\\SteamVR\\bin");
+        let dir = std::path::PathBuf::from(std::env::var("OpenXR_LIB_DIR")?);
         if dir.is_dir() {
             vec![dir]
         } else {
@@ -102,7 +102,11 @@ fn main() {
         for dir in lib_dirs {
             println!("cargo:rustc-link-search=native={}", dir.to_str().unwrap());
         }
+
+        println!("cargo:rustc-link-lib=pathcch");
+        println!("cargo:rustc-link-lib=static=openxr_loader");
+
         link("vss-desktop-cc", "static");
-        link("vrclient_x64", "static")
+        link("openxr_loader", "static")
     }
 }
