@@ -1,6 +1,7 @@
-use std::{borrow::Borrow, default, mem::{self, size_of}, os::raw::{c_char, c_void}};
+use std::os::raw::{c_char, c_void};
 use vss::*;
 use vss::gfx::Factory;
+//use cgmath::{Matrix4, Vector3};
 
 pub type OpenXRPtr = *mut c_void;
 
@@ -16,12 +17,15 @@ extern "C" {
         surface_width: *mut u32,
         surface_height: *mut u32,
     ) -> *const c_char;
+    fn openxr_acquire_swapchain_images(openxr: OpenXRPtr, swapchain_index: *mut u32)-> *const c_char;
+    fn openxr_begin_frame_sync(openxr: OpenXRPtr, is_available: *mut bool)-> *const c_char;
+    fn openxr_end_frame(openxr: OpenXRPtr)-> *const c_char;    
 }
-
 
 pub struct OpenXR {
     openxr: OpenXRPtr,
     render_targets_color: Vec<RenderTargetColor>,
+    render_targets_depth: Vec<RenderTargetDepth>
 }
 
 impl OpenXR {
@@ -30,7 +34,8 @@ impl OpenXR {
         unsafe { openxr_new(&mut openxr as *mut *mut _)};
         OpenXR{
             openxr,
-            render_targets_color: Vec::new()
+            render_targets_color: Vec::new(),
+            render_targets_depth: Vec::new()
         }
     }
 
@@ -77,8 +82,32 @@ impl OpenXR {
                 surface_height,
             );
             self.render_targets_color.push(factory.view_texture_as_render_target(&color_texture, 0, None).unwrap());
+            self.render_targets_depth.push(factory.create_depth_stencil(surface_width as u16, surface_height as u16).unwrap().2);
         }
         (surface_width, surface_height)
+    }
+
+    pub fn begin_frame_sync(&self) -> bool{
+        let mut is_available = false;
+        unsafe { openxr_begin_frame_sync(self.openxr, &mut is_available as *mut _) };
+
+        is_available
+    }
+
+    pub fn get_current_render_target(&self) -> (RenderTargetColor, RenderTargetDepth){
+        let mut current_swap_chain_index = 0u32;
+        unsafe {
+            openxr_acquire_swapchain_images(
+                self.openxr,
+                &mut current_swap_chain_index as *mut _
+            )
+        };
+
+        return(self.render_targets_color[0].clone(), self.render_targets_depth[0].clone());
+    }
+
+    pub fn end_frame(&self) {
+        unsafe { openxr_end_frame(self.openxr) };
     }
 }
 

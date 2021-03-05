@@ -242,6 +242,36 @@ pub fn main() {
     thread::sleep(a_second);
 }
 
+
+#[cfg(feature = "openxr")]
+pub fn set_oxr_data(window: &mut Window, last_fov: &mut Vec<(f32, f32)>, oxr: &mut openxr::OpenXR){
+    let (oxr_target_color, oxr_target_depth) = oxr.get_current_render_target();
+    window.replace_targets(oxr_target_color, oxr_target_depth, false);
+
+    /*let view_matrices = varjo.get_current_view_matrices();
+    let proj_matrices = varjo.get_current_proj_matrices();
+    let head_position = 0.5 * (view_matrices[0].w.truncate() + view_matrices[1].w.truncate());
+    let (left_gaze, right_gaze, _focus_distance) = varjo.get_current_gaze();
+
+    for index in 0 .. 4 {
+        let fov_x = 2.0*(1.0/proj_matrices[index][0][0]).atan();// * 180.0 / 3.1415926535;
+        let fov_y = 2.0*(1.0/proj_matrices[index][1][1]).atan();// * 180.0 / 3.1415926535;
+        if last_fov[index].0 != fov_x || last_fov[index].1 != fov_y {
+            window.set_value("fov_x".to_string(), Value::Number(fov_x as f64), index);
+            window.set_value("fov_y".to_string(), Value::Number(fov_y as f64), index);
+            window.set_value("proj_matrix".to_string(), Value::Matrix(proj_matrices[index%2]), index);
+            last_fov[index].0 = fov_x;
+            last_fov[index].1 = fov_y;
+        }
+        window.set_perspective(EyePerspective{
+            position: head_position,
+            view: view_matrices[index],
+            proj: proj_matrices[index],
+            gaze: if index%2 == 0 {left_gaze} else {right_gaze},
+        },index);
+    }*/
+}
+
 #[cfg(feature = "openxr")]
 pub fn main() {
     let mut oxr = openxr::OpenXR::new();
@@ -280,13 +310,9 @@ pub fn main() {
 
     let mut window = Window::new(config.visible, remote, parameters, flow_count);
 
-    
     dbg!("Pre init");
     oxr.initialize();
     dbg!("Post init");
-
-
-
 
     let mut desktop = SharedStereoDesktop::new();
 
@@ -299,16 +325,28 @@ pub fn main() {
         window.add_node(Box::new(node), index);
     }
 
-
     let mut done = false;
     window.update_last_node();
 
     oxr.create_session(&window);
     oxr.create_render_targets(&window);
 
+    let mut oxr_fov = vec![(100.0, 70.0); 4];
 
     while !done {
+        let oxr_should_render = oxr.begin_frame_sync();
+
+        if oxr_should_render {
+            set_oxr_data(&mut window, &mut oxr_fov, &mut oxr);
+        }
+        
+        window.update_last_node();
+        
         done = window.poll_events();
+
+        if oxr_should_render {
+            oxr.end_frame();
+        }
     }
 }
 
