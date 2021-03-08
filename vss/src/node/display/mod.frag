@@ -228,69 +228,6 @@ vec3 RetinalGanglion(){
         return vec3(0.0, 0.0, 0.0);
     }
 
-
-
-// global var for size
-//------------------
-    // vec2 pos_pixel = v_tex*u_resolution_in;
-    // vec2 dist_center = (u_resolution_in*0.5 - pos_pixel)/u_resolution_in;
-    // float fieldsize_px = u_heat_scale * ( 2 + sqrt(dist_center.x*dist_center.x + dist_center.y*dist_center.y));
-    // float num_fields = u_resolution_in.x/fieldsize_px;
-
-    // vec2 rgc_center_pixels = round(pos_pixel/fieldsize_px) * fieldsize_px + fieldsize_px/2 ;
-    // vec2 rgc_center = rgc_center_pixels / u_resolution_in;
-
-    // float gray_own = getPerceivedBrightness(texture(s_original, rgc_center).rgb);
-    // float gray_others = 0;
-    // for (int i = -4; i <= 4; i++) {
-    //     for (int j = -4; j <= 4; j++) {
-    //         if(i!=0||j!=0){ // exclude i=j=0
-    //             gray_others += getPerceivedBrightness(texture(s_original, rgc_center + vec2(float(i), float(j))*(fieldsize_px/2) / u_resolution_in).rgb);
-    //         }
-    //     }
-    // }
-    // gray_others /= 80;
-    // if(gray_own-gray_others > 0.1){
-    //     // ON stimulating
-    //     return vec3(1.0,0.0,0.0);// * 80 * ( gray_own-gray_others );// * u_heat_scale;
-    // }
-    // else if (gray_own-gray_others < -0.1){
-    //     // OFF stimulating
-    //     return vec3(0.0,0.0,1.0);// * 80 * abs( gray_own-gray_others );// * u_heat_scale;
-    // }
-    // else{
-    //     return vec3(0.0, 0.0, 0.0);
-    // }
-
-
-// constant size
-//------------------
-    // float gray_own = getPerceivedBrightness(texture(s_original, v_tex).rgb);
-    // float gray_others = 0;
-
-    // // float scale = length((v_tex)-0.5)*32;
-    // float scale = u_heat_scale;
-
-    // for (int i = -1; i <= 1; i++) {
-    //     for (int j = -1; j <= 1; j++) {
-    //         if(i!=0||j!=0){ // exclude i=j=0
-    //             gray_others += getPerceivedBrightness(texture(s_original, v_tex + vec2(float(i), float(j))*scale / u_resolution_in).rgb);
-    //         }
-    //     }
-    // }
-    // gray_others /= 8;
-    // if(gray_own-gray_others > 0.0){
-    //     // ON stimulating
-    //     return vec3(1.0,0.0,0.0) * 8 * ( gray_own-gray_others ) * u_heat_scale;
-    // }
-    // else {//if (gray_own-gray_others < -0.001){
-    //     // OFF stimulating
-    //     return vec3(0.0,0.0,1.0) * 8 * abs( gray_own-gray_others ) * u_heat_scale;
-    // }
-    // // else{
-    // //     return vec3(1.0,0.0,1.0) * 50 * abs( gray_own-gray_others );
-    // // }
-    // // return vec3(v_tex,0);
 }
 
 void main() {
