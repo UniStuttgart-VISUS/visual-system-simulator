@@ -77,38 +77,115 @@ vec3 TurboColormap(in float x) {
   );
 }
 
+// Watson approximates the distance on the retina to degrees conversion as a linear equation
+// Since we do not have the distance in mm from the center but in [0; 0.5], 
+//  and the lens maps the image space to +/- 90°, we can map 90 deg to 1.0 linear
+float dist_to_deg(in float dist){
+    return 2*dist*90;
+}
+float deg_to_dist(in float deg){
+    return deg/(90*2);
+}
+
+float spacing(in vec2 pos) {
+    float dist = sqrt(pos.x * pos.x + pos.y * pos.y);
+    float x = dist_to_deg(dist); // TODO exact calc here, now we aproximate that we map the edge of the retina to 90deg
+
+    float rel_density = 0.996 * pow(1.0+(x/0.9932),-2.0) + (1.0-0.996) * exp(-1.0 * x/12.13);
+    float abs_density =  33000.0 * rel_density;
+    float spacing = sqrt(1.0/(abs_density));
+    spacing = deg_to_dist(spacing);   //deg to norm
+
+    float desired_res = sqrt(33000.0)*90; // desired resoolution in fovea
+    float available_res = min(u_resolution_in.x, u_resolution_in.y);
+
+    float scale_factor = desired_res/available_res;
+
+    spacing *= scale_factor;
+    //float spacing = (1.0/rel_density)/90;
+    spacing /= u_heat_scale;
+    return spacing;
+}
+
 vec3 RetinalGanglion(){
 
-    vec2 pos_pixel = v_tex*u_resolution_in;
-    vec2 dist_center = (u_resolution_in*0.5 - pos_pixel)/u_resolution_in;
-    float fieldsize_px = u_heat_scale * ( 2 + sqrt(dist_center.x*dist_center.x + dist_center.y*dist_center.y));
-    float num_fields = u_resolution_in.x/fieldsize_px;
+    //return vec3(spacing(v_tex), 0.0, 0.0);
 
-    vec2 rgc_center_pixels = round(pos_pixel/fieldsize_px) * fieldsize_px + fieldsize_px/2 ;
-    vec2 rgc_center = rgc_center_pixels / u_resolution_in;
+    vec2 loc = v_tex;      
+    float len = 0.5;
+    vec2 center = vec2(0.5);
+    
+    for (int i=0; i<16; i++) {  
+        if( 2*len <= spacing(0.5-center) ){
+            break;
+        } 
+        len/=2.0;
+        center = center + step(center,loc)*len - step(loc,center)*len;
+    }
+    
+    // fragColor = vec4(vec2(spacing(0.5-c)*20.0),0.0,1.0);
 
-    float gray_own = getPerceivedBrightness(texture(s_original, rgc_center).rgb);
+    float gray_own = getPerceivedBrightness(texture(s_color, center).rgb);
     float gray_others = 0;
-    for (int i = -4; i <= 4; i++) {
-        for (int j = -4; j <= 4; j++) {
+
+    // make sure we sample at least one pixel around the own one
+    float sample_distance = max(len, 1.0/u_resolution_in.y);
+    for (int i = -1; i <= 1; i++) {
+        for (int j = -1; j <= 1; j++) {
             if(i!=0||j!=0){ // exclude i=j=0
-                gray_others += getPerceivedBrightness(texture(s_original, rgc_center + vec2(float(i), float(j))*(fieldsize_px/2) / u_resolution_in).rgb);
+                gray_others += getPerceivedBrightness(texture(s_color, center + vec2(float(i), float(j)) * sample_distance ).rgb);
             }
         }
     }
-    gray_others /= 80;
-    if(gray_own-gray_others > 0.1){
+    gray_others /= 8;
+    if(gray_own-gray_others > 0.01){
         // ON stimulating
-        return vec3(1.0,0.0,0.0);// * 80 * ( gray_own-gray_others );// * u_heat_scale;
+        return vec3(1.0,0.0,0.0) * 8 * ( gray_own-gray_others );// * u_heat_scale;
     }
-    else if (gray_own-gray_others < -0.1){
+    else if (gray_own-gray_others < -0.01){
         // OFF stimulating
-        return vec3(0.0,0.0,1.0);// * 80 * abs( gray_own-gray_others );// * u_heat_scale;
+        return vec3(0.0,0.0,1.0) * 8 * abs( gray_own-gray_others );// * u_heat_scale;
     }
     else{
         return vec3(0.0, 0.0, 0.0);
     }
 
+
+
+// global var for size
+//------------------
+    // vec2 pos_pixel = v_tex*u_resolution_in;
+    // vec2 dist_center = (u_resolution_in*0.5 - pos_pixel)/u_resolution_in;
+    // float fieldsize_px = u_heat_scale * ( 2 + sqrt(dist_center.x*dist_center.x + dist_center.y*dist_center.y));
+    // float num_fields = u_resolution_in.x/fieldsize_px;
+
+    // vec2 rgc_center_pixels = round(pos_pixel/fieldsize_px) * fieldsize_px + fieldsize_px/2 ;
+    // vec2 rgc_center = rgc_center_pixels / u_resolution_in;
+
+    // float gray_own = getPerceivedBrightness(texture(s_original, rgc_center).rgb);
+    // float gray_others = 0;
+    // for (int i = -4; i <= 4; i++) {
+    //     for (int j = -4; j <= 4; j++) {
+    //         if(i!=0||j!=0){ // exclude i=j=0
+    //             gray_others += getPerceivedBrightness(texture(s_original, rgc_center + vec2(float(i), float(j))*(fieldsize_px/2) / u_resolution_in).rgb);
+    //         }
+    //     }
+    // }
+    // gray_others /= 80;
+    // if(gray_own-gray_others > 0.1){
+    //     // ON stimulating
+    //     return vec3(1.0,0.0,0.0);// * 80 * ( gray_own-gray_others );// * u_heat_scale;
+    // }
+    // else if (gray_own-gray_others < -0.1){
+    //     // OFF stimulating
+    //     return vec3(0.0,0.0,1.0);// * 80 * abs( gray_own-gray_others );// * u_heat_scale;
+    // }
+    // else{
+    //     return vec3(0.0, 0.0, 0.0);
+    // }
+
+
+// constant size
 //------------------
     // float gray_own = getPerceivedBrightness(texture(s_original, v_tex).rgb);
     // float gray_others = 0;
@@ -196,14 +273,14 @@ void main() {
             }
             break;
         case 7: // retinal ganglion ON/OFF
-            // color = RetinalGanglion();  
+            color = RetinalGanglion();  
 
-            float cov =  texture(s_color_uncertainty, v_tex).r + texture(s_color_uncertainty, v_tex).g + texture(s_color_uncertainty, v_tex).b 
-            -(texture(s_covariances, v_tex).r + texture(s_covariances, v_tex).g + texture(s_covariances, v_tex).b);
+            // float cov =  texture(s_color_uncertainty, v_tex).r + texture(s_color_uncertainty, v_tex).g + texture(s_color_uncertainty, v_tex).b 
+            // -(texture(s_covariances, v_tex).r + texture(s_covariances, v_tex).g + texture(s_covariances, v_tex).b);
 
-            // // float cov =  texture(s_covariances, v_tex).r + texture(s_covariances, v_tex).g + texture(s_covariances, v_tex).b;
+            // // // float cov =  texture(s_covariances, v_tex).r + texture(s_covariances, v_tex).g + texture(s_covariances, v_tex).b;
 
-            color = ViridisColormap(sqrt(abs(cov))* u_heat_scale);
+            // color = ViridisColormap(sqrt(abs(cov))* u_heat_scale);
 
             break;
 
