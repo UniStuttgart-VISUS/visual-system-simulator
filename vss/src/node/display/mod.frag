@@ -77,9 +77,11 @@ vec3 TurboColormap(in float x) {
   );
 }
 
-// Watson approximates the distance on the retina to degrees conversion as a linear equation
+
+
+// Watson et al approximate the distance on the retina to degrees conversion as a linear equation
 // Since we do not have the distance in mm from the center but in [0; 0.5], 
-//  and the lens maps the image space to +/- 90°, we can map 90 deg to 1.0 linear
+// and the lens maps the image space to +/- 90°, we can map 90 deg to 1.0 linear
 float dist_to_deg(in float dist){
     return 2*dist*90;
 }
@@ -88,7 +90,7 @@ float deg_to_dist(in float deg){
 }
 
 // depending on which principal meridians enclose the point, we need to calculate with different values for RGCf density
-// finding the meridians is a bit tricky for the indicidual eyes, so i did some "art"
+// finding the meridians is a bit tricky for the individual eyes, so i did some "art"
 /*
                                  ┌─────┐
                2         eye:l   │     │   eye:r          2
@@ -104,70 +106,106 @@ float deg_to_dist(in float deg){
                                  └─────┘
                4                  nose                    4
 */
-vec3 ganglion_params(in vec2 pos){
+int[2] meridians_from_pos(in vec2 pos){
+
+    // flip the x axis if we are in the left eye
+    if( u_flow_idx > 0 ){
+        pos.x *= -1.0;
+    }
 
     // temporal, superior: 1, 2
-    if(pos.x > 0 && pos.y > 0){ 
-
+    if(pos.x >= 0 && pos.y >= 0){ 
+        return int[2](0,1);
     }
-    // nasal, superior: 1, 2
-    else if(pos.x > 0 && pos.y > 0){
-
+    // nasal, superior: 2, 3
+    else if(pos.x <= 0 && pos.y >= 0){
+        return int[2](2,1);
     }
-    // nasal, inferior: 1, 2
-    else if(pos.x > 0 && pos.y > 0){
-
+    // nasal, inferior: 3, 4
+    else if(pos.x <= 0 && pos.y <= 0){
+        return int[2](2,3);
     }
-    // temporal, inferior: 1, 2
-    else if(pos.x > 0 && pos.y > 0){
-
+    // temporal, inferior: 1, 4
+    else{ // equal to if(pos.x >= 0 && pos.y <= 0){
+        return int[2](0,3);
     }
-
 }  
 
+// dont get tricked by columds vs rows
+const mat4 watsons_params = mat4(
+    //a     //r_2   //r_e   // filler
+    0.9851, 1.058,  22.14,  0.0,
+    0.9935, 1.035,  16.35,  0.0,
+    0.9729, 1.084,  7.633,  0.0,
+    0.996,  0.9932, 12.13,  0.0
+);
+
+const float max_d_rgcf = 33000.0;
+
+float weighted_density_meridian(in float x, in float r_xy, in vec3 params){
+    float rel_density =  params.x * pow(1.0+(r_xy/params.y),-2.0) + (1.0-params.x) * exp(-1.0 * r_xy/params.z);
+    float weighted_density = pow(x, 2.0) * pow(rel_density, 2.0);
+    return weighted_density;
+}
+
+// calculate the spacing between RGCf
 float spacing(in vec2 pos) {
-    float dist = sqrt(pos.x * pos.x + pos.y * pos.y);
-    float x = dist_to_deg(dist); // TODO exact calc here, now we aproximate that we map the edge of the retina to 90deg
 
-    float rel_density = 0.996 * pow(1.0+(x/0.9932),-2.0) + (1.0-0.996) * exp(-1.0 * x/12.13);
-    float abs_density =  33000.0 * rel_density;
-    float spacing = sqrt(1.0/(abs_density));
-    spacing = deg_to_dist(spacing);   //deg to norm
+    float r_xy = dist_to_deg(sqrt(pos.x * pos.x + pos.y * pos.y));
+    
+    // lookup the parameters for the enclosing meridians
+    int[2] meridians = meridians_from_pos(pos);
+    vec3 m_x_params = watsons_params[meridians[0]].xyz;
+    vec3 m_y_params = watsons_params[meridians[1]].xyz;
+    float x = dist_to_deg(pos.x);
+    float y = dist_to_deg(pos.y);
 
-    float desired_res = sqrt(33000.0)*90; // desired resoolution in fovea
+    // get the weighted densities at the meridians
+    float wdx = weighted_density_meridian(abs(x), r_xy, m_x_params);
+    float wdy = weighted_density_meridian(abs(y), r_xy, m_y_params);
+
+    // calculate the density from the two components
+    float density = max_d_rgcf * (1.0/r_xy) * sqrt( wdx + wdy );
+
+    float spacing = sqrt(1.0/(density));
+    spacing = deg_to_dist(spacing);
+
+    // scale the whole calculation to match with our capabilities:
+    // we do not want to simulate ganglion cells cmaller than a pixel 
+    float desired_res = sqrt(max_d_rgcf)*90;
     float available_res = min(u_resolution_in.x, u_resolution_in.y);
-
     float scale_factor = desired_res/available_res;
 
     spacing *= scale_factor;
-    //float spacing = (1.0/rel_density)/90;
-    spacing /= u_heat_scale;
     return spacing;
 }
 
 vec3 RetinalGanglion(){
 
-    return vec3(v_tex, 0.0);
+    vec2 loc = v_tex;
 
-    vec2 loc = v_tex;      
+    // want to see the density? use this!
+    //return vec3(TurboColormap(16*spacing(loc-0.5)));
+
     float len = 0.5;
     vec2 center = vec2(0.5);
     
+    // subdivide until we have the required gradnularity
     for (int i=0; i<16; i++) {  
-        if( 2*len <= spacing(0.5-center) ){
+        if( 2*len < spacing(center-0.5) ){
             break;
         } 
         len/=2.0;
         center = center + step(center,loc)*len - step(loc,center)*len;
     }
     
-    // fragColor = vec4(vec2(spacing(0.5-c)*20.0),0.0,1.0);
+    // make sure we sample at least one pixel around the own one
+    float sample_distance = max(len, 1.0/u_resolution_in.y);
 
     float gray_own = getPerceivedBrightness(texture(s_color, center).rgb);
     float gray_others = 0;
 
-    // make sure we sample at least one pixel around the own one
-    float sample_distance = max(len, 1.0/u_resolution_in.y);
+    // sample 8 pixels with the distance calculated above
     for (int i = -1; i <= 1; i++) {
         for (int j = -1; j <= 1; j++) {
             if(i!=0||j!=0){ // exclude i=j=0
@@ -176,13 +214,15 @@ vec3 RetinalGanglion(){
         }
     }
     gray_others /= 8;
-    if(gray_own-gray_others > 0.01){
-        // ON stimulating
-        return vec3(1.0,0.0,0.0) * 8 * ( gray_own-gray_others );// * u_heat_scale;
+
+    float lum_diff = gray_own - gray_others;
+
+    float threshold = 0.01 * u_heat_scale;
+    if( lum_diff > threshold){        // ON center
+        return vec3(1.0,0.0,0.0) * 8 * ( lum_diff );
     }
-    else if (gray_own-gray_others < -0.01){
-        // OFF stimulating
-        return vec3(0.0,0.0,1.0) * 8 * abs( gray_own-gray_others );// * u_heat_scale;
+    else if( lum_diff < (-1.0 * threshold) ){        // OFF center
+        return vec3(0.0,0.0,1.0) * 8 * abs( lum_diff );
     }
     else{
         return vec3(0.0, 0.0, 0.0);

@@ -128,7 +128,7 @@ impl Node for Display {
     fn input(&mut self, perspective: &EyePerspective, vis_param: &VisualizationParameters) -> EyePerspective {
         self.pso_data.u_vis_type = ((vis_param.vis_type) as u32) as i32;
         self.pso_data.u_heat_scale = vis_param.heat_scale;
-
+        self.pso_data.u_flow_idx = vis_param.eye_idx as i32;
         perspective.clone()
     }
 
