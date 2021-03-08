@@ -87,6 +87,44 @@ float deg_to_dist(in float deg){
     return deg/(90*2);
 }
 
+// depending on which principal meridians enclose the point, we need to calculate with different values for RGCf density
+// finding the meridians is a bit tricky for the indicidual eyes, so i did some "art"
+/*
+                                 ┌─────┐
+               2         eye:l   │     │   eye:r          2
+            superior             │     │               superior
+               │                 │     │                  │
+               │                 │     │                  │
+    temporal   │                 │     │                  │     temporal
+1  ────────────┼───────────── 3  │     │   3  ────────────┼───────────── 1
+               │      nasal      │     │       nasal      │
+               │                 │     │                  │
+               │                 │     │                  │
+           inferior              │     │              inferior
+                                 └─────┘
+               4                  nose                    4
+*/
+vec3 ganglion_params(in vec2 pos){
+
+    // temporal, superior: 1, 2
+    if(pos.x > 0 && pos.y > 0){ 
+
+    }
+    // nasal, superior: 1, 2
+    else if(pos.x > 0 && pos.y > 0){
+
+    }
+    // nasal, inferior: 1, 2
+    else if(pos.x > 0 && pos.y > 0){
+
+    }
+    // temporal, inferior: 1, 2
+    else if(pos.x > 0 && pos.y > 0){
+
+    }
+
+}  
+
 float spacing(in vec2 pos) {
     float dist = sqrt(pos.x * pos.x + pos.y * pos.y);
     float x = dist_to_deg(dist); // TODO exact calc here, now we aproximate that we map the edge of the retina to 90deg
@@ -109,7 +147,7 @@ float spacing(in vec2 pos) {
 
 vec3 RetinalGanglion(){
 
-    //return vec3(spacing(v_tex), 0.0, 0.0);
+    return vec3(v_tex, 0.0);
 
     vec2 loc = v_tex;      
     float len = 0.5;
