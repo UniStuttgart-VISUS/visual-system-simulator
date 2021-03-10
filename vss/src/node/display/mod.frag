@@ -140,7 +140,7 @@ const mat4 watsons_params = mat4(
     0.996,  0.9932, 12.13,  0.0
 );
 
-const float max_d_rgcf = 33000.0;
+const float max_d_rgcf = 33163.2;
 
 float weighted_density_meridian(in float x, in float r_xy, in vec3 params){
     float rel_density =  params.x * pow(1.0+(r_xy/params.y),-2.0) + (1.0-params.x) * exp(-1.0 * r_xy/params.z);
@@ -150,6 +150,13 @@ float weighted_density_meridian(in float x, in float r_xy, in vec3 params){
 
 // calculate the spacing between RGCf
 float spacing(in vec2 pos) {
+
+    // fix the aspect ratio
+    pos.x=pos.x * (u_resolution_in.x/u_resolution_in.y);
+
+    pos *= 2.0; //map to +/- 1.0 on the meridians
+    // note that this does not create problems in the corners, 
+    // since we use the iso-spacing ellipses from Watson to calculate the actual spacing
 
     float r_xy = dist_to_deg(sqrt(pos.x * pos.x + pos.y * pos.y));
     
@@ -170,13 +177,16 @@ float spacing(in vec2 pos) {
     float spacing = sqrt(1.0/(density));
     spacing = deg_to_dist(spacing);
 
-    // scale the whole calculation to match with our capabilities:
-    // we do not want to simulate ganglion cells cmaller than a pixel 
+    /*
+    // uncomment this if you do not want to simulate ganglion cells smaller than a pixel 
+    // This has some severe implications in the periphery: a RGCf that would encompass a 8x8 px field 
+    // and hence could be correctly represented, is scaled unnecessarily
     float desired_res = sqrt(max_d_rgcf)*90;
     float available_res = min(u_resolution_in.x, u_resolution_in.y);
     float scale_factor = desired_res/available_res;
-
     spacing *= scale_factor;
+    // spacing /= u_heat_scale;
+    */
     return spacing;
 }
 
@@ -190,17 +200,20 @@ vec3 RetinalGanglion(){
     float len = 0.5;
     vec2 center = vec2(0.5);
     
-    // subdivide until we have the required gradnularity
+    // subdivide until we have the required granularity
     for (int i=0; i<16; i++) {  
-        if( 2*len < spacing(center-0.5) ){
+        // 2*len, since len is radius instead of diameter (=spacing)
+        if( 2*len <= spacing(center-0.5) ){  
             break;
         } 
         len/=2.0;
+
+        // select the center of the new square, such that it contains the actual position
         center = center + step(center,loc)*len - step(loc,center)*len;
     }
     
     // make sure we sample at least one pixel around the own one
-    float sample_distance = max(len, 1.0/u_resolution_in.y);
+    float sample_distance = max(len, 1.0/min(u_resolution_in.x, u_resolution_in.y) );
 
     float gray_own = getPerceivedBrightness(texture(s_color, center).rgb);
     float gray_others = 0;
@@ -217,11 +230,11 @@ vec3 RetinalGanglion(){
 
     float lum_diff = gray_own - gray_others;
 
-    float threshold = 0.01 * u_heat_scale;
-    if( lum_diff > threshold){        // ON center
+    float threshold = 0.01;
+    if( lum_diff > threshold){  // ON center
         return vec3(1.0,0.0,0.0) * 8 * ( lum_diff );
     }
-    else if( lum_diff < (-1.0 * threshold) ){        // OFF center
+    else if( lum_diff < (-1.0 * threshold) ){ // OFF center
         return vec3(0.0,0.0,1.0) * 8 * abs( lum_diff );
     }
     else{
