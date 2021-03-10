@@ -13,3 +13,4 @@ Cargo.lock
 *.iml
 
 /dependencies/
+render_test_scenes.sh
