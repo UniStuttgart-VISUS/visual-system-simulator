@@ -1,5 +1,6 @@
 use crate::*;
 use std::cell::RefCell;
+use std::time::Instant;
 use cgmath::{Matrix4, Vector4, SquareMatrix};
 use glutin::{ElementState, MouseButton, dpi::{LogicalPosition}};
 
@@ -34,7 +35,8 @@ pub struct Window {
 
     remote: Option<Remote>,
     flow: Vec<Flow>,
-    vis_param: RefCell<VisualizationParameters>
+    vis_param: RefCell<VisualizationParameters>,
+    last_render_instant: RefCell<Instant>
 }
 
 impl Window {
@@ -74,21 +76,21 @@ impl Window {
 
         //TODO set perspective from values here ?
 
-        let mut vis_param = VisualizationParameters::default();
-        if let Some(Value::Number(file_vis_type)) = values[0].borrow().get("file_vis_type") {
-            vis_param.vis_type = match *file_vis_type as i32{
-                0 => VisualizationType::Output,
-                1 => VisualizationType::Deflection,
-                2 => VisualizationType::ColorChange,
-                3 => VisualizationType::ColorUncertainty,
-                4 => VisualizationType::Original,
-                5 => VisualizationType::OverlayOutput,
-                6 => VisualizationType::OverlayInput,
-                7 => VisualizationType::Ganglion,
-                _ => panic!("No file_vis_type of {} found", file_vis_type)
-            };
-        }
-        let mut vis_param = RefCell::new(vis_param);
+        let vis_param = VisualizationParameters::default();
+        // if let Some(Value::Number(file_vis_type)) = values[0].borrow().get("file_vis_type") {
+        //     vis_param.vis_type = match *file_vis_type as i32{
+        //         0 => VisualizationType::Output,
+        //         1 => VisualizationType::Deflection,
+        //         2 => VisualizationType::ColorChange,
+        //         3 => VisualizationType::ColorUncertainty,
+        //         4 => VisualizationType::Original,
+        //         5 => VisualizationType::OverlayOutput,
+        //         6 => VisualizationType::OverlayInput,
+        //         7 => VisualizationType::Ganglion,
+        //         _ => panic!("No file_vis_type of {} found", file_vis_type)
+        //     };
+        // }
+        let vis_param = RefCell::new(vis_param);
 
         Window {
             flow,
@@ -106,7 +108,8 @@ impl Window {
             override_gaze: RefCell::new(false),
             active: RefCell::new(false),
             values: values,
-            vis_param
+            vis_param,
+            last_render_instant: RefCell::new(Instant::now())
         }
     }
 }
@@ -119,6 +122,14 @@ impl Window {
     pub fn replace_node(&mut self, index: usize, node: Box<dyn Node>, flow_index: usize) {
         self.flow[flow_index].replace_node(index, node);
     }
+
+    pub fn delta_t(&self)  -> f32{
+        if self.vis_param.borrow().bees_flying {
+            return self.last_render_instant.borrow().elapsed().as_micros() as f32;
+        }
+        return 0.0;
+    }
+
 
     pub fn nodes_len(&self) -> usize {//TODO: return vector of lengths
         self.flow[0].nodes_len()
@@ -203,6 +214,30 @@ impl Window {
                                 vp.edit_eye_position = 0;
                             },
                         }
+                    }, 
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::P),
+                                ..
+                            },
+                        ..
+                    } => {
+                        let mut vp = self.vis_param.borrow_mut();
+                        vp.bees_flying = !vp.bees_flying;
+                    }, 
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::B),
+                                ..
+                            },
+                        ..
+                    } => {
+                        let mut vp = self.vis_param.borrow_mut();
+                        vp.bees_visible = !vp.bees_visible;
                     }, 
                     glutin::WindowEvent::KeyboardInput {
                         input:
@@ -304,7 +339,7 @@ impl Window {
                             },
                         ..
                     } => {
-                        self.vis_param.borrow_mut().dir_calc_scale+=0.5;
+                        self.vis_param.borrow_mut().dir_calc_scale-=5.0;
                     },
                     glutin::WindowEvent::KeyboardInput {
                         input:
@@ -315,7 +350,7 @@ impl Window {
                             },
                         ..
                     } => {
-                        self.vis_param.borrow_mut().dir_calc_scale-=0.5;
+                        self.vis_param.borrow_mut().dir_calc_scale+=5.0;
                     },
                     glutin::WindowEvent::KeyboardInput {
                         input:
@@ -364,82 +399,17 @@ impl Window {
                     glutin::WindowEvent::KeyboardInput {
                         input:
                             glutin::KeyboardInput {
-                                virtual_keycode: Some(glutin::VirtualKeyCode::Key0),
+                                virtual_keycode: Some(glutin::VirtualKeyCode::C),
+                                state: glutin::ElementState::Pressed,
                                 ..
                             },
                         ..
                     } => {
-                        self.vis_param.borrow_mut().vis_type=VisualizationType::Output;
-                    },
-                    glutin::WindowEvent::KeyboardInput {
-                        input:
-                            glutin::KeyboardInput {
-                                virtual_keycode: Some(glutin::VirtualKeyCode::Key1),
-                                ..
-                            },
-                        ..
-                    } => {
-                        self.vis_param.borrow_mut().vis_type=VisualizationType::Deflection;
-                    },
-                    glutin::WindowEvent::KeyboardInput {
-                        input:
-                            glutin::KeyboardInput {
-                                virtual_keycode: Some(glutin::VirtualKeyCode::Key2),
-                                ..
-                            },
-                        ..
-                    } => {
-                        self.vis_param.borrow_mut().vis_type=VisualizationType::ColorChange;
-                    },
-                    glutin::WindowEvent::KeyboardInput {
-                        input:
-                            glutin::KeyboardInput {
-                                virtual_keycode: Some(glutin::VirtualKeyCode::Key3),
-                                ..
-                            },
-                        ..
-                    } => {
-                        self.vis_param.borrow_mut().vis_type=VisualizationType::ColorUncertainty;
-                    },
-                    glutin::WindowEvent::KeyboardInput {
-                        input:
-                            glutin::KeyboardInput {
-                                virtual_keycode: Some(glutin::VirtualKeyCode::Key4),
-                                ..
-                            },
-                        ..
-                    } => {
-                        self.vis_param.borrow_mut().vis_type=VisualizationType::Original;
-                    },
-                    glutin::WindowEvent::KeyboardInput {
-                        input:
-                            glutin::KeyboardInput {
-                                virtual_keycode: Some(glutin::VirtualKeyCode::Key5),
-                                ..
-                            },
-                        ..
-                    } => {
-                        self.vis_param.borrow_mut().vis_type=VisualizationType::OverlayOutput;
-                    },
-                    glutin::WindowEvent::KeyboardInput {
-                        input:
-                            glutin::KeyboardInput {
-                                virtual_keycode: Some(glutin::VirtualKeyCode::Key6),
-                                ..
-                            },
-                        ..
-                    } => {
-                        self.vis_param.borrow_mut().vis_type=VisualizationType::OverlayInput;
-                    },
-                    glutin::WindowEvent::KeyboardInput {
-                        input:
-                            glutin::KeyboardInput {
-                                virtual_keycode: Some(glutin::VirtualKeyCode::Key7),
-                                ..
-                            },
-                        ..
-                    } => {
-                        self.vis_param.borrow_mut().vis_type=VisualizationType::Ganglion;
+                        let mut vp = self.vis_param.borrow_mut();
+                        match vp.vis_type.color_map_type {
+                            ColorMapType::Viridis => (*vp).vis_type.color_map_type = ColorMapType::Turbo,
+                            ColorMapType::Turbo => (*vp).vis_type.color_map_type = ColorMapType::Viridis,
+                        }
                     },
                     glutin::WindowEvent::KeyboardInput {
                         input:
@@ -496,6 +466,29 @@ impl Window {
                             }
                         }
                     }
+                    glutin::WindowEvent::KeyboardInput {
+                        input:glutin::KeyboardInput {virtual_keycode, ..}, ..
+                    } => {
+                        let mut vp = self.vis_param.borrow_mut();
+                        match virtual_keycode{
+                            Some(glutin::VirtualKeyCode::O) => vp.vis_type.base_image=BaseImage::Output,
+                            Some(glutin::VirtualKeyCode::I) => vp.vis_type.base_image=BaseImage::Original,
+                            Some(glutin::VirtualKeyCode::G) => vp.vis_type.base_image=BaseImage::Ganglion,
+
+                            Some(glutin::VirtualKeyCode::Key1) => vp.vis_type.mix_type=MixType::BaseImageOnly,
+                            Some(glutin::VirtualKeyCode::Key2) => vp.vis_type.mix_type=MixType::ColorMapOnly,
+                            Some(glutin::VirtualKeyCode::Key3) => vp.vis_type.mix_type=MixType::OverlayThreshold,
+
+                            Some(glutin::VirtualKeyCode::Key4) => vp.vis_type.combination_function=CombinationFunction::AbsoluteErrorRGBVectorLength,
+                            Some(glutin::VirtualKeyCode::Key5) => vp.vis_type.combination_function=CombinationFunction::AbsoluteErrorXYVectorLength,
+                            Some(glutin::VirtualKeyCode::Key6) => vp.vis_type.combination_function=CombinationFunction::AbsoluteErrorRGBXYVectorLength,
+                            Some(glutin::VirtualKeyCode::Key7) => vp.vis_type.combination_function=CombinationFunction::UncertaintyRGBVectorLength,
+                            Some(glutin::VirtualKeyCode::Key8) => vp.vis_type.combination_function=CombinationFunction::UncertaintyXYVectorLength,
+                            Some(glutin::VirtualKeyCode::Key9) => vp.vis_type.combination_function=CombinationFunction::UncertaintyRGBXYVectorLength,
+                            Some(glutin::VirtualKeyCode::Key0) => vp.vis_type.combination_function=CombinationFunction::UncertaintyGenVar,
+                            _ => {}
+                        }
+                    }
                     _ => (),
                 }
             }
@@ -524,6 +517,7 @@ impl Window {
             if *self.override_view.borrow() || *self.override_gaze.borrow() {
                 let window_size = &self.windowed_context.window().get_inner_size().unwrap();
                 let cursor_pos = self.cursor_pos.borrow();
+                self.vis_param.borrow_mut().highlight_position = (cursor_pos.x/window_size.width, cursor_pos.y/window_size.height);
                 let yaw = cursor_pos.x as f32 / window_size.width as f32
                     * std::f32::consts::PI
                     * 2.0
@@ -552,6 +546,7 @@ impl Window {
             .borrow_mut()
             .clear(&self.render_target.borrow(), [68.0 / 255.0; 4]);
         self.flow.iter().for_each(|f| f.render(&self));
+        self.last_render_instant.replace(Instant::now());
 
         use gfx::Device;
         self.flush(&mut self.encoder().borrow_mut());
@@ -564,6 +559,7 @@ impl Window {
         if let Some(remote) = &self.remote {
             remote.send_frame();
         }
+
 
         return done;
     }

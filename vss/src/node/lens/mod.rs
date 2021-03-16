@@ -227,7 +227,7 @@ impl Node for Lens {
         self.pso_data.u_depth_min = vis_param.test_depth_min;
         self.pso_data.u_lens_position[0] = vis_param.eye_position.0;
         self.pso_data.u_lens_position[1] = vis_param.eye_position.1;
-        self.pso_data.u_track_error = vis_param.has_to_track_error() as i32;        
+        self.pso_data.u_track_error = vis_param.has_to_track_error() as i32;   
         perspective.clone()
     }
 }
