@@ -81,6 +81,7 @@ impl OpenXR {
                 surface_width,
                 surface_height,
             );
+            println!("color_texture {:?} from target {:?}", color_texture, render_target);
             self.render_targets_color.push(factory.view_texture_as_render_target(&color_texture, 0, None).unwrap());
             self.render_targets_depth.push(factory.create_depth_stencil(surface_width as u16, surface_height as u16).unwrap().2);
         }

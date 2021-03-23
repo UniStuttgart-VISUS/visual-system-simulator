@@ -52,7 +52,7 @@ private:
     XrResult                                wait_frame_result;
     std::vector<XrCompositionLayerProjectionView> projectionLayerViews;
     XrCompositionLayerProjection            projectionLayer{ XR_TYPE_COMPOSITION_LAYER_PROJECTION, nullptr, 0, 0, 2, projectionLayerViews.data() };
-    XrSpace& space{ projectionLayer.space };
+    //XrSpace& space{ projectionLayer.space };
     std::vector<XrView>                  xr_views;
 
 public:
@@ -227,7 +227,7 @@ public:
         ref_space.referenceSpaceType   = XR_REFERENCE_SPACE_TYPE_LOCAL;
         xrCreateReferenceSpace(xr_session, &ref_space, &xr_app_space);
 
-
+        std::cout << "xr_app_space: " << xr_app_space << std::endl;
 
         uint32_t swapchainFormatCount{ 0 };
         std::vector<int64_t> swapchainFormats;
@@ -282,7 +282,7 @@ public:
             swapchain.width  = swapchain_info.width;
             swapchain.height = swapchain_info.height;
             swapchain.handle = handle;
-            swapchain.surface_images.resize(surface_count, { XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR } );
+            swapchain.surface_images.resize(surface_count, { XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR } );
             // swapchain.surface_data  .resize(surface_count);
             xrEnumerateSwapchainImages(swapchain.handle, surface_count, &surface_count, (XrSwapchainImageBaseHeader*)swapchain.surface_images.data());
             printf("surface_count %i\n", surface_count);
@@ -298,6 +298,28 @@ public:
         for( int i = 0 ; i<2 ; i++ ){
             for(int k = 0 ; k<3 ; k++ ){
                 surfaces.push_back(xr_swapchains[i].surface_images[k].image);
+            }
+        }
+
+        bool ready = false;
+        while (!ready) {
+            XrEventDataBuffer eventBuffer;
+            auto pollResult = xrPollEvent(xr_instance, &eventBuffer);
+            if (pollResult == XR_EVENT_UNAVAILABLE) {
+                std::cout << "XR_EVENT_UNAVAILABLE" << std::endl;
+            }
+
+            switch (eventBuffer.type) {
+                case XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED:
+                    if(reinterpret_cast<XrEventDataSessionStateChanged&>(eventBuffer).state == XR_SESSION_STATE_READY){
+                        std::cout << "XR_SESSION_STATE_READY" << std::endl;
+                        ready = true;
+                    }else{
+                        std::cout << reinterpret_cast<XrEventDataSessionStateChanged&>(eventBuffer).state << std::endl;
+                    }
+                    break;
+                default:
+                    break;
             }
         }
 
@@ -353,43 +375,55 @@ public:
     }
 
     uint32_t acquire_swapchain_images(){
-        uint32_t swapchainIndex;
-        XrSwapchainImageAcquireInfo acquire_info = { XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO };
-        xrAcquireSwapchainImage(xr_swapchains[0].handle, &acquire_info, &swapchainIndex);
-        XrSwapchainImageWaitInfo wait_info = { XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO };
-		wait_info.timeout = XR_INFINITE_DURATION;
-        xrWaitSwapchainImage(xr_swapchains[0].handle, &wait_info);
-        printf("Swapchain index is %i\n",swapchainIndex);
-
         uint32_t         view_count  = 0;
-        XrViewState      view_state  = { XR_TYPE_VIEW_STATE };
-	    XrViewLocateInfo locate_info = { XR_TYPE_VIEW_LOCATE_INFO };
+        XrViewState      view_state  = { XR_TYPE_VIEW_STATE};
+        std::cout << "frame_state.predictedDisplayTime: " << frame_state.predictedDisplayTime << std::endl;
+	    XrViewLocateInfo locate_info = { XR_TYPE_VIEW_LOCATE_INFO, nullptr, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, frame_state.predictedDisplayTime, xr_app_space};
         xrLocateViews(xr_session, &locate_info, &view_state, (uint32_t)xr_views.size(), &view_count, xr_views.data());
-        std::cout << view_count << std::endl;
+        std::cout << "view_count: " << view_count << std::endl;
 	    xr_views.resize(view_count);
 
-        for (uint32_t eyeIndex = 0; eyeIndex < view_count; eyeIndex++) {
-            projectionLayerViews[eyeIndex].fov = xr_views[0].fov;
-            projectionLayerViews[eyeIndex].pose = xr_views[0].pose;
-        }
+        // for (uint32_t eyeIndex = 0; eyeIndex < view_count; eyeIndex++) {
 
-        /*
+        // }
+
+        
+        uint32_t swapchainIndex;
         for (uint32_t i = 0; i < view_count; i++) {
-
-            uint32_t                    img_id;
             XrSwapchainImageAcquireInfo acquire_info = { XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO };
-            xrAcquireSwapchainImage(xr_swapchains[i].handle, &acquire_info, &img_id);
-
+            xrAcquireSwapchainImage(xr_swapchains[i].handle, &acquire_info, &swapchainIndex);
             XrSwapchainImageWaitInfo wait_info = { XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO };
             wait_info.timeout = XR_INFINITE_DURATION;
             xrWaitSwapchainImage(xr_swapchains[i].handle, &wait_info);
-        }*/
+            printf("Swapchain index is %i\n",swapchainIndex);
+
+            // uint32_t                    img_id;
+            // XrSwapchainImageAcquireInfo acquire_info = { XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO };
+            // xrAcquireSwapchainImage(xr_swapchains[i].handle, &acquire_info, &img_id);
+
+            // XrSwapchainImageWaitInfo wait_info = { XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO };
+            // wait_info.timeout = XR_INFINITE_DURATION;
+            // xrWaitSwapchainImage(xr_swapchains[i].handle, &wait_info);
+
+            projectionLayerViews[i].fov = xr_views[0].fov;
+            projectionLayerViews[i].pose = xr_views[0].pose;
+            projectionLayerViews[i].subImage.swapchain = xr_swapchains[i].handle;
+            projectionLayerViews[i].subImage.imageRect.offset = { 0, 0 };
+            projectionLayerViews[i].subImage.imageRect.extent = { xr_swapchains[i].width, xr_swapchains[i].height };
+        }
+
+
+        std::cout << "acquire_swapchain_images end" << std::endl;
         return swapchainIndex;
     }
 
     void end_frame(){
-        XrSwapchainImageReleaseInfo release_info = { XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO };
-        xrReleaseSwapchainImage(xr_swapchains[0].handle, &release_info);
+         for (uint32_t i = 0; i < 2; i++) {
+            XrSwapchainImageReleaseInfo release_info = { XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO };
+            xrReleaseSwapchainImage(xr_swapchains[i].handle, &release_info);
+         }
+
+
 
         XrFrameEndInfo frameEndInfo{ XR_TYPE_FRAME_END_INFO, nullptr, frame_state.predictedDisplayTime,
                                 XR_ENVIRONMENT_BLEND_MODE_OPAQUE };
@@ -406,7 +440,12 @@ public:
         end_info.environmentBlendMode = xr_blend;
         end_info.layerCount           = layer == nullptr ? 0 : 1;
         end_info.layers               = &layer;
-        xrEndFrame(xr_session, &frameEndInfo);
+        XrResult result = xrEndFrame(xr_session, &frameEndInfo);
+        if (!XR_SUCCEEDED(result)){
+            char resultString[XR_MAX_RESULT_STRING_SIZE];
+            xrResultToString(xr_instance, result, resultString);
+            printf("Could not end Frame %s\n",resultString);
+        }
     }
 };
 
@@ -454,6 +493,7 @@ API_EXPORT const char *openxr_create_session(OpenXR *openxr)
     try
     {
         openxr->create_session();
+        openxr->prepareXrCompositionLayers();
         return nullptr;
     }
     catch (const std::exception &ex)

@@ -6,7 +6,7 @@ mod varjo;
 #[cfg(feature = "openxr")]
 mod openxr;
 
-use std::cell::RefCell;
+use std::{cell::RefCell, thread::sleep, time::Duration};
 
 use vss::*;
 
