@@ -11,6 +11,7 @@ enum Message {
 pub struct DownloadRgbBuffer {
     input: Slot,
     tx: std::sync::mpsc::Sender<Message>,
+    res: [f32;2]
 }
 
 impl DownloadRgbBuffer {
@@ -65,11 +66,12 @@ impl Node for DownloadRgbBuffer {
         DownloadRgbBuffer {
             input: Slot::Empty,
             tx,
+            res: [0.0,0.0]
         }
     }
 
-    fn negociate_slots(&mut self, _window: &Window, slots: NodeSlots) -> NodeSlots {
-        println!("negociate_slots called");
+    fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
+        self.res = slots.clone().to_color_input(window).input_size_f32();
         self.input = slots.clone().take_input();
         slots.to_passthrough()
     }
@@ -82,7 +84,7 @@ impl Node for DownloadRgbBuffer {
 
                 let factory = &mut window.factory().borrow_mut();
                 let encoder = &mut window.encoder().borrow_mut();
-                let (width, height, _, _) = color.get_dimensions();
+                let (width, height) = (self.res[0], self.res[1]);
                 let width = width as u32;
                 let height = height as u32;
 

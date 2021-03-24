@@ -135,13 +135,16 @@ fn build_flow(window: &mut Window, io_generator: &mut IoGenerator, flow_index: u
 pub fn main() {
     let config = cmd_parse();
 
-    let remote = if let Some(port) = config.port {
-        Some(Remote::new(port))
-    } else {
-        None
-    };
+    // let remote = if let Some(port) = config.port {
+    //     Some(Remote::new(port))
+    // } else {
+    //     None
+    // };
     
-    let flow_count = 2;
+    let flow_count = match (config.parameters_r.clone(), config.parameters_l.clone()) {
+        (Some(_), Some(_)) => 2 , 
+        _ => 1
+    };
 
     let mut parameters = Vec::new();
     for idx in 0 .. flow_count {
@@ -159,21 +162,14 @@ pub fn main() {
                 config.parameters.clone().into_iter()
             }
         };
-        // for (key, val) in  config.parameters.clone().into_iter() {
         for (key, val) in iter {
             value_map.insert((key).clone(), (val).clone());
-
-            // if idx == 0 && key.eq("myopiahyperopia_mnh"){
-            //     value_map.insert("myopiahyperopia_mnh".into(), Value::Number(50.0));
-            // }
-            // else{
-            // }
         }  
         value_map.insert("flow_id".into(),Value::Number(idx as f64));
         parameters.push(RefCell::new(value_map));
     }
 
-    let mut window = Window::new(config.visible, remote, parameters, flow_count);
+    let mut window = Window::new(config.visible, None, parameters, flow_count);
 
     let is_output_hack_used = config.output.is_some();
 
@@ -184,28 +180,30 @@ pub fn main() {
 
     let mut desktop = SharedStereoDesktop::new();
 
+    
     for index in 0 .. flow_count {
         let mut io_generator = IoGenerator::new(config.inputs.clone(), config.output.clone());
-
         build_flow(&mut window, &mut io_generator, index, config.resolution);
-        let mut node = desktop.get_stereo_desktop_node(&window);
 
-        // let mut node = VRCompositor::new(&window);
-        // let viewport = &viewports[index];
-        // node.set_viewport(viewport.0 as f32, viewport.1 as f32, viewport.2 as f32, viewport.3 as f32);
-
-        window.add_node(Box::new(node), index);
+        if flow_count > 1 {
+            let mut node = desktop.get_stereo_desktop_node(&window);
+            window.add_node(Box::new(node), index);
+        }
     }
-
+    
 
     let mut done = false;
     window.update_last_node();
+    window.update_nodes();
+
+    let mut frame_counter = 0u128; // you know, for the simulations than run longer than the universe exists
 
     while !done {
+        frame_counter+=1;
 
         done = window.poll_events();
 
-        if !config.visible || is_output_hack_used {
+        if !config.visible || is_output_hack_used && frame_counter == 3 {
             // Exit once all inputs have been processed, unless visible.
             done = true;
         }

@@ -294,6 +294,11 @@ void main() {
 
     float value = 0.0;
 
+    // xy error and sd are tiny compared to their rgb counterparts. We should normalize them to make the featues at least visible
+    float max_e_xy = 200.0/1080.0; // expermimental value, looks good, dont ask
+    float max_u_2_xy = 20.0/1080.0; // expermimental value, looks good, dont ask
+
+
     switch (u_base_image) {
         case 0:  // simulated image
             color =  texture(s_color, v_tex).rgb;
@@ -316,12 +321,12 @@ void main() {
                 value = sqrt( e_rgb_2.r + e_rgb_2.g + e_rgb_2.b);
                 break;
             case 1: // Length of XY error
-                vec2 e_xy_2 = pow(texture(s_deflection, v_tex).xy, vec2(2.0)) * u_dir_calc_scale;
+                vec2 e_xy_2 = pow(texture(s_deflection, v_tex).xy / max_e_xy, vec2(2.0)) ; 
                 value = sqrt( e_xy_2.x + e_xy_2.y );
                 break;
             case 2: // Length of RGBXY error
                 vec3 e_5_rgb_2 = pow(texture(s_color_change, v_tex).rgb, vec3(2.0));
-                vec2 e_5_xy_2 = pow(texture(s_deflection, v_tex).xy, vec2(2.0)) * u_dir_calc_scale;
+                vec2 e_5_xy_2 = pow(texture(s_deflection, v_tex).xy / max_e_xy, vec2(2.0));
                 value = sqrt( e_5_rgb_2.r + e_5_rgb_2.g + e_5_rgb_2.b + e_5_xy_2.x + e_5_xy_2.y );
                 break;
             case 3: // Length of RGB uncertainty
@@ -329,12 +334,12 @@ void main() {
                 value = sqrt( u_rgb.r + u_rgb.g + u_rgb.b);
                 break;
             case 4: // Length of XY uncertainty
-                vec2 u_xy = texture(s_deflection, v_tex).ba * u_dir_calc_scale;
+                vec2 u_xy = texture(s_deflection, v_tex).ba / max_u_2_xy;
                 value = sqrt( u_xy.x + u_xy.y );
                 break;
             case 5: // Length of RGBXY uncertainty
                 vec3 u_5_rgb = texture(s_color_uncertainty, v_tex).rgb;
-                vec2 u_5_xy = texture(s_deflection, v_tex).ba * u_dir_calc_scale;
+                vec2 u_5_xy = texture(s_deflection, v_tex).ba / max_u_2_xy;
                 value = sqrt(u_5_rgb.r + u_5_rgb.g + u_5_rgb.b + u_5_xy.x + u_5_xy.y );
                 break;
             case 6: // GenvarRGB
@@ -358,6 +363,9 @@ void main() {
                 break;
             case 1: // Turbo
                 cm_color = TurboColormap(value);
+                break;
+            case 2: // Grayscale for external normalization
+                cm_color = vec3(value);
                 break;
         }
 

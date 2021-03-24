@@ -168,8 +168,8 @@ impl Node for Display {
         let speed = 4.0;
 
         self.hive_rot= self.hive_rot*Matrix4::from_angle_x(Rad(       speed * window.delta_t()/1_000_000.0));
-        self.hive_rot= self.hive_rot*Matrix4::from_angle_y(Rad( 0.6 * speed * window.delta_t()/1_000_000.0));
-        self.hive_rot= self.hive_rot*Matrix4::from_angle_z(Rad( 0.3 * speed * window.delta_t()/1_000_000.0));
+        self.hive_rot= self.hive_rot*Matrix4::from_angle_y(Rad( 0.7 * speed * window.delta_t()/1_000_000.0));
+        self.hive_rot= self.hive_rot*Matrix4::from_angle_z(Rad( 0.2 * speed * window.delta_t()/1_000_000.0));
 
         self.pso_data.u_hive_rotation = self.hive_rot.into();
 

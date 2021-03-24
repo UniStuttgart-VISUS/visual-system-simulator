@@ -27,6 +27,7 @@ pub enum MixType{
 pub enum ColorMapType{
   Viridis,
   Turbo,
+  Grayscale,
 }
 
 impl Default for BaseImage{
@@ -101,6 +102,7 @@ impl Default for VisualizationParameters{
 
 impl VisualizationParameters{
   pub fn has_to_track_error( &self) -> bool{
-    self.vis_type.mix_type != MixType::BaseImageOnly
+    true
+    //self.vis_type.mix_type != MixType::BaseImageOnly
   }
 }
