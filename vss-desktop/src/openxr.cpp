@@ -6,8 +6,6 @@
 
 #include <openxr.h>
 #include <openxr_platform.h>
-#include <openxr_platform_defines.h>
-#include <openxr_reflection.h>
 
 #include <iostream>
 #include <cassert>
@@ -16,49 +14,56 @@
 #include <cstdlib>
 #include <algorithm>
 
-const XrPosef  xr_pose_identity = { {0,0,0,1}, {0,0,0} };
+#define XR_CHECK_RESULT(X, M)\
+{\
+    XrResult result = X;\
+    if (!XR_SUCCEEDED(result)){\
+        char resultString[XR_MAX_RESULT_STRING_SIZE];\
+        xrResultToString(xr_instance, result, resultString);\
+        printf("XR %s failed with result %s\n",M,resultString);\
+    }\
+}
 
 struct swapchain_t {
 	XrSwapchain handle;
 	int32_t     width;
 	int32_t     height;
 	std::vector<XrSwapchainImageOpenGLKHR> surface_images;
-	// std::vector<swapchain_surfdata_t>     surface_data;
 };
-// struct swapchain_surfdata_t {
-// 	IOpenGLDepthStencilView *depth_view;
-// 	ID3D11RenderTargetView *target_view;
-// };
+
+const XrPosef  xr_pose_identity = { {0,0,0,1}, {0,0,0} };
 
 class OpenXR
 {
 private:
-    XrInstance     xr_instance      = {};
     // Function pointers for some OpenXR extension methods we'll use.
-    PFN_xrGetOpenGLGraphicsRequirementsKHR  ext_xrGetOpenGLGraphicsRequirementsKHR  = nullptr;
-    PFN_xrCreateDebugUtilsMessengerEXT      ext_xrCreateDebugUtilsMessengerEXT      = nullptr;
-    PFN_xrDestroyDebugUtilsMessengerEXT     ext_xrDestroyDebugUtilsMessengerEXT     = nullptr;
-    XrSystemId                              xr_system_id                            = XR_NULL_SYSTEM_ID;
-    XrSessionState                          xr_session_state                        = XR_SESSION_STATE_UNKNOWN;
-    XrFormFactor                            app_config_form                         = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY;
-    XrDebugUtilsMessengerEXT                xr_debug                                = {};
-    XrEnvironmentBlendMode                  xr_blend                                = {};
-    std::vector<XrViewConfigurationView>    xr_config_views;
-    XrViewConfigurationType                 app_config_view                         = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
-    XrSession                               xr_session                              = {};
-    XrSpace                                 xr_app_space                            = {};
-    std::vector<swapchain_t>                xr_swapchains;
-    XrFrameState                            frame_state;
-    XrResult                                wait_frame_result;
-    std::vector<XrCompositionLayerProjectionView> projectionLayerViews;
-    XrCompositionLayerProjection            projectionLayer{ XR_TYPE_COMPOSITION_LAYER_PROJECTION, nullptr, 0, 0, 2, projectionLayerViews.data() };
-    //XrSpace& space{ projectionLayer.space };
+    PFN_xrGetOpenGLGraphicsRequirementsKHR ext_xrGetOpenGLGraphicsRequirementsKHR = nullptr;
+    PFN_xrCreateDebugUtilsMessengerEXT     ext_xrCreateDebugUtilsMessengerEXT     = nullptr;
+    PFN_xrDestroyDebugUtilsMessengerEXT    ext_xrDestroyDebugUtilsMessengerEXT    = nullptr;
+
+    XrFormFactor            app_config_form = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY;
+    XrViewConfigurationType app_config_view = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
+
+    XrInstance     xr_instance      = {};
+    XrSession      xr_session       = {};
+    XrSessionState xr_session_state = XR_SESSION_STATE_UNKNOWN;
+    bool           xr_running       = false;
+    XrSpace        xr_app_space     = {};
+    XrSystemId     xr_system_id     = XR_NULL_SYSTEM_ID;
+    XrEnvironmentBlendMode   xr_blend = {};
+    XrDebugUtilsMessengerEXT xr_debug = {};
+
     std::vector<XrView>                  xr_views;
+    std::vector<XrViewConfigurationView> xr_config_views;
+    std::vector<swapchain_t>             xr_swapchains;
+
+    XrTime current_predictedDisplayTime;
+    std::vector<XrCompositionLayerProjectionView> current_views;
+    std::vector<uint32_t> current_img_id;
 
 public:
     uint32_t swapChainWidth, swapChainHeight;
     std::vector<uint32_t> surfaces = std::vector<uint32_t>();
-
 
 public:
     OpenXR(){}
@@ -66,66 +71,52 @@ public:
     ~OpenXR(){}
 
     void initialize(){
-        std::vector<const char*> extensions;        
-
-        const char  *ask_extensions[] = { 
-            XR_KHR_OPENGL_ENABLE_EXTENSION_NAME, 
-            XR_EXT_DEBUG_UTILS_EXTENSION_NAME,
+        std::vector<const char*> use_extensions;
+        const char         *ask_extensions[] = { 
+            XR_KHR_OPENGL_ENABLE_EXTENSION_NAME, // Use OpenGL for rendering
+            XR_EXT_DEBUG_UTILS_EXTENSION_NAME,  // Debug utils for extra info
         };
-
-        printf("We need %s\n", XR_KHR_OPENGL_ENABLE_EXTENSION_NAME);
-
 
         uint32_t ext_count = 0;
         xrEnumerateInstanceExtensionProperties(nullptr, 0, &ext_count, nullptr);
         std::vector<XrExtensionProperties> xr_exts(ext_count, { XR_TYPE_EXTENSION_PROPERTIES });
         xrEnumerateInstanceExtensionProperties(nullptr, ext_count, &ext_count, xr_exts.data());
 
-        printf("OpenXR extensions available:\n");
+        std::cout << "OpenXR extensions available:" << std::endl;
         for (size_t i = 0; i < xr_exts.size(); i++) {
-            printf("- %s\n", xr_exts[i].extensionName);
+            std::cout << "- " << xr_exts[i].extensionName << std::endl;
 
             // Check if we're asking for this extensions, and add it to our use 
             // list!
             for (int32_t ask = 0; ask < _countof(ask_extensions); ask++) {
                 if (strcmp(ask_extensions[ask], xr_exts[i].extensionName) == 0) {
-                    extensions.push_back(ask_extensions[ask]);
+                    use_extensions.push_back(ask_extensions[ask]);
                     break;
                 }
             }
         }
 
-        // If a required extension isn't present, you want to ditch out here!
-        // It's possible something like your rendering API might not be provided
-        // by the active runtime. APIs like OpenGL don't have universal support.
-        if (!std::any_of( extensions.begin(), extensions.end(), 
+        if (!std::any_of( use_extensions.begin(), use_extensions.end(), 
             [] (const char *ext) {
                 return strcmp(ext, XR_KHR_OPENGL_ENABLE_EXTENSION_NAME)==0;
-            })) {
-            printf("Could not create oxr instance, you runtime is broken or misconfigured\n");
-            printf("See https://github.com/maluoi/StereoKit/blob/develop/Set-OXR-Runtime.ps1\n");
-            printf("Spoiler: Windows OpenXR runtime does not support Opengl\n");
+            }))
             exit(1);
-        }
+        
 
 
+        // Initialize OpenXR with the extensions we've found!
         XrInstanceCreateInfo createInfo = { XR_TYPE_INSTANCE_CREATE_INFO };
-        createInfo.enabledExtensionCount      = extensions.size();
-        createInfo.enabledExtensionNames      = extensions.data();
+        createInfo.enabledExtensionCount      = (uint32_t)use_extensions.size();
+        createInfo.enabledExtensionNames      = use_extensions.data();
         createInfo.applicationInfo.apiVersion = XR_CURRENT_API_VERSION;
         strcpy_s(createInfo.applicationInfo.applicationName, "vss_was_sonst");
         xrCreateInstance(&createInfo, &xr_instance);
 
-
         // Check if OpenXR is on this system, if this is null here, the user 
         // needs to install an OpenXR runtime and ensure it's active!
         if (xr_instance == nullptr){
-            printf("Could not create oxr instance, you runtime is broken or misconfigured \n");
-            printf("See https://github.com/maluoi/StereoKit/blob/develop/Set-OXR-Runtime.ps1\n");
-            printf("Spoiler: Windows OpenXR runtime does not support Opengl\n");
             exit(1);
         }
-
 
         // Load extension methods that we'll need for this application! There's a
         // couple ways to do this, and this is a fairly manual one. Chek out this
@@ -157,11 +148,6 @@ public:
             // add a breakpoint this line!
             printf("%s: %s\n", msg->functionName, msg->message);
 
-            // Output to debug window
-            char text[512];
-            sprintf_s(text, "%s: %s", msg->functionName, msg->message);
-            OutputDebugStringA(text);
-
             // Returning XR_TRUE here will force the calling function to fail
             return (XrBool32)XR_FALSE;
         };
@@ -177,7 +163,7 @@ public:
         // Check what blend mode is valid for this device (opaque vs transparent displays)
         // We'll just take the first one available!
         uint32_t blend_count = 0;
-        xrEnumerateEnvironmentBlendModes(xr_instance, xr_system_id, app_config_view, 1, &blend_count, &xr_blend);
+        XR_CHECK_RESULT(xrEnumerateEnvironmentBlendModes(xr_instance, xr_system_id, app_config_view, 1, &blend_count, &xr_blend), "xrEnumerateEnvironmentBlendModes");
 
         // // OpenXR wants to ensure apps are using the correct graphics card, so this MUST be called 
         // // before xrCreateSession. This is crucial on devices that have multiple graphics cards, 
@@ -187,76 +173,49 @@ public:
         ext_xrGetOpenGLGraphicsRequirementsKHR(xr_instance, xr_system_id, &requirement);
 
         // ignore the requirements for now
+        printf("OpenXR::initialize()\n");
     }
 
     void create_session(){
+
         // A session represents this application's desire to display things! This is where we hook up our graphics API.
         // This does not start the session, for that, you'll need a call to xrBeginSession, which we do in openxr_poll_events
         XrGraphicsBindingOpenGLWin32KHR binding = { XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR };
-        // printf("%p\n",binding.hGLRC);
-
-        // GLFWwindow* window = glfwCreateWindow(100, 100, "Test", NULL, NULL);
-        //window = glfwGetCurrentContext();
-        // printf("glfw context: %i\n", window == nullptr);
-        // xr::GraphicsBindingOpenGLWin32KHR graphicsBinding{ wglGetCurrentDC(), wglGetCurrentContext() };
-        binding.hDC = wglGetCurrentDC();       // hDC is a valid Windows HW device context handle.
-        binding.hGLRC = wglGetCurrentContext();     // hGLRC is a valid Windows OpenGL rendering context handle.
+        binding.hDC = wglGetCurrentDC();
+        binding.hGLRC = wglGetCurrentContext();
         printf("hGLRC %p\n",binding.hGLRC);
         printf("hDC %p\n",binding.hDC);
-
         XrSessionCreateInfo sessionInfo = { XR_TYPE_SESSION_CREATE_INFO };
         sessionInfo.next     = &binding;
         sessionInfo.systemId = xr_system_id;
-        XrResult result = xrCreateSession(xr_instance, &sessionInfo, &xr_session);
-        if (!XR_SUCCEEDED(result)){
-            char resultString[XR_MAX_RESULT_STRING_SIZE];
-            xrResultToString(xr_instance, result, resultString);
-            printf("XR init failed with result %s\n",resultString);
-        }
+        xrCreateSession(xr_instance, &sessionInfo, &xr_session);
 
-
-        // // Unable to start a session, may not have an MR device attached or ready
-        if (xr_session == nullptr){
-            printf("Could not create oxr session is yout HMD ready");
+        // Unable to start a session, may not have an MR device attached or ready
+        if (xr_session == nullptr)
             exit(1);
-        }
-
-
+        
         XrReferenceSpaceCreateInfo ref_space = { XR_TYPE_REFERENCE_SPACE_CREATE_INFO };
         ref_space.poseInReferenceSpace = xr_pose_identity;
         ref_space.referenceSpaceType   = XR_REFERENCE_SPACE_TYPE_LOCAL;
-        xrCreateReferenceSpace(xr_session, &ref_space, &xr_app_space);
-
+        XR_CHECK_RESULT(xrCreateReferenceSpace(xr_session, &ref_space, &xr_app_space), "xrCreateReferenceSpace");
         std::cout << "xr_app_space: " << xr_app_space << std::endl;
 
-        uint32_t swapchainFormatCount{ 0 };
-        std::vector<int64_t> swapchainFormats;
-        result = (xrEnumerateSwapchainFormats(xr_session, swapchainFormatCount, &swapchainFormatCount, nullptr));        
-        if (!XR_SUCCEEDED(result)){
-            exit(1);
-        }
-        swapchainFormats.resize(swapchainFormatCount);
-         result = xrEnumerateSwapchainFormats(xr_session, swapchainFormatCount, &swapchainFormatCount, swapchainFormats.data());
-        for (const auto& format : swapchainFormats) {
-            printf("Found swapchain format: %li\n", format);
-        }
+        uint32_t view_count = 0;
+        XR_CHECK_RESULT(xrEnumerateViewConfigurationViews(xr_instance, xr_system_id, app_config_view, 0, &view_count, nullptr), "xrEnumerateViewConfigurationViews");
+        xr_config_views.resize(view_count, { XR_TYPE_VIEW_CONFIGURATION_VIEW });
+        xr_views       .resize(view_count, { XR_TYPE_VIEW });
+        XR_CHECK_RESULT(xrEnumerateViewConfigurationViews(xr_instance, xr_system_id, app_config_view, view_count, &view_count, xr_config_views.data()), "xrEnumerateViewConfigurationViews");
+        printf("viewCount %i\n", view_count);
 
-
-        uint32_t viewConfigCount = 0;
-        xrEnumerateViewConfigurationViews(xr_instance, xr_system_id, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO,
-                                                          viewConfigCount, &viewConfigCount, nullptr);
-        xr_config_views.resize(viewConfigCount);
-        xrEnumerateViewConfigurationViews(xr_instance, xr_system_id, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO,
-                                                          viewConfigCount, &viewConfigCount, xr_config_views.data());
-
-        printf("viewConfigCount %i\n", viewConfigCount);
-
-
-        for (uint32_t i = 0; i < viewConfigCount; i++) {
-
-
+        for (uint32_t i = 0; i < view_count; i++) {
+            // Create a swapchain for this viewpoint! A swapchain is a set of texture buffers used for displaying to screen,
+            // typically this is a backbuffer and a front buffer, one for rendering data to, and one for displaying on-screen.
+            // A note about swapchain image format here! OpenXR doesn't create a concrete image format for the texture, like 
+            // DXGI_FORMAT_R8G8B8A8_UNORM. Instead, it switches to the TYPELESS variant of the provided texture format, like 
+            // DXGI_FORMAT_R8G8B8A8_TYPELESS. When creating an ID3D11RenderTargetView for the swapchain texture, we must specify
+            // a concrete type like DXGI_FORMAT_R8G8B8A8_UNORM, as attempting to create a TYPELESS view will throw errors, so 
+            // we do need to store the format separately and remember it later.
             XrViewConfigurationView &view           = xr_config_views[i];
-            printf("Width: %i, Height: %i\n", view.recommendedImageRectWidth, view.recommendedImageRectHeight);
             XrSwapchainCreateInfo    swapchain_info = { XR_TYPE_SWAPCHAIN_CREATE_INFO };
             XrSwapchain              handle;
             swapchain_info.arraySize   = 1;
@@ -266,186 +225,146 @@ public:
             swapchain_info.width       = view.recommendedImageRectWidth;
             swapchain_info.height      = view.recommendedImageRectHeight;
             swapchain_info.sampleCount = view.recommendedSwapchainSampleCount;
-            swapchain_info.usageFlags  = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT; //XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT
-            result = xrCreateSwapchain(xr_session, &swapchain_info, &handle);
-            if (!XR_SUCCEEDED(result)){
-                char resultString[XR_MAX_RESULT_STRING_SIZE];
-                xrResultToString(xr_instance, result, resultString);
-                printf("XR xrCreateSwapchain failed with result %s\n",resultString);
-            }
-            uint32_t surface_count = 0;
-            xrEnumerateSwapchainImages(handle, 0, &surface_count, nullptr);
+            swapchain_info.usageFlags  = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
 
+            XR_CHECK_RESULT(xrCreateSwapchain(xr_session, &swapchain_info, &handle), "xrCreateSwapchain");
+
+            // Find out how many textures were generated for the swapchain
+            uint32_t surface_count = 0;
+            XR_CHECK_RESULT(xrEnumerateSwapchainImages(handle, 0, &surface_count, nullptr), "xrEnumerateSwapchainImages");
+
+            // We'll want to track our own information about the swapchain, so we can draw stuff onto it! We'll also create
+            // a depth buffer for each generated texture here as well with make_surfacedata.
             swapchain_t swapchain = {};
-            swapChainWidth = swapchain_info.width;
-            swapChainHeight = swapchain_info.height;
             swapchain.width  = swapchain_info.width;
             swapchain.height = swapchain_info.height;
             swapchain.handle = handle;
             swapchain.surface_images.resize(surface_count, { XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR } );
-            // swapchain.surface_data  .resize(surface_count);
-            xrEnumerateSwapchainImages(swapchain.handle, surface_count, &surface_count, (XrSwapchainImageBaseHeader*)swapchain.surface_images.data());
-            printf("surface_count %i\n", surface_count);
+            XR_CHECK_RESULT(xrEnumerateSwapchainImages(swapchain.handle, surface_count, &surface_count, (XrSwapchainImageBaseHeader*)swapchain.surface_images.data()), "xrEnumerateSwapchainImages");
+            for (uint32_t i = 0; i < surface_count; i++) {
+                surfaces.push_back(((XrSwapchainImageOpenGLKHR &)swapchain.surface_images[i]).image);
+            }
+            swapChainWidth = swapchain.width;
+            swapChainHeight = swapchain.height;
             xr_swapchains.push_back(swapchain);
-            printf("texID1: %i\n", swapchain.surface_images[0].image);
-            printf("texID2: %i\n", swapchain.surface_images[1].image);
-            printf("texID3: %i\n", swapchain.surface_images[2].image);
-
-            // for (uint32_t i = 0; i < surface_count; i++) {
-            //     swapchain.surface_data[i] = d3d_make_surface_data((XrBaseInStructure&)swapchain.surface_images[i]);
-            // }
         }
-        for( int i = 0 ; i<2 ; i++ ){
-            for(int k = 0 ; k<3 ; k++ ){
-                surfaces.push_back(xr_swapchains[i].surface_images[k].image);
-            }
-        }
-
-        bool ready = false;
-        while (!ready) {
-            XrEventDataBuffer eventBuffer;
-            auto pollResult = xrPollEvent(xr_instance, &eventBuffer);
-            if (pollResult == XR_EVENT_UNAVAILABLE) {
-                std::cout << "XR_EVENT_UNAVAILABLE" << std::endl;
-            }
-
-            switch (eventBuffer.type) {
-                case XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED:
-                    if(reinterpret_cast<XrEventDataSessionStateChanged&>(eventBuffer).state == XR_SESSION_STATE_READY){
-                        std::cout << "XR_SESSION_STATE_READY" << std::endl;
-                        ready = true;
-                    }else{
-                        std::cout << reinterpret_cast<XrEventDataSessionStateChanged&>(eventBuffer).state << std::endl;
-                    }
-                    break;
-                default:
-                    break;
-            }
-        }
-
-        XrSessionBeginInfo begin_info = { XR_TYPE_SESSION_BEGIN_INFO };
-        begin_info.primaryViewConfigurationType = app_config_view;
-        result = xrBeginSession(xr_session, &begin_info);
-        if (!XR_SUCCEEDED(result)){
-            char resultString[XR_MAX_RESULT_STRING_SIZE];
-            xrResultToString(xr_instance, result, resultString);
-            printf("Could start session%s\n",resultString);
-        }
-    } 
-
-    void prepareXrCompositionLayers() {
-        //session.getReferenceSpaceBoundsRect(xr::ReferenceSpaceType::Local, bounds);
-        projectionLayer.viewCount = 2;
-        projectionLayer.views = projectionLayerViews.data();
-        //layersPointers.push_back(&projectionLayer);
-        // Finish setting up the layer submission
-        for (uint32_t eyeIndex = 0; eyeIndex < 2; eyeIndex++) {
-            XrCompositionLayerProjectionView layerView;
-            layerView.subImage.swapchain = xr_swapchains[0].handle;
-            layerView.subImage.imageRect.extent = { (int32_t)xr_swapchains[0].width / 2, (int32_t)xr_swapchains[0].height };
-            if (eyeIndex == 1) {
-                layerView.subImage.imageRect.offset.x = layerView.subImage.imageRect.extent.width;
-            }
-            projectionLayerViews.push_back(layerView);
-        }
+        printf("OpenXR::create_session()\n");
     }
 
+    void openxr_poll_events(bool &exit) {
+        exit = false;
 
+        XrEventDataBuffer event_buffer = { XR_TYPE_EVENT_DATA_BUFFER };
 
+        while (xrPollEvent(xr_instance, &event_buffer) == XR_SUCCESS) {
+            switch (event_buffer.type) {
+            case XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED: {
+                XrEventDataSessionStateChanged *changed = (XrEventDataSessionStateChanged*)&event_buffer;
+                xr_session_state = changed->state;
+
+                // Session state change is where we can begin and end sessions, as well as find quit messages!
+                switch (xr_session_state) {
+                case XR_SESSION_STATE_READY: {
+                    XrSessionBeginInfo begin_info = { XR_TYPE_SESSION_BEGIN_INFO };
+                    begin_info.primaryViewConfigurationType = app_config_view;
+                    XR_CHECK_RESULT(xrBeginSession(xr_session, &begin_info), "xrBeginSession");
+                    xr_running = true;
+                } break;
+                case XR_SESSION_STATE_STOPPING: {
+                    xr_running = false;
+                    XR_CHECK_RESULT(xrEndSession(xr_session), "xrEndSession");
+                } break;
+                case XR_SESSION_STATE_EXITING:      exit = true;              break;
+                case XR_SESSION_STATE_LOSS_PENDING: exit = true;              break;
+                }
+            } break;
+            case XR_TYPE_EVENT_DATA_INSTANCE_LOSS_PENDING: exit = true; return;
+            }
+            event_buffer = { XR_TYPE_EVENT_DATA_BUFFER };
+        }
+        //printf("OpenXR::openxr_poll_events()\n");
+    }
 
     bool begin_frame(){
-        XrFrameWaitInfo frameWaitInfo{ XR_TYPE_FRAME_WAIT_INFO, nullptr };
-        XrResult result = xrWaitFrame(xr_session, &frameWaitInfo, &frame_state);
-        if (!XR_SUCCEEDED(result)){
-            char resultString[XR_MAX_RESULT_STRING_SIZE];
-            xrResultToString(xr_instance, result, resultString);
-            printf("Could not wait for frame%s\n",resultString);
-        }
+        XrFrameState frame_state = { XR_TYPE_FRAME_STATE };
+        XR_CHECK_RESULT(xrWaitFrame (xr_session, nullptr, &frame_state), "xrWaitFrame");
+        current_predictedDisplayTime = frame_state.predictedDisplayTime;
+        XR_CHECK_RESULT(xrBeginFrame(xr_session, nullptr), "xrBeginFrame");
 
-        XrFrameBeginInfo begin_info{};
-        result = xrBeginFrame(xr_session, &begin_info);
-        if (!XR_SUCCEEDED(result)){
-            char resultString[XR_MAX_RESULT_STRING_SIZE];
-            xrResultToString(xr_instance, result, resultString);
-            printf("Could not start frame%s\n",resultString);
+        // If the session is active, lets render our layer in the compositor!
+        current_views.clear();
+
+        if (xr_session_state == XR_SESSION_STATE_VISIBLE || xr_session_state == XR_SESSION_STATE_FOCUSED) {
+            // Find the state and location of each viewpoint at the predicted time
+            uint32_t         view_count  = 0;
+            XrViewState      view_state  = { XR_TYPE_VIEW_STATE };
+            XrViewLocateInfo locate_info = { XR_TYPE_VIEW_LOCATE_INFO };
+            locate_info.viewConfigurationType = app_config_view;
+            locate_info.displayTime           = frame_state.predictedDisplayTime;
+            locate_info.space                 = xr_app_space;
+            XR_CHECK_RESULT(xrLocateViews(xr_session, &locate_info, &view_state, (uint32_t)xr_views.size(), &view_count, xr_views.data()), "xrLocateViews");
+            current_views.resize(view_count);
+
+            // And now we'll iterate through each viewpoint, and render it!
+            current_img_id.clear();
+            current_img_id.reserve(view_count);
+            for (uint32_t i = 0; i < view_count; i++) {
+
+                // We need to ask which swapchain image to use for rendering! Which one will we get?
+                // Who knows! It's up to the runtime to decide.
+                XrSwapchainImageAcquireInfo acquire_info = { XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO };
+                XR_CHECK_RESULT(xrAcquireSwapchainImage(xr_swapchains[i].handle, &acquire_info, &current_img_id[i]), "xrAcquireSwapchainImage");
+
+                // Wait until the image is available to render to. The compositor could still be
+                // reading from it.
+                XrSwapchainImageWaitInfo wait_info = { XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO };
+                wait_info.timeout = XR_INFINITE_DURATION;
+                XR_CHECK_RESULT(xrWaitSwapchainImage(xr_swapchains[i].handle, &wait_info), "xrWaitSwapchainImage");
+
+                // Set up our rendering information for the viewpoint we're using right now!
+                current_views[i] = { XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW };
+                current_views[i].pose = xr_views[i].pose;
+                current_views[i].fov  = xr_views[i].fov;
+                current_views[i].subImage.swapchain        = xr_swapchains[i].handle;
+                current_views[i].subImage.imageRect.offset = { 0, 0 };
+                current_views[i].subImage.imageRect.extent = { xr_swapchains[i].width, xr_swapchains[i].height };
+            }
         }
-        std::cout << "shouldRender: " << frame_state.shouldRender << std::endl;
-        return frame_state.shouldRender;
-        // if it breaks, try to care about the HMD state in switch case
+        //printf("OpenXR::begin_frame()\n");
     }
 
     uint32_t acquire_swapchain_images(){
-        uint32_t         view_count  = 0;
-        XrViewState      view_state  = { XR_TYPE_VIEW_STATE};
-        std::cout << "frame_state.predictedDisplayTime: " << frame_state.predictedDisplayTime << std::endl;
-	    XrViewLocateInfo locate_info = { XR_TYPE_VIEW_LOCATE_INFO, nullptr, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, frame_state.predictedDisplayTime, xr_app_space};
-        xrLocateViews(xr_session, &locate_info, &view_state, (uint32_t)xr_views.size(), &view_count, xr_views.data());
-        std::cout << "view_count: " << view_count << std::endl;
-	    xr_views.resize(view_count);
-
-        // for (uint32_t eyeIndex = 0; eyeIndex < view_count; eyeIndex++) {
-
-        // }
-
-        
-        uint32_t swapchainIndex;
-        for (uint32_t i = 0; i < view_count; i++) {
-            XrSwapchainImageAcquireInfo acquire_info = { XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO };
-            xrAcquireSwapchainImage(xr_swapchains[i].handle, &acquire_info, &swapchainIndex);
-            XrSwapchainImageWaitInfo wait_info = { XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO };
-            wait_info.timeout = XR_INFINITE_DURATION;
-            xrWaitSwapchainImage(xr_swapchains[i].handle, &wait_info);
-            printf("Swapchain index is %i\n",swapchainIndex);
-
-            // uint32_t                    img_id;
-            // XrSwapchainImageAcquireInfo acquire_info = { XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO };
-            // xrAcquireSwapchainImage(xr_swapchains[i].handle, &acquire_info, &img_id);
-
-            // XrSwapchainImageWaitInfo wait_info = { XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO };
-            // wait_info.timeout = XR_INFINITE_DURATION;
-            // xrWaitSwapchainImage(xr_swapchains[i].handle, &wait_info);
-
-            projectionLayerViews[i].fov = xr_views[0].fov;
-            projectionLayerViews[i].pose = xr_views[0].pose;
-            projectionLayerViews[i].subImage.swapchain = xr_swapchains[i].handle;
-            projectionLayerViews[i].subImage.imageRect.offset = { 0, 0 };
-            projectionLayerViews[i].subImage.imageRect.extent = { xr_swapchains[i].width, xr_swapchains[i].height };
-        }
-
-
-        std::cout << "acquire_swapchain_images end" << std::endl;
-        return swapchainIndex;
+        //printf("OpenXR::acquire_swapchain_images()\n");
+        return 0;//current_img_id[0];
     }
 
     void end_frame(){
-         for (uint32_t i = 0; i < 2; i++) {
-            XrSwapchainImageReleaseInfo release_info = { XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO };
-            xrReleaseSwapchainImage(xr_swapchains[i].handle, &release_info);
-         }
-
-
-
-        XrFrameEndInfo frameEndInfo{ XR_TYPE_FRAME_END_INFO, nullptr, frame_state.predictedDisplayTime,
-                                XR_ENVIRONMENT_BLEND_MODE_OPAQUE };
-        //XrCompositionLayerProjection             layer_proj = { XR_TYPE_COMPOSITION_LAYER_PROJECTION };
+         // We're finished with rendering our layer, so send it off for display!
         XrCompositionLayerBaseHeader            *layer      = nullptr;
-        std::vector<XrCompositionLayerProjectionView> views;
-        //bool session_active = xr_session_state == XR_SESSION_STATE_VISIBLE || xr_session_state == XR_SESSION_STATE_FOCUSED;
-        //if (session_active && openxr_render_layer(frame_state.predictedDisplayTime, views, layer_proj)) {
-        layer = (XrCompositionLayerBaseHeader*)&projectionLayer;
+        XrCompositionLayerProjection             layer_proj = { XR_TYPE_COMPOSITION_LAYER_PROJECTION };
+
+        if (xr_session_state == XR_SESSION_STATE_VISIBLE || xr_session_state == XR_SESSION_STATE_FOCUSED) {
+            for (uint32_t i = 0; i < current_views.size(); i++) {
+                // And tell OpenXR we're done with rendering to this one!
+                XrSwapchainImageReleaseInfo release_info = { XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO };
+                XR_CHECK_RESULT(xrReleaseSwapchainImage(xr_swapchains[i].handle, &release_info), "xrReleaseSwapchainImage");
+            }
+
+            layer_proj.space     = xr_app_space;
+            layer_proj.viewCount = (uint32_t)current_views.size();
+            layer_proj.views     = current_views.data();
+
+            layer = (XrCompositionLayerBaseHeader*)&layer_proj;
+        }
 
         // We're finished with rendering our layer, so send it off for display!
         XrFrameEndInfo end_info{ XR_TYPE_FRAME_END_INFO };
-        end_info.displayTime          = frame_state.predictedDisplayTime;
+        end_info.displayTime          = current_predictedDisplayTime;
         end_info.environmentBlendMode = xr_blend;
         end_info.layerCount           = layer == nullptr ? 0 : 1;
         end_info.layers               = &layer;
-        XrResult result = xrEndFrame(xr_session, &frameEndInfo);
-        if (!XR_SUCCEEDED(result)){
-            char resultString[XR_MAX_RESULT_STRING_SIZE];
-            xrResultToString(xr_instance, result, resultString);
-            printf("Could not end Frame %s\n",resultString);
-        }
+        XR_CHECK_RESULT(xrEndFrame(xr_session, &end_info), "xrEndFrame");
+        //printf("OpenXR::end_frame()\n");
     }
 };
 
@@ -493,7 +412,24 @@ API_EXPORT const char *openxr_create_session(OpenXR *openxr)
     try
     {
         openxr->create_session();
-        openxr->prepareXrCompositionLayers();
+        return nullptr;
+    }
+    catch (const std::exception &ex)
+    {
+        return ex.what();
+    }
+    catch (...)
+    {
+        return "Unexpected exception";
+    }
+}
+
+API_EXPORT const char *openxr_poll_events(OpenXR *openxr, bool *exit)
+{
+    assert(openxr != nullptr && "OpenXR instance expected");
+    try
+    {
+        openxr->openxr_poll_events(*exit);
         return nullptr;
     }
     catch (const std::exception &ex)

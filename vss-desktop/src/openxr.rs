@@ -10,6 +10,7 @@ extern "C" {
     fn openxr_new(openxr: *mut OpenXRPtr) -> *const c_char;
     fn openxr_init(openxr: OpenXRPtr) -> *const c_char;
     fn openxr_create_session(openxr: OpenXRPtr) -> *const c_char;
+    fn openxr_poll_events(openxr: OpenXRPtr, exit: *mut bool)-> *const c_char;
     fn openxr_get_surfaces(
         openxr: OpenXRPtr,
         surfaces: *mut *mut u32,
@@ -46,13 +47,18 @@ impl OpenXR {
     }
 
     pub fn create_session(&self, window: &Window){
-
-        //TODO do
         unsafe {
             openxr_create_session(self.openxr);            
         }
-
     }
+
+    pub fn poll_events(&self) -> bool{
+        let mut exit = false;
+        unsafe { openxr_poll_events(self.openxr, &mut exit as *mut _) };
+
+        exit
+    }
+
     pub fn create_render_targets(&mut self, window: &Window) -> (u32, u32){
 
         let mut render_targets_size = 0u32;

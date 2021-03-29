@@ -310,10 +310,6 @@ pub fn main() {
 
     let mut window = Window::new(config.visible, remote, parameters, flow_count);
 
-    dbg!("Pre init");
-    oxr.initialize();
-    dbg!("Post init");
-
     let mut desktop = SharedStereoDesktop::new();
 
     for index in 0 .. flow_count {
@@ -328,12 +324,19 @@ pub fn main() {
     let mut done = false;
     window.update_last_node();
 
+    dbg!("Pre init");
+    oxr.initialize();
+    dbg!("Post init");
     oxr.create_session(&window);
     oxr.create_render_targets(&window);
-
+    
     let mut oxr_fov = vec![(100.0, 70.0); 4];
 
     while !done {
+        if oxr.poll_events() {
+            println!("OXR sent stop.");
+            break;
+        }
         let oxr_should_render = oxr.begin_frame_sync();
 
         if oxr_should_render {
