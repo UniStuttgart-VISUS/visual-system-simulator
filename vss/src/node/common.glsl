@@ -4,8 +4,6 @@ float normpdf(in float x) {
     return 0.39894 * exp(-0.5 * x * x / (49.0)) / 7.0;
 }
 
-
-
 mat3 covarMatFromVec(in vec3 var, in vec3 covar){
     return mat3(
         var.r       , covar.x     , covar.y      ,
@@ -89,10 +87,7 @@ vec4 blur_with_error(in vec2 fragCoord, in sampler2D tex, float blur_scale, vec2
 
     // the average of the weighted samples and hence the result
     vec3 avg = final_colour / (Z * Z);
-
-    // s^2 = sum( (df/dx_i * s_i)^2 ) + s^2_blur
-    //       ------------------------   ----------
-    //              var_in               var_new
+ 
     vec3 col_var_in = vec3(0.0);
     vec3 col_covar_var_in = vec3(0.0);
     vec3 col_var_new = vec3(0.0);
@@ -140,7 +135,6 @@ vec4 blur_with_error(in vec2 fragCoord, in sampler2D tex, float blur_scale, vec2
     vec2 dir_var = dir_var_in + dir_var_new;
     float dir_covar = dir_covar_in + dir_covar_new;
 
-
      S_col = covarMatFromVec(col_var, col_covar);
      S_pos = covarMatFromVec(dir_var, dir_covar);
 
@@ -162,7 +156,6 @@ float getPerceivedBrightness(in vec3 color) {
 // Output: Although the brightness has variance in only one dimension, when multiplied by the color value, we have (co)variances in all three dimensions.
 // Hence the bloom operation needs to calculate the variances of each channel separately
 void applyBloom(inout vec3 color, in float blur_factor, inout mat3 S) {
-// void applyBloom(inout vec3 color, in float blur_factor, inout vec3 var_in, inout vec3 cv) {
     // The constants adjust the contribution of each color to the perceived brightness, according to the amount of reception in the eye. See https://www.w3.org/TR/AERT/#color-contrast
     vec3 weights = vec3(0.299, 0.587, 0.114);
     float brightness = dot(weights, color);
@@ -180,14 +173,14 @@ void applyBloom(inout vec3 color, in float blur_factor, inout mat3 S) {
         x_g*(1+(w_r*x_r+w_g*x_g+w_b*x_b)*c), 
         x_b*(1+(w_r*x_r+w_g*x_g+w_b*x_b)*c)
         ], [x_r,x_g,x_b]);
-	)
     (Use wxMaxima to compute)
     */
-    mat3 J = mat3(
+
+    mat3 J = transpose(mat3(
         c*(dotp)+c*color.r*weights.r+1,	c*color.r*weights.g,	        c*color.r*weights.b,
 	    c*color.g*weights.r,	        c*(dotp)+c*color.g*weights.g+1,	c*color.g*weights.b,
 	    color.b*c*weights.r,	        color.b*c*weights.g,	        c*(dotp)+color.b*c*weights.b+1
-    );
+    ));
 
     mat3 Jt = transpose(J);
 

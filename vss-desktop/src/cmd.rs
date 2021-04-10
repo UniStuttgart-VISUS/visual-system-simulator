@@ -28,6 +28,7 @@ pub struct Config {
     pub parameters: ValueMap,
     pub parameters_r: Option<ValueMap>,
     pub parameters_l: Option<ValueMap>,
+    pub track_perf: u32
 }
 
 impl Default for Config {
@@ -41,7 +42,7 @@ impl Default for Config {
             parameters: std::collections::HashMap::new(),
             parameters_r: None,
             parameters_l: None,
-
+            track_perf: 0
         }
     }
 }
@@ -181,6 +182,18 @@ pub fn cmd_parse() -> Config {
                 .help("The factor to scale the colormap by before output"),
         )
         .arg(
+            Arg::with_name("perf")
+                .long("perf")
+                .number_of_values(1)
+                .help("Tracks performance metrics"),
+        )
+        .arg(
+            Arg::with_name("rays")
+                .long("rays")
+                .number_of_values(1)
+                .help("Set of rays to use"),
+        )
+        .arg(
             Arg::with_name("output")
                 .long("output")
                 .short("o")
@@ -252,6 +265,14 @@ pub fn cmd_parse() -> Config {
         let cf = cf.parse::<u16>().expect("Invalid cf") as f64;
         parameters.insert("file_cf".to_string(), Value::Number(cf));
     }
+
+    let mut track_perf = matches.value_of("perf").map(|v| v.parse::<u32>()).unwrap_or(Ok(0u32)).unwrap_or(0);
+
+    if let Some(rays) = matches.value_of("rays") {
+        let rays = rays.parse::<f64>().expect("Invalid rays");
+        parameters.insert("rays".to_string(), Value::Number(rays));
+    }
+
     if let Some(cm_scale) = matches.value_of("cm_scale") {
         let cm_scale = cm_scale.parse::<f64>().expect("Invalid cm_scale");
         parameters.insert("cm_scale".to_string(), Value::Number(cm_scale));
@@ -345,6 +366,7 @@ pub fn cmd_parse() -> Config {
         inputs,
         parameters,
         parameters_r,
-        parameters_l
+        parameters_l,
+        track_perf
     }
 }

@@ -577,7 +577,7 @@ impl Window {
             if *self.override_view.borrow() || *self.override_gaze.borrow() {
                 let window_size = &self.windowed_context.window().get_inner_size().unwrap();
                 let cursor_pos = self.cursor_pos.borrow();
-                println!("{} {}",cursor_pos.x as f32 ,cursor_pos.y as f32);
+                //println!("{} {}",cursor_pos.x as f32 ,cursor_pos.y as f32);
                 let view_input = match self.forced_view {
                     Some(pos) =>{
                         pos

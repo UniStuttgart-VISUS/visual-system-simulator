@@ -102,7 +102,7 @@ impl Default for VisualizationParameters{
 
 impl VisualizationParameters{
   pub fn has_to_track_error( &self) -> bool{
-    true
-    //self.vis_type.mix_type != MixType::BaseImageOnly
+    // true
+    self.vis_type.mix_type != MixType::BaseImageOnly
   }
 }

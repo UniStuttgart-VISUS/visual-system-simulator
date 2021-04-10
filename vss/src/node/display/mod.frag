@@ -356,7 +356,6 @@ void main() {
 
         value *= u_heat_scale;
 
-
         switch (u_colormap_type) {
             case 0: // Viridis
                 cm_color = ViridisColormap(value);
@@ -364,11 +363,10 @@ void main() {
             case 1: // Turbo
                 cm_color = TurboColormap(value);
                 break;
-            case 2: // Grayscale for external normalization
+            case 2: // Grayscale, e.g. for external normalization
                 cm_color = vec3(value);
                 break;
         }
-
     }
 
     switch (u_mix_type) {

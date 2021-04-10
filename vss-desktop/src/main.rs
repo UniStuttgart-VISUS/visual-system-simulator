@@ -7,13 +7,16 @@ mod varjo;
 mod openxr;
 
 use std::cell::RefCell;
-
+use std::time::Instant;
+use std::fs;
 use vss::*;
 
 use crate::cmd::*;
 use crate::node::*;
 
 type IoNodePair = (Box<dyn Node>, Option<Box<dyn Node>>);
+use std::fs::File;
+use std::io::Write;
 
 struct IoGenerator {
     inputs: Vec<String>,
@@ -198,6 +201,17 @@ pub fn main() {
 
     let mut frame_counter = 0u128; // you know, for the simulations than run longer than the universe exists
 
+    let mut frame_times: Vec<(u128,u128,(u32,u32),u32,u32)> = vec![];
+    let mut previous_frame = Instant::now();
+    let print_spacing = 60;
+    let rays = if let Some(Value::Number(rays)) = config.parameters.get("rays") {
+        *rays as u32
+    }else{0};
+
+    let mix_type = if let Some(Value::Number(mix_type)) = config.parameters.get("file_mix_type") {
+        *mix_type as u32
+    }else{0};
+
     while !done {
         frame_counter+=1;
 
@@ -208,6 +222,24 @@ pub fn main() {
             done = true;
         }
 
+        if config.track_perf >0 {
+            let time_diff = previous_frame.elapsed().as_micros();
+            let perf_info = (frame_counter,time_diff, (config.resolution.unwrap()[0],config.resolution.unwrap()[1]), rays, mix_type);
+            frame_times.push(perf_info);
+
+            if frame_counter>0 && frame_counter % print_spacing == 0 {
+                let avg_fps: i32 = frame_times[(frame_counter-print_spacing) as usize .. frame_counter as usize]
+                .iter()
+                .map(|t| t.1 as i32)
+                .sum::<i32>() / (print_spacing as i32);
+
+                println!("{:?} ≙ {}fps", perf_info, 1_000_000/(avg_fps));
+            }
+            previous_frame =  Instant::now();
+            if frame_counter > config.track_perf as u128 {
+                break;
+            }
+        }
         /*  
             The above hack works only with still images
             The original solution below has several problems:
@@ -235,9 +267,20 @@ pub fn main() {
 
     // writing the image to file might not be done yet, so we wait a second
     // this async behaviour stems from the callback used in the download buffer
+    if config.track_perf > 0 {
+        dump_perf_data(frame_times);
+    }
     use std::{thread, time};
     let a_second = time::Duration::from_secs(1);
     thread::sleep(a_second);
+}
+
+fn dump_perf_data(frame_times: Vec<(u128,u128,(u32,u32),u32,u32)>){
+    fs::write("vss_perf_data.csv", 
+        frame_times.iter()
+            .map(|t| format!("{},{},{},{},{}\n", t.0, t.1, t.2.0*t.2.1, t.3, t.4))
+            .collect::<Vec<String>>()
+            .join(""));
 }
 
 #[cfg(feature = "openxr")]
