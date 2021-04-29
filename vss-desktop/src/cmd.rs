@@ -28,6 +28,7 @@ pub struct Config {
     pub parameters: ValueMap,
     pub parameters_r: Option<ValueMap>,
     pub parameters_l: Option<ValueMap>,
+    pub track_perf: u32
 }
 
 impl Default for Config {
@@ -41,7 +42,7 @@ impl Default for Config {
             parameters: std::collections::HashMap::new(),
             parameters_r: None,
             parameters_l: None,
-
+            track_perf: 0
         }
     }
 }
@@ -110,6 +111,7 @@ pub fn cmd_parse() -> Config {
                 .long("config_right")
                 .value_name("FILE|JSON")
                 .number_of_values(1)
+                .conflicts_with("config")
                 .help("Sets the configuration parameters for the right eye"),
         )
         .arg(
@@ -117,6 +119,7 @@ pub fn cmd_parse() -> Config {
                 .long("config_left")
                 .value_name("FILE|JSON")
                 .number_of_values(1)
+                .conflicts_with("config")
                 .help("Sets the configuration parameters for the left eye"),
         )
         .arg(
@@ -126,6 +129,13 @@ pub fn cmd_parse() -> Config {
                 .value_names(&["X", "Y"])
                 .number_of_values(2)
                 .help("Sets the fallback gaze position"),
+        )
+        .arg(
+            Arg::with_name("view")
+                .long("view")
+                .value_names(&["X", "Y"])
+                .number_of_values(2)
+                .help("Sets the fallback view position"),
         )
         .arg(
             Arg::with_name("res")
@@ -142,10 +152,46 @@ pub fn cmd_parse() -> Config {
                 .help("Forces window visibility"),
         )
         .arg(
-            Arg::with_name("vis_type")
-                .long("vis_type")
+            Arg::with_name("base_image")
+                .long("base_image")
                 .number_of_values(1)
-                .help("The type of visualization rendered to file"),
+                .help("The type of base imageto use"),
+        )
+        .arg(
+            Arg::with_name("mix_type")
+                .long("mix_type")
+                .number_of_values(1)
+                .help("The type mix function to use"),
+        )
+        .arg(
+            Arg::with_name("cm_type")
+                .long("cm_type")
+                .number_of_values(1)
+                .help("The type of color map to use"),
+        )
+        .arg(
+            Arg::with_name("cf")
+                .long("cf")
+                .number_of_values(1)
+                .help("The type of combination function to use"),
+        )
+        .arg(
+            Arg::with_name("cm_scale")
+                .long("cm_scale")
+                .number_of_values(1)
+                .help("The factor to scale the colormap by before output"),
+        )
+        .arg(
+            Arg::with_name("perf")
+                .long("perf")
+                .number_of_values(1)
+                .help("Tracks performance metrics"),
+        )
+        .arg(
+            Arg::with_name("rays")
+                .long("rays")
+                .number_of_values(1)
+                .help("Set of rays to use"),
         )
         .arg(
             Arg::with_name("output")
@@ -201,15 +247,45 @@ pub fn cmd_parse() -> Config {
         None
     };
 
+ 
+
+    if let Some(base_image) = matches.value_of("base_image") {
+        let base_image = base_image.parse::<u16>().expect("Invalid base_image") as f64;
+        parameters.insert("file_base_image".to_string(), Value::Number(base_image));
+    }
+    if let Some(mix_type) = matches.value_of("mix_type") {
+        let mix_type = mix_type.parse::<u16>().expect("Invalid mix_type") as f64;
+        parameters.insert("file_mix_type".to_string(), Value::Number(mix_type));
+    }
+    if let Some(cm_type) = matches.value_of("cm_type") {
+        let cm_type = cm_type.parse::<u16>().expect("Invalid cm_type") as f64;
+        parameters.insert("file_cm_type".to_string(), Value::Number(cm_type));
+    }
+    if let Some(cf) = matches.value_of("cf") {
+        let cf = cf.parse::<u16>().expect("Invalid cf") as f64;
+        parameters.insert("file_cf".to_string(), Value::Number(cf));
+    }
+
+    let mut track_perf = matches.value_of("perf").map(|v| v.parse::<u32>()).unwrap_or(Ok(0u32)).unwrap_or(0);
+
+    if let Some(rays) = matches.value_of("rays") {
+        let rays = rays.parse::<f64>().expect("Invalid rays");
+        parameters.insert("rays".to_string(), Value::Number(rays));
+    }
+
+    if let Some(cm_scale) = matches.value_of("cm_scale") {
+        let cm_scale = cm_scale.parse::<f64>().expect("Invalid cm_scale");
+        parameters.insert("cm_scale".to_string(), Value::Number(cm_scale));
+    }
     if let Some(vis_type) = matches.value_of("vis_type") {
         let vis_type = vis_type.parse::<u16>().expect("Invalid vis_type") as f64;
         parameters.insert("file_vis_type".to_string(), Value::Number(vis_type));
-        if let Some(parameters_r) = &mut parameters_r{
-            parameters_r.insert("file_vis_type".to_string(), Value::Number(vis_type));
-        }
-        if let Some(parameters_l) = &mut parameters_l{
-            parameters_l.insert("file_vis_type".to_string(), Value::Number(vis_type));
-        }
+        // if let Some(parameters_r) = &mut parameters_r{
+        //     parameters_r.insert("file_vis_type".to_string(), Value::Number(vis_type));
+        // }
+        // if let Some(parameters_l) = &mut parameters_l{
+        //     parameters_l.insert("file_vis_type".to_string(), Value::Number(vis_type));
+        // }
     } 
 
     if let Some(gaze) = matches.values_of("gaze") {
@@ -219,6 +295,29 @@ pub fn cmd_parse() -> Config {
         parameters.insert("gaze_x".to_string(), Value::Number(gaze[0]));
         parameters.insert("gaze_y".to_string(), Value::Number(gaze[1]));
     };
+
+    if let Some(view) = matches.values_of("view") {
+        let view = view
+            .map(|t| t.trim().parse::<f64>().unwrap())
+            .collect::<Vec<f64>>();
+        parameters.insert("view_x".to_string(), Value::Number(view[0]));
+        parameters.insert("view_y".to_string(), Value::Number(view[1]));
+    };
+    
+    let (merged_parameters_r,merged_parameters_l) = match (parameters_r.clone(), parameters_l.clone()){
+        (Some(mut parameters_r),Some(mut parameters_l)) =>{
+            for (key, val) in parameters.iter() {
+                parameters_l.insert(key.clone(),val.clone());
+                parameters_r.insert(key.clone(),val.clone());
+            }
+            (Some(parameters_r),Some(parameters_l))
+        }
+        _ => (None,None)
+    };
+    // this is ugly as hell but rust currently dies not allow destructuring assignments
+    parameters_r = merged_parameters_r;
+    parameters_l = merged_parameters_l;
+
 
     let mut resolution = default.resolution;
     if let Some(res) = matches.values_of("res") {
@@ -267,6 +366,7 @@ pub fn cmd_parse() -> Config {
         inputs,
         parameters,
         parameters_r,
-        parameters_l
+        parameters_l,
+        track_perf
     }
 }

@@ -1,22 +1,67 @@
-#[derive(Copy, Clone)]
-pub enum VisualizationType{
+#[derive(Copy, Clone, Debug)]
+pub enum BaseImage{
   Output,
-  Deflection,
-  ColorChange,
-  ColorUncertainty,
   Original,
-  OverlayOutput,
-  OverlayInput,
   Ganglion
 }
 
-impl Default for VisualizationType{
+#[derive(Copy, Clone, Debug)]
+pub enum CombinationFunction{
+  AbsoluteErrorRGBVectorLength,
+  AbsoluteErrorXYVectorLength,
+  AbsoluteErrorRGBXYVectorLength,
+  UncertaintyRGBVectorLength,
+  UncertaintyXYVectorLength,
+  UncertaintyRGBXYVectorLength,
+  UncertaintyGenVar
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum MixType{
+  BaseImageOnly,
+  ColorMapOnly,
+  OverlayThreshold,  
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum ColorMapType{
+  Viridis,
+  Turbo,
+  Grayscale,
+}
+
+impl Default for BaseImage{
   fn default() -> Self{
-    VisualizationType::Output
+    BaseImage::Output
+  }
+}
+impl Default for ColorMapType{
+  fn default() -> Self{
+    ColorMapType::Viridis
+  }
+}
+impl Default for MixType{
+  fn default() -> Self{
+    MixType::BaseImageOnly
   }
 }
 
-#[derive(Copy, Clone)]
+impl Default for CombinationFunction{
+  fn default() -> Self{
+    CombinationFunction::AbsoluteErrorRGBVectorLength
+  }
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+pub struct VisualizationType{
+  pub base_image: BaseImage,
+  pub combination_function: CombinationFunction,
+  pub mix_type: MixType,
+  pub color_map_type: ColorMapType
+}
+
+
+#[derive(Copy, Clone, Debug)]
 pub struct VisualizationParameters{
   pub vis_type: VisualizationType,
   pub heat_scale : f32,
@@ -27,7 +72,10 @@ pub struct VisualizationParameters{
   pub eye_idx: u32,
   pub edit_eye_position: u32,
   pub eye_position: (f32,f32),
-  pub previous_mouse_position: (f32,f32)
+  pub previous_mouse_position: (f32,f32),
+  pub highlight_position: (f64,f64),
+  pub bees_flying: bool,
+  pub bees_visible: bool
 }
 
 impl Default for VisualizationParameters{
@@ -44,22 +92,17 @@ impl Default for VisualizationParameters{
       eye_idx: 0,
       edit_eye_position: 0,
       eye_position: (0.0,0.0),
-      previous_mouse_position: (0.0,0.0)
-
+      previous_mouse_position: (0.0,0.0),
+      highlight_position: (0.0,0.0),
+      bees_flying: true,
+      bees_visible: false
     }
   }
 }
 
 impl VisualizationParameters{
   pub fn has_to_track_error( &self) -> bool{
-    match self.vis_type {
-      VisualizationType::Deflection 
-      | VisualizationType::ColorChange
-      | VisualizationType::ColorUncertainty
-      | VisualizationType::OverlayInput
-      | VisualizationType::OverlayInput
-      => true,
-      _ => false
-    }
+    // true
+    self.vis_type.mix_type != MixType::BaseImageOnly
   }
 }

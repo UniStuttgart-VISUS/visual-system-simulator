@@ -186,8 +186,8 @@ RefractInfo rayIntersectEllipsoid(vec3 rPos, vec3 rDir, vec3 cPos, float cRad) {
     // float mul = 0.25 * 0;
 
     // We start off by defining the three main axis of the ellispoid.
-    vec3 a = vec3(cRad  , 0         ,    0);// * 0.96;
-    vec3 b = vec3(0     , cRad - u_astigmatism_ecc_mm ,    0);
+    vec3 a = vec3(cRad -0.094, 0,0); //experimental value, remove when cubemap works
+    vec3 b = vec3(0     , cRad - 0.078 - u_astigmatism_ecc_mm ,    0); //experimental value, remove when cubemap works
     vec3 c = vec3(0     , 0         , cRad);
 
     // Now we allow for rotation along the Z axis (viewing direction)

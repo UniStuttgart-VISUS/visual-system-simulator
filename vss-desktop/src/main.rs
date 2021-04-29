@@ -3,14 +3,20 @@ mod node;
 #[cfg(feature = "varjo")]
 mod varjo;
 
-use std::cell::RefCell;
+#[cfg(feature = "openxr")]
+mod openxr;
 
+use std::cell::RefCell;
+use std::time::Instant;
+use std::fs;
 use vss::*;
 
 use crate::cmd::*;
 use crate::node::*;
 
 type IoNodePair = (Box<dyn Node>, Option<Box<dyn Node>>);
+use std::fs::File;
+use std::io::Write;
 
 struct IoGenerator {
     inputs: Vec<String>,
@@ -128,17 +134,20 @@ fn build_flow(window: &mut Window, io_generator: &mut IoGenerator, flow_index: u
 
 }
 
-#[cfg(not(feature = "varjo"))]
+#[cfg(not(any(feature = "varjo", feature = "openxr")))]
 pub fn main() {
     let config = cmd_parse();
 
-    let remote = if let Some(port) = config.port {
-        Some(Remote::new(port))
-    } else {
-        None
-    };
+    // let remote = if let Some(port) = config.port {
+    //     Some(Remote::new(port))
+    // } else {
+    //     None
+    // };
     
-    let flow_count = 2;
+    let flow_count = match (config.parameters_r.clone(), config.parameters_l.clone()) {
+        (Some(_), Some(_)) => 2 , 
+        _ => 1
+    };
 
     let mut parameters = Vec::new();
     for idx in 0 .. flow_count {
@@ -156,21 +165,14 @@ pub fn main() {
                 config.parameters.clone().into_iter()
             }
         };
-        // for (key, val) in  config.parameters.clone().into_iter() {
         for (key, val) in iter {
             value_map.insert((key).clone(), (val).clone());
-
-            // if idx == 0 && key.eq("myopiahyperopia_mnh"){
-            //     value_map.insert("myopiahyperopia_mnh".into(), Value::Number(50.0));
-            // }
-            // else{
-            // }
         }  
         value_map.insert("flow_id".into(),Value::Number(idx as f64));
         parameters.push(RefCell::new(value_map));
     }
 
-    let mut window = Window::new(config.visible, remote, parameters, flow_count);
+    let mut window = Window::new(config.visible, None, parameters, flow_count);
 
     let is_output_hack_used = config.output.is_some();
 
@@ -181,32 +183,63 @@ pub fn main() {
 
     let mut desktop = SharedStereoDesktop::new();
 
+    
     for index in 0 .. flow_count {
         let mut io_generator = IoGenerator::new(config.inputs.clone(), config.output.clone());
-
         build_flow(&mut window, &mut io_generator, index, config.resolution);
-        let mut node = desktop.get_stereo_desktop_node(&window);
 
-        // let mut node = VRCompositor::new(&window);
-        // let viewport = &viewports[index];
-        // node.set_viewport(viewport.0 as f32, viewport.1 as f32, viewport.2 as f32, viewport.3 as f32);
-
-        window.add_node(Box::new(node), index);
+        if flow_count > 1 {
+            let mut node = desktop.get_stereo_desktop_node(&window);
+            window.add_node(Box::new(node), index);
+        }
     }
-
+    
 
     let mut done = false;
     window.update_last_node();
+    window.update_nodes();
+
+    let mut frame_counter = 0u128; // you know, for the simulations than run longer than the universe exists
+
+    let mut frame_times: Vec<(u128,u128,(u32,u32),u32,u32)> = vec![];
+    let mut previous_frame = Instant::now();
+    let print_spacing = 60;
+    let rays = if let Some(Value::Number(rays)) = config.parameters.get("rays") {
+        *rays as u32
+    }else{0};
+
+    let mix_type = if let Some(Value::Number(mix_type)) = config.parameters.get("file_mix_type") {
+        *mix_type as u32
+    }else{0};
 
     while !done {
+        frame_counter+=1;
 
         done = window.poll_events();
 
-        if !config.visible || is_output_hack_used {
+        if !config.visible || is_output_hack_used && frame_counter == 3 {
             // Exit once all inputs have been processed, unless visible.
             done = true;
         }
 
+        if config.track_perf >0 {
+            let time_diff = previous_frame.elapsed().as_micros();
+            let perf_info = (frame_counter,time_diff, (config.resolution.unwrap()[0],config.resolution.unwrap()[1]), rays, mix_type);
+            frame_times.push(perf_info);
+
+            if frame_counter>0 && frame_counter % print_spacing == 0 {
+                let avg_fps: i32 = frame_times[(frame_counter-print_spacing) as usize .. frame_counter as usize]
+                .iter()
+                .map(|t| t.1 as i32)
+                .sum::<i32>() / (print_spacing as i32);
+
+                println!("{:?} ≙ {}fps", perf_info, 1_000_000/(avg_fps));
+            }
+            previous_frame =  Instant::now();
+            if frame_counter > config.track_perf as u128 {
+                break;
+            }
+        }
         /*  
             The above hack works only with still images
             The original solution below has several problems:
@@ -234,9 +267,90 @@ pub fn main() {
 
     // writing the image to file might not be done yet, so we wait a second
     // this async behaviour stems from the callback used in the download buffer
+    if config.track_perf > 0 {
+        dump_perf_data(frame_times);
+    }
     use std::{thread, time};
     let a_second = time::Duration::from_secs(1);
     thread::sleep(a_second);
+}
+
+fn dump_perf_data(frame_times: Vec<(u128,u128,(u32,u32),u32,u32)>){
+    fs::write("vss_perf_data.csv", 
+        frame_times.iter()
+            .map(|t| format!("{},{},{},{},{}\n", t.0, t.1, t.2.0*t.2.1, t.3, t.4))
+            .collect::<Vec<String>>()
+            .join(""));
+}
+
+#[cfg(feature = "openxr")]
+pub fn main() {
+    let mut oxr = openxr::OpenXR::new();
+    let config = cmd_parse();
+
+    let remote = if let Some(port) = config.port {
+        Some(Remote::new(port))
+    } else {
+        None
+    };
+    
+    let flow_count = 2;
+
+    let mut parameters = Vec::new();
+    for idx in 0 .. flow_count {
+        let mut value_map = ValueMap::new();
+        let iter = match (config.parameters_r.clone(), config.parameters_l.clone()) {
+            (Some(param_r), Some(param_l)) =>{
+                if idx == 0 {
+                    param_r.into_iter()
+                }
+                else{
+                    param_l.into_iter()
+                }
+            }
+            _ => {
+                config.parameters.clone().into_iter()
+            }
+        };
+        for (key, val) in iter {
+            value_map.insert((key).clone(), (val).clone());
+        }  
+        value_map.insert("flow_id".into(),Value::Number(idx as f64));
+        parameters.push(RefCell::new(value_map));
+    }
+
+    let mut window = Window::new(config.visible, remote, parameters, flow_count);
+
+    
+    dbg!("Pre init");
+    oxr.initialize();
+    dbg!("Post init");
+
+
+
+
+    let mut desktop = SharedStereoDesktop::new();
+
+    for index in 0 .. flow_count {
+        let mut io_generator = IoGenerator::new(config.inputs.clone(), config.output.clone());
+
+        build_flow(&mut window, &mut io_generator, index, config.resolution);
+        let mut node = desktop.get_stereo_desktop_node(&window);
+
+        window.add_node(Box::new(node), index);
+    }
+
+
+    let mut done = false;
+    window.update_last_node();
+
+    oxr.create_session(&window);
+    oxr.create_render_targets(&window);
+
+
+    while !done {
+        done = window.poll_events();
+    }
 }
 
 #[cfg(feature = "varjo")]

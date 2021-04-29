@@ -1,5 +1,6 @@
 use crate::*;
 use std::cell::RefCell;
+use std::time::Instant;
 use cgmath::{Matrix4, Vector4, SquareMatrix};
 use glutin::{ElementState, MouseButton, dpi::{LogicalPosition}};
 
@@ -34,7 +35,9 @@ pub struct Window {
 
     remote: Option<Remote>,
     flow: Vec<Flow>,
-    vis_param: RefCell<VisualizationParameters>
+    vis_param: RefCell<VisualizationParameters>,
+    last_render_instant: RefCell<Instant>,
+    forced_view: Option<(f32,f32)>
 }
 
 impl Window {
@@ -75,20 +78,56 @@ impl Window {
         //TODO set perspective from values here ?
 
         let mut vis_param = VisualizationParameters::default();
-        if let Some(Value::Number(file_vis_type)) = values[0].borrow().get("file_vis_type") {
-            vis_param.vis_type = match *file_vis_type as i32{
-                0 => VisualizationType::Output,
-                1 => VisualizationType::Deflection,
-                2 => VisualizationType::ColorChange,
-                3 => VisualizationType::ColorUncertainty,
-                4 => VisualizationType::Original,
-                5 => VisualizationType::OverlayOutput,
-                6 => VisualizationType::OverlayInput,
-                7 => VisualizationType::Ganglion,
-                _ => panic!("No file_vis_type of {} found", file_vis_type)
+        if let Some(Value::Number(file_base_image)) = values[0].borrow().get("file_base_image") {
+            vis_param.vis_type.base_image = match *file_base_image as i32{
+                0 => BaseImage::Output,
+                1 => BaseImage::Original,
+                2 => BaseImage::Ganglion,
+                _ => panic!("No BaseImage of {} found", file_base_image)
             };
         }
-        let mut vis_param = RefCell::new(vis_param);
+        if let Some(Value::Number(file_mix_type)) = values[0].borrow().get("file_mix_type") {
+            vis_param.vis_type.mix_type = match *file_mix_type as i32{
+                0 => MixType::BaseImageOnly,
+                1 => MixType::ColorMapOnly,
+                2 => MixType::OverlayThreshold,
+                _ => panic!("No MixType of {} found", file_mix_type)
+            };
+        }
+        if let Some(Value::Number(file_color_map_type)) = values[0].borrow().get("file_cm_type") {
+            vis_param.vis_type.color_map_type = match *file_color_map_type as i32{
+                0 => ColorMapType::Viridis,
+                1 => ColorMapType::Turbo,
+                2 => ColorMapType::Grayscale,
+                _ => panic!("No ColorMapType of {} found", file_color_map_type)
+            };
+        }
+        if let Some(Value::Number(combination_function)) = values[0].borrow().get("file_cf") {
+            vis_param.vis_type.combination_function = match *combination_function as i32{
+                0 => CombinationFunction::AbsoluteErrorRGBVectorLength,
+                1 => CombinationFunction::AbsoluteErrorXYVectorLength,
+                2 => CombinationFunction::AbsoluteErrorRGBXYVectorLength,
+                3 => CombinationFunction::UncertaintyRGBVectorLength,
+                4 => CombinationFunction::UncertaintyXYVectorLength,
+                5 => CombinationFunction::UncertaintyRGBXYVectorLength,
+                6 => CombinationFunction::UncertaintyGenVar,
+                _ => panic!("No CombinationFunction of {} found", combination_function)
+            };
+        }
+        if let Some(Value::Number(cm_scale)) = values[0].borrow().get("cm_scale") {
+            vis_param.heat_scale = *cm_scale as f32;
+        }
+
+        let mut override_view = false;
+
+        let mut forced_view = None;
+        if let (Some(Value::Number(view_x)), Some(Value::Number(view_y)) ) = (values[0].borrow().get("view_x"),(values[0].borrow().get("view_y"))) {
+            forced_view = Some((*view_x as f32,*view_y as f32));
+            override_view = true;
+        }
+        let override_view =  RefCell::new(override_view);
+
+        let vis_param = RefCell::new(vis_param);
 
         Window {
             flow,
@@ -102,11 +141,13 @@ impl Window {
             main_depth: RefCell::new(main_depth),
             should_swap_buffers: RefCell::new(true),
             cursor_pos: RefCell::new(LogicalPosition{x:0.0, y:0.0}),
-            override_view: RefCell::new(false),
+            override_view,
             override_gaze: RefCell::new(false),
             active: RefCell::new(false),
             values: values,
-            vis_param
+            vis_param,
+            last_render_instant: RefCell::new(Instant::now()),
+            forced_view,
         }
     }
 }
@@ -119,6 +160,14 @@ impl Window {
     pub fn replace_node(&mut self, index: usize, node: Box<dyn Node>, flow_index: usize) {
         self.flow[flow_index].replace_node(index, node);
     }
+
+    pub fn delta_t(&self)  -> f32{
+        if self.vis_param.borrow().bees_flying {
+            return self.last_render_instant.borrow().elapsed().as_micros() as f32;
+        }
+        return 0.0;
+    }
+
 
     pub fn nodes_len(&self) -> usize {//TODO: return vector of lengths
         self.flow[0].nodes_len()
@@ -155,6 +204,10 @@ impl Window {
 
     pub fn encoder(&self) -> &RefCell<DeviceEncoder> {
         &self.encoder
+    }
+
+    pub fn device(&self) -> & RefCell<gfx_device_gl::Device> {
+        &self.device
     }
 
     pub fn flush(&self, encoder: &mut DeviceEncoder) {
@@ -199,6 +252,30 @@ impl Window {
                                 vp.edit_eye_position = 0;
                             },
                         }
+                    }, 
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::P),
+                                ..
+                            },
+                        ..
+                    } => {
+                        let mut vp = self.vis_param.borrow_mut();
+                        vp.bees_flying = !vp.bees_flying;
+                    }, 
+                    glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glutin::KeyboardInput {
+                                state: glutin::ElementState::Pressed,
+                                virtual_keycode: Some(glutin::VirtualKeyCode::B),
+                                ..
+                            },
+                        ..
+                    } => {
+                        let mut vp = self.vis_param.borrow_mut();
+                        vp.bees_visible = !vp.bees_visible;
                     }, 
                     glutin::WindowEvent::KeyboardInput {
                         input:
@@ -300,7 +377,7 @@ impl Window {
                             },
                         ..
                     } => {
-                        self.vis_param.borrow_mut().dir_calc_scale+=0.5;
+                        self.vis_param.borrow_mut().dir_calc_scale-=5.0;
                     },
                     glutin::WindowEvent::KeyboardInput {
                         input:
@@ -311,7 +388,7 @@ impl Window {
                             },
                         ..
                     } => {
-                        self.vis_param.borrow_mut().dir_calc_scale-=0.5;
+                        self.vis_param.borrow_mut().dir_calc_scale+=5.0;
                     },
                     glutin::WindowEvent::KeyboardInput {
                         input:
@@ -360,82 +437,18 @@ impl Window {
                     glutin::WindowEvent::KeyboardInput {
                         input:
                             glutin::KeyboardInput {
-                                virtual_keycode: Some(glutin::VirtualKeyCode::Key0),
+                                virtual_keycode: Some(glutin::VirtualKeyCode::C),
+                                state: glutin::ElementState::Pressed,
                                 ..
                             },
                         ..
                     } => {
-                        self.vis_param.borrow_mut().vis_type=VisualizationType::Output;
-                    },
-                    glutin::WindowEvent::KeyboardInput {
-                        input:
-                            glutin::KeyboardInput {
-                                virtual_keycode: Some(glutin::VirtualKeyCode::Key1),
-                                ..
-                            },
-                        ..
-                    } => {
-                        self.vis_param.borrow_mut().vis_type=VisualizationType::Deflection;
-                    },
-                    glutin::WindowEvent::KeyboardInput {
-                        input:
-                            glutin::KeyboardInput {
-                                virtual_keycode: Some(glutin::VirtualKeyCode::Key2),
-                                ..
-                            },
-                        ..
-                    } => {
-                        self.vis_param.borrow_mut().vis_type=VisualizationType::ColorChange;
-                    },
-                    glutin::WindowEvent::KeyboardInput {
-                        input:
-                            glutin::KeyboardInput {
-                                virtual_keycode: Some(glutin::VirtualKeyCode::Key3),
-                                ..
-                            },
-                        ..
-                    } => {
-                        self.vis_param.borrow_mut().vis_type=VisualizationType::ColorUncertainty;
-                    },
-                    glutin::WindowEvent::KeyboardInput {
-                        input:
-                            glutin::KeyboardInput {
-                                virtual_keycode: Some(glutin::VirtualKeyCode::Key4),
-                                ..
-                            },
-                        ..
-                    } => {
-                        self.vis_param.borrow_mut().vis_type=VisualizationType::Original;
-                    },
-                    glutin::WindowEvent::KeyboardInput {
-                        input:
-                            glutin::KeyboardInput {
-                                virtual_keycode: Some(glutin::VirtualKeyCode::Key5),
-                                ..
-                            },
-                        ..
-                    } => {
-                        self.vis_param.borrow_mut().vis_type=VisualizationType::OverlayOutput;
-                    },
-                    glutin::WindowEvent::KeyboardInput {
-                        input:
-                            glutin::KeyboardInput {
-                                virtual_keycode: Some(glutin::VirtualKeyCode::Key6),
-                                ..
-                            },
-                        ..
-                    } => {
-                        self.vis_param.borrow_mut().vis_type=VisualizationType::OverlayInput;
-                    },
-                    glutin::WindowEvent::KeyboardInput {
-                        input:
-                            glutin::KeyboardInput {
-                                virtual_keycode: Some(glutin::VirtualKeyCode::Key7),
-                                ..
-                            },
-                        ..
-                    } => {
-                        self.vis_param.borrow_mut().vis_type=VisualizationType::Ganglion;
+                        let mut vp = self.vis_param.borrow_mut();
+                        match vp.vis_type.color_map_type {
+                            ColorMapType::Viridis => (*vp).vis_type.color_map_type = ColorMapType::Turbo,
+                            ColorMapType::Turbo => (*vp).vis_type.color_map_type = ColorMapType::Grayscale,
+                            ColorMapType::Grayscale  => (*vp).vis_type.color_map_type = ColorMapType::Viridis,
+                        }
                     },
                     glutin::WindowEvent::KeyboardInput {
                         input:
@@ -492,10 +505,54 @@ impl Window {
                             }
                         }
                     }
+                    glutin::WindowEvent::KeyboardInput {
+                        input:glutin::KeyboardInput {virtual_keycode, ..}, ..
+                    } => {
+                        let mut vp = self.vis_param.borrow_mut();
+                        match virtual_keycode{
+                            Some(glutin::VirtualKeyCode::O) => vp.vis_type.base_image=BaseImage::Output,
+                            Some(glutin::VirtualKeyCode::I) => vp.vis_type.base_image=BaseImage::Original,
+                            Some(glutin::VirtualKeyCode::G) => vp.vis_type.base_image=BaseImage::Ganglion,
+
+                            Some(glutin::VirtualKeyCode::Key1) => vp.vis_type.mix_type=MixType::BaseImageOnly,
+                            Some(glutin::VirtualKeyCode::Key2) => vp.vis_type.mix_type=MixType::ColorMapOnly,
+                            Some(glutin::VirtualKeyCode::Key3) => vp.vis_type.mix_type=MixType::OverlayThreshold,
+
+                            Some(glutin::VirtualKeyCode::Key4) => vp.vis_type.combination_function=CombinationFunction::AbsoluteErrorRGBVectorLength,
+                            Some(glutin::VirtualKeyCode::Key5) => vp.vis_type.combination_function=CombinationFunction::AbsoluteErrorXYVectorLength,
+                            Some(glutin::VirtualKeyCode::Key6) => vp.vis_type.combination_function=CombinationFunction::AbsoluteErrorRGBXYVectorLength,
+                            Some(glutin::VirtualKeyCode::Key7) => vp.vis_type.combination_function=CombinationFunction::UncertaintyRGBVectorLength,
+                            Some(glutin::VirtualKeyCode::Key8) => vp.vis_type.combination_function=CombinationFunction::UncertaintyXYVectorLength,
+                            Some(glutin::VirtualKeyCode::Key9) => vp.vis_type.combination_function=CombinationFunction::UncertaintyRGBXYVectorLength,
+                            Some(glutin::VirtualKeyCode::Key0) => vp.vis_type.combination_function=CombinationFunction::UncertaintyGenVar,
+                            _ => {}
+                        }
+                    }
                     _ => (),
                 }
             }
         });
+
+        if let Some(_) = self.forced_view {
+            // Update pipline IO.
+            let dpi_factor = self.windowed_context.window().get_hidpi_factor();
+            let size = glutin::dpi::PhysicalSize {
+                width: 1920.0,
+                height: 1080.0,
+            };
+            //self.windowed_context.resize(size);
+            gfx_window_glutin::update_views(
+                &self.windowed_context,
+                &mut self.render_target.borrow_mut(),
+                &mut self.main_depth.borrow_mut(),
+            );
+            for (i, f) in self.flow.iter().enumerate(){
+                f.negociate_slots(&self);
+                f.update_values(&self, &self.values[i].borrow());
+                f.last_perspective.borrow_mut().proj = cgmath::perspective(
+                    cgmath::Deg(70.0), (size.width/size.height) as f32, 0.05, 1000.0);
+            }
+        }
 
         if let Some(size) = deferred_size {
             // Update pipline IO.
@@ -520,11 +577,22 @@ impl Window {
             if *self.override_view.borrow() || *self.override_gaze.borrow() {
                 let window_size = &self.windowed_context.window().get_inner_size().unwrap();
                 let cursor_pos = self.cursor_pos.borrow();
-                let yaw = cursor_pos.x as f32 / window_size.width as f32
+                //println!("{} {}",cursor_pos.x as f32 ,cursor_pos.y as f32);
+                let view_input = match self.forced_view {
+                    Some(pos) =>{
+                        pos
+                    }
+                    None =>{
+                        (cursor_pos.x as f32 ,cursor_pos.y as f32)
+                    }
+                };
+
+                self.vis_param.borrow_mut().highlight_position = (cursor_pos.x/window_size.width, cursor_pos.y/window_size.height);
+                let yaw = view_input.0 as f32 / window_size.width as f32
                     * std::f32::consts::PI
                     * 2.0
                     - 0.5;
-                let pitch = cursor_pos.y as f32 / window_size.height as f32
+                let pitch = view_input.1 as f32 / window_size.height as f32
                     * std::f32::consts::PI
                     - 0.5;//50 mm lens
                 let view = Matrix4::from_angle_x(cgmath::Rad(pitch)) * Matrix4::from_angle_y(cgmath::Rad(yaw));
@@ -540,14 +608,16 @@ impl Window {
                 if *self.override_gaze.borrow() {
                     perspective.gaze = (perspective.view * view.invert().unwrap() * Vector4::unit_z()).truncate();
                 }
-            }
+            }            
             f.input(&self.vis_param.borrow());
         }
+        //println!("Rendered with: {:?}", self.vis_param.borrow_mut());
 
         self.encoder
             .borrow_mut()
             .clear(&self.render_target.borrow(), [68.0 / 255.0; 4]);
         self.flow.iter().for_each(|f| f.render(&self));
+        self.last_render_instant.replace(Instant::now());
 
         use gfx::Device;
         self.flush(&mut self.encoder().borrow_mut());
@@ -560,6 +630,7 @@ impl Window {
         if let Some(remote) = &self.remote {
             remote.send_frame();
         }
+
 
         return done;
     }

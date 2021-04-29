@@ -146,11 +146,14 @@ void applyNyctalopia(inout vec4 color, in vec4 retina, inout ErrorValues ev) {
             // The weights from the brightness function
             vec3 weights = vec3(0.299, 0.587, 0.114);
 
-            mat3 J = mat3(
+            /*
+                To generate the Jacobi matrix, use color = retina.a * color + (1.0 - retina.a) * night_blindness_factor * color in the dimensions to derive
+            */
+            mat3 J = transpose(mat3(
                 5*(1-retina.a)*(color.b*weights.b+color.g*weights.g+color.r*weights.r)+5*(1-retina.a)*color.r*weights.r+retina.a,	5*(1-retina.a)*color.r*weights.g,	5*(1-retina.a)*color.r*weights.b,
                 5*(1-retina.a)*color.g*weights.r,	5*(1-retina.a)*(color.b*weights.b+color.g*weights.g+color.r*weights.r)+5*(1-retina.a)*color.g*weights.g+retina.a,	5*(1-retina.a)*color.g*weights.b,
                 5*(1-retina.a)*color.b*weights.r,	5*(1-retina.a)*color.b*weights.g,	5*(1-retina.a)*(color.b*weights.b+color.g*weights.g+color.r*weights.r)+5*(1-retina.a)*color.b*weights.b+retina.a
-            );
+            ));
             mat3 Jt = transpose(J);
             ev.S_col = J*ev.S_col*Jt;
         }
@@ -162,7 +165,8 @@ void glaucoma(inout vec4 color, in vec4 retina_mask, inout ErrorValues ev) {
     float maxValue = retina_mask.r > retina_mask.g ? retina_mask.r : retina_mask.g;
     maxValue = maxValue > retina_mask.b ? maxValue : retina_mask.b;
     maxValue = maxValue > retina_mask.a ? maxValue : retina_mask.a;
-    // only takes effect when everything is lower than 0.25
+    // only takes effect when everything is lower than 0.25. 
+    // This simulates a loss of resolution caused by less-sensitive photoreceptor types
     maxValue *= 4.0;
     if (maxValue < 1.0) {
         color = (maxValue) * (color) + (1.0 - maxValue) * GLAUCOMA_COLOR;
@@ -178,7 +182,7 @@ void main() {
     //vec4 retina_mask = texture(s_retina, normalize(world_dir.xyz)/world_dir.w);
 
     /*
-        Since there is no uncertainty att play here, we can overwrite all previous efforts with 0.
+        Since there is no uncertainty at play here, we can overwrite all previous efforts with 0.
         The color changehas have to be added to the previously recorded changes.
         Since the resulting color is constant, it does not make sense to have uncertainties regarding position
     */
@@ -230,7 +234,6 @@ void main() {
         rt_color_change = vec4(texture(s_color_change, v_tex).rgb + color_diff,0.0);
         rt_color_uncertainty = vec4(color_var, 0.0);
         rt_deflection = vec4(texture(s_deflection, v_tex).rg, dir_var);
-        // rt_deflection = texture(s_deflection, v_tex).rgba;
         rt_covariances = vec4(color_covar, dir_covar);
     }
 }

@@ -29,18 +29,17 @@ void lowerContrastBy(inout vec4 color, inout mat3 S, float value) {
         color.g += (color.r - color.g) * value;
         color.b += (color.r - color.b) * value;
         // jacobian ([ r, g+(r-g)*c, b+(r-b)*c ], [r,g,b]);
-        mat3 J = mat3(1,	0,	0, value, 1-value,	0, value, 0, 1-value);
-        S = J*S*transpose(J);
-        
+        mat3 J = transpose(mat3(1.0,	0.0,	0.0, value, 1.0-value,	0.0, value, 0.0, 1.0-value));
+        S = J*S*transpose(J);        
     } else if (color.g > color.r && color.g > color.b) {
         color.r += (color.g - color.r) * value;
         color.b += (color.g - color.b) * value;
-        mat3 J = mat3(1-value, value,0, 0, 1,0, 0, value, 1-value);
-        S = J*S*transpose(J);
-    } else {
+        mat3 J = transpose(mat3(1-value, value,0, 0, 1,0, 0, value, 1-value));
+        S = J*S*transpose(J);        
+    } else{
         color.r += (color.b - color.r) * value;
         color.g += (color.b - color.g) * value;
-        mat3 J = mat3(1-value, 0 , value, 0, 1-value, value, 0, 0, 1);
+        mat3 J = transpose(mat3(1-value, 0 , value, 0, 1-value, value, 0, 0, 1));
         S = J*S*transpose(J);
     }
 }
@@ -82,7 +81,7 @@ void main() {
         else{
             color =  blur(v_tex, s_color, u_blur_factor * 3.0, u_resolution);
 
-            // since bloom and contrast alre quite cheap, they do not have their own methods without error tracking
+            // since bloom and contrast are quite cheap, they do not have their own methods without error tracking
             mat3 unused_mat = mat3(0.0);
             applyBloom(color.rgb, u_blur_factor/3, unused_mat);
             rt_color = color;

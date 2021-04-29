@@ -1,5 +1,7 @@
 use super::*;
 use gfx;
+use cgmath::Matrix4;
+use cgmath::Rad;
 
 gfx_defines! {
     pipeline pipe {
@@ -10,12 +12,21 @@ gfx_defines! {
         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
         u_vis_type: gfx::Global<i32> = "u_vis_type",
         u_heat_scale: gfx::Global<f32> = "u_heat_scale",
+        u_dir_calc_scale: gfx::Global<f32> = "u_dir_calc_scale",
         s_deflection: gfx::TextureSampler<[f32; 4]> = "s_deflection",
         s_color_change: gfx::TextureSampler<[f32; 4]> = "s_color_change",
         s_color_uncertainty: gfx::TextureSampler<[f32; 4]> = "s_color_uncertainty",
         s_original: gfx::TextureSampler<[f32; 4]> = "s_original",
         s_covariances: gfx::TextureSampler<[f32; 4]> = "s_covariances",
         u_flow_idx: gfx::Global<i32> = "u_flow_idx",
+        u_hive_rotation: gfx::Global<[[f32; 4];4]> = "u_hive_rotation",
+        u_hive_position: gfx::Global<[f32; 2]> = "u_hive_position",
+        u_hive_visible: gfx::Global<i32> = "u_hive_visible",
+
+        u_base_image: gfx::Global<i32> = "u_base_image",
+        u_combination_function: gfx::Global<i32> = "u_combination_function",
+        u_mix_type: gfx::Global<i32> = "u_mix_type",
+        u_colormap_type: gfx::Global<i32> = "u_colormap_type",
     }
 }
 
@@ -24,6 +35,7 @@ gfx_defines! {
 pub struct Display {
     pso: gfx::PipelineState<Resources, pipe::Meta>,
     pso_data: pipe::Data<Resources>,
+    hive_rot: Matrix4<f32>
 }
 
 impl Node for Display {
@@ -84,8 +96,17 @@ impl Node for Display {
                 rt_color: dst,
                 u_vis_type: 0,
                 u_heat_scale: 1.0,
-                u_flow_idx: 0
+                u_dir_calc_scale: 1.0,
+                u_flow_idx: 0,
+                u_hive_rotation: [[0.0; 4]; 4],
+                u_hive_position: [0.0; 2],
+                u_hive_visible: 0,
+                u_base_image: 0,
+                u_combination_function: 0,
+                u_mix_type: 0,
+                u_colormap_type: 0
             },
+            hive_rot: Matrix4::from_angle_x(Rad(0.0))
         }
     }
 
@@ -126,13 +147,32 @@ impl Node for Display {
     }
 
     fn input(&mut self, perspective: &EyePerspective, vis_param: &VisualizationParameters) -> EyePerspective {
-        self.pso_data.u_vis_type = ((vis_param.vis_type) as u32) as i32;
+        //self.pso_data.u_vis_type = ((vis_param.vis_type) as u32) as i32;
         self.pso_data.u_heat_scale = vis_param.heat_scale;
+        self.pso_data.u_dir_calc_scale = vis_param.dir_calc_scale;
+        self.pso_data.u_flow_idx = vis_param.eye_idx as i32;
+        self.pso_data.u_hive_position[0] = vis_param.highlight_position.0 as f32;
+        self.pso_data.u_hive_position[1] = vis_param.highlight_position.1 as f32;
+        self.pso_data.u_hive_visible = vis_param.bees_visible as i32;
+
+        self.pso_data.u_base_image =  ((vis_param.vis_type.base_image) as u32) as i32;
+        self.pso_data.u_combination_function = ((vis_param.vis_type.combination_function) as u32) as i32;
+        self.pso_data.u_mix_type = ((vis_param.vis_type.mix_type) as u32) as i32;
+        self.pso_data.u_colormap_type = ((vis_param.vis_type.color_map_type) as u32) as i32;
 
         perspective.clone()
     }
 
     fn render(&mut self, window: &Window) {
+
+        let speed = 4.0;
+
+        self.hive_rot= self.hive_rot*Matrix4::from_angle_x(Rad(       speed * window.delta_t()/1_000_000.0));
+        self.hive_rot= self.hive_rot*Matrix4::from_angle_y(Rad( 0.7 * speed * window.delta_t()/1_000_000.0));
+        self.hive_rot= self.hive_rot*Matrix4::from_angle_z(Rad( 0.2 * speed * window.delta_t()/1_000_000.0));
+
+        self.pso_data.u_hive_rotation = self.hive_rot.into();
+
         let mut encoder = window.encoder().borrow_mut();
 
         if self.pso_data.u_stereo == 0 {

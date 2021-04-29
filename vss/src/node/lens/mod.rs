@@ -165,6 +165,10 @@ impl Node for Lens {
         self.pso_data.u_far_vision_factor = 0.0;
         self.pso_data.u_active = 0;
 
+        if let Some(Value::Number(rays)) = values.get("rays") {
+            self.pso_data.u_samplecount = *rays as i32;
+        }
+
         if let Some(Value::Bool(true)) = values.get("presbyopia_onoff") {
             // near point is a parameter between 0 and 100 that is to be scaled to 0 - 1000
             if let Some(Value::Number(near_point)) = values.get("presbyopia_near_point") {
@@ -227,7 +231,7 @@ impl Node for Lens {
         self.pso_data.u_depth_min = vis_param.test_depth_min;
         self.pso_data.u_lens_position[0] = vis_param.eye_position.0;
         self.pso_data.u_lens_position[1] = vis_param.eye_position.1;
-        self.pso_data.u_track_error = vis_param.has_to_track_error() as i32;        
+        self.pso_data.u_track_error = vis_param.has_to_track_error() as i32;   
         perspective.clone()
     }
 }

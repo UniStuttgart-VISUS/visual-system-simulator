@@ -30,3 +30,4 @@ cc = "^1.0.61"
 default = []
 video = ["ac_ffmpeg"]
 varjo = []
+openxr = []
