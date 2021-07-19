@@ -20,15 +20,17 @@ use std::io::Write;
 
 struct IoGenerator {
     inputs: Vec<String>,
+    config_name: String,
     output: Option<mustache::Template>,
     input_idx: usize,
     input_processed: std::sync::Arc<std::sync::RwLock<bool>>,
 }
 
 impl IoGenerator {
-    fn new(inputs: Vec<String>, output: Option<mustache::Template>) -> Self {
+    fn new(inputs: Vec<String>, config_name: String, output: Option<mustache::Template>) -> Self {
         Self {
             inputs,
+            config_name,
             output,
             input_idx: 0,
             input_processed: std::sync::Arc::new(std::sync::RwLock::new(false)),
@@ -57,7 +59,8 @@ impl IoGenerator {
                 input_node.set_render_resolution(render_resolution);
                 let output_node = if let Some(output) = &self.output {
                     let mut output_node = DownloadRgbBuffer::new(&window);
-                    let input_info = InputInfo {
+                    let output_info = OutputInfo {
+                        configname: self.config_name.clone(),
                         dirname: input_path
                             .parent()
                             .unwrap()
@@ -85,7 +88,7 @@ impl IoGenerator {
                             .into_string()
                             .unwrap(),
                     };
-                    let output_path = output.render_to_string(&input_info).unwrap();
+                    let output_path = output.render_to_string(&output_info).unwrap();
                     output_node.set_image_path(output_path, self.input_processed.clone());
                     Some(Box::new(output_node) as Box<dyn Node>)
                 } else {
@@ -183,9 +186,12 @@ pub fn main() {
 
     let mut desktop = SharedStereoDesktop::new();
 
-    
-    for index in 0 .. flow_count {
-        let mut io_generator = IoGenerator::new(config.inputs.clone(), config.output.clone());
+    for index in 0..flow_count {
+        let mut io_generator = IoGenerator::new(
+            config.inputs.clone(),
+            config.name.clone(),
+            config.output.clone(),
+        );
         build_flow(&mut window, &mut io_generator, index, config.resolution);
 
         if flow_count > 1 {
@@ -331,8 +337,12 @@ pub fn main() {
 
     let mut desktop = SharedStereoDesktop::new();
 
-    for index in 0 .. flow_count {
-        let mut io_generator = IoGenerator::new(config.inputs.clone(), config.output.clone());
+    for index in 0..flow_count {
+        let mut io_generator = IoGenerator::new(
+            config.inputs.clone(),
+            config.name.clone(),
+            config.output.clone(),
+        );
 
         build_flow(&mut window, &mut io_generator, index, config.resolution);
         let mut node = desktop.get_stereo_desktop_node(&window);
@@ -409,7 +419,7 @@ pub fn main() {
     let varjo_viewports = varjo.create_render_targets(&window);
     let mut varjo_fov = vec![(100.0, 70.0); 4];
 
-    let mut io_generator = IoGenerator::new(config.inputs, config.output);
+    let mut io_generator = IoGenerator::new(config.inputs, config.name.clone(), config.output);
 
     for index in 0 .. flow_count {
         let viewport = &varjo_viewports[index];
