@@ -117,7 +117,11 @@ fn build_flow(window: &mut Window, io_generator: &mut IoGenerator, flow_index: u
     window.add_node(Box::new(node), flow_index);
     let node = Retina::new(&window);
     window.add_node(Box::new(node), flow_index);
-
+    
+    // Measure Uncertainty
+    let node = VarianceMeasure::new(&window);
+    window.add_node(Box::new(node), flow_index);
+    
     // Add output node, if present.
     if let Some(output_node) = output_node {
         // Display node.

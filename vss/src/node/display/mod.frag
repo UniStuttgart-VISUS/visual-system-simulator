@@ -308,6 +308,8 @@ void main() {
             break;
         case 2:
             color = RetinalGanglion();
+        case 3:
+            color =  texture(s_color, v_tex).rgb;
         default:
             // leave default value
             break;

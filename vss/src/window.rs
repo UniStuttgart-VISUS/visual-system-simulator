@@ -3,6 +3,7 @@ use std::cell::RefCell;
 use std::time::Instant;
 use cgmath::{Matrix4, Vector4, SquareMatrix};
 use glutin::{ElementState, MouseButton, dpi::{LogicalPosition}};
+use eframe::egui::*;
 
 /// A factory to create device objects.
 pub type DeviceFactory = gfx_device_gl::Factory;
@@ -513,6 +514,7 @@ impl Window {
                             Some(glutin::VirtualKeyCode::O) => vp.vis_type.base_image=BaseImage::Output,
                             Some(glutin::VirtualKeyCode::I) => vp.vis_type.base_image=BaseImage::Original,
                             Some(glutin::VirtualKeyCode::G) => vp.vis_type.base_image=BaseImage::Ganglion,
+                            Some(glutin::VirtualKeyCode::V) => vp.vis_type.base_image=BaseImage::Variance,
 
                             Some(glutin::VirtualKeyCode::Key1) => vp.vis_type.mix_type=MixType::BaseImageOnly,
                             Some(glutin::VirtualKeyCode::Key2) => vp.vis_type.mix_type=MixType::ColorMapOnly,

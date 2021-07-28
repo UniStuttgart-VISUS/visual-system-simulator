@@ -2,7 +2,8 @@
 pub enum BaseImage{
   Output,
   Original,
-  Ganglion
+  Ganglion,
+  Variance
 }
 
 #[derive(Copy, Clone, Debug)]
