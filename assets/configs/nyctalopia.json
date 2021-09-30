@@ -16,9 +16,14 @@
 	"maculardegeneration_radius": 0,
 	"myopiahyperopia_onoff": false,
 	"myopiahyperopia_mnh": 50,
-	"nyctalopia_onoff": false,
+	"nyctalopia_onoff": true,
 	"nyctalopia_int": 99,
 	"presbyopia_onoff": false,
 	"presbyopia_near_point": 0,
-	"retina_map_path" : "./assets/configs/nyctalopia.retina.png"
+	"retina_map_pos_x_path" : null,
+	"retina_map_neg_x_path" : null,
+	"retina_map_pos_y_path" : null,
+	"retina_map_neg_y_path" : null,
+	"retina_map_pos_z_path" : null,
+	"retina_map_neg_z_path" : null
 }

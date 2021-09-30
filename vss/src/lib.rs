@@ -1,20 +1,23 @@
 #[macro_use]
-extern crate gfx;
-extern crate gfx_device_gl;
-extern crate gfx_gl;
-extern crate gfx_window_glutin;
-extern crate glutin;
-extern crate image;
-extern crate serde_json;
-extern crate ws;
-
+pub extern crate gfx;
 #[macro_use]
-mod pipeline;
-mod config;
-mod devices;
-mod passes;
+extern crate bitflags;
 
-pub use crate::config::*;
-pub use crate::devices::*;
-pub use crate::passes::*;
-pub use crate::pipeline::*;
+mod flow;
+mod node;
+mod remote;
+mod texture;
+mod utils;
+mod value;
+mod window;
+mod vis_param;
+
+pub use self::flow::*;
+pub use self::node::*;
+pub use self::remote::*;
+pub use self::texture::*;
+pub use self::utils::*;
+pub use self::value::*;
+pub use self::window::*;
+pub use self::window::*;
+pub use self::vis_param::*;

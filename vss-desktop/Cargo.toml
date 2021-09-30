@@ -4,13 +4,30 @@ edition = "2018"
 version = "1.0.0"
 authors = ["The Visual System Simulator Developers"]
 license = "Apache-2.0"
+build = "build.rs"
+default-run = "vss"
+
+[[bin]]
+name = "vss"
+path = "src/main.rs"
 
 [dependencies]
 vss = { path = "../vss" }
 clap = "2"
+serde = { version = "1", features = ["derive"] }
+glob = "0.3"
+mustache = "0.9"
 serde_json = "*"
-av = { git = "https://github.com/unpatched/rust-av.git", branch = "master", optional = true }
+ac_ffmpeg = { package = "ac-ffmpeg", version = "0.15.3", optional = true }
+log = "0.4.11"
+simple-logging = "2.0.2"
+cgmath = "0.18"
+
+[build-dependencies]
+cc = "^1.0.61"
 
 [features]
 default = []
-video = ["av"]
+video = ["ac_ffmpeg"]
+varjo = []
+openxr = []
