@@ -188,6 +188,16 @@ pub fn cmd_parse() -> Config {
                 .help("Tracks performance metrics"),
         )
         .arg(
+            Arg::with_name("variance")
+                .long("variance")
+                .value_names(&["Type", "Metric", "Color"])
+                .number_of_values(3)
+                .help("Enables variance metrics. Needs three values:\n\
+                \x20\x20Type(0-3): Off/Before/After/Diff\n\
+                \x20\x20Metric(0-6): First/Avg/Var_Avg/First_Contrast/Delta_E/Michelson_Contrast/Histogram\n\
+                \x20\x20Color(0-2): RGB/LAB/ITP"),
+        )
+        .arg(
             Arg::with_name("rays")
                 .long("rays")
                 .number_of_values(1)
@@ -268,6 +278,15 @@ pub fn cmd_parse() -> Config {
 
     let mut track_perf = matches.value_of("perf").map(|v| v.parse::<u32>()).unwrap_or(Ok(0u32)).unwrap_or(0);
 
+    if let Some(variance) = matches.values_of("variance") {
+        let variance = variance
+            .map(|t| t.trim().parse::<f64>().unwrap())
+            .collect::<Vec<f64>>();
+        parameters.insert("measure_variance".to_string(), Value::Number(variance[0]));
+        parameters.insert("variance_metric".to_string(), Value::Number(variance[1]));
+        parameters.insert("variance_color_space".to_string(), Value::Number(variance[2]));
+    };
+
     if let Some(rays) = matches.value_of("rays") {
         let rays = rays.parse::<f64>().expect("Invalid rays");
         parameters.insert("rays".to_string(), Value::Number(rays));
@@ -314,7 +333,7 @@ pub fn cmd_parse() -> Config {
         }
         _ => (None,None)
     };
-    // this is ugly as hell but rust currently dies not allow destructuring assignments
+    // this is ugly as hell but rust currently does not allow destructuring assignments
     parameters_r = merged_parameters_r;
     parameters_l = merged_parameters_l;
 

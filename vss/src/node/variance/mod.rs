@@ -1,4 +1,5 @@
 use std::borrow::BorrowMut;
+use std::collections::HashMap;
 
 use super::*;
 use gfx;
@@ -10,7 +11,7 @@ gfx_defines! {
         s_color: gfx::TextureSampler<[f32; 4]> = "s_color",
         s_original: gfx::TextureSampler<[f32; 4]> = "s_original",
         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
-        rt_measure: gfx::RenderTarget<ColorFormat> = "rt_measure",
+        rt_measure: gfx::RenderTarget<HighpFormat> = "rt_measure",
         s_deflection: gfx::TextureSampler<[f32; 4]> = "s_deflection",
         rt_deflection: gfx::RenderTarget<Rgba32F> = "rt_deflection",
         s_color_change: gfx::TextureSampler<[f32; 4]> = "s_color_change",
@@ -20,9 +21,9 @@ gfx_defines! {
         s_covariances: gfx::TextureSampler<[f32; 4]> = "s_covariances",
         rt_covariances: gfx::RenderTarget<Rgba32F> = "rt_covariances",
         u_track_error: gfx::Global<i32> = "u_track_error",
-        u_show_variance: gfx::Global<i32> = "u_show_variance",
-        u_color_space: gfx::Global<i32> = "u_color_space",
-        u_variance_measure: gfx::Global<i32> = "u_variance_measure",
+        u_show_variance: gfx::Global<u32> = "u_show_variance",
+        u_variance_metric: gfx::Global<u32> = "u_variance_metric",
+        u_color_space: gfx::Global<u32> = "u_color_space",
     }
 }
 
@@ -73,11 +74,11 @@ impl Node for VarianceMeasure {
                 s_covariances: (s_covariances, sampler.clone()),
                 rt_covariances,
                 u_track_error: 0,
-                u_show_variance: 3,
-                u_color_space: 2,
-                u_variance_measure: 4,
+                u_show_variance: 0,
+                u_variance_metric: 0,
+                u_color_space: 0,
             },
-            last_info: 0.0,
+            last_info: 1.0,
         }
     }
 
@@ -98,7 +99,7 @@ impl Node for VarianceMeasure {
         self.pso_data.s_covariances = slots.as_covariances_view();
         self.pso_data.rt_covariances = slots.as_covariances();
             
-        let (color, _) = create_texture_render_target::<ColorFormat>(
+        let (color, _) = create_texture_render_target::<HighpFormat>(
             &mut window.factory().borrow_mut(),
             self.pso_data.u_resolution[0] as u32,
             self.pso_data.u_resolution[1] as u32,
@@ -115,16 +116,19 @@ impl Node for VarianceMeasure {
 
     fn input(&mut self, perspective: &EyePerspective, vis_param: &VisualizationParameters) -> EyePerspective {
         self.pso_data.u_track_error = vis_param.has_to_track_error() as i32;
-        //self.pso_data.u_show_variance =  ((vis_param.vis_type.base_image) as u32) as i32;
+        self.pso_data.u_show_variance =  vis_param.measure_variance;
+        self.pso_data.u_variance_metric =  vis_param.variance_metric;
+        self.pso_data.u_color_space =  vis_param.variance_color_space;
         perspective.clone()
     }
 
     fn render(&mut self, window: &Window) {
         let mut encoder = window.encoder().borrow_mut();
         encoder.draw(&gfx::Slice::from_vertex_count(6), &self.pso, &self.pso_data);
+
         self.last_info += window.delta_t()/1000000.0;
-        if self.last_info > 1.0{
-            self.last_info -= 1.0;
+        if self.last_info >= 1.0 && self.pso_data.u_show_variance > 0 {
+            self.last_info = 0.0;
 
             use gfx::format::Formatted;
             use gfx::memory::Typed;
@@ -135,7 +139,7 @@ impl Node for VarianceMeasure {
 
             // Schedule download.
             let download = factory
-                .create_download_buffer::<[u8; 4]>((width * height) as usize)
+                .create_download_buffer::<[f32; 3]>((width * height) as usize)
                 .unwrap();
             encoder
                 .copy_texture_to_buffer_raw(
@@ -148,7 +152,7 @@ impl Node for VarianceMeasure {
                         width: width as u16,
                         height: height as u16,
                         depth: 0,
-                        format: ColorFormat::get_format(),
+                        format: HighpFormat::get_format(),
                         mipmap: 0,
                     },
                     download.raw(),
@@ -159,17 +163,39 @@ impl Node for VarianceMeasure {
             // Flush before reading the buffers to prevent panics.
             window.flush(encoder.borrow_mut());
 
-            // Copy to buffers.
-            let mut sum_loss = 0.0;
-            let reader = factory.read_mapping(&download).unwrap();
-            for row in reader.chunks(width as usize).rev() {
-                for pixel in row.iter() {
-                    sum_loss += (pixel[0] as f32)/255.0;
+            if self.pso_data.u_variance_metric == 6 {
+                assert!(self.pso_data.u_show_variance < 3, "Histogram can only be calculated with variance Type <Before> or <After>");
+                // calculate histogram
+                let mut color_map = HashMap::new();
+                let reader = factory.read_mapping(&download).unwrap();
+                for row in reader.chunks(width as usize).rev() {
+                    for pixel in row.iter() {
+                        let pixel_key = (((pixel[0] * 255.0) as u32) << 16) | (((pixel[1] * 255.0) as u32) << 8) | ((pixel[2] * 255.0) as u32);
+                        //println!("color array: {:?}\t color key: {:?}", pixel[0], pixel_key);
+                        color_map.entry(pixel_key).or_insert([pixel[0], pixel[1], pixel[2], 1.0])[3] += 1.0;
+                    }
                 }
+                let mut histogram_variance = 0.0;
+                for (index, (_color_key, color)) in color_map.iter().enumerate(){
+                    for (index_inner, (_color_key_inner, color_inner)) in color_map.iter().enumerate(){
+                        if index_inner >= index {break;}
+                        let diff = (color_inner[0] - color[0], color_inner[1] - color[1], color_inner[2] - color[2]);
+                        let length = (diff.0*diff.0 + diff.1*diff.1*0.5 + diff.2*diff.2).sqrt() as f64;
+                        histogram_variance += length * 2.0 * (color[3] as f64 * color_inner[3] as f64 / (width * height * width * height) as f64);
+                    }
+                }
+                println!("Total Colors: {:?}\t Avg variance: {:?}", color_map.len(), histogram_variance);
+            }else{
+                // sum up variance
+                let mut sum_variance = 0.0;
+                let reader = factory.read_mapping(&download).unwrap();
+                for row in reader.chunks(width as usize).rev() {
+                    for pixel in row.iter() {
+                        sum_variance += (pixel[0] as f32)/255.0;
+                    }
+                }
+                println!("Total Variance: {:?}\t Avg Variance: {:?}", sum_variance, sum_variance/(download.len() as f32 * 4.0));
             }
-            
-            
-            println!("Total Loss: {:?}\t Avg Loss: {:?}", sum_loss, sum_loss/(download.len() as f32 * 4.0));
         }
     }
 }

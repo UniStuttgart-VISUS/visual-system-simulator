@@ -8,9 +8,9 @@ uniform sampler2D s_color_uncertainty;
 uniform sampler2D s_covariances;
 
 uniform vec2 u_resolution;
-uniform int u_show_variance;
-uniform int u_color_space;
-uniform int u_variance_measure;
+uniform uint u_show_variance;
+uniform uint u_variance_metric;
+uniform uint u_color_space;
 
 in vec2 v_tex;
 out vec4 rt_color;
@@ -21,7 +21,6 @@ out vec4 rt_color_uncertainty;
 out vec4 rt_covariances;
 
 #define VAR_SIZE 10
-#define VAR_MEASURE 2
 
 #define COLOR_SPACE_RGB 0
 #define COLOR_SPACE_LAB 1
@@ -32,12 +31,13 @@ out vec4 rt_covariances;
 #define SHOW_VARIANCE_POST 2
 #define SHOW_VARIANCE_DIFF 3
 
-#define MEASURE_VARIANCE_FIRST 0
-#define MEASURE_VARIANCE_AVG 1
-#define MEASURE_VARIANCE_VAR_AVG 2
-#define MEASURE_VARIANCE_FIRST_CONTRAST 3
-#define MEASURE_VARIANCE_DELTA_E 4
-#define MEASURE_VARIANCE_MICHELSON_CONTRAST 5
+#define VARIANCE_METRIC_FIRST 0
+#define VARIANCE_METRIC_AVG 1
+#define VARIANCE_METRIC_VAR_AVG 2
+#define VARIANCE_METRIC_FIRST_CONTRAST 3
+#define VARIANCE_METRIC_DELTA_E 4
+#define VARIANCE_METRIC_MICHELSON_CONTRAST 5
+#define VARIANCE_METRIC_HISTOGRAM 6
 
 vec3 rgb2xyz(vec3 c){
 	vec3 tmp=vec3(
@@ -76,12 +76,11 @@ vec3 oetf(vec3 e){
     if (e.r <= 1.0){result.r = sqrt(e.r)/2.0;} else {result.r = a*log(e.r-b)+c;}
     if (e.g <= 1.0){result.g = sqrt(e.g)/2.0;} else {result.g = a*log(e.g-b)+c;}
     if (e.b <= 1.0){result.b = sqrt(e.b)/2.0;} else {result.b = a*log(e.b-b)+c;}
-    //vec3 secondWeight = floor(min(e, vec3(1.0)));
-    //vec3 firstWeight = vec3(1.0) - secondWeight;
-    return result;//firstWeight*(sqrt(e)/2.0) + secondWeight*(a*log(e-b)+c);
+    return result;
 }
 
 //https://en.wikipedia.org/wiki/ICtCp
+//we assume the rgb value is in https://de.wikipedia.org/wiki/ITU-R-Empfehlung_BT.2020
 vec3 rgb2itp(vec3 c){
     mat3 lmsMat = mat3(1688., 683., 99., 2146., 2951., 309., 262., 462., 3688.);
     mat3 ictcpMat = mat3(2048., 3625., 9500., 2048., -7465., -9212., 0., 3840., -288.);
@@ -181,13 +180,12 @@ float varianceMeasure_delta_e(in sampler2D texSampler, in vec2 fragCoord){
     for (float i = -VAR_SIZE; i <= VAR_SIZE; ++i) {
         for (float j = -VAR_SIZE; j <= VAR_SIZE; ++j) {
             vec3 diff = main_color - sampleColor(texSampler, (fragCoord + vec2(float(i), float(j)) / u_resolution))*itpWeights;
-            //float value = 720.0*length(diff);
-            float value = length(diff);
-            //quadratiches mittel: quadrieren, summieren, teilen, wurzeln
-            result += value*value;
+            //result += 720.0*length(diff);
+            //TODO: find proper scaling for this value
+            result += 10.0*length(diff);
         }
     }
-    return sqrt(result/(pow(VAR_SIZE*2.0+1.0, 2.0)-1.0));
+    return result/(pow(VAR_SIZE*2.0+1.0, 2.0)-1.0);
 }
 
 //Michelson-Kontrast
@@ -203,41 +201,25 @@ float varianceMeasure_michelson_contrast(in sampler2D texSampler, in vec2 fragCo
         }
     }
     vec3 contrast = (maxValues-minValues)/(maxValues+minValues);
-    return (contrast.r + contrast.g + contrast.b) / 3.0;
+    return abs(contrast.r) + length(contrast.gb);
 }
 
 float sampleVariance(in sampler2D texSampler, in vec2 fragCoord){
-    if(u_variance_measure == MEASURE_VARIANCE_FIRST){
+    if(u_variance_metric == VARIANCE_METRIC_FIRST){
         return varianceMeasure_first(texSampler, fragCoord);
-    }else if(u_variance_measure == MEASURE_VARIANCE_AVG){
+    }else if(u_variance_metric == VARIANCE_METRIC_AVG){
         return varianceMeasure_avg(texSampler, fragCoord);
-    }else if(u_variance_measure == MEASURE_VARIANCE_VAR_AVG){
+    }else if(u_variance_metric == VARIANCE_METRIC_VAR_AVG){
         return varianceMeasure_var_avg(texSampler, fragCoord);
-    }else if(u_variance_measure == MEASURE_VARIANCE_FIRST_CONTRAST){
+    }else if(u_variance_metric == VARIANCE_METRIC_FIRST_CONTRAST){
         return varianceMeasure_first_contrast(texSampler, fragCoord);
-    }else if(u_variance_measure == MEASURE_VARIANCE_DELTA_E){
+    }else if(u_variance_metric == VARIANCE_METRIC_DELTA_E){
         return varianceMeasure_delta_e(texSampler, fragCoord);
-    }else if(u_variance_measure == MEASURE_VARIANCE_MICHELSON_CONTRAST){
+    }else if(u_variance_metric == VARIANCE_METRIC_MICHELSON_CONTRAST){
         return varianceMeasure_michelson_contrast(texSampler, fragCoord);
     }else{
         return 0.0;
     }
-}
-
-float global_variance(in vec2 fragCoord, in sampler2D tex, vec2 resolution) { // iterate over entire texture
-    float result = 0.0;
-
-    //read out the texels
-    vec3 main_color = texture(tex, fragCoord).rgb;
-    for (float x = 0.5; x < u_resolution.x; x+=10.0) {
-        for (float y = 0.5; y < u_resolution.y; y+=10.0) {
-            vec3 diff = abs(main_color - texture(tex, vec2(x, y) / resolution).rgb);
-            result += diff.x + diff.y + diff.z;
-        }
-    }
-
-    // the average of the weighted samples and hence the result
-    return result / (u_resolution.x * u_resolution.y * 3.0*10.0*10.0);
 }
 
 vec3 TurboColormap(in float x) {
@@ -260,26 +242,40 @@ vec3 TurboColormap(in float x) {
 }
 
 void main() {
-    //loss /= variance_original+0.01
-    //loss = loss/2.0 + 0.5;
-    //loss = clamp(loss, 0.0, 1.0);    
-    if(u_show_variance == SHOW_VARIANCE_PRE){
-        float variance_original = sampleVariance(s_original, v_tex);
-        rt_color = vec4(TurboColormap(variance_original), 1.0);
-        rt_measure = vec4(variance_original);
-    }else if(u_show_variance == SHOW_VARIANCE_POST){
-        float variance_sim = sampleVariance(s_color, v_tex);
-        rt_color = vec4(TurboColormap(variance_sim), 1.0);
-        rt_measure = vec4(variance_sim);
-    }else if(u_show_variance == SHOW_VARIANCE_DIFF){
-        float variance_original = sampleVariance(s_original, v_tex);
-        float variance_sim = sampleVariance(s_color, v_tex);
-        float loss = variance_original-variance_sim;
-        rt_color = vec4(TurboColormap(loss), 1.0);
-        rt_measure = vec4(loss);
-    }else{//SHOW_VARIANCE_NONE
-        rt_color = vec4(sampleColor(s_color, v_tex), 1.0);
-        rt_measure = vec4(0.0);
+    if(u_variance_metric == VARIANCE_METRIC_HISTOGRAM){
+        if(u_show_variance == SHOW_VARIANCE_PRE){
+            rt_measure = vec4(sampleColor(s_original, v_tex), 1.0);
+        }else if(u_show_variance == SHOW_VARIANCE_POST){
+            rt_measure = vec4(sampleColor(s_color, v_tex), 1.0);
+        }else{//SHOW_VARIANCE_NONE & SHOW_VARIANCE_DIFF
+            rt_measure = vec4(0.0);
+        }
+        rt_color = vec4(texture(s_color, v_tex).rgb, 1.0);
+    }else{
+        if(u_show_variance == SHOW_VARIANCE_PRE){
+            float variance_original = sampleVariance(s_original, v_tex);
+            rt_color = vec4(TurboColormap(variance_original), 1.0);
+            rt_measure = vec4(variance_original);
+        }else if(u_show_variance == SHOW_VARIANCE_POST){
+            float variance_sim = sampleVariance(s_color, v_tex);
+            rt_color = vec4(TurboColormap(variance_sim), 1.0);
+            rt_measure = vec4(variance_sim);
+        }else if(u_show_variance == SHOW_VARIANCE_DIFF){
+            float variance_original = sampleVariance(s_original, v_tex);
+            float variance_sim = sampleVariance(s_color, v_tex);
+            float loss = variance_original-variance_sim;
+            //loss /= variance_original+0.01
+            //loss = loss/2.0 + 0.5;
+            //loss = clamp(loss, 0.0, 1.0);
+            //loss *= 5.0;
+            //loss = clamp(loss, -1.0, 1.0)*0.5 + 0.5;
+            //loss = abs(clamp(loss, -1.0, 1.0));
+            rt_color = vec4(TurboColormap(loss), 1.0);
+            rt_measure = vec4(loss);
+        }else{//SHOW_VARIANCE_NONE
+            rt_color = vec4(sampleColor(s_color, v_tex), 1.0);
+            rt_measure = vec4(0.0);
+        }
     }
 
     if(u_track_error==1){

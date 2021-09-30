@@ -5,6 +5,7 @@ use std::cell::RefCell;
 
 
 pub type ColorFormat = (gfx::format::R8_G8_B8_A8, gfx::format::Unorm);
+pub type HighpFormat = (gfx::format::R32_G32_B32, gfx::format::Float);
 pub type DepthFormat = (gfx::format::R32, gfx::format::Float);
 
 #[derive(Clone)]
