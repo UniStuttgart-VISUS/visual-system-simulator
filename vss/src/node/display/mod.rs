@@ -1,3 +1,5 @@
+use core::f32;
+
 use super::*;
 use gfx;
 use cgmath::Matrix4;
@@ -28,18 +30,42 @@ gfx_defines! {
         u_mix_type: gfx::Global<i32> = "u_mix_type",
         u_colormap_type: gfx::Global<i32> = "u_colormap_type",
     }
+
+    vertex Vertex {
+        pos: [f32; 2] = "a_pos",
+        uv: [f32; 2] = "a_uv",
+        color: [f32; 4] = "a_col",
+    }
+
+    pipeline gui_pipe {
+        vbuf: gfx::VertexBuffer<Vertex> = (),
+        u_texture: gfx::TextureSampler<[f32; 4]> = "u_tex",
+        u_resolution_in: gfx::Global<[f32; 2]> = "u_resolution_in",
+        u_resolution_out: gfx::Global<[f32; 2]> = "u_resolution_out",
+        rt_color: gfx::BlendTarget<ColorFormat> = ("rt_color", gfx::state::ColorMask::all(), gfx::preset::blend::ALPHA),
+    }
 }
 
-
+const TRIANGLE: [Vertex; 3] = [
+    Vertex { pos: [ -0.5, -0.5 ], uv: [ 0.0, 0.0 ], color: [1.0, 0.0, 0.0, 1.0] },
+    Vertex { pos: [  0.5, -0.5 ], uv: [ 0.0, 0.0 ], color: [0.0, 1.0, 0.0, 1.0] },
+    Vertex { pos: [  0.0,  0.5 ], uv: [ 0.0, 0.0 ], color: [0.0, 0.0, 1.0, 1.0] }
+];
 
 pub struct Display {
     pso: gfx::PipelineState<Resources, pipe::Meta>,
     pso_data: pipe::Data<Resources>,
-    hive_rot: Matrix4<f32>
+    gui_pso: gfx::PipelineState<Resources, gui_pipe::Meta>,
+    gui_pso_data: gui_pipe::Data<Resources>,
+    hive_rot: Matrix4<f32>,
+    gui_context: eframe::egui::CtxRef,
+    gui_texture_version: u64,
+    gui_meshes: Vec<eframe::egui::ClippedMesh>,
+    gui_active: bool
 }
 
 impl Node for Display {
-    fn new(window: &Window) -> Self {
+    fn new(window: &window::Window) -> Self {
         let mut factory = window.factory().borrow_mut();
 
         let pso = factory
@@ -47,6 +73,14 @@ impl Node for Display {
                 &include_glsl!("mod.vert"),
                 &include_glsl!("mod.frag"),
                 pipe::new(),
+            )
+            .unwrap();
+        
+        let gui_pso = factory
+            .create_pipeline_simple(
+                &include_glsl!("gui.vert"),
+                &include_glsl!("gui.frag"),
+                gui_pipe::new(),
             )
             .unwrap();
 
@@ -81,6 +115,11 @@ impl Node for Display {
             gfx::handle::RenderTargetView<gfx_device_gl::Resources, [f32; 4]>,
         ) = factory.create_render_target(1, 1).unwrap();
 
+        let (vertex_buffer, _slice) = factory.create_vertex_buffer_with_slice(&TRIANGLE, ());
+        let (_, gui_texture) = load_texture_from_bytes(&mut factory, &[127; 4], 1, 1).unwrap();
+
+        let gui_context = eframe::egui::CtxRef::default();
+
         Display {
             pso,
             pso_data: pipe::Data {
@@ -93,7 +132,7 @@ impl Node for Display {
                 s_color_uncertainty:(s_color_uncertainty, sampler.clone()),
                 s_original:(s_original, sampler.clone()),
                 s_covariances: (s_covariances, sampler.clone()),
-                rt_color: dst,
+                rt_color: dst.clone(),
                 u_vis_type: 0,
                 u_heat_scale: 1.0,
                 u_dir_calc_scale: 1.0,
@@ -106,11 +145,23 @@ impl Node for Display {
                 u_mix_type: 0,
                 u_colormap_type: 0
             },
-            hive_rot: Matrix4::from_angle_x(Rad(0.0))
+            gui_pso,
+            gui_pso_data: gui_pipe::Data {
+                vbuf: vertex_buffer,
+                u_texture: (gui_texture, sampler.clone()),
+                u_resolution_in: [1.0, 1.0],
+                u_resolution_out: [1.0, 1.0],
+                rt_color: dst.clone(),
+            },
+            hive_rot: Matrix4::from_angle_x(Rad(0.0)),
+            gui_context,
+            gui_texture_version: 0,
+            gui_meshes: Vec::new(),
+            gui_active: false
         }
     }
 
-    fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
+    fn negociate_slots(&mut self, window: &window::Window, slots: NodeSlots) -> NodeSlots {
         let slots = slots.to_color_input(window).to_color_output(window);
         self.pso_data.u_resolution_in = slots.input_size_f32();
         self.pso_data.u_resolution_out = slots.output_size_f32();
@@ -122,16 +173,20 @@ impl Node for Display {
         
         self.pso_data.rt_color = slots.as_color();
 
+        self.gui_pso_data.u_resolution_in = slots.input_size_f32();
+        self.gui_pso_data.u_resolution_out = slots.output_size_f32();
+        self.gui_pso_data.rt_color = slots.as_color();
+
         slots
     }
 
-    fn negociate_slots_wk(&mut self, window: &Window, slots: NodeSlots, well_known: &WellKnownSlots) -> NodeSlots{
+    fn negociate_slots_wk(&mut self, window: &window::Window, slots: NodeSlots, well_known: &WellKnownSlots) -> NodeSlots{
         self.pso_data.s_original = well_known.get_original().expect("Nah, no original image?");
         self.negociate_slots(window, slots)
     }
 
 
-    fn update_values(&mut self, _window: &Window, values: &ValueMap) {
+    fn update_values(&mut self, _window: &window::Window, values: &ValueMap) {
         self.pso_data.u_stereo = if values
             .get("split_screen_switch")
             .unwrap_or(&Value::Bool(false))
@@ -160,10 +215,28 @@ impl Node for Display {
         self.pso_data.u_mix_type = ((vis_param.vis_type.mix_type) as u32) as i32;
         self.pso_data.u_colormap_type = ((vis_param.vis_type.color_map_type) as u32) as i32;
 
+        let mut raw_input = eframe::egui::RawInput::default();
+        raw_input.events.push(eframe::egui::Event::PointerButton{
+            pos: eframe::egui::pos2(vis_param.mouse_input.position.0, vis_param.mouse_input.position.1),
+            button: eframe::egui::PointerButton::Primary,
+            pressed: vis_param.mouse_input.left_button,
+            modifiers: eframe::egui::Modifiers::default(),
+        });
+        self.gui_context.begin_frame(raw_input);
+
+        eframe::egui::Window::new("Window").show(&self.gui_context, |ui| {
+            if ui.button("Click me").clicked() {
+                println!("Click");
+            }
+        });
+
+        let (_output, shapes) = self.gui_context.end_frame();
+        self.gui_meshes = self.gui_context.tessellate(shapes);
+
         perspective.clone()
     }
 
-    fn render(&mut self, window: &Window) {
+    fn render(&mut self, window: &window::Window) {
 
         let speed = 4.0;
 
@@ -183,6 +256,35 @@ impl Node for Display {
                 &self.pso,
                 &self.pso_data,
             );
+        }
+
+        if self.gui_active{
+            let mut factory = window.factory().borrow_mut();
+    
+            let gui_texture = self.gui_context.texture();
+            if self.gui_texture_version != gui_texture.version{
+                let mut tex_data: Vec<u8> = Vec::new();
+                for color in gui_texture.srgba_pixels(){
+                    tex_data.push(color.r());
+                    tex_data.push(color.g());
+                    tex_data.push(color.b());
+                    tex_data.push(color.a());
+                }
+                let sampler = factory.create_sampler_linear();
+                let (_, gui_texture_view) = load_texture_from_bytes(&mut factory, tex_data.as_slice(), gui_texture.width as u32, gui_texture.height as u32).unwrap();
+                self.gui_pso_data.u_texture = (gui_texture_view, sampler);
+                self.gui_texture_version = gui_texture.version;
+            }
+    
+            for mesh in self.gui_meshes.iter(){
+                let mut vertices = Vec::new();
+                for v in &mesh.1.vertices{
+                    vertices.push(Vertex{ pos: [ v.pos.x, v.pos.y ],  uv: [ v.uv.x, v.uv.y ], color: [v.color.r() as f32 / 255.0, v.color.g() as f32 / 255.0, v.color.b() as f32 / 255.0, v.color.a() as f32 / 255.0] });
+                }
+                let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(&vertices, mesh.1.indices.as_slice());
+                self.gui_pso_data.vbuf = vertex_buffer;
+                encoder.draw(&slice, &self.gui_pso, &self.gui_pso_data);
+            }
         }
     }
 }

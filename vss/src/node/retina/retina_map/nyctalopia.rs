@@ -10,7 +10,7 @@ pub fn generate(res: (u32, u32), severity: u8) -> image::ImageBuffer<image::Rgba
     let mut mapbuffer = image::ImageBuffer::new(res.0, res.1);
 
     for (_, _, pixel) in mapbuffer.enumerate_pixels_mut() {
-        let a = 255 - (255 * severity) / 100;
+        let a = 255 - (255 * severity as u32) / 100;
 
         *pixel = image::Rgba([255, 255, 255, a as u8]);
     }

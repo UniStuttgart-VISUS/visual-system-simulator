@@ -20,11 +20,11 @@ pub fn generate_colorblindness(
         let mut b = 255;
 
         if ctype == 0 {
-            r = 255 - (255 * severity) / 100;
+            r = 255 - (255 * severity as u32) / 100;
         } else if ctype == 1 {
-            g = 255 - (255 * severity) / 100;
+            g = 255 - (255 * severity as u32) / 100;
         } else if ctype == 2 {
-            b = 255 - (255 * severity) / 100;
+            b = 255 - (255 * severity as u32) / 100;
         }
 
         *pixel = image::Rgba([r as u8, g as u8, b as u8, 255]);
@@ -48,7 +48,7 @@ pub fn generate_achromatopsia(
     let mut mapbuffer = image::ImageBuffer::new(res.0, res.1);
 
     for (_, _, pixel) in mapbuffer.enumerate_pixels_mut() {
-        let v = 255 - (255 * severity) / 100;
+        let v = 255 - (255 * severity as u32) / 100;
         *pixel = image::Rgba([v as u8, v as u8, v as u8, 255]);
     }
 

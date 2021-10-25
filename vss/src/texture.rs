@@ -55,7 +55,7 @@ pub fn load_texture(
     let img = image::load(data, image::ImageFormat::Png)
         .unwrap()
         .flipv()
-        .to_rgba();
+        .to_rgba8();
     let (width, height) = img.dimensions();
     let data = img.into_raw();
 
@@ -140,7 +140,7 @@ pub fn load_cubemap(
         let img = image::load(data.remove(0), image::ImageFormat::Png)
             .unwrap()
             .flipv()
-            .to_rgba();
+            .to_rgba8();
         let (width, height) = img.dimensions();
         let raw = img.into_raw();
         raw_data[i] = raw;
@@ -352,7 +352,7 @@ pub fn load_highres_normalmap(
     let img = image::load(data, image::ImageFormat::Png)
         .unwrap()
         .flipv()
-        .to_rgba();
+        .to_rgba8();
     let (width, height) = img.dimensions();
     let data_raw = img.into_raw();
 

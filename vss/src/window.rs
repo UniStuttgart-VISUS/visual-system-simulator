@@ -117,6 +117,15 @@ impl Window {
         if let Some(Value::Number(cm_scale)) = values[0].borrow().get("cm_scale") {
             vis_param.heat_scale = *cm_scale as f32;
         }
+        if let Some(Value::Number(measure_variance)) = values[0].borrow().get("measure_variance") {
+            vis_param.measure_variance = *measure_variance as u32;
+        }
+        if let Some(Value::Number(variance_metric)) = values[0].borrow().get("variance_metric") {
+            vis_param.variance_metric = *variance_metric as u32;
+        }
+        if let Some(Value::Number(variance_color_space)) = values[0].borrow().get("variance_color_space") {
+            vis_param.variance_color_space = *variance_color_space as u32;
+        }
 
         let mut override_view = false;
 
@@ -470,6 +479,7 @@ impl Window {
                         if *self.active.borrow() {
                             self.cursor_pos.replace(position);
                             let mut vp = self.vis_param.borrow_mut();
+                            vp.mouse_input.position = (position.x as f32, position.y as f32);
                             match vp.edit_eye_position {
                                 1 => {
                                     vp.previous_mouse_position = (position.x as f32 * 0.1, position.y as f32 * 0.1);
@@ -494,12 +504,15 @@ impl Window {
                     }
                     glutin::WindowEvent::MouseInput { state, button, .. } => {
                         if *self.active.borrow() {
+                            let mut vp = self.vis_param.borrow_mut();
                             match button {
                                 MouseButton::Left => {
                                     self.override_view.replace(state == ElementState::Pressed);
+                                    vp.mouse_input.left_button = state == ElementState::Pressed;
                                 }
                                 MouseButton::Right => {
                                     self.override_gaze.replace(state == ElementState::Pressed);
+                                    vp.mouse_input.right_button = state == ElementState::Pressed;
                                 }
                                 _ => {}
                             }
@@ -513,6 +526,7 @@ impl Window {
                             Some(glutin::VirtualKeyCode::O) => vp.vis_type.base_image=BaseImage::Output,
                             Some(glutin::VirtualKeyCode::I) => vp.vis_type.base_image=BaseImage::Original,
                             Some(glutin::VirtualKeyCode::G) => vp.vis_type.base_image=BaseImage::Ganglion,
+                            Some(glutin::VirtualKeyCode::V) => vp.vis_type.base_image=BaseImage::Variance,
 
                             Some(glutin::VirtualKeyCode::Key1) => vp.vis_type.mix_type=MixType::BaseImageOnly,
                             Some(glutin::VirtualKeyCode::Key2) => vp.vis_type.mix_type=MixType::ColorMapOnly,
@@ -535,7 +549,7 @@ impl Window {
 
         if let Some(_) = self.forced_view {
             // Update pipline IO.
-            let dpi_factor = self.windowed_context.window().get_hidpi_factor();
+            let _dpi_factor = self.windowed_context.window().get_hidpi_factor();
             let size = glutin::dpi::PhysicalSize {
                 width: 1920.0,
                 height: 1080.0,

@@ -74,7 +74,7 @@ impl UploadRgbBuffer {
         let reader = image::io::Reader::new(cursor)
             .with_guessed_format()
             .expect("Cursor io never fails");
-        let img = reader.decode().unwrap().flipv().to_rgba();
+        let img = reader.decode().unwrap().flipv().to_rgba8();
         let (width, height) = img.dimensions();
 
         self.upload_buffer(&RgbBuffer {
