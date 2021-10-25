@@ -276,7 +276,7 @@ pub fn cmd_parse() -> Config {
         parameters.insert("file_cf".to_string(), Value::Number(cf));
     }
 
-    let mut track_perf = matches.value_of("perf").map(|v| v.parse::<u32>()).unwrap_or(Ok(0u32)).unwrap_or(0);
+    let track_perf = matches.value_of("perf").map(|v| v.parse::<u32>()).unwrap_or(Ok(0u32)).unwrap_or(0);
 
     if let Some(variance) = matches.values_of("variance") {
         let variance = variance

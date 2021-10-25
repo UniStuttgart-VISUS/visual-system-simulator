@@ -1,12 +1,9 @@
 use core::f32;
-use std::borrow::Borrow;
-use std::borrow::BorrowMut;
 
 use super::*;
 use gfx;
 use cgmath::Matrix4;
 use cgmath::Rad;
-use eframe::egui::*;
 
 gfx_defines! {
     pipeline pipe {
@@ -61,11 +58,10 @@ pub struct Display {
     gui_pso: gfx::PipelineState<Resources, gui_pipe::Meta>,
     gui_pso_data: gui_pipe::Data<Resources>,
     hive_rot: Matrix4<f32>,
-    resolution: [f32; 2],
     gui_context: eframe::egui::CtxRef,
-    //gui_texture: gfx::handle::ShaderResourceView<Resources, [f32; 4]>,
     gui_texture_version: u64,
-    gui_meshes: Vec<eframe::egui::ClippedMesh>
+    gui_meshes: Vec<eframe::egui::ClippedMesh>,
+    gui_active: bool
 }
 
 impl Node for Display {
@@ -119,7 +115,7 @@ impl Node for Display {
             gfx::handle::RenderTargetView<gfx_device_gl::Resources, [f32; 4]>,
         ) = factory.create_render_target(1, 1).unwrap();
 
-        let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(&TRIANGLE, ());
+        let (vertex_buffer, _slice) = factory.create_vertex_buffer_with_slice(&TRIANGLE, ());
         let (_, gui_texture) = load_texture_from_bytes(&mut factory, &[127; 4], 1, 1).unwrap();
 
         let gui_context = eframe::egui::CtxRef::default();
@@ -158,10 +154,10 @@ impl Node for Display {
                 rt_color: dst.clone(),
             },
             hive_rot: Matrix4::from_angle_x(Rad(0.0)),
-            resolution: [1.0, 1.0],
             gui_context,
             gui_texture_version: 0,
-            gui_meshes: Vec::new()
+            gui_meshes: Vec::new(),
+            gui_active: false
         }
     }
 
@@ -186,7 +182,6 @@ impl Node for Display {
 
     fn negociate_slots_wk(&mut self, window: &window::Window, slots: NodeSlots, well_known: &WellKnownSlots) -> NodeSlots{
         self.pso_data.s_original = well_known.get_original().expect("Nah, no original image?");
-        self.resolution = slots.output_size_f32();
         self.negociate_slots(window, slots)
     }
 
@@ -235,7 +230,7 @@ impl Node for Display {
             }
         });
 
-        let (output, shapes) = self.gui_context.end_frame();
+        let (_output, shapes) = self.gui_context.end_frame();
         self.gui_meshes = self.gui_context.tessellate(shapes);
 
         perspective.clone()
@@ -263,31 +258,33 @@ impl Node for Display {
             );
         }
 
-        let mut factory = window.factory().borrow_mut();
-
-        let gui_texture = self.gui_context.texture();
-        if self.gui_texture_version != gui_texture.version{
-            let mut tex_data: Vec<u8> = Vec::new();
-            for color in gui_texture.srgba_pixels(){
-                tex_data.push(color.r());
-                tex_data.push(color.g());
-                tex_data.push(color.b());
-                tex_data.push(color.a());
+        if self.gui_active{
+            let mut factory = window.factory().borrow_mut();
+    
+            let gui_texture = self.gui_context.texture();
+            if self.gui_texture_version != gui_texture.version{
+                let mut tex_data: Vec<u8> = Vec::new();
+                for color in gui_texture.srgba_pixels(){
+                    tex_data.push(color.r());
+                    tex_data.push(color.g());
+                    tex_data.push(color.b());
+                    tex_data.push(color.a());
+                }
+                let sampler = factory.create_sampler_linear();
+                let (_, gui_texture_view) = load_texture_from_bytes(&mut factory, tex_data.as_slice(), gui_texture.width as u32, gui_texture.height as u32).unwrap();
+                self.gui_pso_data.u_texture = (gui_texture_view, sampler);
+                self.gui_texture_version = gui_texture.version;
             }
-            let sampler = factory.create_sampler_linear();
-            let (_, gui_texture_view) = load_texture_from_bytes(&mut factory, tex_data.as_slice(), gui_texture.width as u32, gui_texture.height as u32).unwrap();
-            self.gui_pso_data.u_texture = (gui_texture_view, sampler);
-            self.gui_texture_version = gui_texture.version;
+    
+            for mesh in self.gui_meshes.iter(){
+                let mut vertices = Vec::new();
+                for v in &mesh.1.vertices{
+                    vertices.push(Vertex{ pos: [ v.pos.x, v.pos.y ],  uv: [ v.uv.x, v.uv.y ], color: [v.color.r() as f32 / 255.0, v.color.g() as f32 / 255.0, v.color.b() as f32 / 255.0, v.color.a() as f32 / 255.0] });
+                }
+                let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(&vertices, mesh.1.indices.as_slice());
+                self.gui_pso_data.vbuf = vertex_buffer;
+                encoder.draw(&slice, &self.gui_pso, &self.gui_pso_data);
+            }
         }
-
-        /*for mesh in self.gui_meshes.iter(){
-            let mut vertices = Vec::new();
-            for v in &mesh.1.vertices{
-                vertices.push(Vertex{ pos: [ v.pos.x, v.pos.y ],  uv: [ v.uv.x, v.uv.y ], color: [v.color.r() as f32 / 255.0, v.color.g() as f32 / 255.0, v.color.b() as f32 / 255.0, v.color.a() as f32 / 255.0] });
-            }
-            let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(&vertices, mesh.1.indices.as_slice());
-            self.gui_pso_data.vbuf = vertex_buffer;
-            encoder.draw(&slice, &self.gui_pso, &self.gui_pso_data);
-        }*/
     }
 }

@@ -15,8 +15,6 @@ use crate::cmd::*;
 use crate::node::*;
 
 type IoNodePair = (Box<dyn Node>, Option<Box<dyn Node>>);
-use std::fs::File;
-use std::io::Write;
 
 struct IoGenerator {
     inputs: Vec<String>,
@@ -35,11 +33,11 @@ impl IoGenerator {
         }
     }
 
-    fn is_ready(&self) -> bool {
+    fn _is_ready(&self) -> bool {
         *self.input_processed.read().unwrap()
     }
 
-    fn next(&mut self, window: &Window, render_resolution: Option<[u32; 2]>) -> Option<IoNodePair> {
+    fn _next(&mut self, window: &Window, render_resolution: Option<[u32; 2]>) -> Option<IoNodePair> {
         self.input_idx += 1;
         self.current(&window, render_resolution,0)
     }
@@ -193,7 +191,7 @@ pub fn main() {
         build_flow(&mut window, &mut io_generator, index, config.resolution);
 
         if flow_count > 1 {
-            let mut node = desktop.get_stereo_desktop_node(&window);
+            let node = desktop.get_stereo_desktop_node(&window);
             window.add_node(Box::new(node), index);
         }
     }
@@ -280,11 +278,14 @@ pub fn main() {
 }
 
 fn dump_perf_data(frame_times: Vec<(u128,u128,(u32,u32),u32,u32)>){
-    fs::write("vss_perf_data.csv", 
+    match fs::write("vss_perf_data.csv", 
         frame_times.iter()
             .map(|t| format!("{},{},{},{},{}\n", t.0, t.1, t.2.0*t.2.1, t.3, t.4))
             .collect::<Vec<String>>()
-            .join(""));
+            .join("")){
+                Err(e) => println!("dump_perf_data error {:?}", e),
+                _ => ()
+    }
 }
 
 #[cfg(feature = "openxr")]

@@ -182,7 +182,7 @@ float varianceMeasure_delta_e(in sampler2D texSampler, in vec2 fragCoord){
             vec3 diff = main_color - sampleColor(texSampler, (fragCoord + vec2(float(i), float(j)) / u_resolution))*itpWeights;
             //result += 720.0*length(diff);
             //TODO: find proper scaling for this value
-            result += 10.0*length(diff);
+            result += 720*length(diff);
         }
     }
     return result/(pow(VAR_SIZE*2.0+1.0, 2.0)-1.0);
@@ -201,6 +201,7 @@ float varianceMeasure_michelson_contrast(in sampler2D texSampler, in vec2 fragCo
         }
     }
     vec3 contrast = (maxValues-minValues)/(maxValues+minValues);
+    //this way of adding up the components only applies to the LAB color format
     return abs(contrast.r) + length(contrast.gb);
 }
 
@@ -241,6 +242,17 @@ vec3 TurboColormap(in float x) {
   );
 }
 
+//taken from https://www.shadertoy.com/view/XtGGzG
+vec3 viridis_quintic( float x ){
+	x = clamp( x, 0.0, 1.0 );
+	vec4 x1 = vec4( 1.0, x, x * x, x * x * x ); // 1 x x2 x3
+	vec4 x2 = x1 * x1.w * x; // x4 x5 x6 x7
+	return vec3(
+		dot( x1.xyzw, vec4( +0.280268003, -0.143510503, +2.225793877, -14.815088879 ) ) + dot( x2.xy, vec2( +25.212752309, -11.772589584 ) ),
+		dot( x1.xyzw, vec4( -0.002117546, +1.617109353, -1.909305070, +2.701152864 ) ) + dot( x2.xy, vec2( -1.685288385, +0.178738871 ) ),
+		dot( x1.xyzw, vec4( +0.300805501, +2.614650302, -12.019139090, +28.933559110 ) ) + dot( x2.xy, vec2( -33.491294770, +13.762053843 ) ) );
+}
+
 void main() {
     if(u_variance_metric == VARIANCE_METRIC_HISTOGRAM){
         if(u_show_variance == SHOW_VARIANCE_PRE){
@@ -254,11 +266,11 @@ void main() {
     }else{
         if(u_show_variance == SHOW_VARIANCE_PRE){
             float variance_original = sampleVariance(s_original, v_tex);
-            rt_color = vec4(TurboColormap(variance_original), 1.0);
+            rt_color = vec4(viridis_quintic(variance_original), 1.0);
             rt_measure = vec4(variance_original);
         }else if(u_show_variance == SHOW_VARIANCE_POST){
             float variance_sim = sampleVariance(s_color, v_tex);
-            rt_color = vec4(TurboColormap(variance_sim), 1.0);
+            rt_color = vec4(viridis_quintic(variance_sim), 1.0);
             rt_measure = vec4(variance_sim);
         }else if(u_show_variance == SHOW_VARIANCE_DIFF){
             float variance_original = sampleVariance(s_original, v_tex);
@@ -270,7 +282,7 @@ void main() {
             //loss *= 5.0;
             //loss = clamp(loss, -1.0, 1.0)*0.5 + 0.5;
             //loss = abs(clamp(loss, -1.0, 1.0));
-            rt_color = vec4(TurboColormap(loss), 1.0);
+            rt_color = vec4(viridis_quintic(loss), 1.0);
             rt_measure = vec4(loss);
         }else{//SHOW_VARIANCE_NONE
             rt_color = vec4(sampleColor(s_color, v_tex), 1.0);

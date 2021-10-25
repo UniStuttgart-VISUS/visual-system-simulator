@@ -109,11 +109,6 @@ impl Node for VarianceMeasure {
         slots
     }
 
-    fn negociate_slots_wk(&mut self, window: &Window, slots: NodeSlots, well_known: &WellKnownSlots) -> NodeSlots{
-        self.pso_data.s_original = well_known.get_original().expect("Nah, no original image?");
-        self.negociate_slots(window, slots)
-    }
-
     fn input(&mut self, perspective: &EyePerspective, vis_param: &VisualizationParameters) -> EyePerspective {
         self.pso_data.u_track_error = vis_param.has_to_track_error() as i32;
         self.pso_data.u_show_variance =  vis_param.measure_variance;
@@ -165,14 +160,14 @@ impl Node for VarianceMeasure {
 
             if self.pso_data.u_variance_metric == 6 {
                 assert!(self.pso_data.u_show_variance < 3, "Histogram can only be calculated with variance Type <Before> or <After>");
+                assert!(self.pso_data.u_color_space == 2, "Histogram can only be calculated with color Type <ITP>");
                 // calculate histogram
                 let mut color_map = HashMap::new();
                 let reader = factory.read_mapping(&download).unwrap();
                 for row in reader.chunks(width as usize).rev() {
                     for pixel in row.iter() {
                         let pixel_key = (((pixel[0] * 255.0) as u32) << 16) | (((pixel[1] * 255.0) as u32) << 8) | ((pixel[2] * 255.0) as u32);
-                        //println!("color array: {:?}\t color key: {:?}", pixel[0], pixel_key);
-                        color_map.entry(pixel_key).or_insert([pixel[0], pixel[1], pixel[2], 1.0])[3] += 1.0;
+                        color_map.entry(pixel_key).or_insert([pixel[0], pixel[1], pixel[2], 0.0])[3] += 1.0;
                     }
                 }
                 let mut histogram_variance = 0.0;
@@ -184,17 +179,18 @@ impl Node for VarianceMeasure {
                         histogram_variance += length * 2.0 * (color[3] as f64 * color_inner[3] as f64 / (width * height * width * height) as f64);
                     }
                 }
-                println!("Total Colors: {:?}\t Avg variance: {:?}", color_map.len(), histogram_variance);
+                println!("Total amount of colors: {:?}\t Avg variance: {:?}", color_map.len(), histogram_variance);
             }else{
+                assert!((self.pso_data.u_variance_metric != 5) || (self.pso_data.u_color_space == 1), "Michelson Contrast can only be calculated with color Type <LAB>");
                 // sum up variance
                 let mut sum_variance = 0.0;
                 let reader = factory.read_mapping(&download).unwrap();
                 for row in reader.chunks(width as usize).rev() {
                     for pixel in row.iter() {
-                        sum_variance += (pixel[0] as f32)/255.0;
+                        sum_variance += pixel[0] as f32;
                     }
                 }
-                println!("Total Variance: {:?}\t Avg Variance: {:?}", sum_variance, sum_variance/(download.len() as f32 * 4.0));
+                println!("Variance sum: {:?}\t Avg variance per pixel: {:?}", sum_variance, sum_variance/(download.len() as f32));
             }
         }
     }

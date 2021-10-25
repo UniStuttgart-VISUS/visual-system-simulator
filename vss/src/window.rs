@@ -3,7 +3,6 @@ use std::cell::RefCell;
 use std::time::Instant;
 use cgmath::{Matrix4, Vector4, SquareMatrix};
 use glutin::{ElementState, MouseButton, dpi::{LogicalPosition}};
-use eframe::egui::*;
 
 /// A factory to create device objects.
 pub type DeviceFactory = gfx_device_gl::Factory;
@@ -550,7 +549,7 @@ impl Window {
 
         if let Some(_) = self.forced_view {
             // Update pipline IO.
-            let dpi_factor = self.windowed_context.window().get_hidpi_factor();
+            let _dpi_factor = self.windowed_context.window().get_hidpi_factor();
             let size = glutin::dpi::PhysicalSize {
                 width: 1920.0,
                 height: 1080.0,

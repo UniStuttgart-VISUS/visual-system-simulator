@@ -119,7 +119,7 @@ impl RemoteClient {
         {
             match image::load(Cursor::new(data), image::ImageFormat::Png) {
                 Ok(img) => {
-                    let img = img.flipv().to_rgba();
+                    let img = img.flipv().to_rgba8();
                     let (img_w, img_h) = img.dimensions();
                     *width = img_w as u32;
                     *height = img_h as u32;
