@@ -22,22 +22,22 @@ pub fn generate_retina_map(resolution: (u32, u32), orientation: &[Vector3<f32>; 
 
     // achromatopsia
     if let Some(Value::Bool(true)) = values.get("achromatopsia_onoff") {
-        let severity = values.get("achromatopsia_int").unwrap().as_f64().unwrap() as u64;
+        let severity = values.get("achromatopsia_int").unwrap().as_f64().unwrap() as u8;
         let achromatopsia = colorblindness::generate_achromatopsia(resolution, severity);
         maps.push(achromatopsia);
     }
 
     // nyctalopia
     if let Some(Value::Bool(true)) = values.get("nyctalopia_onoff") {
-        let severity = values.get("nyctalopia_int").unwrap().as_f64().unwrap() as u64;
+        let severity = values.get("nyctalopia_int").unwrap().as_f64().unwrap() as u8;
         let nyctalopia = nyctalopia::generate(resolution, severity);
         maps.push(nyctalopia);
     }
 
     // colorblindness
     if let Some(Value::Bool(true)) = values.get("colorblindness_onoff") {
-        let ctype = values.get("colorblindness_type").unwrap().as_f64().unwrap() as u64;
-        let severity = values.get("colorblindness_int").unwrap().as_f64().unwrap() as u64;
+        let ctype = values.get("colorblindness_type").unwrap().as_f64().unwrap() as u8;
+        let severity = values.get("colorblindness_int").unwrap().as_f64().unwrap() as u8;
         let colorblindness = colorblindness::generate_colorblindness(resolution, ctype, severity);
         maps.push(colorblindness);
     }

@@ -173,7 +173,7 @@ impl Node for Lens {
             // near point is a parameter between 0 and 100 that is to be scaled to 0 - 1000
             if let Some(Value::Number(near_point)) = values.get("presbyopia_near_point") {
                 self.pso_data.u_active = 1;
-                self.pso_data.u_near_point = (near_point * 10.0) as f32;
+                self.pso_data.u_near_point = *near_point as f32;
                 self.pso_data.u_near_vision_factor = 1.0;
             }
         }

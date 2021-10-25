@@ -7,7 +7,9 @@ use std::io::prelude::*;
 use vss::*;
 
 #[derive(Serialize)]
-pub struct InputInfo {
+pub struct OutputInfo {
+    // Name of the configuration (e.g., `astigmatism`)
+    pub configname: String,
     /// Path without basename, e.g., `path/to` (drops suffix after last `/`).
     pub dirname: String,
     /// Path without dirname, e.g., `image.png` (drops prefix up to last `/`).
@@ -25,10 +27,11 @@ pub struct Config {
     pub resolution: Option<[u32; 2]>,
     pub output: Option<mustache::Template>,
     pub inputs: Vec<String>,
+    pub name: String,
     pub parameters: ValueMap,
     pub parameters_r: Option<ValueMap>,
     pub parameters_l: Option<ValueMap>,
-    pub track_perf: u32
+    pub track_perf: u32,
 }
 
 impl Default for Config {
@@ -39,32 +42,36 @@ impl Default for Config {
             resolution: None,
             output: None,
             inputs: Vec::new(),
+            name: "default".to_string(),
             parameters: std::collections::HashMap::new(),
             parameters_r: None,
             parameters_l: None,
-            track_perf: 0
+            track_perf: 0,
         }
     }
 }
 
-fn from_json(arg: &str) -> Result<serde_json::Value, Box<dyn Error>> {
-    if let Ok(json) = serde_json::from_str(&arg) {
-        Ok(json)
+fn parse_config(arg: &str) -> Result<(ValueMap, String), Box<dyn Error>> {
+    // Parse from string or as file.
+    let (value, name): (serde_json::Value, String) = if let Ok(json) = serde_json::from_str(&arg) {
+        (json, "custom".to_string())
     } else {
         let mut data = String::new();
         let mut file = File::open(arg)?;
         file.read_to_string(&mut data)?;
+        (
+            serde_json::from_str(&data)?,
+            std::path::Path::new(arg)
+                .file_stem()
+                .unwrap()
+                .to_os_string()
+                .into_string()
+                .unwrap(),
+        )
+    };
+    let object = value.as_object().unwrap();
 
-        let json = serde_json::from_str(&data)?;
-        Ok(json)
-    }
-}
-
-fn from_json_obj(arg: &str) -> Result<ValueMap, Box<dyn Error>> {
     let mut map = ValueMap::new();
-    let json = from_json(arg)?;
-    let object = json.as_object().unwrap();
-
     for (key, value) in object.iter() {
         match value {
             serde_json::value::Value::Null => {}
@@ -81,7 +88,7 @@ fn from_json_obj(arg: &str) -> Result<ValueMap, Box<dyn Error>> {
             serde_json::value::Value::Object(_) => {}
         }
     }
-    Ok(map)
+    Ok((map, name))
 }
 
 pub fn cmd_parse() -> Config {
@@ -212,8 +219,8 @@ pub fn cmd_parse() -> Config {
                 .max_values(1)
                 .help(
                     "Enables output with optional mustache-style pattern, e.g.:\n\
-                    \x20\x20\"{{dirname}}/{{stem}}_out.{{extension}}\"  (default)\n\
-                    \x20\x20\"{{dirname}}/out_{{basename}}\"",
+                    \x20\x20\"{{dirname}}/{{stem}}_{{configname}}.{{extension}}\"  (default)\n\
+                    \x20\x20\"{{dirname}}/{{configname}}_{{basename}}\"",
                 ),
         )
         .arg(
@@ -240,24 +247,22 @@ pub fn cmd_parse() -> Config {
         default.port
     };
 
-    let mut parameters = if let Some(config_str) = matches.value_of("config") {
-        from_json_obj(config_str).expect("Invalid JSON")
+    let (mut parameters, config_name) = if let Some(config_str) = matches.value_of("config") {
+        parse_config(config_str).expect("Invalid config")
     } else {
-        default.parameters
+        (default.parameters, "Default".to_string())
     };
 
-    let mut parameters_r = if let Some(config_str) = matches.value_of("config_right") {
-        Some(from_json_obj(config_str).expect("Invalid JSON"))
+    let mut parameters_r = if let Some(config_right_str) = matches.value_of("config_right") {
+        Some(parse_config(config_right_str).expect("Invalid config").0)
     } else {
         None
     };
-    let mut parameters_l = if let Some(config_str) = matches.value_of("config_left") {
-        Some(from_json_obj(config_str).expect("Invalid JSON"))
+    let mut parameters_l = if let Some(config_left_str) = matches.value_of("config_left") {
+        Some(parse_config(config_left_str).expect("Invalid config").0)
     } else {
         None
     };
-
- 
 
     if let Some(base_image) = matches.value_of("base_image") {
         let base_image = base_image.parse::<u16>().expect("Invalid base_image") as f64;
@@ -276,7 +281,11 @@ pub fn cmd_parse() -> Config {
         parameters.insert("file_cf".to_string(), Value::Number(cf));
     }
 
-    let track_perf = matches.value_of("perf").map(|v| v.parse::<u32>()).unwrap_or(Ok(0u32)).unwrap_or(0);
+    let track_perf = matches
+        .value_of("perf")
+        .map(|v| v.parse::<u32>())
+        .unwrap_or(Ok(0u32))
+        .unwrap_or(0);
 
     if let Some(variance) = matches.values_of("variance") {
         let variance = variance
@@ -286,7 +295,7 @@ pub fn cmd_parse() -> Config {
         parameters.insert("variance_metric".to_string(), Value::Number(variance[1]));
         parameters.insert("variance_color_space".to_string(), Value::Number(variance[2]));
     };
-
+    
     if let Some(rays) = matches.value_of("rays") {
         let rays = rays.parse::<f64>().expect("Invalid rays");
         parameters.insert("rays".to_string(), Value::Number(rays));
@@ -305,7 +314,7 @@ pub fn cmd_parse() -> Config {
         // if let Some(parameters_l) = &mut parameters_l{
         //     parameters_l.insert("file_vis_type".to_string(), Value::Number(vis_type));
         // }
-    } 
+    }
 
     if let Some(gaze) = matches.values_of("gaze") {
         let gaze = gaze
@@ -322,21 +331,21 @@ pub fn cmd_parse() -> Config {
         parameters.insert("view_x".to_string(), Value::Number(view[0]));
         parameters.insert("view_y".to_string(), Value::Number(view[1]));
     };
-    
-    let (merged_parameters_r,merged_parameters_l) = match (parameters_r.clone(), parameters_l.clone()){
-        (Some(mut parameters_r),Some(mut parameters_l)) =>{
-            for (key, val) in parameters.iter() {
-                parameters_l.insert(key.clone(),val.clone());
-                parameters_r.insert(key.clone(),val.clone());
+
+    let (merged_parameters_r, merged_parameters_l) =
+        match (parameters_r.clone(), parameters_l.clone()) {
+            (Some(mut parameters_r), Some(mut parameters_l)) => {
+                for (key, val) in parameters.iter() {
+                    parameters_l.insert(key.clone(), val.clone());
+                    parameters_r.insert(key.clone(), val.clone());
+                }
+                (Some(parameters_r), Some(parameters_l))
             }
-            (Some(parameters_r),Some(parameters_l))
-        }
-        _ => (None,None)
-    };
-    // this is ugly as hell but rust currently does not allow destructuring assignments
+            _ => (None, None),
+        };
+    // this is ugly as hell but rust currently dies not allow destructuring assignments
     parameters_r = merged_parameters_r;
     parameters_l = merged_parameters_l;
-
 
     let mut resolution = default.resolution;
     if let Some(res) = matches.values_of("res") {
@@ -355,7 +364,7 @@ pub fn cmd_parse() -> Config {
         let output = if let Some(output) = matches.value_of("output") {
             output
         } else {
-            "{{dirname}}/{{stem}}_out.{{extension}}"
+            "{{dirname}}/{{stem}}_{{configname}}.{{extension}}"
         };
         Some(mustache::compile_str(output).unwrap())
     } else {
@@ -383,9 +392,10 @@ pub fn cmd_parse() -> Config {
         resolution,
         output,
         inputs,
+        name: config_name,
         parameters,
         parameters_r,
         parameters_l,
-        track_perf
+        track_perf,
     }
 }

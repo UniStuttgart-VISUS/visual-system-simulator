@@ -4,13 +4,13 @@
 /// # Arguments
 ///
 /// - `res`      - resolution of the returned retina map
-/// - `type`     - type of colorblindness(red, green, blue)
+/// - `type`     - type of colorblindness (red, green, blue)
 /// - `severity` - the severity of the disease, value between 0 and 100
 ///
 pub fn generate_colorblindness(
     res: (u32, u32),
-    ctype: u64,
-    severity: u64,
+    ctype: u8,
+    severity: u8,
 ) -> image::ImageBuffer<image::Rgba<u8>, Vec<u8>> {
     let mut mapbuffer = image::ImageBuffer::new(res.0, res.1);
 
@@ -18,17 +18,16 @@ pub fn generate_colorblindness(
         let mut r = 255;
         let mut g = 255;
         let mut b = 255;
-        let a = 255;
 
         if ctype == 0 {
-            r = r - r * severity / 100;
+            r = 255 - (255 * severity as u32) / 100;
         } else if ctype == 1 {
-            g = g - g * severity / 100;
+            g = 255 - (255 * severity as u32) / 100;
         } else if ctype == 2 {
-            b = b - b * severity / 100;
+            b = 255 - (255 * severity as u32) / 100;
         }
 
-        *pixel = image::Rgba([r as u8, g as u8, b as u8, a as u8]);
+        *pixel = image::Rgba([r as u8, g as u8, b as u8, 255]);
     }
 
     mapbuffer
@@ -44,21 +43,13 @@ pub fn generate_colorblindness(
 ///
 pub fn generate_achromatopsia(
     res: (u32, u32),
-    severity: u64,
+    severity: u8,
 ) -> image::ImageBuffer<image::Rgba<u8>, Vec<u8>> {
     let mut mapbuffer = image::ImageBuffer::new(res.0, res.1);
 
     for (_, _, pixel) in mapbuffer.enumerate_pixels_mut() {
-        let mut r = 255;
-        let mut g = 255;
-        let mut b = 255;
-        let a = 255;
-
-        r = r - r * severity / 100;
-        g = g - g * severity / 100;
-        b = b - b * severity / 100;
-
-        *pixel = image::Rgba([r as u8, g as u8, b as u8, a as u8]);
+        let v = 255 - (255 * severity as u32) / 100;
+        *pixel = image::Rgba([v as u8, v as u8, v as u8, 255]);
     }
 
     mapbuffer

@@ -17,9 +17,10 @@ pub fn generate_simple(
 ) -> image::ImageBuffer<image::Rgba<u8>, Vec<u8>> {
     // convert severity from int between 0 and 100 to float between 0.5 and 1
     let severity = severity as f64 / 100.0;
-    let severity = 1.0 - 0.5 * (1.0 - severity).powi(2);
+    let intensity = 1.0 - 0.5 * (1.0 - severity).powi(2);
+    let radius = severity.powi(2) * 100.0;
 
-    generate(res, orientation, severity, severity)
+    generate(res, orientation, radius, intensity)
 }
 
 ///
