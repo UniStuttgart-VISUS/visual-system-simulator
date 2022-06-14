@@ -14,6 +14,7 @@ mod yuv_buffer;
 mod vr_compositor;
 mod stereo_desktop;
 mod variance;
+mod peacock;
 
 pub use self::cataract::*;
 pub use self::display::*;
@@ -26,6 +27,7 @@ pub use self::yuv_buffer::*;
 pub use self::vr_compositor::*;
 pub use self::stereo_desktop::*;
 pub use self::variance::*;
+pub use self::peacock::*;
 
 use self::macros::*;
 

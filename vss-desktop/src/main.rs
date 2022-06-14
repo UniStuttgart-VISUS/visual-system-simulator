@@ -118,6 +118,8 @@ fn build_flow(window: &mut Window, io_generator: &mut IoGenerator, flow_index: u
     window.add_node(Box::new(node), flow_index);
     let node = Retina::new(&window);
     window.add_node(Box::new(node), flow_index);
+    let node = PeacockCB::new(&window);
+    window.add_node(Box::new(node), flow_index);
     
     // Measure Uncertainty
     let node = VarianceMeasure::new(&window);
