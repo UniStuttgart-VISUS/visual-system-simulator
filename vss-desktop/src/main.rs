@@ -9,6 +9,7 @@ mod openxr;
 use std::cell::RefCell;
 use std::time::Instant;
 use std::fs;
+use std::fs::OpenOptions;
 use vss::*;
 
 use crate::cmd::*;
@@ -105,7 +106,7 @@ impl IoGenerator {
     }
 }
 
-fn build_flow(window: &mut Window, io_generator: &mut IoGenerator, flow_index: usize, render_resolution: Option<[u32; 2]>){
+fn build_flow(window: &mut Window, io_generator: &mut IoGenerator, flow_index: usize, render_resolution: Option<[u32; 2]>, variance_log: Option<String>){
     let (input_node, output_node) = io_generator.current(&window, render_resolution, flow_index).unwrap();
 
     // Add input node.
@@ -122,7 +123,15 @@ fn build_flow(window: &mut Window, io_generator: &mut IoGenerator, flow_index: u
     window.add_node(Box::new(node), flow_index);
     
     // Measure Uncertainty
-    let node = VarianceMeasure::new(&window);
+    let mut node = VarianceMeasure::new(&window);
+    if variance_log.is_some(){
+        node.log_file = Some(OpenOptions::new()
+            .write(true)
+            .append(true)
+            .create(true)
+            .open(variance_log.unwrap())
+            .unwrap());
+    }
     window.add_node(Box::new(node), flow_index);
     
     // Add output node, if present.
@@ -196,7 +205,7 @@ pub fn main() {
             config.name.clone(),
             config.output.clone(),
         );
-        build_flow(&mut window, &mut io_generator, index, config.resolution);
+        build_flow(&mut window, &mut io_generator, index, config.resolution, config.variance_log.clone());
 
         if flow_count > 1 {
             let node = desktop.get_stereo_desktop_node(&window);
