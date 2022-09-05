@@ -1,11 +1,12 @@
 [workspace]
+resolver = "2"
 members = [
   "vss",
-  "vss-desktop",
+  #"vss-desktop",
   #"vss-mobile"
 ]
 
 
-[patch.crates-io]
+# [patch.crates-io]
 #gfx_core = {path = "dependencies/gfx_core", version = "0.9"}
-gfx_core =  { git = 'https://github.com/trimoq/gfx', branch = 'v0.18', version = "0.9"}
+#gfx_core =  { git = 'https://github.com/trimoq/gfx', branch = 'v0.18', version = "0.9"}

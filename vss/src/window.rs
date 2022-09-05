@@ -2,31 +2,39 @@ use crate::*;
 use std::cell::RefCell;
 use std::time::Instant;
 use cgmath::{Matrix4, Vector4, SquareMatrix};
-use glutin::{ElementState, MouseButton, dpi::{LogicalPosition}};
+use wgpu::*;
+use winit::{
+    event::*,
+    dpi::*,
+    event_loop::{ControlFlow, EventLoop},
+    window::WindowBuilder,
+};
+// use glutin::{ElementState, MouseButton, dpi::{LogicalPosition}};
 
 /// A factory to create device objects.
-pub type DeviceFactory = gfx_device_gl::Factory;
+//TODO-WGPU pub type DeviceFactory = gfx_device_gl::Factory;
 
 /// An encoder to manipulate a device command queue.
-pub type DeviceEncoder = gfx::Encoder<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer>;
+//TODO-WGPU pub type DeviceEncoder = gfx::Encoder<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer>;
 
 /// Render Target Types of this Window.
-pub type RenderTargetColor = gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat>;
-pub type RenderTargetDepthFormat = (gfx::format::D24_S8, gfx::format::Unorm);
-pub type RenderTargetDepth = gfx::handle::DepthStencilView<gfx_device_gl::Resources, RenderTargetDepthFormat>;
+//TODO-WGPU pub type RenderTargetColor = gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat>;
+//TODO-WGPU pub type RenderTargetDepthFormat = (gfx::format::D24_S8, gfx::format::Unorm);
+//TODO-WGPU pub type RenderTargetDepth = gfx::handle::DepthStencilView<gfx_device_gl::Resources, RenderTargetDepthFormat>;
 
 /// Represents a window along with its associated rendering context and [Flow].
 pub struct Window {
-    windowed_context: glutin::WindowedContext<glutin::PossiblyCurrent>,
-    events_loop: RefCell<glutin::EventsLoop>,
-    device: RefCell<gfx_device_gl::Device>,
-    factory: RefCell<DeviceFactory>,
-    encoder: RefCell<DeviceEncoder>,
+    windowed_context: winit::window::Window,
+    events_loop: RefCell<EventLoop<()>>,
+    device: RefCell<Device>,
+    queue: RefCell<Queue>,
+    //TODO-WGPU factory: RefCell<DeviceFactory>,
+    //TODO-WGPU encoder: RefCell<CommandEncoder>,
 
-    render_target: RefCell<RenderTargetColor>,
-    main_depth: RefCell<RenderTargetDepth>,
+    //TODO-WGPU render_target: RefCell<RenderTargetColor>,
+    //TODO-WGPU main_depth: RefCell<RenderTargetDepth>,
     should_swap_buffers: RefCell<bool>,
-    cursor_pos: RefCell<LogicalPosition>,
+    cursor_pos: RefCell<LogicalPosition<f32>>,
     override_view: RefCell<bool>,
     override_gaze: RefCell<bool>,
 
@@ -34,46 +42,74 @@ pub struct Window {
     values: Vec<RefCell<ValueMap>>,
 
     remote: Option<Remote>,
-    flow: Vec<Flow>,
+    //TODO-WGPU flow: Vec<Flow>,
     vis_param: RefCell<VisualizationParameters>,
     last_render_instant: RefCell<Instant>,
     forced_view: Option<(f32,f32)>
 }
 
 impl Window {
-    pub fn new(visible: bool, remote: Option<Remote>, values: Vec<RefCell<ValueMap>>, flow_count: usize) -> Self {
+    pub async fn new(visible: bool, remote: Option<Remote>, values: Vec<RefCell<ValueMap>>, flow_count: usize) -> Self {
         // Create a window and context.
-        let gl_version = glutin::GlRequest::GlThenGles {
-            opengles_version: (3, 2),
-            opengl_version: (4, 1),
-        };
-        let events_loop = glutin::EventsLoop::new();
-        let window_builder = glutin::WindowBuilder::new()
-            .with_title("Visual System Simulator")
-            .with_min_dimensions(glutin::dpi::LogicalSize::new(640.0, 360.0))
-            .with_dimensions(glutin::dpi::LogicalSize::new(1280.0, 720.0))
-            .with_visibility(visible);
-        let context_builder = glutin::ContextBuilder::new()
-            .with_vsync(true)
-            .with_gl(gl_version);
-        let (windowed_context, mut device, mut factory, render_target, main_depth) =
-            gfx_window_glutin::init::<
-                (gfx::format::R8_G8_B8_A8, gfx::format::Unorm),
-                gfx::format::DepthStencil,
-            >(window_builder, context_builder, &events_loop)
-            .unwrap();
+        let events_loop = EventLoop::new();
 
-        windowed_context.window().hide_cursor(true);
+        let window_builder = WindowBuilder::new()
+            .with_title("Visual System Simulator")
+            .with_min_inner_size(LogicalSize::new(640.0, 360.0))
+            .with_inner_size(LogicalSize::new(1280.0, 720.0))
+            .with_visible(visible);
+
+        // let context_builder = glutin::ContextBuilder::new()
+        //     .with_vsync(true)
+        //     .with_gl(gl_version);
+        // let (windowed_context, mut device, mut factory, render_target, main_depth) =
+        //     gfx_window_glutin::init::<
+        //         (gfx::format::R8_G8_B8_A8, gfx::format::Unorm),
+        //         gfx::format::DepthStencil,
+        //     >(window_builder, context_builder, &events_loop)
+        //     .unwrap();
+        
+        let windowed_context = window_builder.build(&events_loop).unwrap();
+
+        windowed_context.set_cursor_visible(true);
+
+        let instance = wgpu::Instance::new(wgpu::Backends::VULKAN);
+        let surface = unsafe { instance.create_surface(&windowed_context) };
+        let adapter = instance.request_adapter(
+            &wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: Some(&surface),
+                force_fallback_adapter: false,
+            },
+        ).await.unwrap();
+
+
+        let (device, queue) = adapter.request_device(
+            &wgpu::DeviceDescriptor {
+                features: wgpu::Features::empty(),
+                // WebGL doesn't support all of wgpu's features, so if
+                // we're building for the web we'll have to disable some.
+                // TODO-WGPU will look into this at a later point
+                // limits: if cfg!(target_arch = "wasm32") {
+                //     wgpu::Limits::downlevel_webgl2_defaults()
+                // } else {
+                //     wgpu::Limits::default()
+                // },
+                limits: wgpu::Limits::default(),
+                label: None,
+            },
+            None,
+        ).await.unwrap();
 
         // Create a command buffer.
-        let encoder: DeviceEncoder = factory.create_command_buffer().into();
+        //TODO-WGPU let encoder: CommandEncoder = factory.create_command_buffer().into();
 
         unsafe {
-            device.with_gl(|gl| gl.Disable(gfx_gl::FRAMEBUFFER_SRGB));
+            //TODO-WGPU device.with_gl(|gl| gl.Disable(gfx_gl::FRAMEBUFFER_SRGB));
         }
 
-        let mut flow = Vec::new();
-        flow.resize_with(flow_count, Flow::new);
+        //TODO-WGPU let mut flow = Vec::new();
+        //TODO-WGPU flow.resize_with(flow_count, Flow::new);
 
         //TODO set perspective from values here ?
 
@@ -139,15 +175,16 @@ impl Window {
         let vis_param = RefCell::new(vis_param);
 
         Window {
-            flow,
+            //TODO-WGPU flow,
             remote,
             windowed_context,
             events_loop: RefCell::new(events_loop),
             device: RefCell::new(device),
-            factory: RefCell::new(factory),
-            encoder: RefCell::new(encoder),
-            render_target: RefCell::new(render_target),
-            main_depth: RefCell::new(main_depth),
+            queue: RefCell::new(queue),
+            //TODO-WGPU factory: RefCell::new(factory),
+            //TODO-WGPU encoder: RefCell::new(encoder),
+            //TODO-WGPU render_target: RefCell::new(render_target),
+            //TODO-WGPU main_depth: RefCell::new(main_depth),
             should_swap_buffers: RefCell::new(true),
             cursor_pos: RefCell::new(LogicalPosition{x:0.0, y:0.0}),
             override_view,
@@ -241,32 +278,32 @@ impl Window {
 
         // Poll for window events.
         self.events_loop.borrow_mut().poll_events(|event| {
-            if let glutin::Event::WindowEvent { event, .. } = event {
+            if let Event::WindowEvent { event, .. } = event {
                 match event {
-                    glutin::WindowEvent::KeyboardInput {
+                    WindowEvent::KeyboardInput {
                         input:
-                            glutin::KeyboardInput {state,
-                                virtual_keycode: Some(glutin::VirtualKeyCode::LShift),
+                            KeyboardInput {state,
+                                virtual_keycode: Some(VirtualKeyCode::LShift),
                                 ..
                             },
                         ..
                     } => {
                         match state{
-                            glutin::ElementState::Pressed => {
+                            ElementState::Pressed => {
                                 let mut vp = self.vis_param.borrow_mut();
                                 vp.edit_eye_position = 1;
                             },
-                            glutin::ElementState::Released => {
+                            ElementState::Released => {
                                 let mut vp = self.vis_param.borrow_mut();
                                 vp.edit_eye_position = 0;
                             },
                         }
                     }, 
-                    glutin::WindowEvent::KeyboardInput {
+                    WindowEvent::KeyboardInput {
                         input:
-                            glutin::KeyboardInput {
-                                state: glutin::ElementState::Pressed,
-                                virtual_keycode: Some(glutin::VirtualKeyCode::P),
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(VirtualKeyCode::P),
                                 ..
                             },
                         ..
@@ -274,11 +311,11 @@ impl Window {
                         let mut vp = self.vis_param.borrow_mut();
                         vp.bees_flying = !vp.bees_flying;
                     }, 
-                    glutin::WindowEvent::KeyboardInput {
+                    WindowEvent::KeyboardInput {
                         input:
-                            glutin::KeyboardInput {
-                                state: glutin::ElementState::Pressed,
-                                virtual_keycode: Some(glutin::VirtualKeyCode::B),
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(VirtualKeyCode::B),
                                 ..
                             },
                         ..
@@ -286,11 +323,11 @@ impl Window {
                         let mut vp = self.vis_param.borrow_mut();
                         vp.bees_visible = !vp.bees_visible;
                     }, 
-                    glutin::WindowEvent::KeyboardInput {
+                    WindowEvent::KeyboardInput {
                         input:
-                            glutin::KeyboardInput {
-                                state: glutin::ElementState::Pressed,
-                                virtual_keycode: Some(glutin::VirtualKeyCode::R),
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(VirtualKeyCode::R),
                                 ..
                             },
                         ..
@@ -300,11 +337,11 @@ impl Window {
                             vp.eye_position = (0.0, 0.0);
                         }
                     }, 
-                    glutin::WindowEvent::KeyboardInput {
+                    WindowEvent::KeyboardInput {
                         input:
-                            glutin::KeyboardInput {
-                                state: glutin::ElementState::Pressed,
-                                virtual_keycode: Some(glutin::VirtualKeyCode::Space),
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(VirtualKeyCode::Space),
                                 ..
                             },
                         ..
@@ -313,11 +350,11 @@ impl Window {
                         // println!("Space: eye was {}",(vp.eye_idx as u32));
                         vp.eye_idx = (vp.eye_idx+1)%2
                     },                
-                    glutin::WindowEvent::KeyboardInput {
+                    WindowEvent::KeyboardInput {
                         input:
-                            glutin::KeyboardInput {
-                                state: glutin::ElementState::Pressed,
-                                virtual_keycode: Some(glutin::VirtualKeyCode::H),
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(VirtualKeyCode::H),
                                 ..
                             },
                         ..
@@ -329,11 +366,11 @@ impl Window {
                             vp.test_depth_max
                         );
                     },
-                    glutin::WindowEvent::KeyboardInput {
+                    WindowEvent::KeyboardInput {
                         input:
-                            glutin::KeyboardInput {
-                                state: glutin::ElementState::Pressed,
-                                virtual_keycode: Some(glutin::VirtualKeyCode::L),
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(VirtualKeyCode::L),
                                 ..
                             },
                         ..
@@ -345,11 +382,11 @@ impl Window {
                             vp.test_depth_max
                         );
                     },
-                    glutin::WindowEvent::KeyboardInput {
+                    WindowEvent::KeyboardInput {
                         input:
-                            glutin::KeyboardInput {
-                                state: glutin::ElementState::Pressed,
-                                virtual_keycode: Some(glutin::VirtualKeyCode::J),
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(VirtualKeyCode::J),
                                 ..
                             },
                         ..
@@ -361,11 +398,11 @@ impl Window {
                             vp.test_depth_max
                         );
                     },
-                    glutin::WindowEvent::KeyboardInput {
+                    WindowEvent::KeyboardInput {
                         input:
-                            glutin::KeyboardInput {
-                                state: glutin::ElementState::Pressed,
-                                virtual_keycode: Some(glutin::VirtualKeyCode::K),
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(VirtualKeyCode::K),
                                 ..
                             },
                         ..
@@ -377,77 +414,77 @@ impl Window {
                             vp.test_depth_max
                         );
                     },
-                    glutin::WindowEvent::KeyboardInput {
+                    WindowEvent::KeyboardInput {
                         input:
-                            glutin::KeyboardInput {
-                                state: glutin::ElementState::Pressed,
-                                virtual_keycode: Some(glutin::VirtualKeyCode::A),
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(VirtualKeyCode::A),
                                 ..
                             },
                         ..
                     } => {
                         self.vis_param.borrow_mut().dir_calc_scale-=5.0;
                     },
-                    glutin::WindowEvent::KeyboardInput {
+                    WindowEvent::KeyboardInput {
                         input:
-                            glutin::KeyboardInput {
-                                state: glutin::ElementState::Pressed,
-                                virtual_keycode: Some(glutin::VirtualKeyCode::D),
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(VirtualKeyCode::D),
                                 ..
                             },
                         ..
                     } => {
                         self.vis_param.borrow_mut().dir_calc_scale+=5.0;
                     },
-                    glutin::WindowEvent::KeyboardInput {
+                    WindowEvent::KeyboardInput {
                         input:
-                            glutin::KeyboardInput {
-                                state: glutin::ElementState::Pressed,
-                                virtual_keycode: Some(glutin::VirtualKeyCode::W),
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(VirtualKeyCode::W),
                                 ..
                             },
                         ..
                     } => {
                         self.vis_param.borrow_mut().heat_scale+=0.5;
                     },
-                    glutin::WindowEvent::KeyboardInput {
+                    WindowEvent::KeyboardInput {
                         input:
-                            glutin::KeyboardInput {
-                                state: glutin::ElementState::Pressed,
-                                virtual_keycode: Some(glutin::VirtualKeyCode::S),
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(VirtualKeyCode::S),
                                 ..
                             },
                         ..
                     } => {
                         self.vis_param.borrow_mut().heat_scale-=0.5;
                     },
-                    glutin::WindowEvent::KeyboardInput {
+                    WindowEvent::KeyboardInput {
                         input:
-                            glutin::KeyboardInput {
-                                state: glutin::ElementState::Pressed,
-                                virtual_keycode: Some(glutin::VirtualKeyCode::Q),
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(VirtualKeyCode::Q),
                                 ..
                             },
                         ..
                     } => {
                         self.vis_param.borrow_mut().astigmatism_strength-=0.5;
                     },
-                    glutin::WindowEvent::KeyboardInput {
+                    WindowEvent::KeyboardInput {
                         input:
-                            glutin::KeyboardInput {
-                                state: glutin::ElementState::Pressed,
-                                virtual_keycode: Some(glutin::VirtualKeyCode::E),
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(VirtualKeyCode::E),
                                 ..
                             },
                         ..
                     } => {
                         self.vis_param.borrow_mut().astigmatism_strength+=0.5;
                     },
-                    glutin::WindowEvent::KeyboardInput {
+                    WindowEvent::KeyboardInput {
                         input:
-                            glutin::KeyboardInput {
-                                virtual_keycode: Some(glutin::VirtualKeyCode::C),
-                                state: glutin::ElementState::Pressed,
+                            KeyboardInput {
+                                virtual_keycode: Some(VirtualKeyCode::C),
+                                state: ElementState::Pressed,
                                 ..
                             },
                         ..
@@ -459,23 +496,23 @@ impl Window {
                             ColorMapType::Grayscale  => (*vp).vis_type.color_map_type = ColorMapType::Viridis,
                         }
                     },
-                    glutin::WindowEvent::KeyboardInput {
+                    WindowEvent::KeyboardInput {
                         input:
-                            glutin::KeyboardInput {
-                                virtual_keycode: Some(glutin::VirtualKeyCode::Escape),
+                            KeyboardInput {
+                                virtual_keycode: Some(VirtualKeyCode::Escape),
                                 ..
                             },
                         ..
                     }
-                    | glutin::WindowEvent::CloseRequested
-                    | glutin::WindowEvent::Destroyed => done = true,
-                    glutin::WindowEvent::Focused(active) => {
+                    | WindowEvent::CloseRequested
+                    | WindowEvent::Destroyed => done = true,
+                    WindowEvent::Focused(active) => {
                         self.active.replace(active);
                     }
-                    glutin::WindowEvent::Resized(size) => {
+                    WindowEvent::Resized(size) => {
                         deferred_size = Some(size);
                     }
-                    glutin::WindowEvent::CursorMoved { position, .. } => {
+                    WindowEvent::CursorMoved { position, .. } => {
                         if *self.active.borrow() {
                             self.cursor_pos.replace(position);
                             let mut vp = self.vis_param.borrow_mut();
@@ -495,14 +532,14 @@ impl Window {
                             }
                         }
                     }
-                    glutin::WindowEvent::CursorLeft { .. } => {
+                    WindowEvent::CursorLeft { .. } => {
                         if *self.active.borrow() {
                             self.override_view.replace(false);
                             self.override_gaze.replace(false);
                             //reset gaze ?
                         }
                     }
-                    glutin::WindowEvent::MouseInput { state, button, .. } => {
+                    WindowEvent::MouseInput { state, button, .. } => {
                         if *self.active.borrow() {
                             let mut vp = self.vis_param.borrow_mut();
                             match button {
@@ -518,27 +555,27 @@ impl Window {
                             }
                         }
                     }
-                    glutin::WindowEvent::KeyboardInput {
-                        input:glutin::KeyboardInput {virtual_keycode, ..}, ..
+                    WindowEvent::KeyboardInput {
+                        input:KeyboardInput {virtual_keycode, ..}, ..
                     } => {
                         let mut vp = self.vis_param.borrow_mut();
                         match virtual_keycode{
-                            Some(glutin::VirtualKeyCode::O) => vp.vis_type.base_image=BaseImage::Output,
-                            Some(glutin::VirtualKeyCode::I) => vp.vis_type.base_image=BaseImage::Original,
-                            Some(glutin::VirtualKeyCode::G) => vp.vis_type.base_image=BaseImage::Ganglion,
-                            Some(glutin::VirtualKeyCode::V) => vp.vis_type.base_image=BaseImage::Variance,
+                            Some(VirtualKeyCode::O) => vp.vis_type.base_image=BaseImage::Output,
+                            Some(VirtualKeyCode::I) => vp.vis_type.base_image=BaseImage::Original,
+                            Some(VirtualKeyCode::G) => vp.vis_type.base_image=BaseImage::Ganglion,
+                            Some(VirtualKeyCode::V) => vp.vis_type.base_image=BaseImage::Variance,
 
-                            Some(glutin::VirtualKeyCode::Key1) => vp.vis_type.mix_type=MixType::BaseImageOnly,
-                            Some(glutin::VirtualKeyCode::Key2) => vp.vis_type.mix_type=MixType::ColorMapOnly,
-                            Some(glutin::VirtualKeyCode::Key3) => vp.vis_type.mix_type=MixType::OverlayThreshold,
+                            Some(VirtualKeyCode::Key1) => vp.vis_type.mix_type=MixType::BaseImageOnly,
+                            Some(VirtualKeyCode::Key2) => vp.vis_type.mix_type=MixType::ColorMapOnly,
+                            Some(VirtualKeyCode::Key3) => vp.vis_type.mix_type=MixType::OverlayThreshold,
 
-                            Some(glutin::VirtualKeyCode::Key4) => vp.vis_type.combination_function=CombinationFunction::AbsoluteErrorRGBVectorLength,
-                            Some(glutin::VirtualKeyCode::Key5) => vp.vis_type.combination_function=CombinationFunction::AbsoluteErrorXYVectorLength,
-                            Some(glutin::VirtualKeyCode::Key6) => vp.vis_type.combination_function=CombinationFunction::AbsoluteErrorRGBXYVectorLength,
-                            Some(glutin::VirtualKeyCode::Key7) => vp.vis_type.combination_function=CombinationFunction::UncertaintyRGBVectorLength,
-                            Some(glutin::VirtualKeyCode::Key8) => vp.vis_type.combination_function=CombinationFunction::UncertaintyXYVectorLength,
-                            Some(glutin::VirtualKeyCode::Key9) => vp.vis_type.combination_function=CombinationFunction::UncertaintyRGBXYVectorLength,
-                            Some(glutin::VirtualKeyCode::Key0) => vp.vis_type.combination_function=CombinationFunction::UncertaintyGenVar,
+                            Some(VirtualKeyCode::Key4) => vp.vis_type.combination_function=CombinationFunction::AbsoluteErrorRGBVectorLength,
+                            Some(VirtualKeyCode::Key5) => vp.vis_type.combination_function=CombinationFunction::AbsoluteErrorXYVectorLength,
+                            Some(VirtualKeyCode::Key6) => vp.vis_type.combination_function=CombinationFunction::AbsoluteErrorRGBXYVectorLength,
+                            Some(VirtualKeyCode::Key7) => vp.vis_type.combination_function=CombinationFunction::UncertaintyRGBVectorLength,
+                            Some(VirtualKeyCode::Key8) => vp.vis_type.combination_function=CombinationFunction::UncertaintyXYVectorLength,
+                            Some(VirtualKeyCode::Key9) => vp.vis_type.combination_function=CombinationFunction::UncertaintyRGBXYVectorLength,
+                            Some(VirtualKeyCode::Key0) => vp.vis_type.combination_function=CombinationFunction::UncertaintyGenVar,
                             _ => {}
                         }
                     }
