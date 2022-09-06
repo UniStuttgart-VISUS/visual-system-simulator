@@ -7,7 +7,7 @@ use winit::{
     event::*,
     dpi::*,
     event_loop::{ControlFlow, EventLoop},
-    window::WindowBuilder,
+    window::WindowBuilder, platform::run_return::EventLoopExtRunReturn,
 };
 // use glutin::{ElementState, MouseButton, dpi::{LogicalPosition}};
 
@@ -24,17 +24,20 @@ use winit::{
 
 /// Represents a window along with its associated rendering context and [Flow].
 pub struct Window {
-    windowed_context: winit::window::Window,
+    wgpu_window: winit::window::Window,
     events_loop: RefCell<EventLoop<()>>,
-    device: RefCell<Device>,
-    queue: RefCell<Queue>,
+    window_size: PhysicalSize<u32>,
+    surface: wgpu::Surface,
+    surface_config: wgpu::SurfaceConfiguration,
+    device: RefCell<wgpu::Device>,
+    queue: RefCell<wgpu::Queue>,
     //TODO-WGPU factory: RefCell<DeviceFactory>,
     //TODO-WGPU encoder: RefCell<CommandEncoder>,
 
     //TODO-WGPU render_target: RefCell<RenderTargetColor>,
     //TODO-WGPU main_depth: RefCell<RenderTargetDepth>,
     should_swap_buffers: RefCell<bool>,
-    cursor_pos: RefCell<LogicalPosition<f32>>,
+    cursor_pos: RefCell<PhysicalPosition<f64>>,
     override_view: RefCell<bool>,
     override_gaze: RefCell<bool>,
 
@@ -62,19 +65,19 @@ impl Window {
         // let context_builder = glutin::ContextBuilder::new()
         //     .with_vsync(true)
         //     .with_gl(gl_version);
-        // let (windowed_context, mut device, mut factory, render_target, main_depth) =
+        // let (wgpu_window, mut device, mut factory, render_target, main_depth) =
         //     gfx_window_glutin::init::<
         //         (gfx::format::R8_G8_B8_A8, gfx::format::Unorm),
         //         gfx::format::DepthStencil,
         //     >(window_builder, context_builder, &events_loop)
         //     .unwrap();
         
-        let windowed_context = window_builder.build(&events_loop).unwrap();
-
-        windowed_context.set_cursor_visible(true);
+        let wgpu_window = window_builder.build(&events_loop).unwrap();
+        wgpu_window.set_cursor_visible(true);
+        let window_size = wgpu_window.inner_size();
 
         let instance = wgpu::Instance::new(wgpu::Backends::VULKAN);
-        let surface = unsafe { instance.create_surface(&windowed_context) };
+        let surface = unsafe { instance.create_surface(&wgpu_window) };
         let adapter = instance.request_adapter(
             &wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
@@ -100,6 +103,15 @@ impl Window {
             },
             None,
         ).await.unwrap();
+
+        let surface_config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: surface.get_supported_formats(&adapter)[0],
+            width: window_size.width,
+            height: window_size.height,
+            present_mode: wgpu::PresentMode::Fifo,
+        };
+        surface.configure(&device, &surface_config);
 
         // Create a command buffer.
         //TODO-WGPU let encoder: CommandEncoder = factory.create_command_buffer().into();
@@ -175,18 +187,21 @@ impl Window {
         let vis_param = RefCell::new(vis_param);
 
         Window {
-            //TODO-WGPU flow,
-            remote,
-            windowed_context,
+            wgpu_window,
             events_loop: RefCell::new(events_loop),
+            window_size,
+            surface,
+            surface_config,
             device: RefCell::new(device),
             queue: RefCell::new(queue),
             //TODO-WGPU factory: RefCell::new(factory),
             //TODO-WGPU encoder: RefCell::new(encoder),
             //TODO-WGPU render_target: RefCell::new(render_target),
             //TODO-WGPU main_depth: RefCell::new(main_depth),
+            //TODO-WGPU flow,
+            remote,
             should_swap_buffers: RefCell::new(true),
-            cursor_pos: RefCell::new(LogicalPosition{x:0.0, y:0.0}),
+            cursor_pos: RefCell::new(PhysicalPosition{x:0.0, y:0.0}),
             override_view,
             override_gaze: RefCell::new(false),
             active: RefCell::new(false),
@@ -199,12 +214,21 @@ impl Window {
 }
 
 impl Window {
-    pub fn add_node(&mut self, node: Box<dyn Node>, flow_index: usize) {
-        self.flow[flow_index].add_node(node);
-    }
+    //TODO-WGPU pub fn add_node(&mut self, node: Box<dyn Node>, flow_index: usize) {
+    //TODO-WGPU     self.flow[flow_index].add_node(node);
+    //TODO-WGPU }
 
-    pub fn replace_node(&mut self, index: usize, node: Box<dyn Node>, flow_index: usize) {
-        self.flow[flow_index].replace_node(index, node);
+    //TODO-WGPU pub fn replace_node(&mut self, index: usize, node: Box<dyn Node>, flow_index: usize) {
+    //TODO-WGPU     self.flow[flow_index].replace_node(index, node);
+    //TODO-WGPU }
+
+    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+        if new_size.width > 0 && new_size.height > 0 {
+            self.window_size = new_size;
+            self.surface_config.width = new_size.width;
+            self.surface_config.height = new_size.height;
+            self.surface.configure(&self.device.borrow_mut(), &self.surface_config);
+        }
     }
 
     pub fn delta_t(&self)  -> f32{
@@ -214,70 +238,71 @@ impl Window {
         return 0.0;
     }
 
+    // TODO WGPU all of these functions
+    // pub fn nodes_len(&self) -> usize {//TODO: return vector of lengths
+    //     self.flow[0].nodes_len()
+    // }
 
-    pub fn nodes_len(&self) -> usize {//TODO: return vector of lengths
-        self.flow[0].nodes_len()
-    }
+    // pub fn update_last_node(&mut self) {
+    //     self.flow.iter().for_each(|f| f.update_last_slot(&self));
+    // }
 
-    pub fn update_last_node(&mut self) {
-        self.flow.iter().for_each(|f| f.update_last_slot(&self));
-    }
+    // pub fn update_nodes(&mut self) {
+    //     for (i, f) in self.flow.iter().enumerate(){
+    //         f.negociate_slots(&self);
+    //         f.update_values(&self, &self.values[i].borrow());
+    //     }
+    // }
 
-    pub fn update_nodes(&mut self) {
-        for (i, f) in self.flow.iter().enumerate(){
-            f.negociate_slots(&self);
-            f.update_values(&self, &self.values[i].borrow());
-        }
-    }
-
-    pub fn set_values(&self, values: ValueMap, flow_index: usize) {
-        self.values[flow_index].replace(values);
-        self.flow[flow_index].update_values(&self, &self.values[flow_index].borrow());
-    }
+    // pub fn set_values(&self, values: ValueMap, flow_index: usize) {
+    //     self.values[flow_index].replace(values);
+    //     self.flow[flow_index].update_values(&self, &self.values[flow_index].borrow());
+    // }
     
-    pub fn set_value(&self, key: String, value: Value, flow_index: usize) {
-        self.values[flow_index].borrow_mut().insert(key, value);
-        self.flow[flow_index].update_values(&self, &self.values[flow_index].borrow());
-    }
+    // pub fn set_value(&self, key: String, value: Value, flow_index: usize) {
+    //     self.values[flow_index].borrow_mut().insert(key, value);
+    //     self.flow[flow_index].update_values(&self, &self.values[flow_index].borrow());
+    // }
     
-    pub fn set_perspective(&self, new_perspective: EyePerspective, flow_index: usize) {
-        self.flow[flow_index].last_perspective.replace(new_perspective);
-    }
+    // pub fn set_perspective(&self, new_perspective: EyePerspective, flow_index: usize) {
+    //     self.flow[flow_index].last_perspective.replace(new_perspective);
+    // }
 
-    pub fn factory(&self) -> &RefCell<DeviceFactory> {
-        &self.factory
-    }
+    // pub fn factory(&self) -> &RefCell<DeviceFactory> {
+    //     &self.factory
+    // }
 
-    pub fn encoder(&self) -> &RefCell<DeviceEncoder> {
-        &self.encoder
-    }
+    // pub fn encoder(&self) -> &RefCell<DeviceEncoder> {
+    //     &self.encoder
+    // }
 
-    pub fn device(&self) -> & RefCell<gfx_device_gl::Device> {
-        &self.device
-    }
+    // pub fn device(&self) -> & RefCell<gfx_device_gl::Device> {
+    //     &self.device
+    // }
 
-    pub fn flush(&self, encoder: &mut DeviceEncoder) {
-        use std::ops::DerefMut;
-        let mut device = self.device.borrow_mut();
-        encoder.flush(device.deref_mut());
-    }
+    // pub fn flush(&self, encoder: &mut DeviceEncoder) {
+    //     use std::ops::DerefMut;
+    //     let mut device = self.device.borrow_mut();
+    //     encoder.flush(device.deref_mut());
+    // }
 
-    pub fn target(&self) -> gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat> {
-        self.render_target.borrow().clone()
-    }
+    // pub fn target(&self) -> gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat> {
+    //     self.render_target.borrow().clone()
+    // }
 
-    pub fn replace_targets(&self, target_color: RenderTargetColor, target_depth: RenderTargetDepth, should_swap_buffers: bool) {
-        self.render_target.replace(target_color);
-        self.main_depth.replace(target_depth);
-        self.should_swap_buffers.replace(should_swap_buffers);
-    }
+    // pub fn replace_targets(&self, target_color: RenderTargetColor, target_depth: RenderTargetDepth, should_swap_buffers: bool) {
+    //     self.render_target.replace(target_color);
+    //     self.main_depth.replace(target_depth);
+    //     self.should_swap_buffers.replace(should_swap_buffers);
+    // }
 
-    pub fn poll_events(&self) -> bool {
+    pub fn poll_events(&mut self) -> bool {
         let mut done = false;
         let mut deferred_size = None;
 
         // Poll for window events.
-        self.events_loop.borrow_mut().poll_events(|event| {
+        // TODO-WGPU use .run() instead of .run_return() as it is highly discouraged and incompatible with some platforms
+        self.events_loop.borrow_mut().run_return(|event, _, control_flow| {
             if let Event::WindowEvent { event, .. } = event {
                 match event {
                     WindowEvent::KeyboardInput {
@@ -505,7 +530,10 @@ impl Window {
                         ..
                     }
                     | WindowEvent::CloseRequested
-                    | WindowEvent::Destroyed => done = true,
+                    | WindowEvent::Destroyed => {
+                        done = true;
+                        *control_flow = ControlFlow::Exit;
+                    }
                     WindowEvent::Focused(active) => {
                         self.active.replace(active);
                     }
@@ -586,102 +614,103 @@ impl Window {
 
         if let Some(_) = self.forced_view {
             // Update pipline IO.
-            let _dpi_factor = self.windowed_context.window().get_hidpi_factor();
-            let size = glutin::dpi::PhysicalSize {
-                width: 1920.0,
-                height: 1080.0,
-            };
-            //self.windowed_context.resize(size);
-            gfx_window_glutin::update_views(
-                &self.windowed_context,
-                &mut self.render_target.borrow_mut(),
-                &mut self.main_depth.borrow_mut(),
-            );
-            for (i, f) in self.flow.iter().enumerate(){
-                f.negociate_slots(&self);
-                f.update_values(&self, &self.values[i].borrow());
-                f.last_perspective.borrow_mut().proj = cgmath::perspective(
-                    cgmath::Deg(70.0), (size.width/size.height) as f32, 0.05, 1000.0);
-            }
+            let new_size = PhysicalSize::new(1920 as u32, 1080 as u32);
+            //self.wgpu_window.resize(size);
+            &self.resize(new_size);
+            // TODO-WGPU
+            // gfx_window_glutin::update_views(
+            //     &self.wgpu_window,
+            //     &mut self.render_target.borrow_mut(),
+            //     &mut self.main_depth.borrow_mut(),
+            // );
+            // TODO-WGPU
+            // for (i, f) in self.flow.iter().enumerate(){
+            //     f.negociate_slots(&self);
+            //     f.update_values(&self, &self.values[i].borrow());
+            //     f.last_perspective.borrow_mut().proj = cgmath::perspective(
+            //         cgmath::Deg(70.0), (size.width/size.height) as f32, 0.05, 1000.0);
+            // }
         }
 
-        if let Some(size) = deferred_size {
+        if let Some(new_size) = deferred_size {
             // Update pipline IO.
-            let dpi_factor = self.windowed_context.window().get_hidpi_factor();
-            let size = size.to_physical(dpi_factor);
-            self.windowed_context.resize(size);
-            gfx_window_glutin::update_views(
-                &self.windowed_context,
-                &mut self.render_target.borrow_mut(),
-                &mut self.main_depth.borrow_mut(),
-            );
-            for (i, f) in self.flow.iter().enumerate(){
-                f.negociate_slots(&self);
-                f.update_values(&self, &self.values[i].borrow());
-                f.last_perspective.borrow_mut().proj = cgmath::perspective(
-                    cgmath::Deg(70.0), (size.width/size.height) as f32, 0.05, 1000.0);
-            }
+            // let dpi_factor = self.wgpu_window.scale_factor();
+            // let size = size.to_physical(dpi_factor);
+            &self.resize(new_size);
+            // self.wgpu_window.resize(size);
+            // TODO-WGPU
+            // gfx_window_glutin::update_views(
+            //     &self.wgpu_window,
+            //     &mut self.render_target.borrow_mut(),
+            //     &mut self.main_depth.borrow_mut(),
+            // );
+            // TODO-WGPU
+            // for (i, f) in self.flow.iter().enumerate(){
+            //     f.negociate_slots(&self);
+            //     f.update_values(&self, &self.values[i].borrow());
+            //     f.last_perspective.borrow_mut().proj = cgmath::perspective(
+            //         cgmath::Deg(70.0), (size.width/size.height) as f32, 0.05, 1000.0);
+            // }
         }
 
         // Update input.
-        for f in self.flow.iter(){
-            if *self.override_view.borrow() || *self.override_gaze.borrow() {
-                let window_size = &self.windowed_context.window().get_inner_size().unwrap();
-                let cursor_pos = self.cursor_pos.borrow();
-                //println!("{} {}",cursor_pos.x as f32 ,cursor_pos.y as f32);
-                let view_input = match self.forced_view {
-                    Some(pos) =>{
-                        pos
-                    }
-                    None =>{
-                        (cursor_pos.x as f32 ,cursor_pos.y as f32)
-                    }
-                };
+        // TODO-WGPU
+        // for f in self.flow.iter(){
+        //     if *self.override_view.borrow() || *self.override_gaze.borrow() {
+        //         let window_size = &self.wgpu_window.window().get_inner_size().unwrap();
+        //         let cursor_pos = self.cursor_pos.borrow();
+        //         //println!("{} {}",cursor_pos.x as f32 ,cursor_pos.y as f32);
+        //         let view_input = match self.forced_view {
+        //             Some(pos) =>{
+        //                 pos
+        //             }
+        //             None =>{
+        //                 (cursor_pos.x as f32 ,cursor_pos.y as f32)
+        //             }
+        //         };
 
-                self.vis_param.borrow_mut().highlight_position = (cursor_pos.x/window_size.width, cursor_pos.y/window_size.height);
-                let yaw = view_input.0 as f32 / window_size.width as f32
-                    * std::f32::consts::PI
-                    * 2.0
-                    - 0.5;
-                let pitch = view_input.1 as f32 / window_size.height as f32
-                    * std::f32::consts::PI
-                    - 0.5;//50 mm lens
-                let view = Matrix4::from_angle_x(cgmath::Rad(pitch)) * Matrix4::from_angle_y(cgmath::Rad(yaw));
+        //         self.vis_param.borrow_mut().highlight_position = (cursor_pos.x/window_size.width, cursor_pos.y/window_size.height);
+        //         let yaw = view_input.0 as f32 / window_size.width as f32
+        //             * std::f32::consts::PI
+        //             * 2.0
+        //             - 0.5;
+        //         let pitch = view_input.1 as f32 / window_size.height as f32
+        //             * std::f32::consts::PI
+        //             - 0.5;//50 mm lens
+        //         let view = Matrix4::from_angle_x(cgmath::Rad(pitch)) * Matrix4::from_angle_y(cgmath::Rad(yaw));
 
-                let mut perspective = f.last_perspective.borrow_mut();
+        //         let mut perspective = f.last_perspective.borrow_mut();
 
-                if *self.override_view.borrow() {
-                    if !*self.override_gaze.borrow(){
-                        perspective.gaze = (view * perspective.view.invert().unwrap() * perspective.gaze.extend(1.0)).truncate();
-                    }
-                    perspective.view = view;
-                }
-                if *self.override_gaze.borrow() {
-                    perspective.gaze = (perspective.view * view.invert().unwrap() * Vector4::unit_z()).truncate();
-                }
-            }            
-            f.input(&self.vis_param.borrow());
-        }
+        //         if *self.override_view.borrow() {
+        //             if !*self.override_gaze.borrow(){
+        //                 perspective.gaze = (view * perspective.view.invert().unwrap() * perspective.gaze.extend(1.0)).truncate();
+        //             }
+        //             perspective.view = view;
+        //         }
+        //         if *self.override_gaze.borrow() {
+        //             perspective.gaze = (perspective.view * view.invert().unwrap() * Vector4::unit_z()).truncate();
+        //         }
+        //     }            
+        //     f.input(&self.vis_param.borrow());
+        // }
         //println!("Rendered with: {:?}", self.vis_param.borrow_mut());
 
-        self.encoder
-            .borrow_mut()
-            .clear(&self.render_target.borrow(), [68.0 / 255.0; 4]);
-        self.flow.iter().for_each(|f| f.render(&self));
+        // self.encoder
+        //     .borrow_mut()
+        //     .clear(&self.render_target.borrow(), [68.0 / 255.0; 4]);
+        // self.flow.iter().for_each(|f| f.render(&self));
         self.last_render_instant.replace(Instant::now());
 
-        use gfx::Device;
-        self.flush(&mut self.encoder().borrow_mut());
-        self.device.borrow_mut().cleanup();
+        // self.flush(&mut self.encoder().borrow_mut());
+        // self.device.borrow_mut().cleanup();
 
-        if *self.should_swap_buffers.borrow(){
-            self.windowed_context.swap_buffers().unwrap();
-        }
+        // if *self.should_swap_buffers.borrow(){
+        //     self.wgpu_window.swap_buffers().unwrap();
+        // }
 
         if let Some(remote) = &self.remote {
             remote.send_frame();
         }
-
 
         return done;
     }

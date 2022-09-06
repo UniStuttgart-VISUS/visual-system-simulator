@@ -9,7 +9,7 @@
 //TODO-WGPU mod passthrough;
 //TODO-WGPU mod retina;
 //TODO-WGPU mod rgb_buffer;
-//TODO-WGPU mod slot;
+mod slot;
 //TODO-WGPU mod yuv_buffer;
 //TODO-WGPU mod vr_compositor;
 //TODO-WGPU mod stereo_desktop;
@@ -22,7 +22,7 @@
 //TODO-WGPU pub use self::passthrough::*;
 //TODO-WGPU pub use self::retina::*;
 //TODO-WGPU pub use self::rgb_buffer::*;
-//TODO-WGPU pub use self::slot::*;
+pub use self::slot::*;
 //TODO-WGPU pub use self::yuv_buffer::*;
 //TODO-WGPU pub use self::vr_compositor::*;
 //TODO-WGPU pub use self::stereo_desktop::*;
