@@ -1,6 +1,7 @@
 use crate::*;
-use std::cell::RefCell;
+use std::{cell::RefCell, borrow::BorrowMut};
 use std::time::Instant;
+use std::iter;
 use cgmath::{Matrix4, Vector4, SquareMatrix};
 use wgpu::*;
 use winit::{
@@ -116,9 +117,11 @@ impl Window {
         // Create a command buffer.
         //TODO-WGPU let encoder: CommandEncoder = factory.create_command_buffer().into();
 
-        unsafe {
-            //TODO-WGPU device.with_gl(|gl| gl.Disable(gfx_gl::FRAMEBUFFER_SRGB));
-        }
+        //TODO-WGPU maybe use "surface.get_supported_formats(&adapter)[0].describe().srgb" to filter;
+        // unsafe {
+        //     device.with_gl(|gl| gl.Disable(gfx_gl::FRAMEBUFFER_SRGB));
+        //     
+        // }
 
         //TODO-WGPU let mut flow = Vec::new();
         //TODO-WGPU flow.resize_with(flow_count, Flow::new);
@@ -299,316 +302,325 @@ impl Window {
     pub fn poll_events(&mut self) -> bool {
         let mut done = false;
         let mut deferred_size = None;
+        let mut redraw_requested = false;
 
         // Poll for window events.
         // TODO-WGPU use .run() instead of .run_return() as it is highly discouraged and incompatible with some platforms
         self.events_loop.borrow_mut().run_return(|event, _, control_flow| {
-            if let Event::WindowEvent { event, .. } = event {
-                match event {
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {state,
-                                virtual_keycode: Some(VirtualKeyCode::LShift),
-                                ..
-                            },
-                        ..
-                    } => {
-                        match state{
-                            ElementState::Pressed => {
-                                let mut vp = self.vis_param.borrow_mut();
-                                vp.edit_eye_position = 1;
-                            },
-                            ElementState::Released => {
-                                let mut vp = self.vis_param.borrow_mut();
-                                vp.edit_eye_position = 0;
-                            },
-                        }
-                    }, 
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::P),
-                                ..
-                            },
-                        ..
-                    } => {
-                        let mut vp = self.vis_param.borrow_mut();
-                        vp.bees_flying = !vp.bees_flying;
-                    }, 
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::B),
-                                ..
-                            },
-                        ..
-                    } => {
-                        let mut vp = self.vis_param.borrow_mut();
-                        vp.bees_visible = !vp.bees_visible;
-                    }, 
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::R),
-                                ..
-                            },
-                        ..
-                    } => {
-                        let mut vp = self.vis_param.borrow_mut();
-                        if vp.edit_eye_position > 0 {
-                            vp.eye_position = (0.0, 0.0);
-                        }
-                    }, 
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::Space),
-                                ..
-                            },
-                        ..
-                    } => {
-                        let mut vp = self.vis_param.borrow_mut();
-                        // println!("Space: eye was {}",(vp.eye_idx as u32));
-                        vp.eye_idx = (vp.eye_idx+1)%2
-                    },                
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::H),
-                                ..
-                            },
-                        ..
-                    } => {
-                        let mut vp = self.vis_param.borrow_mut();
-                        vp.test_depth_max+=100.0;
-                        println!("Depth min,max [{},{}]",
-                            vp.test_depth_min,
-                            vp.test_depth_max
-                        );
-                    },
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::L),
-                                ..
-                            },
-                        ..
-                    } => {
-                        let mut vp = self.vis_param.borrow_mut();
-                        vp.test_depth_max-=100.0;
-                        println!("Depth min,max [{},{}]",
-                            vp.test_depth_min,
-                            vp.test_depth_max
-                        );
-                    },
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::J),
-                                ..
-                            },
-                        ..
-                    } => {
-                        let mut vp = self.vis_param.borrow_mut();
-                        vp.test_depth_min+=10.0;
-                        println!("Depth min,max [{},{}]",
-                            vp.test_depth_min,
-                            vp.test_depth_max
-                        );
-                    },
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::K),
-                                ..
-                            },
-                        ..
-                    } => {
-                        let mut vp = self.vis_param.borrow_mut();
-                        vp.test_depth_min-=10.0;
-                        println!("Depth min,max [{},{}]",
-                            vp.test_depth_min,
-                            vp.test_depth_max
-                        );
-                    },
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::A),
-                                ..
-                            },
-                        ..
-                    } => {
-                        self.vis_param.borrow_mut().dir_calc_scale-=5.0;
-                    },
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::D),
-                                ..
-                            },
-                        ..
-                    } => {
-                        self.vis_param.borrow_mut().dir_calc_scale+=5.0;
-                    },
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::W),
-                                ..
-                            },
-                        ..
-                    } => {
-                        self.vis_param.borrow_mut().heat_scale+=0.5;
-                    },
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::S),
-                                ..
-                            },
-                        ..
-                    } => {
-                        self.vis_param.borrow_mut().heat_scale-=0.5;
-                    },
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::Q),
-                                ..
-                            },
-                        ..
-                    } => {
-                        self.vis_param.borrow_mut().astigmatism_strength-=0.5;
-                    },
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::E),
-                                ..
-                            },
-                        ..
-                    } => {
-                        self.vis_param.borrow_mut().astigmatism_strength+=0.5;
-                    },
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                virtual_keycode: Some(VirtualKeyCode::C),
-                                state: ElementState::Pressed,
-                                ..
-                            },
-                        ..
-                    } => {
-                        let mut vp = self.vis_param.borrow_mut();
-                        match vp.vis_type.color_map_type {
-                            ColorMapType::Viridis => (*vp).vis_type.color_map_type = ColorMapType::Turbo,
-                            ColorMapType::Turbo => (*vp).vis_type.color_map_type = ColorMapType::Grayscale,
-                            ColorMapType::Grayscale  => (*vp).vis_type.color_map_type = ColorMapType::Viridis,
-                        }
-                    },
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                virtual_keycode: Some(VirtualKeyCode::Escape),
-                                ..
-                            },
-                        ..
-                    }
-                    | WindowEvent::CloseRequested
-                    | WindowEvent::Destroyed => {
-                        done = true;
-                        *control_flow = ControlFlow::Exit;
-                    }
-                    WindowEvent::Focused(active) => {
-                        self.active.replace(active);
-                    }
-                    WindowEvent::Resized(size) => {
-                        deferred_size = Some(size);
-                    }
-                    WindowEvent::CursorMoved { position, .. } => {
-                        if *self.active.borrow() {
-                            self.cursor_pos.replace(position);
+            match event {
+                Event::WindowEvent { window_id, ref event } if window_id == self.wgpu_window.id() =>{
+                    match event {
+                        WindowEvent::KeyboardInput {
+                            input:
+                                KeyboardInput {state,
+                                    virtual_keycode: Some(VirtualKeyCode::LShift),
+                                    ..
+                                },
+                            ..
+                        } => {
+                            match state{
+                                ElementState::Pressed => {
+                                    let mut vp = self.vis_param.borrow_mut();
+                                    vp.edit_eye_position = 1;
+                                },
+                                ElementState::Released => {
+                                    let mut vp = self.vis_param.borrow_mut();
+                                    vp.edit_eye_position = 0;
+                                },
+                            }
+                        }, 
+                        WindowEvent::KeyboardInput {
+                            input:
+                                KeyboardInput {
+                                    state: ElementState::Pressed,
+                                    virtual_keycode: Some(VirtualKeyCode::P),
+                                    ..
+                                },
+                            ..
+                        } => {
                             let mut vp = self.vis_param.borrow_mut();
-                            vp.mouse_input.position = (position.x as f32, position.y as f32);
-                            match vp.edit_eye_position {
-                                1 => {
-                                    vp.previous_mouse_position = (position.x as f32 * 0.1, position.y as f32 * 0.1);
-                                    vp.edit_eye_position = 2;
+                            vp.bees_flying = !vp.bees_flying;
+                        }, 
+                        WindowEvent::KeyboardInput {
+                            input:
+                                KeyboardInput {
+                                    state: ElementState::Pressed,
+                                    virtual_keycode: Some(VirtualKeyCode::B),
+                                    ..
                                 },
-                                2 => {
-                                    let (p_x,p_y) = vp.previous_mouse_position;
-                                    let (c_x,c_y) = (position.x as f32 * 0.1, position.y as f32 * 0.1);
-                                    vp.eye_position = (c_x - p_x, c_y - p_y);
-                                    // println!("{:?}",vp.eye_position);
+                            ..
+                        } => {
+                            let mut vp = self.vis_param.borrow_mut();
+                            vp.bees_visible = !vp.bees_visible;
+                        }, 
+                        WindowEvent::KeyboardInput {
+                            input:
+                                KeyboardInput {
+                                    state: ElementState::Pressed,
+                                    virtual_keycode: Some(VirtualKeyCode::R),
+                                    ..
                                 },
+                            ..
+                        } => {
+                            let mut vp = self.vis_param.borrow_mut();
+                            if vp.edit_eye_position > 0 {
+                                vp.eye_position = (0.0, 0.0);
+                            }
+                        }, 
+                        WindowEvent::KeyboardInput {
+                            input:
+                                KeyboardInput {
+                                    state: ElementState::Pressed,
+                                    virtual_keycode: Some(VirtualKeyCode::Space),
+                                    ..
+                                },
+                            ..
+                        } => {
+                            let mut vp = self.vis_param.borrow_mut();
+                            // println!("Space: eye was {}",(vp.eye_idx as u32));
+                            vp.eye_idx = (vp.eye_idx+1)%2
+                        },                
+                        WindowEvent::KeyboardInput {
+                            input:
+                                KeyboardInput {
+                                    state: ElementState::Pressed,
+                                    virtual_keycode: Some(VirtualKeyCode::H),
+                                    ..
+                                },
+                            ..
+                        } => {
+                            let mut vp = self.vis_param.borrow_mut();
+                            vp.test_depth_max+=100.0;
+                            println!("Depth min,max [{},{}]",
+                                vp.test_depth_min,
+                                vp.test_depth_max
+                            );
+                        },
+                        WindowEvent::KeyboardInput {
+                            input:
+                                KeyboardInput {
+                                    state: ElementState::Pressed,
+                                    virtual_keycode: Some(VirtualKeyCode::L),
+                                    ..
+                                },
+                            ..
+                        } => {
+                            let mut vp = self.vis_param.borrow_mut();
+                            vp.test_depth_max-=100.0;
+                            println!("Depth min,max [{},{}]",
+                                vp.test_depth_min,
+                                vp.test_depth_max
+                            );
+                        },
+                        WindowEvent::KeyboardInput {
+                            input:
+                                KeyboardInput {
+                                    state: ElementState::Pressed,
+                                    virtual_keycode: Some(VirtualKeyCode::J),
+                                    ..
+                                },
+                            ..
+                        } => {
+                            let mut vp = self.vis_param.borrow_mut();
+                            vp.test_depth_min+=10.0;
+                            println!("Depth min,max [{},{}]",
+                                vp.test_depth_min,
+                                vp.test_depth_max
+                            );
+                        },
+                        WindowEvent::KeyboardInput {
+                            input:
+                                KeyboardInput {
+                                    state: ElementState::Pressed,
+                                    virtual_keycode: Some(VirtualKeyCode::K),
+                                    ..
+                                },
+                            ..
+                        } => {
+                            let mut vp = self.vis_param.borrow_mut();
+                            vp.test_depth_min-=10.0;
+                            println!("Depth min,max [{},{}]",
+                                vp.test_depth_min,
+                                vp.test_depth_max
+                            );
+                        },
+                        WindowEvent::KeyboardInput {
+                            input:
+                                KeyboardInput {
+                                    state: ElementState::Pressed,
+                                    virtual_keycode: Some(VirtualKeyCode::A),
+                                    ..
+                                },
+                            ..
+                        } => {
+                            self.vis_param.borrow_mut().dir_calc_scale-=5.0;
+                        },
+                        WindowEvent::KeyboardInput {
+                            input:
+                                KeyboardInput {
+                                    state: ElementState::Pressed,
+                                    virtual_keycode: Some(VirtualKeyCode::D),
+                                    ..
+                                },
+                            ..
+                        } => {
+                            self.vis_param.borrow_mut().dir_calc_scale+=5.0;
+                        },
+                        WindowEvent::KeyboardInput {
+                            input:
+                                KeyboardInput {
+                                    state: ElementState::Pressed,
+                                    virtual_keycode: Some(VirtualKeyCode::W),
+                                    ..
+                                },
+                            ..
+                        } => {
+                            self.vis_param.borrow_mut().heat_scale+=0.5;
+                        },
+                        WindowEvent::KeyboardInput {
+                            input:
+                                KeyboardInput {
+                                    state: ElementState::Pressed,
+                                    virtual_keycode: Some(VirtualKeyCode::S),
+                                    ..
+                                },
+                            ..
+                        } => {
+                            self.vis_param.borrow_mut().heat_scale-=0.5;
+                        },
+                        WindowEvent::KeyboardInput {
+                            input:
+                                KeyboardInput {
+                                    state: ElementState::Pressed,
+                                    virtual_keycode: Some(VirtualKeyCode::Q),
+                                    ..
+                                },
+                            ..
+                        } => {
+                            self.vis_param.borrow_mut().astigmatism_strength-=0.5;
+                        },
+                        WindowEvent::KeyboardInput {
+                            input:
+                                KeyboardInput {
+                                    state: ElementState::Pressed,
+                                    virtual_keycode: Some(VirtualKeyCode::E),
+                                    ..
+                                },
+                            ..
+                        } => {
+                            self.vis_param.borrow_mut().astigmatism_strength+=0.5;
+                        },
+                        WindowEvent::KeyboardInput {
+                            input:
+                                KeyboardInput {
+                                    virtual_keycode: Some(VirtualKeyCode::C),
+                                    state: ElementState::Pressed,
+                                    ..
+                                },
+                            ..
+                        } => {
+                            let mut vp = self.vis_param.borrow_mut();
+                            match vp.vis_type.color_map_type {
+                                ColorMapType::Viridis => (*vp).vis_type.color_map_type = ColorMapType::Turbo,
+                                ColorMapType::Turbo => (*vp).vis_type.color_map_type = ColorMapType::Grayscale,
+                                ColorMapType::Grayscale  => (*vp).vis_type.color_map_type = ColorMapType::Viridis,
+                            }
+                        },
+                        WindowEvent::KeyboardInput {
+                            input:
+                                KeyboardInput {
+                                    virtual_keycode: Some(VirtualKeyCode::Escape),
+                                    ..
+                                },
+                            ..
+                        }
+                        | WindowEvent::CloseRequested
+                        | WindowEvent::Destroyed => {
+                            done = true;
+                        }
+                        WindowEvent::Focused(active) => {
+                            self.active.replace(*active);
+                        }
+                        WindowEvent::Resized(size) => {
+                            deferred_size = Some(*size);
+                        }
+                        WindowEvent::CursorMoved { position, .. } => {
+                            if *self.active.borrow() {
+                                self.cursor_pos.replace(*position);
+                                let mut vp = self.vis_param.borrow_mut();
+                                vp.mouse_input.position = (position.x as f32, position.y as f32);
+                                match vp.edit_eye_position {
+                                    1 => {
+                                        vp.previous_mouse_position = (position.x as f32 * 0.1, position.y as f32 * 0.1);
+                                        vp.edit_eye_position = 2;
+                                    },
+                                    2 => {
+                                        let (p_x,p_y) = vp.previous_mouse_position;
+                                        let (c_x,c_y) = (position.x as f32 * 0.1, position.y as f32 * 0.1);
+                                        vp.eye_position = (c_x - p_x, c_y - p_y);
+                                        // println!("{:?}",vp.eye_position);
+                                    },
+                                    _ => {}
+                                }
+                            }
+                        }
+                        WindowEvent::CursorLeft { .. } => {
+                            if *self.active.borrow() {
+                                self.override_view.replace(false);
+                                self.override_gaze.replace(false);
+                                //reset gaze ?
+                            }
+                        }
+                        WindowEvent::MouseInput { state, button, .. } => {
+                            if *self.active.borrow() {
+                                let mut vp = self.vis_param.borrow_mut();
+                                match button {
+                                    MouseButton::Left => {
+                                        self.override_view.replace(*state == ElementState::Pressed);
+                                        vp.mouse_input.left_button = *state == ElementState::Pressed;
+                                    }
+                                    MouseButton::Right => {
+                                        self.override_gaze.replace(*state == ElementState::Pressed);
+                                        vp.mouse_input.right_button = *state == ElementState::Pressed;
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        WindowEvent::KeyboardInput {
+                            input:KeyboardInput {virtual_keycode, ..}, ..
+                        } => {
+                            let mut vp = self.vis_param.borrow_mut();
+                            match virtual_keycode{
+                                Some(VirtualKeyCode::O) => vp.vis_type.base_image=BaseImage::Output,
+                                Some(VirtualKeyCode::I) => vp.vis_type.base_image=BaseImage::Original,
+                                Some(VirtualKeyCode::G) => vp.vis_type.base_image=BaseImage::Ganglion,
+                                Some(VirtualKeyCode::V) => vp.vis_type.base_image=BaseImage::Variance,
+    
+                                Some(VirtualKeyCode::Key1) => vp.vis_type.mix_type=MixType::BaseImageOnly,
+                                Some(VirtualKeyCode::Key2) => vp.vis_type.mix_type=MixType::ColorMapOnly,
+                                Some(VirtualKeyCode::Key3) => vp.vis_type.mix_type=MixType::OverlayThreshold,
+    
+                                Some(VirtualKeyCode::Key4) => vp.vis_type.combination_function=CombinationFunction::AbsoluteErrorRGBVectorLength,
+                                Some(VirtualKeyCode::Key5) => vp.vis_type.combination_function=CombinationFunction::AbsoluteErrorXYVectorLength,
+                                Some(VirtualKeyCode::Key6) => vp.vis_type.combination_function=CombinationFunction::AbsoluteErrorRGBXYVectorLength,
+                                Some(VirtualKeyCode::Key7) => vp.vis_type.combination_function=CombinationFunction::UncertaintyRGBVectorLength,
+                                Some(VirtualKeyCode::Key8) => vp.vis_type.combination_function=CombinationFunction::UncertaintyXYVectorLength,
+                                Some(VirtualKeyCode::Key9) => vp.vis_type.combination_function=CombinationFunction::UncertaintyRGBXYVectorLength,
+                                Some(VirtualKeyCode::Key0) => vp.vis_type.combination_function=CombinationFunction::UncertaintyGenVar,
                                 _ => {}
                             }
                         }
+                        _ => (),
                     }
-                    WindowEvent::CursorLeft { .. } => {
-                        if *self.active.borrow() {
-                            self.override_view.replace(false);
-                            self.override_gaze.replace(false);
-                            //reset gaze ?
-                        }
-                    }
-                    WindowEvent::MouseInput { state, button, .. } => {
-                        if *self.active.borrow() {
-                            let mut vp = self.vis_param.borrow_mut();
-                            match button {
-                                MouseButton::Left => {
-                                    self.override_view.replace(state == ElementState::Pressed);
-                                    vp.mouse_input.left_button = state == ElementState::Pressed;
-                                }
-                                MouseButton::Right => {
-                                    self.override_gaze.replace(state == ElementState::Pressed);
-                                    vp.mouse_input.right_button = state == ElementState::Pressed;
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                    WindowEvent::KeyboardInput {
-                        input:KeyboardInput {virtual_keycode, ..}, ..
-                    } => {
-                        let mut vp = self.vis_param.borrow_mut();
-                        match virtual_keycode{
-                            Some(VirtualKeyCode::O) => vp.vis_type.base_image=BaseImage::Output,
-                            Some(VirtualKeyCode::I) => vp.vis_type.base_image=BaseImage::Original,
-                            Some(VirtualKeyCode::G) => vp.vis_type.base_image=BaseImage::Ganglion,
-                            Some(VirtualKeyCode::V) => vp.vis_type.base_image=BaseImage::Variance,
-
-                            Some(VirtualKeyCode::Key1) => vp.vis_type.mix_type=MixType::BaseImageOnly,
-                            Some(VirtualKeyCode::Key2) => vp.vis_type.mix_type=MixType::ColorMapOnly,
-                            Some(VirtualKeyCode::Key3) => vp.vis_type.mix_type=MixType::OverlayThreshold,
-
-                            Some(VirtualKeyCode::Key4) => vp.vis_type.combination_function=CombinationFunction::AbsoluteErrorRGBVectorLength,
-                            Some(VirtualKeyCode::Key5) => vp.vis_type.combination_function=CombinationFunction::AbsoluteErrorXYVectorLength,
-                            Some(VirtualKeyCode::Key6) => vp.vis_type.combination_function=CombinationFunction::AbsoluteErrorRGBXYVectorLength,
-                            Some(VirtualKeyCode::Key7) => vp.vis_type.combination_function=CombinationFunction::UncertaintyRGBVectorLength,
-                            Some(VirtualKeyCode::Key8) => vp.vis_type.combination_function=CombinationFunction::UncertaintyXYVectorLength,
-                            Some(VirtualKeyCode::Key9) => vp.vis_type.combination_function=CombinationFunction::UncertaintyRGBXYVectorLength,
-                            Some(VirtualKeyCode::Key0) => vp.vis_type.combination_function=CombinationFunction::UncertaintyGenVar,
-                            _ => {}
-                        }
-                    }
-                    _ => (),
                 }
+                Event::RedrawRequested(window_id) if window_id == self.wgpu_window.id() => {
+                    redraw_requested = true;
+                }
+                Event::RedrawEventsCleared => {
+                    *control_flow = ControlFlow::Exit;
+                }
+                _ => {}
             }
         });
 
@@ -638,7 +650,7 @@ impl Window {
             // let size = size.to_physical(dpi_factor);
             &self.resize(new_size);
             // self.wgpu_window.resize(size);
-            // TODO-WGPU
+            // TODO-WGPU 
             // gfx_window_glutin::update_views(
             //     &self.wgpu_window,
             //     &mut self.render_target.borrow_mut(),
@@ -695,14 +707,47 @@ impl Window {
         // }
         //println!("Rendered with: {:?}", self.vis_param.borrow_mut());
 
-        // self.encoder
-        //     .borrow_mut()
-        //     .clear(&self.render_target.borrow(), [68.0 / 255.0; 4]);
-        // self.flow.iter().for_each(|f| f.render(&self));
-        self.last_render_instant.replace(Instant::now());
+        if redraw_requested {
+            match self.surface.get_current_texture(){
+                Ok(output) => {
+                    let view = output
+                    .texture
+                    .create_view(&wgpu::TextureViewDescriptor::default());
 
-        // self.flush(&mut self.encoder().borrow_mut());
-        // self.device.borrow_mut().cleanup();
+                    let mut encoder = self
+                        .device
+                        .borrow_mut()
+                        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                            label: Some("Render Encoder"),
+                        });
+                    {
+                        let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                            label: Some("Render Pass"),
+                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                view: &view,
+                                resolve_target: None,
+                                ops: wgpu::Operations {
+                                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                                        r: 0.25,
+                                        g: 0.25,
+                                        b: 0.25,
+                                        a: 1.0,
+                                    }),
+                                    store: true,
+                                },
+                            })],
+                            depth_stencil_attachment: None,
+                        });
+                    }
+            
+                    self.queue.borrow_mut().submit(iter::once(encoder.finish()));
+                    output.present();
+                    self.last_render_instant.replace(Instant::now());
+                }
+                _ => {}
+            }
+        }
+        // self.flow.iter().for_each(|f| f.render(&self));
 
         // if *self.should_swap_buffers.borrow(){
         //     self.wgpu_window.swap_buffers().unwrap();
