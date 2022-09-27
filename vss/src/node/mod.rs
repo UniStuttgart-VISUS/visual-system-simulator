@@ -10,11 +10,15 @@
 //TODO-WGPU mod retina;
 //TODO-WGPU mod rgb_buffer;
 mod slot;
+mod test_node;
 //TODO-WGPU mod yuv_buffer;
 //TODO-WGPU mod vr_compositor;
 //TODO-WGPU mod stereo_desktop;
 //TODO-WGPU mod variance;
 //TODO-WGPU mod peacock;
+
+use wgpu::CommandEncoder;
+use wgpu::TextureView;
 
 //TODO-WGPU pub use self::cataract::*;
 //TODO-WGPU pub use self::display::*;
@@ -23,6 +27,7 @@ mod slot;
 //TODO-WGPU pub use self::retina::*;
 //TODO-WGPU pub use self::rgb_buffer::*;
 pub use self::slot::*;
+pub use self::test_node::*;
 //TODO-WGPU pub use self::yuv_buffer::*;
 //TODO-WGPU pub use self::vr_compositor::*;
 //TODO-WGPU pub use self::stereo_desktop::*;
@@ -48,11 +53,11 @@ pub trait Node {
 
     /// Negociates input and output for this node (source texture and render target),
     /// possibly re-using suggested `slots` (for efficiency).
-    fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots;
+    // fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots;
 
-    fn negociate_slots_wk(&mut self, window: &Window, slots: NodeSlots, _well_known: &WellKnownSlots) -> NodeSlots{
-        self.negociate_slots(window, slots)
-    }
+    // fn negociate_slots_wk(&mut self, window: &Window, slots: NodeSlots, _well_known: &WellKnownSlots) -> NodeSlots{
+    //     self.negociate_slots(window, slots)
+    // }
 
     /// Set new parameters for this effect
     #[allow(unused_variables)]
@@ -65,5 +70,5 @@ pub trait Node {
     }
 
     /// Render the node.
-    fn render(&mut self, window: &Window);
+    fn render(&mut self, window: &Window, encoder: &mut CommandEncoder, view: &TextureView);
 }

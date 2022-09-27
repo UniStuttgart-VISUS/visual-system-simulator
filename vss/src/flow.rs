@@ -2,8 +2,8 @@ use crate::*;
 use std::cell::RefCell;
 use cgmath::{Matrix4};
 use cgmath::Vector3;
-use gfx::format::Rgba32F;
 use cgmath::Rad;
+use wgpu::{TextureView, CommandEncoder};
 use std::ops::Mul;
 
 /// Represents properties of eye-tracking data.
@@ -52,149 +52,149 @@ impl Flow {
         self.nodes.borrow().len()
     }
     
-    pub fn update_last_slot(&self, window: &Window) {
-        if self.last_slot.borrow().is_some() {
-            let output = self.last_slot.borrow_mut().as_mut().unwrap().take_output();
-            let suggested_slot = 
-                NodeSlots::new_io(
-                    window,
-                    self.last_slot.borrow_mut().as_mut().unwrap().take_input(),
-                    match output {
-                        Slot::Rgb{
-                            color: _,
-                            color_view,
-                            deflection,
-                            deflection_view,
-                            color_change,
-                            color_change_view,
-                            color_uncertainty,
-                            color_uncertainty_view,
-                            covariances,
-                            covariances_view
-                        } => Slot::Rgb {
-                            color: window.target(),
-                            color_view,
-                            deflection,
-                            deflection_view,
-                            color_change, 
-                            color_change_view, 
-                            color_uncertainty, 
-                            color_uncertainty_view,
-                            covariances,
-                            covariances_view
-                        },
-                        _ => Slot::Empty,
-                    },
-                );
-            // Negociate and swap.
-            let new_last_slot = self.nodes.borrow_mut().last_mut().unwrap().negociate_slots_wk(window, suggested_slot, &self.well_known);
-            self.last_slot.replace(Some(new_last_slot));
-        }else{
-            self.negociate_slots(window);
-        }
-    }
+    // pub fn update_last_slot(&self, window: &Window) {
+    //     if self.last_slot.borrow().is_some() {
+    //         let output = self.last_slot.borrow_mut().as_mut().unwrap().take_output();
+    //         let suggested_slot = 
+    //             NodeSlots::new_io(
+    //                 window,
+    //                 self.last_slot.borrow_mut().as_mut().unwrap().take_input(),
+    //                 match output {
+    //                     Slot::Rgb{
+    //                         color: _,
+    //                         color_view,
+    //                         deflection,
+    //                         deflection_view,
+    //                         color_change,
+    //                         color_change_view,
+    //                         color_uncertainty,
+    //                         color_uncertainty_view,
+    //                         covariances,
+    //                         covariances_view
+    //                     } => Slot::Rgb {
+    //                         color: window.target(),
+    //                         color_view,
+    //                         deflection,
+    //                         deflection_view,
+    //                         color_change, 
+    //                         color_change_view, 
+    //                         color_uncertainty, 
+    //                         color_uncertainty_view,
+    //                         covariances,
+    //                         covariances_view
+    //                     },
+    //                     _ => Slot::Empty,
+    //                 },
+    //             );
+    //         // Negociate and swap.
+    //         let new_last_slot = self.nodes.borrow_mut().last_mut().unwrap().negociate_slots_wk(window, suggested_slot, &self.well_known);
+    //         self.last_slot.replace(Some(new_last_slot));
+    //     }else{
+    //         self.negociate_slots(window);
+    //     }
+    // }
 
-    pub fn negociate_slots(&self, window: &Window) {
-        let mut slot_a = NodeSlots::new(window);
-        let mut slot_b = NodeSlots::new(window);
-        let nodes_len = self.nodes.borrow().len();
-        for (idx, node) in self.nodes.borrow_mut().iter_mut().enumerate() {
+    // pub fn negociate_slots(&self, window: &Window) {
+    //     let mut slot_a = NodeSlots::new(window);
+    //     let mut slot_b = NodeSlots::new(window);
+    //     let nodes_len = self.nodes.borrow().len();
+    //     for (idx, node) in self.nodes.borrow_mut().iter_mut().enumerate() {
 
-            let suggested_slot = if idx + 1 == nodes_len {
-                // Suggest window as final output.
-                let mut factory = window.factory().borrow_mut();
+    //         let suggested_slot = if idx + 1 == nodes_len {
+    //             // Suggest window as final output.
+    //             let mut factory = window.factory().borrow_mut();
 
-                let (width, height, ..) = window.target().get_dimensions();
+    //             let (width, height, ..) = window.target().get_dimensions();
 
-                let (deflection, deflection_view) = create_texture_render_target::<Rgba32F>(
-                    &mut factory,
-                    width as u32,
-                    height as u32,
-                );
-                let (color_change, color_change_view) = create_texture_render_target::<Rgba32F>(
-                    &mut factory,
-                    width as u32,
-                    height as u32,
-                );
-                let (color_uncertainty, color_uncertainty_view) = create_texture_render_target::<Rgba32F>(
-                    &mut factory,
-                    width as u32,
-                    height as u32,
-                );
-                let (covariances, covariances_view) = create_texture_render_target::<Rgba32F>(
-                    &mut factory,
-                    width as u32,
-                    height as u32,
-                );
+    //             let (deflection, deflection_view) = create_texture_render_target::<Rgba32F>(
+    //                 &mut factory,
+    //                 width as u32,
+    //                 height as u32,
+    //             );
+    //             let (color_change, color_change_view) = create_texture_render_target::<Rgba32F>(
+    //                 &mut factory,
+    //                 width as u32,
+    //                 height as u32,
+    //             );
+    //             let (color_uncertainty, color_uncertainty_view) = create_texture_render_target::<Rgba32F>(
+    //                 &mut factory,
+    //                 width as u32,
+    //                 height as u32,
+    //             );
+    //             let (covariances, covariances_view) = create_texture_render_target::<Rgba32F>(
+    //                 &mut factory,
+    //                 width as u32,
+    //                 height as u32,
+    //             );
 
-                drop(factory);
+    //             drop(factory);
 
-                let output_slot = Slot::Rgb {
-                    color: window.target(),
-                    color_view: None,
-                    deflection,
-                    deflection_view,
-                    color_change, 
-                    color_change_view, 
-                    color_uncertainty, 
-                    color_uncertainty_view,
-                    covariances,
-                    covariances_view
-                };
+    //             let output_slot = Slot::Rgb {
+    //                 color: window.target(),
+    //                 color_view: None,
+    //                 deflection,
+    //                 deflection_view,
+    //                 color_change, 
+    //                 color_change_view, 
+    //                 color_uncertainty, 
+    //                 color_uncertainty_view,
+    //                 covariances,
+    //                 covariances_view
+    //             };
 
-                NodeSlots::new_io(
-                    window,
-                    slot_b.take_output(),
-                    output_slot
-                )
-            } else {
-                // Suggest reusing output of the pre-predecessor.
-                NodeSlots::new_io(window, slot_b.take_output(), slot_a.take_output())
-            };
-            // Negociate and swap.
-            slot_a = node.negociate_slots_wk(window, suggested_slot, &self.well_known);
-            std::mem::swap(&mut slot_a, &mut slot_b);
-        }
-        self.last_slot.replace(Some(slot_b));
-    }
+    //             NodeSlots::new_io(
+    //                 window,
+    //                 slot_b.take_output(),
+    //                 output_slot
+    //             )
+    //         } else {
+    //             // Suggest reusing output of the pre-predecessor.
+    //             NodeSlots::new_io(window, slot_b.take_output(), slot_a.take_output())
+    //         };
+    //         // Negociate and swap.
+    //         slot_a = node.negociate_slots_wk(window, suggested_slot, &self.well_known);
+    //         std::mem::swap(&mut slot_a, &mut slot_b);
+    //     }
+    //     self.last_slot.replace(Some(slot_b));
+    // }
 
-    pub fn update_values(&self, window: &Window, values: &ValueMap) {
-        let mut perspective = self.last_perspective.borrow_mut();
-        let mut configured_view = Matrix4::from_scale(1.0);
-        // if the eye has strabism, it needs some angle offset
-        if let Some(Value::Number(eye_axis_rot_x)) = values.get("eye_axis_rot_x") {
+    // pub fn update_values(&self, window: &Window, values: &ValueMap) {
+    //     let mut perspective = self.last_perspective.borrow_mut();
+    //     let mut configured_view = Matrix4::from_scale(1.0);
+    //     // if the eye has strabism, it needs some angle offset
+    //     if let Some(Value::Number(eye_axis_rot_x)) = values.get("eye_axis_rot_x") {
             
-            configured_view = configured_view.mul(Matrix4::from_angle_x(Rad(*eye_axis_rot_x as f32)));
-        }
-        if let Some(Value::Number(eye_axis_rot_y)) = values.get("eye_axis_rot_y") {
-            configured_view = configured_view.mul(Matrix4::from_angle_y(Rad(*eye_axis_rot_y as f32)));
-        }
+    //         configured_view = configured_view.mul(Matrix4::from_angle_x(Rad(*eye_axis_rot_x as f32)));
+    //     }
+    //     if let Some(Value::Number(eye_axis_rot_y)) = values.get("eye_axis_rot_y") {
+    //         configured_view = configured_view.mul(Matrix4::from_angle_y(Rad(*eye_axis_rot_y as f32)));
+    //     }
 
-        perspective.view = configured_view.mul(perspective.view );
+    //     perspective.view = configured_view.mul(perspective.view );
 
-        self.configured_view.replace(configured_view);
+    //     self.configured_view.replace(configured_view);
 
-        // Propagate to nodes.
-        for node in self.nodes.borrow_mut().iter_mut() {
-            node.update_values(window, &values);
-        }
-    }
+    //     // Propagate to nodes.
+    //     for node in self.nodes.borrow_mut().iter_mut() {
+    //         node.update_values(window, &values);
+    //     }
+    // }
 
-    pub fn input(&self, vis_param: &VisualizationParameters) {
-        let mut perspective = self.last_perspective.borrow().clone();
-        perspective.view = self.configured_view.borrow().mul(perspective.view );
+    // pub fn input(&self, vis_param: &VisualizationParameters) {
+    //     let mut perspective = self.last_perspective.borrow().clone();
+    //     perspective.view = self.configured_view.borrow().mul(perspective.view );
 
-        // Propagate to nodes.
-        for node in self.nodes.borrow_mut().iter_mut().rev() {
-            perspective = node.input( &perspective, vis_param);
-        }
-        //self.last_perspective.replace(perspective);
-    }
+    //     // Propagate to nodes.
+    //     for node in self.nodes.borrow_mut().iter_mut().rev() {
+    //         perspective = node.input( &perspective, vis_param);
+    //     }
+    //     //self.last_perspective.replace(perspective);
+    // }
 
-    pub fn render(&self, window: &Window) {
+    pub fn render(&self, window: &Window, encoder: &mut CommandEncoder, view: &TextureView) {
         // Render all nodes.
         for node in self.nodes.borrow_mut().iter_mut() {
-            node.render(window);
+            node.render(window, encoder, view);
         }
     }
 }

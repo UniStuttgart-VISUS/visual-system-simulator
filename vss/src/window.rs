@@ -2,6 +2,7 @@ use crate::*;
 use std::{cell::RefCell, borrow::BorrowMut};
 use std::time::Instant;
 use std::iter;
+use std::num::NonZeroU32;
 use cgmath::{Matrix4, Vector4, SquareMatrix};
 use wgpu::*;
 use winit::{
@@ -29,7 +30,7 @@ pub struct Window {
     events_loop: RefCell<EventLoop<()>>,
     window_size: PhysicalSize<u32>,
     surface: wgpu::Surface,
-    surface_config: wgpu::SurfaceConfiguration,
+    surface_config: RefCell<wgpu::SurfaceConfiguration>,
     device: RefCell<wgpu::Device>,
     queue: RefCell<wgpu::Queue>,
     //TODO-WGPU factory: RefCell<DeviceFactory>,
@@ -46,7 +47,7 @@ pub struct Window {
     values: Vec<RefCell<ValueMap>>,
 
     remote: Option<Remote>,
-    //TODO-WGPU flow: Vec<Flow>,
+    flow: Vec<Flow>,
     vis_param: RefCell<VisualizationParameters>,
     last_render_instant: RefCell<Instant>,
     forced_view: Option<(f32,f32)>
@@ -123,8 +124,8 @@ impl Window {
         //     
         // }
 
-        //TODO-WGPU let mut flow = Vec::new();
-        //TODO-WGPU flow.resize_with(flow_count, Flow::new);
+        let mut flow = Vec::new();
+        flow.resize_with(flow_count, Flow::new);
 
         //TODO set perspective from values here ?
 
@@ -194,14 +195,14 @@ impl Window {
             events_loop: RefCell::new(events_loop),
             window_size,
             surface,
-            surface_config,
+            surface_config: RefCell::new(surface_config),
             device: RefCell::new(device),
             queue: RefCell::new(queue),
             //TODO-WGPU factory: RefCell::new(factory),
             //TODO-WGPU encoder: RefCell::new(encoder),
             //TODO-WGPU render_target: RefCell::new(render_target),
             //TODO-WGPU main_depth: RefCell::new(main_depth),
-            //TODO-WGPU flow,
+            flow,
             remote,
             should_swap_buffers: RefCell::new(true),
             cursor_pos: RefCell::new(PhysicalPosition{x:0.0, y:0.0}),
@@ -217,9 +218,9 @@ impl Window {
 }
 
 impl Window {
-    //TODO-WGPU pub fn add_node(&mut self, node: Box<dyn Node>, flow_index: usize) {
-    //TODO-WGPU     self.flow[flow_index].add_node(node);
-    //TODO-WGPU }
+    pub fn add_node(&mut self, node: Box<dyn Node>, flow_index: usize) {
+        self.flow[flow_index].add_node(node);
+    }
 
     //TODO-WGPU pub fn replace_node(&mut self, index: usize, node: Box<dyn Node>, flow_index: usize) {
     //TODO-WGPU     self.flow[flow_index].replace_node(index, node);
@@ -228,9 +229,9 @@ impl Window {
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
             self.window_size = new_size;
-            self.surface_config.width = new_size.width;
-            self.surface_config.height = new_size.height;
-            self.surface.configure(&self.device.borrow_mut(), &self.surface_config);
+            self.surface_config.borrow_mut().width = new_size.width;
+            self.surface_config.borrow_mut().height = new_size.height;
+            self.surface.configure(&self.device.borrow_mut(), &self.surface_config.borrow());
         }
     }
 
@@ -279,9 +280,17 @@ impl Window {
     //     &self.encoder
     // }
 
-    // pub fn device(&self) -> & RefCell<gfx_device_gl::Device> {
-    //     &self.device
-    // }
+    pub fn device(&self) -> & RefCell<wgpu::Device> {
+        &self.device
+    }
+
+    pub fn queue(&self) -> & RefCell<wgpu::Queue> {
+        &self.queue
+    }
+
+    pub fn surface_config(&self) -> & RefCell<wgpu::SurfaceConfiguration> {
+        &self.surface_config
+    }
 
     // pub fn flush(&self, encoder: &mut DeviceEncoder) {
     //     use std::ops::DerefMut;
@@ -720,26 +729,8 @@ impl Window {
                         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                             label: Some("Render Encoder"),
                         });
-                    {
-                        let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                            label: Some("Render Pass"),
-                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                view: &view,
-                                resolve_target: None,
-                                ops: wgpu::Operations {
-                                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                                        r: 0.25,
-                                        g: 0.25,
-                                        b: 0.25,
-                                        a: 1.0,
-                                    }),
-                                    store: true,
-                                },
-                            })],
-                            depth_stencil_attachment: None,
-                        });
-                    }
-            
+                    self.flow.iter().for_each(|f| f.render(&self, &mut encoder, &view));
+
                     self.queue.borrow_mut().submit(iter::once(encoder.finish()));
                     output.present();
                     self.last_render_instant.replace(Instant::now());
@@ -747,7 +738,6 @@ impl Window {
                 _ => {}
             }
         }
-        // self.flow.iter().for_each(|f| f.render(&self));
 
         // if *self.should_swap_buffers.borrow(){
         //     self.wgpu_window.swap_buffers().unwrap();

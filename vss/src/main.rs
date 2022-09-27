@@ -9,6 +9,9 @@ pub async fn run() {
 
     let mut window = Window::new(true, None, parameters, 1).await;
 
+    let node = TestNode::new(&window);
+    window.add_node(Box::new(node), 0);
+
     while !window.poll_events() {}
 }
 
