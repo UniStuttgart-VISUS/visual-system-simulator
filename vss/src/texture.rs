@@ -1,3 +1,5 @@
+use wgpu::TextureView;
+
 use crate::*;
 // use gfx::Factory;
 // use gfx_device_gl::CommandBuffer;
@@ -8,7 +10,75 @@ use core::num::NonZeroU32;
 pub struct Texture {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
+    pub width: u32,
+    pub height: u32,
+}
+
+pub struct RenderTexture{
+    pub texture: Option<wgpu::Texture>,
+    pub view: wgpu::TextureView,
+    pub width: u32,
+    pub height: u32,
+}
+
+pub struct Sampler {
     pub sampler: wgpu::Sampler,
+}
+
+impl Texture{
+    pub fn create_bind_group(&self, device: &wgpu::Device, sampler: &Sampler)-> (wgpu::BindGroupLayout, wgpu::BindGroup){
+        create_texture_bind_group(device, &self.view, sampler)
+    }
+}
+
+impl RenderTexture{
+    pub fn create_bind_group(&self, device: &wgpu::Device, sampler: &Sampler)-> (wgpu::BindGroupLayout, wgpu::BindGroup){
+        create_texture_bind_group(device, &self.view, sampler)
+    }
+}
+
+fn create_texture_bind_group(device: &wgpu::Device, view: &TextureView, sampler: &Sampler) 
+    -> (wgpu::BindGroupLayout, wgpu::BindGroup)
+    {
+    let layout =
+    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    multisampled: false,
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+        ],
+        label: Some("texture_bind_group_layout"),
+    });
+
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout: &layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(&sampler.sampler),
+            },
+        ],
+        label: Some("texture_bind_group"),
+    });
+
+    (layout, bind_group)
 }
 
 ///
@@ -108,6 +178,8 @@ pub fn load_texture_from_bytes(
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
     });
 
+    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
     queue.write_texture(
         wgpu::ImageCopyTexture {
             aspect: wgpu::TextureAspect::All,
@@ -124,21 +196,26 @@ pub fn load_texture_from_bytes(
         size,
     );
 
-    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-    
+    Ok(Texture {
+        texture,
+        view,
+        width,
+        height,
+    })
+}
+
+pub fn create_sampler_linear(device: &wgpu::Device) -> Result<Sampler, String>{
     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         address_mode_u: wgpu::AddressMode::ClampToEdge,
         address_mode_v: wgpu::AddressMode::ClampToEdge,
         address_mode_w: wgpu::AddressMode::ClampToEdge,
         mag_filter: wgpu::FilterMode::Linear,
-        min_filter: wgpu::FilterMode::Nearest,
-        mipmap_filter: wgpu::FilterMode::Nearest,
+        min_filter: wgpu::FilterMode::Linear,
+        mipmap_filter: wgpu::FilterMode::Linear,
         ..Default::default()
     });
 
-    Ok(Texture {
-        texture,
-        view,
+    Ok(Sampler {
         sampler,
     })
 }
@@ -430,38 +507,80 @@ pub fn load_texture_from_bytes(
 // }
 
 /// Creates a texture that can be read from in shaders (view) and rendered to (render target).
-pub fn create_texture_render_target<T>(){}
-//     factory: &mut gfx_device_gl::Factory,
-//     width: u32,
-//     height: u32,
-// ) -> (
-//     gfx::handle::RenderTargetView<gfx_device_gl::Resources, T>,
-//     gfx::handle::ShaderResourceView<gfx_device_gl::Resources, <T as gfx::format::Formatted>::View>,
-// )
-// where
-//     T: gfx::format::TextureFormat + gfx::format::RenderFormat,
-// {
-//     let texture = factory
-//         .create_texture(
-//             gfx::texture::Kind::D2(
-//                 width as u16,
-//                 height as u16,
-//                 gfx::texture::AaMode::Single,
-//             ),
-//             1,
-//             gfx::memory::Bind::RENDER_TARGET | gfx::memory::Bind::SHADER_RESOURCE | gfx::memory::Bind::TRANSFER_SRC,
-//             gfx::memory::Usage::Dynamic,
-//             Some( <<T as gfx::format::Formatted>::Channel as gfx::format::ChannelTyped>::get_channel_type() ),
-//         )
-//         .unwrap();
-//     let target_view = factory
-//         .view_texture_as_shader_resource::<T>(&texture, (0, 0), gfx::format::Swizzle::new())
-//         .unwrap();
-//     let target = factory
-//         .view_texture_as_render_target::<T>(&texture, 0, None)
-//         .unwrap();
-//     (target, target_view)
-// }
+pub fn create_texture_render_target(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    width: u32,
+    height: u32,
+    format: wgpu::TextureFormat,
+    label: Option<&str>,
+) -> RenderTexture{
+    let size = wgpu::Extent3d {
+        width,
+        height,
+        depth_or_array_layers: 1,
+    };
+
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label,
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: format,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING |
+               wgpu::TextureUsages::RENDER_ATTACHMENT |
+               wgpu::TextureUsages::COPY_SRC |
+               wgpu::TextureUsages::COPY_DST,
+    });
+
+    let raw_data = vec![0; (width*height*4) as usize];
+    queue.write_texture(
+        wgpu::ImageCopyTexture {
+            aspect: wgpu::TextureAspect::All,
+            texture: &texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+        },
+        raw_data.as_slice(),
+        wgpu::ImageDataLayout {
+            offset: 0,
+            bytes_per_row: NonZeroU32::new(4 * width),
+            rows_per_image: NonZeroU32::new(height),
+        },
+        size,
+    );
+
+    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+    RenderTexture{
+        texture: Some(texture),
+        view,
+        width,
+        height,
+    }
+
+    // let texture = factory
+    //     .create_texture(
+    //         gfx::texture::Kind::D2(
+    //             width as u16,
+    //             height as u16,
+    //             gfx::texture::AaMode::Single,
+    //         ),
+    //         1,
+    //         gfx::memory::Bind::RENDER_TARGET | gfx::memory::Bind::SHADER_RESOURCE | gfx::memory::Bind::TRANSFER_SRC,
+    //         gfx::memory::Usage::Dynamic,
+    //         Some( <<T as gfx::format::Formatted>::Channel as gfx::format::ChannelTyped>::get_channel_type() ),
+    //     )
+    //     .unwrap();
+    // let target_view = factory
+    //     .view_texture_as_shader_resource::<T>(&texture, (0, 0), gfx::format::Swizzle::new())
+    //     .unwrap();
+    // let target = factory
+    //     .view_texture_as_render_target::<T>(&texture, 0, None)
+    //     .unwrap();
+    // (target, target_view)
+}
 
 // pub fn texture_from_id_and_size<T>(
 //     texture_id: gfx_gl::types::GLuint,

@@ -70,11 +70,11 @@ impl Node for DownloadRgbBuffer {
         }
     }
 
-    fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
-        self.res = slots.clone().to_color_input(window).input_size_f32();
-        self.input = slots.clone().take_input();
-        slots.to_passthrough()
-    }
+    // fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
+    //     self.res = slots.clone().to_color_input(window).input_size_f32();
+    //     self.input = slots.clone().take_input();
+    //     slots.to_passthrough()
+    // }
 
     fn render(&mut self, window: &Window) {
         match &self.input {

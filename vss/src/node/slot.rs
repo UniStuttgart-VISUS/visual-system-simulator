@@ -1,12 +1,13 @@
 use super::*;
 use std::cell::RefCell;
 
-pub static ColorFormat:wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
-pub static HighpFormat:wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
-pub static DepthFormat:wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+pub static ColorFormat: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+pub static HighpFormat: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
+pub static DepthFormat: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
 pub enum Slot {
     Empty,
+    //TODO-WGPU x and x_view are switched !
     Rgb {
         color: Texture,
         // color: gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat>,
@@ -93,7 +94,7 @@ impl NodeSlots {
     //             input: Slot::Rgb {
     //                 color,
     //                 color_view: Some(color_view),
-    //                 deflection: deflection,
+    //                 deflection,
     //                 deflection_view,
     //                 color_change, 
     //                 color_change_view, 

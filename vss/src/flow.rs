@@ -191,10 +191,10 @@ impl Flow {
     //     //self.last_perspective.replace(perspective);
     // }
 
-    pub fn render(&self, window: &Window, encoder: &mut CommandEncoder, view: &TextureView) {
+    pub fn render(&self, window: &Window, encoder: &mut CommandEncoder, screen: &RenderTexture) {
         // Render all nodes.
-        for node in self.nodes.borrow_mut().iter_mut() {
-            node.render(window, encoder, view);
+        for (idx, node) in self.nodes.borrow_mut().iter_mut().enumerate(){
+            node.render(window, encoder, screen);
         }
     }
 }

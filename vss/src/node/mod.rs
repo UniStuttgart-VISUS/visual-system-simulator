@@ -8,7 +8,7 @@
 //TODO-WGPU mod lens;
 //TODO-WGPU mod passthrough;
 //TODO-WGPU mod retina;
-//TODO-WGPU mod rgb_buffer;
+mod rgb_buffer;
 mod slot;
 mod test_node;
 //TODO-WGPU mod yuv_buffer;
@@ -25,7 +25,7 @@ use wgpu::TextureView;
 //TODO-WGPU pub use self::lens::*;
 //TODO-WGPU pub use self::passthrough::*;
 //TODO-WGPU pub use self::retina::*;
-//TODO-WGPU pub use self::rgb_buffer::*;
+pub use self::rgb_buffer::*;
 pub use self::slot::*;
 pub use self::test_node::*;
 //TODO-WGPU pub use self::yuv_buffer::*;
@@ -70,5 +70,25 @@ pub trait Node {
     }
 
     /// Render the node.
-    fn render(&mut self, window: &Window, encoder: &mut CommandEncoder, view: &TextureView);
+    fn render(&mut self, window: &Window, encoder: &mut CommandEncoder, screen: &RenderTexture);
+}
+
+pub fn create_render_pass<'pass>(encoder: &'pass mut CommandEncoder, target: &'pass RenderTexture) -> wgpu::RenderPass<'pass>{
+    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("node_render_pass"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view: &target.view,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color {
+                    r: 0.5,
+                    g: 0.5,
+                    b: 0.5,
+                    a: 1.0,
+                }),
+                store: true,
+            },
+        })],
+        depth_stencil_attachment: None,
+    })
 }

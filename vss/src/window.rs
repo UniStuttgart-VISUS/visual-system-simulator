@@ -1,4 +1,4 @@
-use crate::*;
+use crate::{*, Texture};
 use std::{cell::RefCell, borrow::BorrowMut};
 use std::time::Instant;
 use std::iter;
@@ -36,7 +36,7 @@ pub struct Window {
     //TODO-WGPU factory: RefCell<DeviceFactory>,
     //TODO-WGPU encoder: RefCell<CommandEncoder>,
 
-    //TODO-WGPU render_target: RefCell<RenderTargetColor>,
+    //TODO-remove render_target: RefCell<TextureView>, //Rgba8Unorm
     //TODO-WGPU main_depth: RefCell<RenderTargetDepth>,
     should_swap_buffers: RefCell<bool>,
     cursor_pos: RefCell<PhysicalPosition<f64>>,
@@ -200,7 +200,6 @@ impl Window {
             queue: RefCell::new(queue),
             //TODO-WGPU factory: RefCell::new(factory),
             //TODO-WGPU encoder: RefCell::new(encoder),
-            //TODO-WGPU render_target: RefCell::new(render_target),
             //TODO-WGPU main_depth: RefCell::new(main_depth),
             flow,
             remote,
@@ -298,8 +297,9 @@ impl Window {
     //     encoder.flush(device.deref_mut());
     // }
 
-    // pub fn target(&self) -> gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat> {
-    //     self.render_target.borrow().clone()
+    // pub fn target(&self) -> & RefCell<TextureView> {
+    //     &self.render_target
+    //     //self.render_target.borrow().clone()
     // }
 
     // pub fn replace_targets(&self, target_color: RenderTargetColor, target_depth: RenderTargetDepth, should_swap_buffers: bool) {
@@ -729,7 +729,15 @@ impl Window {
                         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                             label: Some("Render Encoder"),
                         });
-                    self.flow.iter().for_each(|f| f.render(&self, &mut encoder, &view));
+
+                    let render_texture = RenderTexture{
+                        texture: None,
+                        view,
+                        width: self.window_size.width,
+                        height: self.window_size.height,
+                    };
+                
+                    self.flow.iter().for_each(|f| f.render(&self, &mut encoder, &render_texture));
 
                     self.queue.borrow_mut().submit(iter::once(encoder.finish()));
                     output.present();

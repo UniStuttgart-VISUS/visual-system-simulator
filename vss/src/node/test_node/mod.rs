@@ -46,7 +46,7 @@ impl Node for TestNode {
                     },
                     count: None,
                 }],
-                label: Some("camera_bind_group_layout"),
+                label: Some("uniforms_bind_group_layout"),
             });
 
         let uniforms_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -55,7 +55,7 @@ impl Node for TestNode {
                 binding: 0,
                 resource: uniforms_buffer.as_entire_binding(),
             }],
-            label: Some("camera_bind_group"),
+            label: Some("uniforms_bind_group"),
         });
 
         let raw_data = vec![64; (100*100*4) as usize];
@@ -66,46 +66,12 @@ impl Node for TestNode {
             100,
             100,
             Some("TestNode Texture")).unwrap();
+        
+        let test_sampler = create_sampler_linear(&device).unwrap();
 
-        let texture_bind_group_layout =
-        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        multisampled: false,
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-            label: Some("texture_bind_group_layout"),
-        });
+        let (texture_bind_group_layout, texture_bind_group) = test_texture.create_bind_group(&device, &test_sampler);
 
-        let texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &texture_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&test_texture.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&test_texture.sampler),
-                },
-            ],
-            label: Some("texture bind group"),
-        });
-
-        let shader2 = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("TestNode Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("mod.wgsl").into()),
         });
@@ -121,12 +87,12 @@ impl Node for TestNode {
             label: Some("TestNode Render Pipeline"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
-                module: &shader2,
+                module: &shader,
                 entry_point: "vs_main",
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
-                module: &shader2,
+                module: &shader,
                 entry_point: "fs_main",
                 targets: &[Some(wgpu::ColorTargetState {
                     format: window.surface_config().borrow().format,
@@ -179,24 +145,8 @@ impl Node for TestNode {
     //     slots
     // }
 
-    fn render(&mut self, window: &window::Window, encoder: &mut CommandEncoder, view: &TextureView) {
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("TestNode render pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.5,
-                        g: 0.5,
-                        b: 0.5,
-                        a: 1.0,
-                    }),
-                    store: true,
-                },
-            })],
-            depth_stencil_attachment: None,
-        });
+    fn render(&mut self, window: &window::Window, encoder: &mut CommandEncoder, screen: &RenderTexture) {
+        let mut render_pass = create_render_pass(encoder, screen);
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, &self.texture_bind_group, &[]);
         render_pass.set_bind_group(1, &self.uniforms_bind_group, &[]);
