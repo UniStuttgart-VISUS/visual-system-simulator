@@ -108,7 +108,7 @@ impl Window {
 
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: surface.get_supported_formats(&adapter)[0],
+            format: ColorFormat,// surface.get_supported_formats(&adapter)[0],
             width: window_size.width,
             height: window_size.height,
             present_mode: wgpu::PresentMode::Fifo,

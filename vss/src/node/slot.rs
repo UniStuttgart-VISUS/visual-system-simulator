@@ -1,7 +1,8 @@
 use super::*;
 use std::cell::RefCell;
 
-pub static ColorFormat: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+// pub static ColorFormat: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm; // old color format
+pub static ColorFormat: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8Unorm;
 pub static HighpFormat: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
 pub static DepthFormat: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 

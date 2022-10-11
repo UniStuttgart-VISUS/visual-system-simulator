@@ -2,12 +2,13 @@
 
 // Vertex shader
 
-struct TestNodeUniforms{
-    test_color: vec4<f32>,
+struct Uniforms{
+    flags: u32,
+    proj_view: mat4x4<f32>,
 };
 
 @group(1) @binding(0)
-var<uniform> uniforms: TestNodeUniforms;
+var<uniform> uniforms: Uniforms;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
@@ -16,6 +17,10 @@ struct VertexOutput {
 
 struct FragmentOutput {
     @location(0) color: vec4<f32>,
+    @location(1) deflection: vec4<f32>,
+    @location(2) color_change: vec4<f32>,
+    @location(3) color_uncertainty: vec4<f32>,
+    @location(4) covariances: vec4<f32>,
 };
 
 @vertex
@@ -46,7 +51,7 @@ var in_color_s: sampler;
 @fragment
 fn fs_main(in: VertexOutput) -> FragmentOutput {
     var out: FragmentOutput;
-    out.color = uniforms.test_color * textureSample(in_color_t, in_color_s, in.tex_coords);
+    out.color = textureSample(in_color_t, in_color_s, in.tex_coords);
     // out.color = uniforms.test_color * vec4<f32>(in.tex_coords, 0.0, 1.0);
     return out;
 }

@@ -17,7 +17,13 @@ mod test_node;
 //TODO-WGPU mod variance;
 //TODO-WGPU mod peacock;
 
+use wgpu::BindGroupLayout;
+use wgpu::ColorTargetState;
 use wgpu::CommandEncoder;
+use wgpu::DepthStencilState;
+use wgpu::RenderPipeline;
+use wgpu::ShaderModule;
+use wgpu::util::DeviceExt;
 use wgpu::TextureView;
 
 //TODO-WGPU pub use self::cataract::*;
@@ -53,7 +59,7 @@ pub trait Node {
 
     /// Negociates input and output for this node (source texture and render target),
     /// possibly re-using suggested `slots` (for efficiency).
-    // fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots;
+    fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots;
 
     // fn negociate_slots_wk(&mut self, window: &Window, slots: NodeSlots, _well_known: &WellKnownSlots) -> NodeSlots{
     //     self.negociate_slots(window, slots)
@@ -73,22 +79,137 @@ pub trait Node {
     fn render(&mut self, window: &Window, encoder: &mut CommandEncoder, screen: &RenderTexture);
 }
 
-pub fn create_render_pass<'pass>(encoder: &'pass mut CommandEncoder, target: &'pass RenderTexture) -> wgpu::RenderPass<'pass>{
-    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-        label: Some("node_render_pass"),
-        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-            view: &target.view,
-            resolve_target: None,
-            ops: wgpu::Operations {
-                load: wgpu::LoadOp::Clear(wgpu::Color {
-                    r: 0.5,
-                    g: 0.5,
-                    b: 0.5,
-                    a: 1.0,
-                }),
-                store: true,
-            },
-        })],
-        depth_stencil_attachment: None,
+pub struct ShaderUniforms<T>{
+    pub data: T,
+    buffer: wgpu::Buffer,
+    pub bind_group_layout: wgpu::BindGroupLayout,
+    pub bind_group: wgpu::BindGroup,
+}
+
+impl<T> ShaderUniforms<T> {
+    pub fn new(device: &wgpu::Device, data: T) -> Self {
+        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("uniforms_buffer"),
+            contents: unsafe { any_as_u8_slice(&data) },
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                label: Some("uniforms_bind_group_layout"),
+            });
+
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buffer.as_entire_binding(),
+            }],
+            label: Some("uniforms_bind_group"),
+        });
+
+        ShaderUniforms{
+            data,
+            buffer,
+            bind_group_layout,
+            bind_group,
+        }
+    }
+
+    pub fn update(&mut self, queue: &wgpu::Queue){
+        queue.write_buffer(&self.buffer, 0, unsafe { any_as_u8_slice(&self.data) });
+    }
+}
+
+pub fn simple_color_state(format: wgpu::TextureFormat) -> Option<ColorTargetState>{
+    Some(ColorTargetState {
+        format: format,
+        blend: None,
+        write_mask: wgpu::ColorWrites::ALL,
+    })
+}
+
+pub fn blended_color_state(format: wgpu::TextureFormat) -> Option<ColorTargetState>{
+    Some(ColorTargetState {
+        format: format,
+        blend: Some(wgpu::BlendState {
+            color: wgpu::BlendComponent::REPLACE,
+            alpha: wgpu::BlendComponent::REPLACE,
+        }),
+        write_mask: wgpu::ColorWrites::ALL,
+    })
+}
+
+pub fn simple_depth_state(format: wgpu::TextureFormat) -> Option<DepthStencilState>{
+    Some(DepthStencilState {
+        format: format,
+        depth_write_enabled: true,
+        depth_compare: wgpu::CompareFunction::Less,
+        stencil: wgpu::StencilState::default(),
+        bias: wgpu::DepthBiasState::default(),
+    })
+}
+
+pub fn create_render_pipeline(
+    device: &wgpu::Device,
+    modules: &[&ShaderModule; 2],
+    entry_points: &[&str; 2],
+    bind_group_layouts: &[&BindGroupLayout],
+    color_targets: &[Option<ColorTargetState>],
+    depth_tagret: Option<DepthStencilState>,
+    label: Option<&str>,
+) -> RenderPipeline{
+    let pipeline_layout =
+        device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label,
+            bind_group_layouts,
+            push_constant_ranges: &[],
+    });
+
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label,
+        layout: Some(&pipeline_layout),
+        vertex: wgpu::VertexState {
+            module: modules[0],
+            entry_point: entry_points[0],
+            buffers: &[],
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: modules[1],
+            entry_point: entry_points[1],
+            targets: color_targets,
+        }),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: Some(wgpu::Face::Back),
+            // Setting this to anything other than Fill requires Features::POLYGON_MODE_LINE
+            // or Features::POLYGON_MODE_POINT
+            polygon_mode: wgpu::PolygonMode::Fill,
+            // Requires Features::DEPTH_CLIP_CONTROL
+            unclipped_depth: false,
+            // Requires Features::CONSERVATIVE_RASTERIZATION
+            conservative: false,
+        },
+        depth_stencil: depth_tagret,
+        multisample: wgpu::MultisampleState {
+            count: 1,
+            mask: !0,
+            alpha_to_coverage_enabled: false,
+        },
+        // If the pipeline will be used with a multiview render pass, this
+        // indicates how many array layers the attachments will have.
+        multiview: None,
     })
 }

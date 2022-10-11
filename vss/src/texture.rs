@@ -1,4 +1,4 @@
-use wgpu::TextureView;
+use wgpu::{TextureView, RenderPassColorAttachment, RenderPassDepthStencilAttachment};
 
 use crate::*;
 // use gfx::Factory;
@@ -34,6 +34,33 @@ impl Texture{
 impl RenderTexture{
     pub fn create_bind_group(&self, device: &wgpu::Device, sampler: &Sampler)-> (wgpu::BindGroupLayout, wgpu::BindGroup){
         create_texture_bind_group(device, &self.view, sampler)
+    }
+
+    pub fn to_color_attachment(&self) -> Option<RenderPassColorAttachment>{
+        Some(wgpu::RenderPassColorAttachment {
+            view: &self.view,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color {
+                    r: 0.5,
+                    g: 0.5,
+                    b: 0.5,
+                    a: 1.0,
+                }),
+                store: true,
+            },
+        })
+    }
+
+    pub fn to_depth_attachment(&self) -> Option<RenderPassDepthStencilAttachment>{
+        Some(wgpu::RenderPassDepthStencilAttachment {
+            view: &self.view,
+            depth_ops: Some(wgpu::Operations {
+                load: wgpu::LoadOp::Clear(1.0),
+                store: true,
+            }),
+            stencil_ops: None,
+        })
     }
 }
 
@@ -96,28 +123,35 @@ fn create_texture_bind_group(device: &wgpu::Device, view: &TextureView, sampler:
 /// update_texture(encoder, &self.texture, size, offset, data);
 /// ```
 ///
-// pub fn update_texture(
-//     encoder: &mut gfx::Encoder<Resources, CommandBuffer>,
-//     texture: &gfx::handle::Texture<Resources, gfx::format::R8_G8_B8_A8>,
-//     size: [u16; 2],
-//     offset: [u16; 2],
-//     raw_data: &[u8],
-// ) {
-//     let img_info = gfx::texture::ImageInfoCommon {
-//         xoffset: offset[0],
-//         yoffset: offset[1],
-//         zoffset: 0,
-//         width: size[0],
-//         height: size[1],
-//         depth: 0,
-//         format: (),
-//         mipmap: 0,
-//     };
+pub fn update_texture(
+    queue: &wgpu::Queue,
+    texture: &Texture,
+    size: [u32; 2],
+    // offset: [u16; 2],
+    raw_data: &[u8],
+) {
+    let texture_size = wgpu::Extent3d {
+        width: size[0],
+        height: size[1],
+        depth_or_array_layers: 1,
+    };
 
-//     let data = gfx::memory::cast_slice(&raw_data);
-//     let _msg = encoder
-//         .update_texture::<gfx::format::R8_G8_B8_A8, ColorFormat>(texture, None, img_info, data);
-// }
+    queue.write_texture(
+        wgpu::ImageCopyTexture {
+            aspect: wgpu::TextureAspect::All,
+            texture: &texture.texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+        },
+        raw_data,
+        wgpu::ImageDataLayout {
+            offset: 0,
+            bytes_per_row: NonZeroU32::new(4 * size[0]),
+            rows_per_image: NonZeroU32::new(size[1]),
+        },
+        texture_size,
+    );
+}
 
 // pub fn load_texture(
 //     factory: &mut gfx_device_gl::Factory,
@@ -530,26 +564,25 @@ pub fn create_texture_render_target(
         format: format,
         usage: wgpu::TextureUsages::TEXTURE_BINDING |
                wgpu::TextureUsages::RENDER_ATTACHMENT |
-               wgpu::TextureUsages::COPY_SRC |
-               wgpu::TextureUsages::COPY_DST,
+               wgpu::TextureUsages::COPY_SRC,
     });
 
-    let raw_data = vec![0; (width*height*4) as usize];
-    queue.write_texture(
-        wgpu::ImageCopyTexture {
-            aspect: wgpu::TextureAspect::All,
-            texture: &texture,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-        },
-        raw_data.as_slice(),
-        wgpu::ImageDataLayout {
-            offset: 0,
-            bytes_per_row: NonZeroU32::new(4 * width),
-            rows_per_image: NonZeroU32::new(height),
-        },
-        size,
-    );
+    // let raw_data = vec![0; (width*height*4) as usize];
+    // queue.write_texture(
+    //     wgpu::ImageCopyTexture {
+    //         aspect: wgpu::TextureAspect::All,
+    //         texture: &texture,
+    //         mip_level: 0,
+    //         origin: wgpu::Origin3d::ZERO,
+    //     },
+    //     raw_data.as_slice(),
+    //     wgpu::ImageDataLayout {
+    //         offset: 0,
+    //         bytes_per_row: NonZeroU32::new(4 * width),
+    //         rows_per_image: NonZeroU32::new(height),
+    //     },
+    //     size,
+    // );
 
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
