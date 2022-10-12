@@ -1,3 +1,6 @@
+use eframe::egui::color;
+use wgpu::BindGroup;
+
 use super::*;
 use std::cell::RefCell;
 
@@ -8,33 +11,31 @@ pub static DepthFormat: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
 pub enum Slot {
     Empty,
-    //TODO-WGPU x and x_view are switched !
     Rgb {
-        color: Texture,
-        // color: gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat>,
-        // color_view: Option<gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>>, //TODO: drop last component?
-        // deflection: gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba32F>,
-        // deflection_view: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>,
-        // color_change: gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba32F>,
-        // color_change_view: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>,
-        // color_uncertainty: gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba32F>,
-        // color_uncertainty_view: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>,
-        // covariances: gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba32F>,
-        // covariances_view: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>,
+        color_source: Texture,
+        color_target: RenderTexture,
+        deflection_source: Texture,
+        deflection_target: RenderTexture,
+        color_change_source: Texture,
+        color_change_target: RenderTexture,
+        color_uncertainty_source: Texture,
+        color_uncertainty_target: RenderTexture,
+        covariances_source: Texture,
+        covariances_target: RenderTexture,
     },
     RgbDepth {
-        // color: gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat>,
-        // color_view: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>, //TODO: drop last component?
-        // depth: gfx::handle::RenderTargetView<gfx_device_gl::Resources, DepthFormat>,
-        // depth_view: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, f32>,
-        // deflection: gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba32F>,
-        // deflection_view: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>,
-        // color_change: gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba32F>,
-        // color_change_view: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>,
-        // color_uncertainty: gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba32F>,
-        // color_uncertainty_view: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>,
-        // covariances: gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba32F>,
-        // covariances_view: gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>,
+        color_source: Texture,
+        color_target: RenderTexture,
+        depth_source: Texture,
+        depth_target: RenderTexture,
+        deflection_source: Texture,
+        deflection_target: RenderTexture,
+        color_change_source: Texture,
+        color_change_target: RenderTexture,
+        color_uncertainty_source: Texture,
+        color_uncertainty_target: RenderTexture,
+        covariances_source: Texture,
+        covariances_target: RenderTexture,
     },
     // XXX: Stereo
 }
@@ -83,122 +84,102 @@ impl NodeSlots {
         }
     }
 
-    // pub fn to_color_input(self, _window: &Window) -> Self {
-    //     match self.input {
-    //         Slot::Empty => {
-    //             panic!("Input expected");
-    //         }
-    //         Slot::Rgb { .. } => self,
-    //         Slot::RgbDepth {
-    //             color, color_view, deflection, deflection_view, color_change, color_change_view, color_uncertainty, color_uncertainty_view, covariances, covariances_view, ..
-    //         } => Self {
-    //             input: Slot::Rgb {
-    //                 color,
-    //                 color_view: Some(color_view),
-    //                 deflection,
-    //                 deflection_view,
-    //                 color_change, 
-    //                 color_change_view, 
-    //                 color_uncertainty, 
-    //                 color_uncertainty_view,
-    //                 covariances,
-    //                 covariances_view
-    //             },
-    //             output: self.output,
-    //             sampler: self.sampler,
-    //         },
-    //     }
-    // }
+    pub fn to_color_input(self, _window: &Window) -> Self {
+        match self.input {
+            Slot::Empty => {
+                panic!("Input expected");
+            }
+            Slot::Rgb { .. } => self,
+            Slot::RgbDepth {
+                color_source, color_target, deflection_source, deflection_target, color_change_source, color_change_target, color_uncertainty_source, color_uncertainty_target, covariances_source, covariances_target, ..
+            } => Self {
+                input: Slot::Rgb {
+                    color_source,
+                    color_target,
+                    deflection_source,
+                    deflection_target,
+                    color_change_source, 
+                    color_change_target, 
+                    color_uncertainty_source, 
+                    color_uncertainty_target,
+                    covariances_source,
+                    covariances_target
+                },
+                output: self.output,
+                // sampler: self.sampler,
+            },
+        }
+    }
 
-    // pub fn to_color_depth_input(self, _window: &Window) -> Self {
-    //     match self.input {
-    //         Slot::Empty => {
-    //             panic!("Input expected");
-    //         }
-    //         Slot::Rgb { .. } => {
-    //             panic!("RGB input cannot be extended with depth");
-    //         }
-    //         Slot::RgbDepth { .. } => self,
-    //     }
-    // }
+    pub fn to_color_depth_input(self, _window: &Window) -> Self {
+        match self.input {
+            Slot::Empty => {
+                panic!("Input expected");
+            }
+            Slot::Rgb { .. } => {
+                panic!("RGB input cannot be extended with depth");
+            }
+            Slot::RgbDepth { .. } => self,
+        }
+    }
 
-    // pub fn to_color_output(self, window: &Window) -> Self {
-    //     match self.output {
-    //         Slot::Empty => {
-    //             // Guess output size, based on input.
-    //             let (width, height, ..) = match &self.input {
-    //                 Slot::Empty => {
-    //                     panic!("Input expected");
-    //                 }
-    //                 Slot::Rgb { color, .. } => color.get_dimensions(),
-    //                 Slot::RgbDepth { color, .. } => color.get_dimensions(),
-    //             };
-    //             let mut factory = window.factory().borrow_mut();
-    //             let (color, color_view) = create_texture_render_target::<ColorFormat>(
-    //                 &mut factory,
-    //                 width as u32,
-    //                 height as u32,
-    //             );
-    //             let (deflection, deflection_view) = create_texture_render_target::<Rgba32F>(
-    //                 &mut factory,
-    //                 width as u32,
-    //                 height as u32,
-    //             );
-    //             let (color_change, color_change_view) = create_texture_render_target::<Rgba32F>(
-    //                 &mut factory,
-    //                 width as u32,
-    //                 height as u32,
-    //             );
-    //             let (color_uncertainty, color_uncertainty_view) = create_texture_render_target::<Rgba32F>(
-    //                 &mut factory,
-    //                 width as u32,
-    //                 height as u32,
-    //             );
-    //             let (covariances, covariances_view) = create_texture_render_target::<Rgba32F>(
-    //                 &mut factory,
-    //                 width as u32,
-    //                 height as u32,
-    //             );
+    pub fn to_color_output(self, window: &Window) -> Self {
+        match self.output {
+            Slot::Empty => {
+                // Guess output size, based on input.
+                let (width, height) = match &self.input {
+                    Slot::Empty => {
+                        panic!("Input expected");
+                    }
+                    Slot::Rgb { color_target, .. } => (color_target.width, color_target.height),
+                    Slot::RgbDepth { color_target, .. } => (color_target.width, color_target.height),
+                };
+                let device = window.device().borrow_mut();
+                let color_target = create_texture_render_target(&device, width, height, ColorFormat, Some("to_color_output color"));
+                let deflection_target = create_texture_render_target(&device, width, height, HighpFormat, Some("to_color_output deflection"));
+                let color_change_target = create_texture_render_target(&device, width, height, HighpFormat, Some("to_color_output color_change"));
+                let color_uncertainty_target = create_texture_render_target(&device, width, height, HighpFormat, Some("to_color_output color_uncertainty"));
+                let covariances_target = create_texture_render_target(&device, width, height, HighpFormat, Some("to_color_output covariances"));
 
-    //             Self {
-    //                 input: self.input,
-    //                 output: Slot::Rgb {
-    //                     color,
-    //                     color_view: Some(color_view),
-    //                     deflection,
-    //                     deflection_view,
-    //                     color_change, 
-    //                     color_change_view, 
-    //                     color_uncertainty, 
-    //                     color_uncertainty_view,
-    //                     covariances,
-    //                     covariances_view
-    //                 },
-    //                 sampler: self.sampler,
-    //             }
-    //         }
-    //         Slot::Rgb { .. } => self,
-    //         Slot::RgbDepth {
-    //             color, color_view, deflection, deflection_view, color_change, color_change_view, color_uncertainty, color_uncertainty_view, covariances, covariances_view, ..
-    //         } => {
-    //             Self {
-    //             input: self.input,
-    //             output: Slot::Rgb {
-    //                 color,
-    //                 color_view: Some(color_view),                        
-    //                 deflection,
-    //                 deflection_view,
-    //                 color_change, 
-    //                 color_change_view, 
-    //                 color_uncertainty, 
-    //                 color_uncertainty_view,
-    //                 covariances,
-    //                 covariances_view
-    //             },
-    //             sampler: self.sampler,
-    //         }},
-    //     }
-    // }
+                Self {
+                    input: self.input,
+                    output: Slot::Rgb {
+                        color_source: color_target.as_texture(),
+                        color_target,
+                        deflection_source: deflection_target.as_texture(),
+                        deflection_target,
+                        color_change_source: color_change_target.as_texture(), 
+                        color_change_target, 
+                        color_uncertainty_source: color_uncertainty_target.as_texture(),
+                        color_uncertainty_target,
+                        covariances_source: covariances_target.as_texture(),
+                        covariances_target
+                    },
+                    // sampler: self.sampler,
+                }
+            }
+            Slot::Rgb { .. } => self,
+            Slot::RgbDepth {
+                color_source, color_target, deflection_source, deflection_target, color_change_source, color_change_target, color_uncertainty_source, color_uncertainty_target, covariances_source, covariances_target, ..
+            } => {
+                Self {
+                input: self.input,
+                output: Slot::Rgb {
+                    color_source,
+                    color_target,
+                    deflection_source,
+                    deflection_target,
+                    color_change_source, 
+                    color_change_target, 
+                    color_uncertainty_source, 
+                    color_uncertainty_target,
+                    covariances_source,
+                    covariances_target
+                },
+                // sampler: self.sampler,
+            }},
+        }
+    }
 
     // pub fn to_color_depth_output(self, window: &Window) -> Self {
     //     match self.output {
@@ -227,17 +208,17 @@ impl NodeSlots {
     //                 width as u32,
     //                 height as u32,
     //             );
-    //             let (color_change, color_change_view) = create_texture_render_target::<Rgba32F>(
+    //             let (color_change_source, color_change_target) = create_texture_render_target::<Rgba32F>(
     //                 &mut factory,
     //                 width as u32,
     //                 height as u32,
     //             );
-    //             let (color_uncertainty, color_uncertainty_view) = create_texture_render_target::<Rgba32F>(
+    //             let (color_uncertainty_source, color_uncertainty_target) = create_texture_render_target::<Rgba32F>(
     //                 &mut factory,
     //                 width as u32,
     //                 height as u32,
     //             );
-    //             let (covariances, covariances_view) = create_texture_render_target::<Rgba32F>(
+    //             let (covariances_source, covariances_target) = create_texture_render_target::<Rgba32F>(
     //                 &mut factory,
     //                 width as u32,
     //                 height as u32,
@@ -252,18 +233,18 @@ impl NodeSlots {
     //                     depth_view,
     //                     deflection,
     //                     deflection_view,
-    //                     color_change, 
-    //                     color_change_view, 
-    //                     color_uncertainty, 
-    //                     color_uncertainty_view,                    
-    //                     covariances,
-    //                     covariances_view
+    //                     color_change_source, 
+    //                     color_change_target, 
+    //                     color_uncertainty_source, 
+    //                     color_uncertainty_target,                    
+    //                     covariances_source,
+    //                     covariances_target
     //                 },
     //                 sampler: self.sampler,
     //             }
     //         }
     //         Slot::Rgb {                 
-    //             color, color_view, deflection, deflection_view, color_change, color_change_view, color_uncertainty, color_uncertainty_view, covariances, covariances_view, ..
+    //             color, color_view, deflection, deflection_view, color_change_source, color_change_target, color_uncertainty_source, color_uncertainty_target, covariances_source, covariances_target, ..
     //         } => {
     //             // Guess missing depth, based on color.
     //             let mut factory = window.factory().borrow_mut();
@@ -282,12 +263,12 @@ impl NodeSlots {
     //                     depth_view,
     //                     deflection,
     //                     deflection_view,
-    //                     color_change, 
-    //                     color_change_view, 
-    //                     color_uncertainty, 
-    //                     color_uncertainty_view,
-    //                     covariances,
-    //                     covariances_view
+    //                     color_change_source, 
+    //                     color_change_target, 
+    //                     color_uncertainty_source, 
+    //                     color_uncertainty_target,
+    //                     covariances_source,
+    //                     covariances_target
     //                 },
     //                 sampler: self.sampler,
     //             }
@@ -296,315 +277,234 @@ impl NodeSlots {
     //     }
     // }
 
-    // pub fn emplace_color_output(self, window: &Window, width: u32, height: u32) -> Self {
-    //     let mut factory = window.factory().borrow_mut();
-    //     let (color, color_view) = create_texture_render_target::<ColorFormat>(
-    //         &mut factory,
-    //         width,
-    //         height,
-    //     );
-    //     let (deflection, deflection_view) = create_texture_render_target::<Rgba32F>(
-    //         &mut factory,
-    //         width as u32,
-    //         height as u32,
-    //     );
-    //     let (color_change, color_change_view) = create_texture_render_target::<Rgba32F>(
-    //         &mut factory,
-    //         width as u32,
-    //         height as u32,
-    //     );
-    //     let (color_uncertainty, color_uncertainty_view) = create_texture_render_target::<Rgba32F>(
-    //         &mut factory,
-    //         width as u32,
-    //         height as u32,
-    //     );
-    //     let (covariances, covariances_view) = create_texture_render_target::<Rgba32F>(
-    //         &mut factory,
-    //         width as u32,
-    //         height as u32,
-    //     );
+    pub fn emplace_color_output(self, window: &Window, width: u32, height: u32) -> Self {
+        let device = window.device().borrow_mut();
+        let color_target = create_texture_render_target(&device, width, height, ColorFormat, Some("emplace_color_output color"));
+        let deflection_target = create_texture_render_target(&device, width, height, HighpFormat, Some("emplace_color_output deflection"));
+        let color_change_target = create_texture_render_target(&device, width, height, HighpFormat, Some("emplace_color_output color_change"));
+        let color_uncertainty_target = create_texture_render_target(&device, width, height, HighpFormat, Some("emplace_color_output color_uncertainty"));
+        let covariances_target = create_texture_render_target(&device, width, height, HighpFormat, Some("emplace_color_output covariances"));
 
-    //     Self {
-    //         input: self.input,
-    //         output: Slot::Rgb {
-    //             color,
-    //             color_view: Some(color_view),
-    //             deflection,
-    //             deflection_view,
-    //             color_change, 
-    //             color_change_view, 
-    //             color_uncertainty, 
-    //             color_uncertainty_view,
-    //             covariances,
-    //             covariances_view
-    //         },
-    //         sampler: self.sampler,
-    //     }
-    // }
+        Self {
+            input: self.input,
+            output: Slot::Rgb {
+                color_source: color_target.as_texture(),
+                color_target,
+                deflection_source: deflection_target.as_texture(),
+                deflection_target,
+                color_change_source: color_change_target.as_texture(), 
+                color_change_target, 
+                color_uncertainty_source: color_uncertainty_target.as_texture(),
+                color_uncertainty_target,
+                covariances_source: covariances_target.as_texture(),
+                covariances_target
+            },
+            // sampler: self.sampler,
+        }
+    }
 
-    // pub fn emplace_color_depth_output(self, window: &Window, width: u32, height: u32) -> Self {
-    //     let mut factory = window.factory().borrow_mut();
+    pub fn emplace_color_depth_output(self, window: &Window, width: u32, height: u32) -> Self {
+        let device = window.device().borrow_mut();
+        let color_target = create_texture_render_target(&device, width, height, ColorFormat, Some("emplace_color_depth_output color"));
+        let depth_target = create_texture_render_target(&device, width, height, DepthFormat, Some("emplace_color_depth_output depth"));
+        let deflection_target = create_texture_render_target(&device, width, height, HighpFormat, Some("emplace_color_depth_output deflection"));
+        let color_change_target = create_texture_render_target(&device, width, height, HighpFormat, Some("emplace_color_depth_output color_change"));
+        let color_uncertainty_target = create_texture_render_target(&device, width, height, HighpFormat, Some("emplace_color_depth_output color_uncertainty"));
+        let covariances_target = create_texture_render_target(&device, width, height, HighpFormat, Some("emplace_color_depth_output covariances"));
 
-    //     let (color, color_view) = create_texture_render_target::<ColorFormat>(
-    //         &mut factory,
-    //         width,
-    //         height,
-    //     );
-    //     let (depth, depth_view) = create_texture_render_target::<DepthFormat>(
-    //         &mut factory,
-    //         width,
-    //         height,
-    //     );
-    //     let (deflection, deflection_view) = create_texture_render_target::<Rgba32F>(
-    //         &mut factory,
-    //         width as u32,
-    //         height as u32,
-    //     );
-    //     let (color_change, color_change_view) = create_texture_render_target::<Rgba32F>(
-    //         &mut factory,
-    //         width as u32,
-    //         height as u32,
-    //     );
-    //     let (color_uncertainty, color_uncertainty_view) = create_texture_render_target::<Rgba32F>(
-    //         &mut factory,
-    //         width as u32,
-    //         height as u32,
-    //     );
-    //     let (covariances, covariances_view) = create_texture_render_target::<Rgba32F>(
-    //         &mut factory,
-    //         width as u32,
-    //         height as u32,
-    //     );
+        Self {
+            input: self.input,
+            output: Slot::RgbDepth {
+                color_source: color_target.as_texture(),
+                color_target,
+                depth_source: depth_target.as_texture(),
+                depth_target,
+                deflection_source: deflection_target.as_texture(),
+                deflection_target,
+                color_change_source: color_change_target.as_texture(), 
+                color_change_target, 
+                color_uncertainty_source: color_uncertainty_target.as_texture(),
+                color_uncertainty_target,
+                covariances_source: covariances_target.as_texture(),
+                covariances_target
+            },
+            // sampler: self.sampler,
+        }
+    }
 
-    //     Self {
-    //         input: self.input,
-    //         output: Slot::RgbDepth {
-    //             color,
-    //             color_view,
-    //             depth,
-    //             depth_view,
-    //             deflection,
-    //             deflection_view,
-    //             color_change, 
-    //             color_change_view, 
-    //             color_uncertainty, 
-    //             color_uncertainty_view,
-    //             covariances,
-    //             covariances_view
-    //         },
-    //         sampler: self.sampler,
-    //     }
-    // }
+    pub fn as_color_source(&self, device: &wgpu::Device) -> (Texture, BindGroup) {
+        match &self.input {
+            Slot::Empty | Slot::RgbDepth { .. } => {
+                panic!("RGB input expected");
+            }
+            Slot::Rgb { color_source, .. } => {
+                let sampler = create_sampler_linear(device).unwrap();
+                let (_, bind_group) = color_source.create_bind_group(device, &sampler);
+                (
+                    color_source.clone(),
+                    bind_group,
+                )
+            }
+        }
+    }
 
-    // pub fn as_deflection(&self) -> gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba32F> {
-    //     match &self.output {
-    //         Slot::Empty => {
-    //             panic!("RGB output expected");
-    //         }
-    //         Slot::RgbDepth { deflection, .. } => deflection.clone(),
-    //         Slot::Rgb { deflection, .. } => deflection.clone(),
-    //     }
-    // }
+    pub fn as_color_depth_source(&self, device: &wgpu::Device) -> ((Texture, BindGroup), (Texture, BindGroup)) {
+        match &self.input {
+            Slot::Empty | Slot::Rgb { .. } => {
+                panic!("RGBD input expected");
+            }
+            Slot::RgbDepth { color_source, depth_source, .. } => {
+                let sampler = create_sampler_linear(device).unwrap();
+                let (_, bind_group_color) = color_source.create_bind_group(device, &sampler);
+                let (_, bind_group_depth) = depth_source.create_bind_group(device, &sampler);
+                ((
+                    color_source.clone(),
+                    bind_group_color,
+                ),
+                (
+                    depth_source.clone(),
+                    bind_group_depth,
+                ))
+            }
+        }
+    }
 
-    // pub fn as_color_change(&self) -> gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba32F> {
-    //     match &self.output {
-    //         Slot::Empty => {
-    //             panic!("RGB output expected");
-    //         }
-    //         Slot::RgbDepth { color_change, .. } => color_change.clone(),
-    //         Slot::Rgb { color_change, .. } => color_change.clone(),
-    //     }
-    // }
+    pub fn as_deflection_source(&self, device: &wgpu::Device) -> (Texture, BindGroup) {
+        match &self.input {
+            Slot::Empty | Slot::RgbDepth { .. } => {
+                panic!("RGB input expected");
+            }
+            Slot::Rgb { deflection_source, .. } => {
+                let sampler = create_sampler_linear(device).unwrap();
+                let (_, bind_group) = deflection_source.create_bind_group(device, &sampler);
+                (
+                    deflection_source.clone(),
+                    bind_group,
+                )
+            }
+        }
+    }
 
-    // pub fn as_color_uncertainty(&self) -> gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba32F> {
-    //     match &self.output {
-    //         Slot::Empty => {
-    //             panic!("RGB output expected");
-    //         }
-    //         Slot::RgbDepth { color_uncertainty, .. } => color_uncertainty.clone(),
-    //         Slot::Rgb { color_uncertainty, .. } => color_uncertainty.clone(),
-    //     }
-    // }
+    pub fn as_color_change_source(&self, device: &wgpu::Device) -> (Texture, BindGroup) {
+        match &self.input {
+            Slot::Empty | Slot::RgbDepth { .. } => {
+                panic!("RGB input expected");
+            }
+            Slot::Rgb { color_change_source, .. } => {
+                let sampler = create_sampler_linear(device).unwrap();
+                let (_, bind_group) = color_change_source.create_bind_group(device, &sampler);
+                (
+                    color_change_source.clone(),
+                    bind_group,
+                )
+            }
+        }
+    }
 
-    // pub fn as_covariances(&self) -> gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba32F> {
-    //     match &self.output {
-    //         Slot::Empty => {
-    //             panic!("RGB output expected");
-    //         }
-    //         Slot::RgbDepth { covariances, .. } => covariances.clone(),
-    //         Slot::Rgb { covariances, .. } => covariances.clone(),
-    //     }
-    // }
+    pub fn as_color_uncertainty_source(&self, device: &wgpu::Device) -> (Texture, BindGroup) {
+        match &self.input {
+            Slot::Empty | Slot::RgbDepth { .. } => {
+                panic!("RGB input expected");
+            }
+            Slot::Rgb { color_uncertainty_source, .. } => {
+                let sampler = create_sampler_linear(device).unwrap();
+                let (_, bind_group) = color_uncertainty_source.create_bind_group(device, &sampler);
+                (
+                    color_uncertainty_source.clone(),
+                    bind_group,
+                )
+            }
+        }
+    }
 
-    // pub fn as_color(&self) -> gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat> {
-    //     match &self.output {
-    //         Slot::Empty | Slot::RgbDepth { .. } => {
-    //             panic!("RGB output expected");
-    //         }
-    //         Slot::Rgb { color, .. } => color.clone(),
-    //     }
-    // }
+    pub fn as_covariances_source(&self, device: &wgpu::Device) -> (Texture, BindGroup) {
+        match &self.input {
+            Slot::Empty | Slot::RgbDepth { .. } => {
+                panic!("RGB input expected");
+            }
+            Slot::Rgb { covariances_source, .. } => {
+                let sampler = create_sampler_linear(device).unwrap();
+                let (_, bind_group) = covariances_source.create_bind_group(device, &sampler);
+                (
+                    covariances_source.clone(),
+                    bind_group,
+                )
+            }
+        }
+    }
 
-    // pub fn as_color_view(
-    //     &self,
-    // ) -> (
-    //     gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>,
-    //     gfx::handle::Sampler<gfx_device_gl::Resources>,
-    // ) {
-    //     match &self.input {
-    //         Slot::Empty | Slot::RgbDepth { .. } => {
-    //             panic!("RGB input expected");
-    //         }
-    //         Slot::Rgb { color_view, .. } => (
-    //             color_view.clone().expect("Shader resource expected"),
-    //             self.sampler.clone(),
-    //         ),
-    //     }
-    // }
+    pub fn as_color_target(&self) -> RenderTexture{
+        match &self.output {
+            Slot::Empty | Slot::RgbDepth { .. } => {
+                panic!("RGB output expected");
+            }
+            Slot::Rgb { color_target, .. } => color_target.clone(),
+        }
+    }
+    
+    pub fn as_color_depth_target(&self) -> (RenderTexture, RenderTexture){
+        match &self.output {
+            Slot::Empty | Slot::Rgb { .. } => {
+                panic!("RGBD output expected");
+            }
+            Slot::RgbDepth { color_target, depth_target, .. } => (color_target.clone(), depth_target.clone()),
+        }
+    }
 
-    // pub fn as_deflection_view(
-    //     &self,
-    // ) -> (
-    //     gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>,
-    //     gfx::handle::Sampler<gfx_device_gl::Resources>,
-    // ) {
-    //     match &self.input {
-    //         Slot::Empty => {
-    //             panic!("RGB input expected");
-    //         }
-    //         Slot::Rgb { deflection_view, .. } => (
-    //             deflection_view.clone(),
-    //             self.sampler.clone(),
-    //         ),
-    //         Slot::RgbDepth { deflection_view,.. } => (
-    //             deflection_view.clone(),
-    //             self.sampler.clone(),
-    //         ),
-    //     }
-    // }
+    pub fn as_deflection_target(&self) -> RenderTexture{
+        match &self.output {
+            Slot::Empty | Slot::RgbDepth { .. } => {
+                panic!("RGB output expected");
+            }
+            Slot::Rgb { deflection_target, .. } => deflection_target.clone(),
+        }
+    }
 
-    // pub fn as_color_change_view(
-    //     &self,
-    // ) -> (
-    //     gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>,
-    //     gfx::handle::Sampler<gfx_device_gl::Resources>,
-    // ) {
-    //     match &self.input {
-    //         Slot::Empty => {
-    //             panic!("RGB input expected");
-    //         }
-    //         Slot::Rgb { color_change_view, .. } => (
-    //             color_change_view.clone(),
-    //             self.sampler.clone(),
-    //         ),
-    //         Slot::RgbDepth { color_change_view,.. } => (
-    //             color_change_view.clone(),
-    //             self.sampler.clone(),
-    //         ),
-    //     }
-    // }
-    // pub fn as_color_uncertainty_view(
-    //     &self,
-    // ) -> (
-    //     gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>,
-    //     gfx::handle::Sampler<gfx_device_gl::Resources>,
-    // ) {
-    //     match &self.input {
-    //         Slot::Empty => {
-    //             panic!("RGB input expected");
-    //         }
-    //         Slot::Rgb { color_uncertainty_view, .. } => (
-    //             color_uncertainty_view.clone(),
-    //             self.sampler.clone(),
-    //         ),
-    //         Slot::RgbDepth { color_uncertainty_view,.. } => (
-    //             color_uncertainty_view.clone(),
-    //             self.sampler.clone(),
-    //         ),
-    //     }
-    // }
+    pub fn as_color_change_target(&self) -> RenderTexture{
+        match &self.output {
+            Slot::Empty | Slot::RgbDepth { .. } => {
+                panic!("RGB output expected");
+            }
+            Slot::Rgb { color_change_target, .. } => color_change_target.clone(),
+        }
+    }
 
-    // pub fn as_covariances_view(
-    //     &self,
-    // ) -> (
-    //     gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>,
-    //     gfx::handle::Sampler<gfx_device_gl::Resources>,
-    // ) {
-    //     match &self.input {
-    //         Slot::Empty => {
-    //             panic!("RGB input expected");
-    //         }
-    //         Slot::Rgb { covariances_view, .. } => (
-    //             covariances_view.clone(),
-    //             self.sampler.clone(),
-    //         ),
-    //         Slot::RgbDepth { covariances_view,.. } => (
-    //             covariances_view.clone(),
-    //             self.sampler.clone(),
-    //         ),
-    //     }
-    // }
+    pub fn as_color_uncertainty_target(&self) -> RenderTexture{
+        match &self.output {
+            Slot::Empty | Slot::RgbDepth { .. } => {
+                panic!("RGB output expected");
+            }
+            Slot::Rgb { color_uncertainty_target, .. } => color_uncertainty_target.clone(),
+        }
+    }
 
-    // pub fn as_color_depth(
-    //     &self,
-    // ) -> (
-    //     gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat>,
-    //     gfx::handle::RenderTargetView<gfx_device_gl::Resources, DepthFormat>,
-    // ) {
-    //     match &self.output {
-    //         Slot::Empty | Slot::Rgb { .. } => {
-    //             panic!("RGBD output expected");
-    //         }
-    //         Slot::RgbDepth { color, depth, .. } => (color.clone(), depth.clone()),
-    //     }
-    // }
+    pub fn as_covariances_target(&self) -> RenderTexture{
+        match &self.output {
+            Slot::Empty | Slot::RgbDepth { .. } => {
+                panic!("RGB output expected");
+            }
+            Slot::Rgb { covariances_target, .. } => covariances_target.clone(),
+        }
+    }
 
-    // pub fn as_all_output(
-    //     &self,
-    // ) -> (
-    //     gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat>,
-    //     gfx::handle::RenderTargetView<gfx_device_gl::Resources, DepthFormat>,
-    //     gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba32F>,
-    //     gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba32F>,
-    //     gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba32F>,
-    //     gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba32F>,
-
-    // ) {
-    //     match &self.output {
-    //         Slot::Empty | Slot::Rgb { .. } => {
-    //             panic!("RGBD output expected");
-    //         }
-    //         Slot::RgbDepth { color, depth, deflection, color_change, color_uncertainty, covariances, .. } 
-    //         => (color.clone(), depth.clone(), deflection.clone(), color_change.clone(), color_uncertainty.clone(),covariances.clone()),
-    //     }
-    // }
-
-//     pub fn as_color_depth_view(
-//         &self,
-//     ) -> (
-//         (
-//             gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>,
-//             gfx::handle::Sampler<gfx_device_gl::Resources>,
-//         ),
-//         (
-//             gfx::handle::ShaderResourceView<gfx_device_gl::Resources, f32>,
-//             gfx::handle::Sampler<gfx_device_gl::Resources>,
-//         ),
-//     ) {
-//         match &self.input {
-//             Slot::Empty | Slot::Rgb { .. } => {
-//                 panic!("RGBD input expected");
-//             }
-//             Slot::RgbDepth {
-//                 color_view,
-//                 depth_view,
-//                 ..
-//             } => (
-//                 (color_view.clone(), self.sampler.clone()),
-//                 (depth_view.clone(), self.sampler.clone()),
-//             ),
-//         }
-//     }
+    pub fn as_all_output(
+        &self,
+    ) -> (
+        RenderTexture,
+        RenderTexture,
+        RenderTexture,
+        RenderTexture,
+        RenderTexture,
+        RenderTexture,
+    ) {
+        match &self.output {
+            Slot::Empty | Slot::Rgb { .. } => {
+                panic!("RGBD output expected");
+            }
+            Slot::RgbDepth { color_target, depth_target, deflection_target, color_change_target, color_uncertainty_target, covariances_target, .. } 
+            => (color_target.clone(), depth_target.clone(), deflection_target.clone(), color_change_target.clone(), color_uncertainty_target.clone(),covariances_target.clone()),
+        }
+    }
 
 //     fn output_size(&self) -> [u32; 2] {
 //         let dimensions = match &self.output {

@@ -17,10 +17,15 @@ struct Sources{
     s_rgb_bind_group: wgpu::BindGroup,
 }
 
+struct Targets{
+    rt_color: RenderTexture,
+}
+
 pub struct TestNode {
     pipeline: wgpu::RenderPipeline,
     uniforms: ShaderUniforms<Uniforms>,
     sources: Sources,
+    targets: Targets,
 }
 
 impl Node for TestNode {
@@ -30,9 +35,11 @@ impl Node for TestNode {
 
         let uniforms = ShaderUniforms::new(&device, Uniforms{test_color: [1.0, 1.0, 1.0, 1.0]});
 
-        let s_rgb = load_texture_from_bytes(&device, &queue, &[128; 4], 1, 1, Some("TestNode s_rgb")).unwrap();
+        let s_rgb = load_texture_from_bytes(&device, &queue, &[255; 4], 1, 1, Some("TestNode s_rgb")).unwrap();
         let sampler = create_sampler_linear(&device).unwrap();
         let (s_rgb_bind_group_layout, s_rgb_bind_group) = s_rgb.create_bind_group(&device, &sampler);
+
+        let rt_color = create_texture_render_target(&device, 1, 1, ColorFormat, Some("TestNode rt_color"));
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("TestNode Shader"),
@@ -50,25 +57,28 @@ impl Node for TestNode {
 
         TestNode {
             pipeline,
+            uniforms,
             sources: Sources{
                 s_rgb,
                 s_rgb_bind_group,
             },
-            uniforms,
+            targets: Targets{
+                rt_color,
+            },
         }
     }
 
     fn negociate_slots(&mut self, window: &window::Window, slots: NodeSlots) -> NodeSlots {
-        // let slots = slots.to_color_input(window).to_color_output(window);
-        // self.pso_data.s_source = slots.as_color_view();
-        // self.pso_data.rt_color = slots.as_color();
+        let slots = slots.to_color_input(window).to_color_output(window);
+        (self.sources.s_rgb, self.sources.s_rgb_bind_group) = slots.as_color_source(&(window.device().borrow_mut()));
+        self.targets.rt_color = slots.as_color_target();
 
         slots
     }
 
     fn render(&mut self, window: &window::Window, encoder: &mut CommandEncoder, screen: &RenderTexture) {
         let queue = window.queue().borrow_mut();
-        self.uniforms.data.test_color = [1.0, 1.0, 1.0, 1.0];
+        self.uniforms.data.test_color = [1.0, 0.1, 0.1, 1.0];
         self.uniforms.update(&queue);
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

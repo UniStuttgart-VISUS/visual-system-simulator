@@ -1,4 +1,5 @@
 use crate::{*, Texture};
+use std::rc::Rc;
 use std::{cell::RefCell, borrow::BorrowMut};
 use std::time::Instant;
 use std::iter;
@@ -28,7 +29,7 @@ use winit::{
 pub struct Window {
     wgpu_window: winit::window::Window,
     events_loop: RefCell<EventLoop<()>>,
-    window_size: PhysicalSize<u32>,
+    pub window_size: PhysicalSize<u32>,
     surface: wgpu::Surface,
     surface_config: RefCell<wgpu::SurfaceConfiguration>,
     device: RefCell<wgpu::Device>,
@@ -250,12 +251,12 @@ impl Window {
     //     self.flow.iter().for_each(|f| f.update_last_slot(&self));
     // }
 
-    // pub fn update_nodes(&mut self) {
-    //     for (i, f) in self.flow.iter().enumerate(){
-    //         f.negociate_slots(&self);
-    //         f.update_values(&self, &self.values[i].borrow());
-    //     }
-    // }
+    pub fn update_nodes(&mut self) {
+        for (i, f) in self.flow.iter().enumerate(){
+            f.negociate_slots(&self);
+            // f.update_values(&self, &self.values[i].borrow());
+        }
+    }
 
     // pub fn set_values(&self, values: ValueMap, flow_index: usize) {
     //     self.values[flow_index].replace(values);
@@ -732,7 +733,7 @@ impl Window {
 
                     let render_texture = RenderTexture{
                         texture: None,
-                        view,
+                        view: Rc::new(view),
                         width: self.window_size.width,
                         height: self.window_size.height,
                     };

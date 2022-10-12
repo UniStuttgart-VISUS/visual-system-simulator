@@ -6,17 +6,19 @@ use crate::*;
 // use gfx_device_gl::Resources;
 // use std::io::Cursor;
 use core::num::NonZeroU32;
+use std::{rc::Rc};
 
 pub struct Texture {
-    pub texture: wgpu::Texture,
-    pub view: wgpu::TextureView,
+    //TODO maybe use RefCell
+    pub texture: Rc<wgpu::Texture>,
+    pub view: Rc<wgpu::TextureView>,
     pub width: u32,
     pub height: u32,
 }
 
 pub struct RenderTexture{
-    pub texture: Option<wgpu::Texture>,
-    pub view: wgpu::TextureView,
+    pub texture: Option<Rc<wgpu::Texture>>,
+    pub view: Rc<wgpu::TextureView>,
     pub width: u32,
     pub height: u32,
 }
@@ -27,18 +29,45 @@ pub struct Sampler {
 
 impl Texture{
     pub fn create_bind_group(&self, device: &wgpu::Device, sampler: &Sampler)-> (wgpu::BindGroupLayout, wgpu::BindGroup){
-        create_texture_bind_group(device, &self.view, sampler)
+        create_texture_bind_group(device, self.view.as_ref(), sampler)
+    }
+    
+    pub fn clone(&self) -> Texture{
+        Texture{
+            texture: self.texture.clone(),
+            view: self.view.clone(),
+            width: self.width,
+            height: self.height,
+        }
     }
 }
 
 impl RenderTexture{
     pub fn create_bind_group(&self, device: &wgpu::Device, sampler: &Sampler)-> (wgpu::BindGroupLayout, wgpu::BindGroup){
-        create_texture_bind_group(device, &self.view, sampler)
+        create_texture_bind_group(device, self.view.as_ref(), sampler)
+    }
+
+    pub fn clone(&self) -> RenderTexture{
+        RenderTexture{
+            texture: self.texture.clone(),
+            view: self.view.clone(),
+            width: self.width,
+            height: self.height,
+        }
+    }
+
+    pub fn as_texture(&self) -> Texture{
+        Texture{
+            texture: self.texture.clone().unwrap(),
+            view: self.view.clone(),
+            width: self.width,
+            height: self.height,
+        }
     }
 
     pub fn to_color_attachment(&self) -> Option<RenderPassColorAttachment>{
         Some(wgpu::RenderPassColorAttachment {
-            view: &self.view,
+            view: self.view.as_ref(),
             resolve_target: None,
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -54,7 +83,7 @@ impl RenderTexture{
 
     pub fn to_depth_attachment(&self) -> Option<RenderPassDepthStencilAttachment>{
         Some(wgpu::RenderPassDepthStencilAttachment {
-            view: &self.view,
+            view: self.view.as_ref(),
             depth_ops: Some(wgpu::Operations {
                 load: wgpu::LoadOp::Clear(1.0),
                 store: true,
@@ -139,7 +168,7 @@ pub fn update_texture(
     queue.write_texture(
         wgpu::ImageCopyTexture {
             aspect: wgpu::TextureAspect::All,
-            texture: &texture.texture,
+            texture: texture.texture.as_ref(),
             mip_level: 0,
             origin: wgpu::Origin3d::ZERO,
         },
@@ -231,8 +260,8 @@ pub fn load_texture_from_bytes(
     );
 
     Ok(Texture {
-        texture,
-        view,
+        texture: Rc::new(texture),
+        view: Rc::new(view),
         width,
         height,
     })
@@ -543,7 +572,6 @@ pub fn create_sampler_linear(device: &wgpu::Device) -> Result<Sampler, String>{
 /// Creates a texture that can be read from in shaders (view) and rendered to (render target).
 pub fn create_texture_render_target(
     device: &wgpu::Device,
-    queue: &wgpu::Queue,
     width: u32,
     height: u32,
     format: wgpu::TextureFormat,
@@ -567,52 +595,14 @@ pub fn create_texture_render_target(
                wgpu::TextureUsages::COPY_SRC,
     });
 
-    // let raw_data = vec![0; (width*height*4) as usize];
-    // queue.write_texture(
-    //     wgpu::ImageCopyTexture {
-    //         aspect: wgpu::TextureAspect::All,
-    //         texture: &texture,
-    //         mip_level: 0,
-    //         origin: wgpu::Origin3d::ZERO,
-    //     },
-    //     raw_data.as_slice(),
-    //     wgpu::ImageDataLayout {
-    //         offset: 0,
-    //         bytes_per_row: NonZeroU32::new(4 * width),
-    //         rows_per_image: NonZeroU32::new(height),
-    //     },
-    //     size,
-    // );
-
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
     RenderTexture{
-        texture: Some(texture),
-        view,
+        texture: Some(Rc::new(texture)),
+        view: Rc::new(view),
         width,
         height,
     }
-
-    // let texture = factory
-    //     .create_texture(
-    //         gfx::texture::Kind::D2(
-    //             width as u16,
-    //             height as u16,
-    //             gfx::texture::AaMode::Single,
-    //         ),
-    //         1,
-    //         gfx::memory::Bind::RENDER_TARGET | gfx::memory::Bind::SHADER_RESOURCE | gfx::memory::Bind::TRANSFER_SRC,
-    //         gfx::memory::Usage::Dynamic,
-    //         Some( <<T as gfx::format::Formatted>::Channel as gfx::format::ChannelTyped>::get_channel_type() ),
-    //     )
-    //     .unwrap();
-    // let target_view = factory
-    //     .view_texture_as_shader_resource::<T>(&texture, (0, 0), gfx::format::Swizzle::new())
-    //     .unwrap();
-    // let target = factory
-    //     .view_texture_as_render_target::<T>(&texture, 0, None)
-    //     .unwrap();
-    // (target, target_view)
 }
 
 // pub fn texture_from_id_and_size<T>(

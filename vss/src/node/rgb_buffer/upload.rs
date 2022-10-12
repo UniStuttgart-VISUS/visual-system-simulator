@@ -1,23 +1,7 @@
 use super::*;
-// use gfx;
 use std::io::Cursor;
 use std::path::Path;
-use wgpu::{util::DeviceExt, CommandEncoder};
-// use gfx::format::Rgba32F;
-
-// gfx_defines! {
-//     pipeline pipe {
-//         u_flags: gfx::Global<u32> = "u_flags",
-//         u_proj_view: gfx::Global<[[f32; 4];4]> = "u_proj_view",
-//         s_rgb: gfx::TextureSampler<[f32; 4]> = "s_rgb",
-//         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
-//         rt_depth: gfx::RenderTarget<DepthFormat> = "rt_depth",
-//         rt_deflection: gfx::RenderTarget<Rgba32F> = "rt_deflection",
-//         rt_color_change: gfx::RenderTarget<Rgba32F> = "rt_color_change",
-//         rt_color_uncertainty: gfx::RenderTarget<Rgba32F> = "rt_color_uncertainty",
-//         rt_covariances: gfx::RenderTarget<Rgba32F> = "rt_covariances",
-//     }
-// }
+use wgpu::CommandEncoder;
 
 struct Uniforms{
     flags: u32,
@@ -36,12 +20,6 @@ struct Targets{
     rt_color_change: RenderTexture,
     rt_color_uncertainty: RenderTexture,
     rt_covariances: RenderTexture,
-    // rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
-    // rt_depth: gfx::RenderTarget<DepthFormat> = "rt_depth",
-    // rt_deflection: gfx::RenderTarget<Rgba32F> = "rt_deflection",
-    // rt_color_change: gfx::RenderTarget<Rgba32F> = "rt_color_change",
-    // rt_color_uncertainty: gfx::RenderTarget<Rgba32F> = "rt_color_uncertainty",
-    // rt_covariances: gfx::RenderTarget<Rgba32F> = "rt_covariances",
 }
 
 bitflags! {
@@ -161,12 +139,12 @@ impl Node for UploadRgbBuffer {
         let sampler = create_sampler_linear(&device).unwrap();
         let (s_rgb_bind_group_layout, s_rgb_bind_group) = s_rgb.create_bind_group(&device, &sampler);
 
-        let rt_color = create_texture_render_target(&device, &queue, 1, 1, ColorFormat, Some("UploadNode rt_color"));
-        let rt_depth = create_texture_render_target(&device, &queue, 1, 1, DepthFormat, Some("UploadNode rt_depth"));
-        let rt_deflection = create_texture_render_target(&device, &queue, 1, 1, HighpFormat, Some("UploadNode rt_deflection"));
-        let rt_color_change = create_texture_render_target(&device, &queue, 1, 1, HighpFormat, Some("UploadNode rt_color_change"));
-        let rt_color_uncertainty = create_texture_render_target(&device, &queue, 1, 1, HighpFormat, Some("UploadNode rt_color_uncertainty"));
-        let rt_covariances = create_texture_render_target(&device, &queue, 1, 1, HighpFormat, Some("UploadNode rt_covariances"));
+        let rt_color = create_texture_render_target(&device, 1, 1, ColorFormat, Some("UploadNode rt_color"));
+        let rt_depth = create_texture_render_target(&device, 1, 1, DepthFormat, Some("UploadNode rt_depth"));
+        let rt_deflection = create_texture_render_target(&device, 1, 1, HighpFormat, Some("UploadNode rt_deflection"));
+        let rt_color_change = create_texture_render_target(&device, 1, 1, HighpFormat, Some("UploadNode rt_color_change"));
+        let rt_color_uncertainty = create_texture_render_target(&device, 1, 1, HighpFormat, Some("UploadNode rt_color_uncertainty"));
+        let rt_covariances = create_texture_render_target(&device, 1, 1, HighpFormat, Some("UploadNode rt_covariances"));
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("UploadNode Shader"),
@@ -246,14 +224,13 @@ impl Node for UploadRgbBuffer {
             }
         }
 
-        // let slots = slots.emplace_color_depth_output(window, width, height);
-        // let (color, depth, deflection, color_change, color_uncertainty, covariances) = slots.as_all_output();
-        // self.pso_data.rt_color = color;
-        // self.pso_data.rt_depth = depth;
-        // self.pso_data.rt_deflection = deflection;
-        // self.pso_data.rt_color_change = color_change;
-        // self.pso_data.rt_color_uncertainty = color_uncertainty;
-        // self.pso_data.rt_covariances = covariances;
+        let slots = slots.emplace_color_depth_output(window, width, height);
+        (self.targets.rt_color,
+         self.targets.rt_depth,
+         self.targets.rt_deflection,
+         self.targets.rt_color_change,
+         self.targets.rt_color_uncertainty,
+         self.targets.rt_covariances) = slots.as_all_output();
 
         slots
     }

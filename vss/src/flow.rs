@@ -94,69 +94,55 @@ impl Flow {
     //     }
     // }
 
-    // pub fn negociate_slots(&self, window: &Window) {
-    //     let mut slot_a = NodeSlots::new(window);
-    //     let mut slot_b = NodeSlots::new(window);
-    //     let nodes_len = self.nodes.borrow().len();
-    //     for (idx, node) in self.nodes.borrow_mut().iter_mut().enumerate() {
+    pub fn negociate_slots(&self, window: &Window) {
+        let mut slot_a = NodeSlots::new(window);
+        let mut slot_b = NodeSlots::new(window);
+        let nodes_len = self.nodes.borrow().len();
+        for (idx, node) in self.nodes.borrow_mut().iter_mut().enumerate() {
 
-    //         let suggested_slot = if idx + 1 == nodes_len {
-    //             // Suggest window as final output.
-    //             let mut factory = window.factory().borrow_mut();
+            let suggested_slot = if idx + 1 == nodes_len {
+                // Suggest window as final output.
+                let device = window.device().borrow_mut();
+        
+                let width = window.window_size.width;
+                let height = window.window_size.height;
 
-    //             let (width, height, ..) = window.target().get_dimensions();
+                let color_target = create_texture_render_target(&device, width, height, ColorFormat, Some("flow_negociate_slots color"));
+                let deflection_target = create_texture_render_target(&device, width, height, HighpFormat, Some("flow_negociate_slots deflection"));
+                let color_change_target = create_texture_render_target(&device, width, height, HighpFormat, Some("flow_negociate_slots color_change"));
+                let color_uncertainty_target = create_texture_render_target(&device, width, height, HighpFormat, Some("flow_negociate_slots color_uncertainty"));
+                let covariances_target = create_texture_render_target(&device, width, height, HighpFormat, Some("flow_negociate_slots covariances"));
+        
+                drop(device);
 
-    //             let (deflection, deflection_view) = create_texture_render_target::<Rgba32F>(
-    //                 &mut factory,
-    //                 width as u32,
-    //                 height as u32,
-    //             );
-    //             let (color_change, color_change_view) = create_texture_render_target::<Rgba32F>(
-    //                 &mut factory,
-    //                 width as u32,
-    //                 height as u32,
-    //             );
-    //             let (color_uncertainty, color_uncertainty_view) = create_texture_render_target::<Rgba32F>(
-    //                 &mut factory,
-    //                 width as u32,
-    //                 height as u32,
-    //             );
-    //             let (covariances, covariances_view) = create_texture_render_target::<Rgba32F>(
-    //                 &mut factory,
-    //                 width as u32,
-    //                 height as u32,
-    //             );
+                let output_slot = Slot::Rgb {
+                    color_source: color_target.as_texture(),
+                    color_target,
+                    deflection_source: deflection_target.as_texture(),
+                    deflection_target,
+                    color_change_source: color_change_target.as_texture(), 
+                    color_change_target, 
+                    color_uncertainty_source: color_uncertainty_target.as_texture(),
+                    color_uncertainty_target,
+                    covariances_source: covariances_target.as_texture(),
+                    covariances_target
+                };
 
-    //             drop(factory);
-
-    //             let output_slot = Slot::Rgb {
-    //                 color: window.target(),
-    //                 color_view: None,
-    //                 deflection,
-    //                 deflection_view,
-    //                 color_change, 
-    //                 color_change_view, 
-    //                 color_uncertainty, 
-    //                 color_uncertainty_view,
-    //                 covariances,
-    //                 covariances_view
-    //             };
-
-    //             NodeSlots::new_io(
-    //                 window,
-    //                 slot_b.take_output(),
-    //                 output_slot
-    //             )
-    //         } else {
-    //             // Suggest reusing output of the pre-predecessor.
-    //             NodeSlots::new_io(window, slot_b.take_output(), slot_a.take_output())
-    //         };
-    //         // Negociate and swap.
-    //         slot_a = node.negociate_slots_wk(window, suggested_slot, &self.well_known);
-    //         std::mem::swap(&mut slot_a, &mut slot_b);
-    //     }
-    //     self.last_slot.replace(Some(slot_b));
-    // }
+                NodeSlots::new_io(
+                    window,
+                    slot_b.take_output(),
+                    output_slot
+                )
+            } else {
+                // Suggest reusing output of the pre-predecessor.
+                NodeSlots::new_io(window, slot_b.take_output(), slot_a.take_output())
+            };
+            // Negociate and swap.
+            slot_a = node.negociate_slots_wk(window, suggested_slot, &self.well_known);
+            std::mem::swap(&mut slot_a, &mut slot_b);
+        }
+        self.last_slot.replace(Some(slot_b));
+    }
 
     // pub fn update_values(&self, window: &Window, values: &ValueMap) {
     //     let mut perspective = self.last_perspective.borrow_mut();

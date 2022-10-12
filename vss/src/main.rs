@@ -12,10 +12,10 @@ pub async fn run() {
     let input_path = std::path::Path::new("./assets/flowers.png");
     let mut input_node = UploadRgbBuffer::new(&window);
     input_node.upload_image(load(input_path));
-    input_node.negociate_slots(&window, NodeSlots::new(&window));
     window.add_node(Box::new(input_node), 0);
     let node = TestNode::new(&window);
     window.add_node(Box::new(node), 0);
+    window.update_nodes();
 
     while !window.poll_events() {}
 }
