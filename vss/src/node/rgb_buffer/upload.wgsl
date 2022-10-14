@@ -52,6 +52,7 @@ var in_color_s: sampler;
 fn fs_main(in: VertexOutput) -> FragmentOutput {
     var out: FragmentOutput;
     out.color = textureSample(in_color_t, in_color_s, in.tex_coords);
+    out.deflection = vec4<f32>(1.0f, 0.0f, 1.0f, 1.0f);
     // out.color = uniforms.test_color * vec4<f32>(in.tex_coords, 0.0, 1.0);
     return out;
 }

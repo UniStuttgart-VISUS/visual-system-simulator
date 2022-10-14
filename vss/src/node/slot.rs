@@ -432,6 +432,26 @@ impl NodeSlots {
             }
         }
     }
+    
+    pub fn as_all_colors_source(&self, device: &wgpu::Device) -> BindGroup {
+        match &self.input {
+            Slot::Empty | Slot::RgbDepth { .. } => {
+                panic!("RGB input expected");
+            }
+            Slot::Rgb { color_source, deflection_source, color_change_source, color_uncertainty_source, covariances_source, .. } => {
+                create_textures_bind_group(
+                    device,
+                    &[
+                        color_source,
+                        deflection_source,
+                        color_change_source,
+                        color_uncertainty_source,
+                        covariances_source,
+                    ],
+                    &create_sampler_nearest(device).unwrap()).1
+            }
+        }
+    }
 
     pub fn as_color_target(&self) -> RenderTexture{
         match &self.output {
@@ -506,36 +526,35 @@ impl NodeSlots {
         }
     }
 
-//     fn output_size(&self) -> [u32; 2] {
-//         let dimensions = match &self.output {
-//             Slot::Empty => {
-//                 panic!("Output expected");
-//             }
-//             Slot::Rgb { color, .. } => color.get_dimensions(),
-//             Slot::RgbDepth { color, .. } => color.get_dimensions(),
-//         };
+    fn output_size(&self) -> [u32; 2] {
+        let target = match &self.output {
+            Slot::Empty => {
+                panic!("Output expected");
+            }
+            Slot::Rgb { color_target, .. } => color_target,
+            Slot::RgbDepth { color_target, .. } => color_target,
+        };
 
-//         [dimensions.0 as u32, dimensions.1 as u32]
-//     }
+        [target.width, target.height]
+    }
 
-//     pub fn output_size_f32(&self) -> [f32; 2] {
-//         let size = self.output_size();
-//         [size[0] as f32, size[1] as f32]
-//     }
+    pub fn output_size_f32(&self) -> [f32; 2] {
+        let size = self.output_size();
+        [size[0] as f32, size[1] as f32]
+    }
 
-//     pub fn input_size_f32(&self) -> [f32; 2] {
-//         let dimensions = match &self.input {
-//             Slot::Empty => {
-//                 panic!("Output expected");
-//             }
-//             Slot::Rgb { color, .. } => color.get_dimensions(),
-//             Slot::RgbDepth { color, .. } => color.get_dimensions(),
-//         };
+    pub fn input_size_f32(&self) -> [f32; 2] {
+        let target = match &self.input {
+            Slot::Empty => {
+                panic!("Output expected");
+            }
+            Slot::Rgb { color_target, .. } => color_target,
+            Slot::RgbDepth { color_target, .. } => color_target,
+        };
 
-//         [dimensions.0 as f32, dimensions.1 as f32]
-//     }
+        [target.width as f32, target.height as f32]
+    }
 
-    
 }
 
 pub struct WellKnownSlots{
@@ -549,23 +568,23 @@ impl WellKnownSlots{
         }
     }
 
-//     pub fn get_original(
-//         &self,
-//     ) -> Option<(gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>, gfx::handle::Sampler<gfx_device_gl::Resources>)>
-//      {
-//         let guard =  RefCell::borrow(&self.original_image);
-//         match *guard{
-//             Some(ref original_image) => {
-//                 Some(original_image.clone())
-//             },
-//             None => None
-//         }
-//     }
-//     pub fn set_original(
-//         &self,
-//         view: (gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>, gfx::handle::Sampler<gfx_device_gl::Resources>)
-//     ) {       
-//         let mut guard = RefCell::borrow_mut(&self.original_image);
-//         *guard =  Some(view.clone());
-//     }
+    pub fn get_original(
+        &self,
+    ) -> Option<Texture>
+     {
+        let guard =  RefCell::borrow(&self.original_image);
+        match *guard{
+            Some(ref original_image) => {
+                Some(original_image.clone())
+            },
+            None => None
+        }
+    }
+    pub fn set_original(
+        &self,
+        view: Texture
+    ) {       
+        let mut guard = RefCell::borrow_mut(&self.original_image);
+        *guard =  Some(view.clone());
+    }
 }

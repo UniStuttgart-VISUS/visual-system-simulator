@@ -137,6 +137,57 @@ fn create_texture_bind_group(device: &wgpu::Device, view: &TextureView, sampler:
     (layout, bind_group)
 }
 
+pub fn create_textures_bind_group(device: &wgpu::Device, textures: &[&Texture], sampler: &Sampler) 
+    -> (wgpu::BindGroupLayout, wgpu::BindGroup)
+    {
+    
+    let mut layout_entries: Vec::<wgpu::BindGroupLayoutEntry> = vec![wgpu::BindGroupLayoutEntry {
+        binding: 0,
+        visibility: wgpu::ShaderStages::FRAGMENT,
+        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering), //TODO make this ::Filtering depending on Texture
+        count: None,
+    }];
+    layout_entries.extend(textures.iter().enumerate().map(
+        |(i, _)|
+        wgpu::BindGroupLayoutEntry{
+            binding: i as u32 + 1,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Texture {
+                multisampled: false,
+                view_dimension: wgpu::TextureViewDimension::D2,
+                sample_type: wgpu::TextureSampleType::Float { filterable: false }, //TODO make this true depending on Texture
+            },
+            count: None,
+        }
+    ));
+
+    let layout =
+    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        entries: &layout_entries,
+        label: Some("textures_bind_group_layout"),
+    });
+
+    let mut group_entries: Vec::<wgpu::BindGroupEntry> = vec![wgpu::BindGroupEntry {
+        binding: 0,
+        resource: wgpu::BindingResource::Sampler(&sampler.sampler),
+    }];
+    group_entries.extend(textures.iter().enumerate().map(
+        |(i, t)|
+        wgpu::BindGroupEntry {
+            binding: i as u32 + 1,
+            resource: wgpu::BindingResource::TextureView(&t.view),
+        }
+    ));
+
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout: &layout,
+        entries: &group_entries,
+        label: Some("textures_bind_group"),
+    });
+
+    (layout, bind_group)
+}
+
 ///
 /// Can be used to replace parts of or a whole texture.
 ///
@@ -267,6 +318,14 @@ pub fn load_texture_from_bytes(
     })
 }
 
+pub fn placeholder_texture(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    label: Option<&str>,
+) -> Result<Texture, String> {
+    load_texture_from_bytes(device, queue, &[0; 4], 1, 1, label)
+}
+
 pub fn create_sampler_linear(device: &wgpu::Device) -> Result<Sampler, String>{
     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         address_mode_u: wgpu::AddressMode::ClampToEdge,
@@ -275,6 +334,22 @@ pub fn create_sampler_linear(device: &wgpu::Device) -> Result<Sampler, String>{
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Linear,
         mipmap_filter: wgpu::FilterMode::Linear,
+        ..Default::default()
+    });
+
+    Ok(Sampler {
+        sampler,
+    })
+}
+
+pub fn create_sampler_nearest(device: &wgpu::Device) -> Result<Sampler, String>{
+    let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        mag_filter: wgpu::FilterMode::Nearest,
+        min_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::FilterMode::Nearest,
         ..Default::default()
     });
 
@@ -603,6 +678,14 @@ pub fn create_texture_render_target(
         width,
         height,
     }
+}
+
+pub fn placeholder_render_texture(
+    device: &wgpu::Device,
+    format: wgpu::TextureFormat,
+    label: Option<&str>,
+) -> RenderTexture{
+    create_texture_render_target(device, 1, 1, format, label)
 }
 
 // pub fn texture_from_id_and_size<T>(

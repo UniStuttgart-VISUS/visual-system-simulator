@@ -1,12 +1,5 @@
 use super::*;
-use wgpu::{util::DeviceExt, CommandEncoder};
-
-// gfx_defines! {
-//     pipeline pipe {
-//         s_source: gfx::TextureSampler<[f32; 4]> = "s_color",
-//         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
-//     }
-// }
+use wgpu::{CommandEncoder};
 
 struct Uniforms{
     test_color: [f32; 4],

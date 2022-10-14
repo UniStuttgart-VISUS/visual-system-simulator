@@ -14,6 +14,7 @@ pub async fn run() {
     input_node.upload_image(load(input_path));
     window.add_node(Box::new(input_node), 0);
     let node = TestNode::new(&window);
+    // let node = Display::new(&window);
     window.add_node(Box::new(node), 0);
     window.update_nodes();
 

@@ -4,7 +4,7 @@
 #[macro_use]
 //TODO-WGPU mod macros;
 //TODO-WGPU mod cataract;
-//TODO-WGPU mod display;
+mod display;
 //TODO-WGPU mod lens;
 //TODO-WGPU mod passthrough;
 //TODO-WGPU mod retina;
@@ -24,10 +24,9 @@ use wgpu::DepthStencilState;
 use wgpu::RenderPipeline;
 use wgpu::ShaderModule;
 use wgpu::util::DeviceExt;
-use wgpu::TextureView;
 
 //TODO-WGPU pub use self::cataract::*;
-//TODO-WGPU pub use self::display::*;
+pub use self::display::*;
 //TODO-WGPU pub use self::lens::*;
 //TODO-WGPU pub use self::passthrough::*;
 //TODO-WGPU pub use self::retina::*;
