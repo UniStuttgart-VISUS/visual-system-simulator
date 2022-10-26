@@ -1,22 +1,23 @@
 // Vertex shader
 
 struct Uniforms{
+    hive_visible: i32,
     stereo: i32,
-    resolution_in: vec2<f32>,
-    resolution_out: vec2<f32>,
     flow_idx: i32,
 
     heat_scale: f32,
     dir_calc_scale: f32,
 
-    hive_rotation: mat4x4<f32>,
-    hive_position: vec2<f32>,
-    hive_visible: i32,
-
     base_image: i32,
     combination_function: i32,
     mix_type: i32,
     colormap_type: i32,
+
+    resolution_in: vec2<f32>,
+    resolution_out: vec2<f32>,
+    hive_position: vec2<f32>,
+
+    hive_rotation: mat4x4<f32>,
 };
 
 @group(0) @binding(0)
@@ -83,6 +84,6 @@ var in_original_s: sampler;
 fn fs_main(in: VertexOutput) -> FragmentOutput {
     var out: FragmentOutput;
     out.color = textureSample(in_color, in_sampler, in.tex);
-    // out.color = uniforms.test_color * vec4<f32>(in.tex_coords, 0.0, 1.0);
+    // out.color = textureSample(in_deflection, in_sampler, in.tex);
     return out;
 }

@@ -140,6 +140,8 @@ fn create_texture_bind_group(device: &wgpu::Device, view: &TextureView, sampler:
 pub fn create_textures_bind_group(device: &wgpu::Device, textures: &[&Texture], sampler: &Sampler) 
     -> (wgpu::BindGroupLayout, wgpu::BindGroup)
     {
+
+    let alt_sampler = create_sampler_nearest(device).unwrap(); //TODO WGPU move this to texture ?
     
     let mut layout_entries: Vec::<wgpu::BindGroupLayoutEntry> = vec![wgpu::BindGroupLayoutEntry {
         binding: 0,
@@ -169,7 +171,7 @@ pub fn create_textures_bind_group(device: &wgpu::Device, textures: &[&Texture], 
 
     let mut group_entries: Vec::<wgpu::BindGroupEntry> = vec![wgpu::BindGroupEntry {
         binding: 0,
-        resource: wgpu::BindingResource::Sampler(&sampler.sampler),
+        resource: wgpu::BindingResource::Sampler(&alt_sampler.sampler),
     }];
     group_entries.extend(textures.iter().enumerate().map(
         |(i, t)|

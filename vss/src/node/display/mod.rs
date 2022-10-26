@@ -6,22 +6,25 @@ use cgmath::Rad;
 use wgpu::CommandEncoder;
 
 struct Uniforms{
+    hive_visible: i32,
     stereo: i32,
-    resolution_in: [f32; 2],
-    resolution_out: [f32; 2],
     flow_idx: i32,
 
     heat_scale: f32,
     dir_calc_scale: f32,
 
-    hive_rotation: [[f32; 4];4],
-    hive_position: [f32; 2],
-    hive_visible: i32,
-
     base_image: i32,
     combination_function: i32,
     mix_type: i32,
     colormap_type: i32,
+    
+    _padding: u32, // fill up 16 byte pattern
+
+    resolution_in: [f32; 2],
+    resolution_out: [f32; 2],
+    hive_position: [f32; 2],
+    
+    hive_rotation: [[f32; 4];4],
 }
 
 // gfx_defines! {
@@ -82,6 +85,7 @@ impl Node for Display {
                 combination_function: 0,
                 mix_type: 0,
                 colormap_type: 0,
+                _padding: 0,
             });
         
         let sampler = create_sampler_linear(&device).unwrap();
@@ -162,9 +166,8 @@ impl Node for Display {
         self.sources_bind_group = slots.as_all_colors_source(&device);
         self.render_target = slots.as_color_target();
 
-        // self.gui_pso_data.u_resolution_in = slots.input_size_f32();
-        // self.gui_pso_data.u_resolution_out = slots.output_size_f32();
-        // self.gui_pso_data.rt_color = slots.as_color();
+        self.uniforms.data.resolution_in = slots.input_size_f32();
+        self.uniforms.data.resolution_out = slots.output_size_f32();
 
         slots
     }
@@ -182,7 +185,7 @@ impl Node for Display {
     }
 
 
-    fn update_values(&mut self, window: &window::Window, values: &ValueMap) {
+    fn update_values(&mut self, _window: &window::Window, values: &ValueMap) {
         self.uniforms.data.stereo = if values
             .get("split_screen_switch")
             .unwrap_or(&Value::Bool(false))
@@ -232,8 +235,6 @@ impl Node for Display {
     }
 
     fn render(&mut self, window: &window::Window, encoder: &mut CommandEncoder, screen: &RenderTexture) {
-        self.uniforms.update(&window.queue().borrow_mut());        
-
         let speed = 4.0;
 
         self.hive_rot= self.hive_rot*Matrix4::from_angle_x(Rad(       speed * window.delta_t()/1_000_000.0));
@@ -242,9 +243,11 @@ impl Node for Display {
 
         self.uniforms.data.hive_rotation = self.hive_rot.into();
 
+        self.uniforms.update(&window.queue().borrow_mut());
+
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("DisplayNode render_pass"),
-            color_attachments: &[self.render_target.to_color_attachment()],
+            color_attachments: &[screen.to_color_attachment()],
             depth_stencil_attachment: None,
         });
     

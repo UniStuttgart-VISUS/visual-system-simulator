@@ -13,8 +13,8 @@ pub async fn run() {
     let mut input_node = UploadRgbBuffer::new(&window);
     input_node.upload_image(load(input_path));
     window.add_node(Box::new(input_node), 0);
-    let node = TestNode::new(&window);
-    // let node = Display::new(&window);
+    // let node = TestNode::new(&window);
+    let node = Display::new(&window);
     window.add_node(Box::new(node), 0);
     window.update_nodes();
 
