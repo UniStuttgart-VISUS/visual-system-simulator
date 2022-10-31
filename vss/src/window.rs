@@ -724,6 +724,8 @@ impl Window {
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
+                    let sampler = create_sampler_linear(&(self.device.borrow_mut()));
+
                     let mut encoder = self
                         .device
                         .borrow_mut()
@@ -734,6 +736,7 @@ impl Window {
                     let render_texture = RenderTexture{
                         texture: None,
                         view: Rc::new(view),
+                        sampler: Rc::new(sampler),
                         width: self.window_size.width,
                         height: self.window_size.height,
                     };

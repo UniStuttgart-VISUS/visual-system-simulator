@@ -107,11 +107,11 @@ impl Flow {
                 let width = window.window_size.width;
                 let height = window.window_size.height;
 
-                let color_target = create_texture_render_target(&device, width, height, ColorFormat, Some("flow_negociate_slots color"));
-                let deflection_target = create_texture_render_target(&device, width, height, HighpFormat, Some("flow_negociate_slots deflection"));
-                let color_change_target = create_texture_render_target(&device, width, height, HighpFormat, Some("flow_negociate_slots color_change"));
-                let color_uncertainty_target = create_texture_render_target(&device, width, height, HighpFormat, Some("flow_negociate_slots color_uncertainty"));
-                let covariances_target = create_texture_render_target(&device, width, height, HighpFormat, Some("flow_negociate_slots covariances"));
+                let color_target = create_color_rt(&device, width, height, Some("flow_negociate_slots color"));
+                let deflection_target = create_highp_rt(&device, width, height, Some("flow_negociate_slots deflection"));
+                let color_change_target = create_highp_rt(&device, width, height, Some("flow_negociate_slots color_change"));
+                let color_uncertainty_target = create_highp_rt(&device, width, height, Some("flow_negociate_slots color_uncertainty"));
+                let covariances_target = create_highp_rt(&device, width, height, Some("flow_negociate_slots covariances"));
         
                 drop(device);
 

@@ -135,11 +135,11 @@ impl NodeSlots {
                     Slot::RgbDepth { color_target, .. } => (color_target.width, color_target.height),
                 };
                 let device = window.device().borrow_mut();
-                let color_target = create_texture_render_target(&device, width, height, ColorFormat, Some("to_color_output color"));
-                let deflection_target = create_texture_render_target(&device, width, height, HighpFormat, Some("to_color_output deflection"));
-                let color_change_target = create_texture_render_target(&device, width, height, HighpFormat, Some("to_color_output color_change"));
-                let color_uncertainty_target = create_texture_render_target(&device, width, height, HighpFormat, Some("to_color_output color_uncertainty"));
-                let covariances_target = create_texture_render_target(&device, width, height, HighpFormat, Some("to_color_output covariances"));
+                let color_target = create_color_rt(&device, width, height, Some("to_color_output color"));
+                let deflection_target = create_highp_rt(&device, width, height, Some("to_color_output deflection"));
+                let color_change_target = create_highp_rt(&device, width, height, Some("to_color_output color_change"));
+                let color_uncertainty_target = create_highp_rt(&device, width, height, Some("to_color_output color_uncertainty"));
+                let covariances_target = create_highp_rt(&device, width, height, Some("to_color_output covariances"));
 
                 Self {
                     input: self.input,
@@ -279,11 +279,11 @@ impl NodeSlots {
 
     pub fn emplace_color_output(self, window: &Window, width: u32, height: u32) -> Self {
         let device = window.device().borrow_mut();
-        let color_target = create_texture_render_target(&device, width, height, ColorFormat, Some("emplace_color_output color"));
-        let deflection_target = create_texture_render_target(&device, width, height, HighpFormat, Some("emplace_color_output deflection"));
-        let color_change_target = create_texture_render_target(&device, width, height, HighpFormat, Some("emplace_color_output color_change"));
-        let color_uncertainty_target = create_texture_render_target(&device, width, height, HighpFormat, Some("emplace_color_output color_uncertainty"));
-        let covariances_target = create_texture_render_target(&device, width, height, HighpFormat, Some("emplace_color_output covariances"));
+        let color_target = create_color_rt(&device, width, height, Some("emplace_color_output color"));
+        let deflection_target = create_highp_rt(&device, width, height, Some("emplace_color_output deflection"));
+        let color_change_target = create_highp_rt(&device, width, height, Some("emplace_color_output color_change"));
+        let color_uncertainty_target = create_highp_rt(&device, width, height, Some("emplace_color_output color_uncertainty"));
+        let covariances_target = create_highp_rt(&device, width, height, Some("emplace_color_output covariances"));
 
         Self {
             input: self.input,
@@ -305,12 +305,12 @@ impl NodeSlots {
 
     pub fn emplace_color_depth_output(self, window: &Window, width: u32, height: u32) -> Self {
         let device = window.device().borrow_mut();
-        let color_target = create_texture_render_target(&device, width, height, ColorFormat, Some("emplace_color_depth_output color"));
-        let depth_target = create_texture_render_target(&device, width, height, DepthFormat, Some("emplace_color_depth_output depth"));
-        let deflection_target = create_texture_render_target(&device, width, height, HighpFormat, Some("emplace_color_depth_output deflection"));
-        let color_change_target = create_texture_render_target(&device, width, height, HighpFormat, Some("emplace_color_depth_output color_change"));
-        let color_uncertainty_target = create_texture_render_target(&device, width, height, HighpFormat, Some("emplace_color_depth_output color_uncertainty"));
-        let covariances_target = create_texture_render_target(&device, width, height, HighpFormat, Some("emplace_color_depth_output covariances"));
+        let color_target = create_color_rt(&device, width, height, Some("emplace_color_depth_output color"));
+        let depth_target = create_depth_rt(&device, width, height, Some("emplace_color_depth_output depth"));
+        let deflection_target = create_highp_rt(&device, width, height, Some("emplace_color_depth_output deflection"));
+        let color_change_target = create_highp_rt(&device, width, height, Some("emplace_color_depth_output color_change"));
+        let color_uncertainty_target = create_highp_rt(&device, width, height, Some("emplace_color_depth_output color_uncertainty"));
+        let covariances_target = create_highp_rt(&device, width, height, Some("emplace_color_depth_output covariances"));
 
         Self {
             input: self.input,
@@ -338,8 +338,7 @@ impl NodeSlots {
                 panic!("RGB input expected");
             }
             Slot::Rgb { color_source, .. } => {
-                let sampler = create_sampler_linear(device).unwrap();
-                let (_, bind_group) = color_source.create_bind_group(device, &sampler);
+                let (_, bind_group) = color_source.create_bind_group(device);
                 (
                     color_source.clone(),
                     bind_group,
@@ -354,9 +353,8 @@ impl NodeSlots {
                 panic!("RGBD input expected");
             }
             Slot::RgbDepth { color_source, depth_source, .. } => {
-                let sampler = create_sampler_linear(device).unwrap();
-                let (_, bind_group_color) = color_source.create_bind_group(device, &sampler);
-                let (_, bind_group_depth) = depth_source.create_bind_group(device, &sampler);
+                let (_, bind_group_color) = color_source.create_bind_group(device);
+                let (_, bind_group_depth) = depth_source.create_bind_group(device);
                 ((
                     color_source.clone(),
                     bind_group_color,
@@ -375,8 +373,7 @@ impl NodeSlots {
                 panic!("RGB input expected");
             }
             Slot::Rgb { deflection_source, .. } => {
-                let sampler = create_sampler_linear(device).unwrap();
-                let (_, bind_group) = deflection_source.create_bind_group(device, &sampler);
+                let (_, bind_group) = deflection_source.create_bind_group(device);
                 (
                     deflection_source.clone(),
                     bind_group,
@@ -391,8 +388,7 @@ impl NodeSlots {
                 panic!("RGB input expected");
             }
             Slot::Rgb { color_change_source, .. } => {
-                let sampler = create_sampler_linear(device).unwrap();
-                let (_, bind_group) = color_change_source.create_bind_group(device, &sampler);
+                let (_, bind_group) = color_change_source.create_bind_group(device);
                 (
                     color_change_source.clone(),
                     bind_group,
@@ -407,8 +403,7 @@ impl NodeSlots {
                 panic!("RGB input expected");
             }
             Slot::Rgb { color_uncertainty_source, .. } => {
-                let sampler = create_sampler_linear(device).unwrap();
-                let (_, bind_group) = color_uncertainty_source.create_bind_group(device, &sampler);
+                let (_, bind_group) = color_uncertainty_source.create_bind_group(device);
                 (
                     color_uncertainty_source.clone(),
                     bind_group,
@@ -423,8 +418,7 @@ impl NodeSlots {
                 panic!("RGB input expected");
             }
             Slot::Rgb { covariances_source, .. } => {
-                let sampler = create_sampler_linear(device).unwrap();
-                let (_, bind_group) = covariances_source.create_bind_group(device, &sampler);
+                let (_, bind_group) = covariances_source.create_bind_group(device);
                 (
                     covariances_source.clone(),
                     bind_group,
@@ -447,8 +441,7 @@ impl NodeSlots {
                         color_change_source,
                         color_uncertainty_source,
                         covariances_source,
-                    ],
-                    &create_sampler_nearest(device).unwrap()).1
+                    ]).1
             }
         }
     }

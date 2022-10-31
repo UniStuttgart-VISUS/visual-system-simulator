@@ -88,23 +88,21 @@ impl Node for Display {
                 _padding: 0,
             });
         
-        let sampler = create_sampler_linear(&device).unwrap();
         let (sources_bind_group_layout, sources_bind_group) = create_textures_bind_group(
             &device,
             &[
                 &placeholder_texture(&device, &queue, Some("DisplayNode s_color")).unwrap(),
-                &placeholder_texture(&device, &queue, Some("DisplayNode s_deflection")).unwrap(),
-                &placeholder_texture(&device, &queue, Some("DisplayNode s_color_change")).unwrap(),
-                &placeholder_texture(&device, &queue, Some("DisplayNode s_color_uncertainty")).unwrap(),
-                &placeholder_texture(&device, &queue, Some("DisplayNode s_covariances")).unwrap(),
+                &placeholder_highp_texture(&device, &queue, Some("DisplayNode s_deflection")).unwrap(),
+                &placeholder_highp_texture(&device, &queue, Some("DisplayNode s_color_change")).unwrap(),
+                &placeholder_highp_texture(&device, &queue, Some("DisplayNode s_color_uncertainty")).unwrap(),
+                &placeholder_highp_texture(&device, &queue, Some("DisplayNode s_covariances")).unwrap(),
             ],
-            &sampler
         );
 
         let original_tex = placeholder_texture(&device, &queue, Some("DisplayNode s_original")).unwrap();
-        let(original_bind_group_layout, original_bind_group) = original_tex.create_bind_group(&device, &sampler);
+        let(original_bind_group_layout, original_bind_group) = original_tex.create_bind_group(&device);
         
-        let render_target = placeholder_render_texture(&device, ColorFormat, Some("DisplayNode render_target"));
+        let render_target = placeholder_color_rt(&device, Some("DisplayNode render_target"));
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("DisplayNode Shader"),
@@ -176,8 +174,7 @@ impl Node for Display {
         match well_known.get_original() {
             Some(o) => {
                 let device = window.device().borrow_mut();
-                let sampler = create_sampler_linear(&device).unwrap();
-                self.original_bind_group = o.create_bind_group(&device, &sampler).1
+                self.original_bind_group = o.create_bind_group(&device).1
             },
             None => {},
         };

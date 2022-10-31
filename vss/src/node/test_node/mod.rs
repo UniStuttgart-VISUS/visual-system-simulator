@@ -28,11 +28,10 @@ impl Node for TestNode {
 
         let uniforms = ShaderUniforms::new(&device, Uniforms{test_color: [1.0, 1.0, 1.0, 1.0]});
 
-        let s_rgb = load_texture_from_bytes(&device, &queue, &[255; 4], 1, 1, Some("TestNode s_rgb")).unwrap();
-        let sampler = create_sampler_linear(&device).unwrap();
-        let (s_rgb_bind_group_layout, s_rgb_bind_group) = s_rgb.create_bind_group(&device, &sampler);
+        let s_rgb = placeholder_texture(&device, &queue, Some("TestNode s_rgb")).unwrap();
+        let (s_rgb_bind_group_layout, s_rgb_bind_group) = s_rgb.create_bind_group(&device);
 
-        let rt_color = create_texture_render_target(&device, 1, 1, ColorFormat, Some("TestNode rt_color"));
+        let rt_color = placeholder_color_rt(&device, Some("TestNode rt_color"));
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("TestNode Shader"),

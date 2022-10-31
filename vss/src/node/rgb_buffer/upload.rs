@@ -135,16 +135,15 @@ impl Node for UploadRgbBuffer {
                 proj_view: [[0.0; 4]; 4],
             });
         
-        let s_rgb = load_texture_from_bytes(&device, &queue, &[128; 4], 1, 1, Some("UploadNode s_rgb")).unwrap();
-        let sampler = create_sampler_linear(&device).unwrap();
-        let (s_rgb_bind_group_layout, s_rgb_bind_group) = s_rgb.create_bind_group(&device, &sampler);
+        let s_rgb = placeholder_texture(&device, &queue, Some("UploadNode s_rgb")).unwrap();
+        let (s_rgb_bind_group_layout, s_rgb_bind_group) = s_rgb.create_bind_group(&device);
 
-        let rt_color = create_texture_render_target(&device, 1, 1, ColorFormat, Some("UploadNode rt_color"));
-        let rt_depth = create_texture_render_target(&device, 1, 1, DepthFormat, Some("UploadNode rt_depth"));
-        let rt_deflection = create_texture_render_target(&device, 1, 1, HighpFormat, Some("UploadNode rt_deflection"));
-        let rt_color_change = create_texture_render_target(&device, 1, 1, HighpFormat, Some("UploadNode rt_color_change"));
-        let rt_color_uncertainty = create_texture_render_target(&device, 1, 1, HighpFormat, Some("UploadNode rt_color_uncertainty"));
-        let rt_covariances = create_texture_render_target(&device, 1, 1, HighpFormat, Some("UploadNode rt_covariances"));
+        let rt_color = placeholder_color_rt(&device, Some("UploadNode rt_color"));
+        let rt_depth = placeholder_depth_rt(&device, Some("UploadNode rt_depth"));
+        let rt_deflection = placeholder_highp_rt(&device, Some("UploadNode rt_deflection"));
+        let rt_color_change = placeholder_highp_rt(&device, Some("UploadNode rt_color_change"));
+        let rt_color_uncertainty = placeholder_highp_rt(&device, Some("UploadNode rt_color_uncertainty"));
+        let rt_covariances = placeholder_highp_rt(&device, Some("UploadNode rt_covariances"));
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("UploadNode Shader"),
@@ -193,17 +192,19 @@ impl Node for UploadRgbBuffer {
         if self.buffer_upload {
             let device = window.device().borrow_mut();
             let queue = window.queue().borrow_mut();
+            let sampler = create_sampler_linear(&device);
             let texture = load_texture_from_bytes(
                 &device,
                 &queue,
                 &self.buffer_next.pixels_rgb,
                 self.buffer_next.width as u32,
                 self.buffer_next.height as u32,
+                sampler,
+                wgpu::TextureFormat::Rgba8Unorm,
                 Some("UploadNode s_rgb"),
             )
             .unwrap();
-            let sampler = create_sampler_linear(&device).unwrap();
-            (_, self.sources.s_rgb_bind_group) = texture.create_bind_group(&device, &sampler);
+            (_, self.sources.s_rgb_bind_group) = texture.create_bind_group(&device);
             self.texture = Some(texture);
         }
 
