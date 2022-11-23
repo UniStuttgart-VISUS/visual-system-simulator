@@ -5,6 +5,7 @@ use cgmath::Matrix4;
 use cgmath::Rad;
 use wgpu::CommandEncoder;
 
+// #[repr(C, align(8))]
 struct Uniforms{
     hive_visible: i32,
     stereo: i32,
@@ -231,7 +232,7 @@ impl Node for Display {
         perspective.clone()
     }
 
-    fn render(&mut self, window: &window::Window, encoder: &mut CommandEncoder, screen: &RenderTexture) {
+    fn render(&mut self, window: &window::Window, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
         let speed = 4.0;
 
         self.hive_rot= self.hive_rot*Matrix4::from_angle_x(Rad(       speed * window.delta_t()/1_000_000.0));
@@ -244,7 +245,7 @@ impl Node for Display {
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("DisplayNode render_pass"),
-            color_attachments: &[screen.to_color_attachment()],
+            color_attachments: &[screen.unwrap_or(&self.render_target).to_color_attachment()],
             depth_stencil_attachment: None,
         });
     

@@ -258,15 +258,15 @@ impl Window {
         }
     }
 
-    // pub fn set_values(&self, values: ValueMap, flow_index: usize) {
-    //     self.values[flow_index].replace(values);
-    //     self.flow[flow_index].update_values(&self, &self.values[flow_index].borrow());
-    // }
+    pub fn set_values(&self, values: ValueMap, flow_index: usize) {
+        self.values[flow_index].replace(values);
+        self.flow[flow_index].update_values(&self, &self.values[flow_index].borrow());
+    }
     
-    // pub fn set_value(&self, key: String, value: Value, flow_index: usize) {
-    //     self.values[flow_index].borrow_mut().insert(key, value);
-    //     self.flow[flow_index].update_values(&self, &self.values[flow_index].borrow());
-    // }
+    pub fn set_value(&self, key: String, value: Value, flow_index: usize) {
+        self.values[flow_index].borrow_mut().insert(key, value);
+        self.flow[flow_index].update_values(&self, &self.values[flow_index].borrow());
+    }
     
     // pub fn set_perspective(&self, new_perspective: EyePerspective, flow_index: usize) {
     //     self.flow[flow_index].last_perspective.replace(new_perspective);

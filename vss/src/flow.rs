@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use cgmath::{Matrix4};
 use cgmath::Vector3;
 use cgmath::Rad;
-use wgpu::{TextureView, CommandEncoder};
+use wgpu::{CommandEncoder};
 use std::ops::Mul;
 
 /// Represents properties of eye-tracking data.
@@ -144,27 +144,27 @@ impl Flow {
         self.last_slot.replace(Some(slot_b));
     }
 
-    // pub fn update_values(&self, window: &Window, values: &ValueMap) {
-    //     let mut perspective = self.last_perspective.borrow_mut();
-    //     let mut configured_view = Matrix4::from_scale(1.0);
-    //     // if the eye has strabism, it needs some angle offset
-    //     if let Some(Value::Number(eye_axis_rot_x)) = values.get("eye_axis_rot_x") {
+    pub fn update_values(&self, window: &Window, values: &ValueMap) {
+        let mut perspective = self.last_perspective.borrow_mut();
+        let mut configured_view = Matrix4::from_scale(1.0);
+        // if the eye has strabism, it needs some angle offset
+        if let Some(Value::Number(eye_axis_rot_x)) = values.get("eye_axis_rot_x") {
             
-    //         configured_view = configured_view.mul(Matrix4::from_angle_x(Rad(*eye_axis_rot_x as f32)));
-    //     }
-    //     if let Some(Value::Number(eye_axis_rot_y)) = values.get("eye_axis_rot_y") {
-    //         configured_view = configured_view.mul(Matrix4::from_angle_y(Rad(*eye_axis_rot_y as f32)));
-    //     }
+            configured_view = configured_view.mul(Matrix4::from_angle_x(Rad(*eye_axis_rot_x as f32)));
+        }
+        if let Some(Value::Number(eye_axis_rot_y)) = values.get("eye_axis_rot_y") {
+            configured_view = configured_view.mul(Matrix4::from_angle_y(Rad(*eye_axis_rot_y as f32)));
+        }
 
-    //     perspective.view = configured_view.mul(perspective.view );
+        perspective.view = configured_view.mul(perspective.view );
 
-    //     self.configured_view.replace(configured_view);
+        self.configured_view.replace(configured_view);
 
-    //     // Propagate to nodes.
-    //     for node in self.nodes.borrow_mut().iter_mut() {
-    //         node.update_values(window, &values);
-    //     }
-    // }
+        // Propagate to nodes.
+        for node in self.nodes.borrow_mut().iter_mut() {
+            node.update_values(window, &values);
+        }
+    }
 
     // pub fn input(&self, vis_param: &VisualizationParameters) {
     //     let mut perspective = self.last_perspective.borrow().clone();
@@ -179,8 +179,9 @@ impl Flow {
 
     pub fn render(&self, window: &Window, encoder: &mut CommandEncoder, screen: &RenderTexture) {
         // Render all nodes.
+        let last_index = self.nodes.borrow_mut().len() - 1;
         for (idx, node) in self.nodes.borrow_mut().iter_mut().enumerate(){
-            node.render(window, encoder, screen);
+            node.render(window, encoder, if idx == last_index {Some(screen)} else {None});
         }
     }
 }

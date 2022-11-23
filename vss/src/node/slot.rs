@@ -519,6 +519,24 @@ impl NodeSlots {
         }
     }
 
+    pub fn as_all_color_output(
+        &self,
+    ) -> (
+        RenderTexture,
+        RenderTexture,
+        RenderTexture,
+        RenderTexture,
+        RenderTexture,
+    ) {
+        match &self.output {
+            Slot::Empty | Slot::RgbDepth { .. } => {
+                panic!("RGB output expected");
+            }
+            Slot::Rgb { color_target, deflection_target, color_change_target, color_uncertainty_target, covariances_target, .. } 
+            => (color_target.clone(), deflection_target.clone(), color_change_target.clone(), color_uncertainty_target.clone(),covariances_target.clone()),
+        }
+    }
+
     fn output_size(&self) -> [u32; 2] {
         let target = match &self.output {
             Slot::Empty => {

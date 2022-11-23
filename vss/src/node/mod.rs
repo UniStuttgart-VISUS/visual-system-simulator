@@ -15,7 +15,7 @@ mod test_node;
 //TODO-WGPU mod vr_compositor;
 //TODO-WGPU mod stereo_desktop;
 //TODO-WGPU mod variance;
-//TODO-WGPU mod peacock;
+mod peacock;
 
 use wgpu::BindGroupLayout;
 use wgpu::ColorTargetState;
@@ -37,7 +37,7 @@ pub use self::test_node::*;
 //TODO-WGPU pub use self::vr_compositor::*;
 //TODO-WGPU pub use self::stereo_desktop::*;
 //TODO-WGPU pub use self::variance::*;
-//TODO-WGPU pub use self::peacock::*;
+pub use self::peacock::*;
 
 //TODO-WGPU use self::macros::*;
 
@@ -75,7 +75,7 @@ pub trait Node {
     }
 
     /// Render the node.
-    fn render(&mut self, window: &Window, encoder: &mut CommandEncoder, screen: &RenderTexture);
+    fn render(&mut self, window: &Window, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>);
 }
 
 pub struct ShaderUniforms<T>{

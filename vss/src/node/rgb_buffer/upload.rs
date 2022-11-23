@@ -242,7 +242,7 @@ impl Node for UploadRgbBuffer {
         perspective.clone()
     }
 
-    fn render(&mut self, window: &window::Window, encoder: &mut CommandEncoder, screen: &RenderTexture) {
+    fn render(&mut self, window: &window::Window, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
         let queue = window.queue().borrow_mut();
         self.uniforms.update(&queue);
 
@@ -263,9 +263,9 @@ impl Node for UploadRgbBuffer {
         }
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("uploadnode_render_pass"),
+            label: Some("UploadNode render_pass"),
             color_attachments: &[
-                self.targets.rt_color.to_color_attachment(),
+                screen.unwrap_or(&self.targets.rt_color).to_color_attachment(),
                 self.targets.rt_deflection.to_color_attachment(),
                 self.targets.rt_color_change.to_color_attachment(),
                 self.targets.rt_color_uncertainty.to_color_attachment(),

@@ -68,14 +68,14 @@ impl Node for TestNode {
         slots
     }
 
-    fn render(&mut self, window: &window::Window, encoder: &mut CommandEncoder, screen: &RenderTexture) {
+    fn render(&mut self, window: &window::Window, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
         let queue = window.queue().borrow_mut();
         self.uniforms.data.test_color = [1.0, 0.1, 0.1, 1.0];
         self.uniforms.update(&queue);
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("testnode_render_pass"),
-            color_attachments: &[screen.to_color_attachment()],
+            color_attachments: &[screen.unwrap_or(&self.targets.rt_color).to_color_attachment()],
             depth_stencil_attachment: None,
         });
 
