@@ -63,7 +63,9 @@ impl Node for PeacockCB {
         
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Peacock Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("mod.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(concat!(
+                include_str!("../vert.wgsl"),
+                include_str!("mod.wgsl")).into()),
         });
 
         let pipeline = create_render_pipeline(

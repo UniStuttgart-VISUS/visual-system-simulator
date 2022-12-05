@@ -107,7 +107,9 @@ impl Node for Display {
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("DisplayNode Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("mod.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(concat!(
+                include_str!("../common.wgsl"),
+                include_str!("mod.wgsl")).into()),
         });
 
         let pipeline = create_render_pipeline(

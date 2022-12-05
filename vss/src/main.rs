@@ -16,10 +16,15 @@ pub async fn run() {
     // let node = TestNode::new(&window);
     let node = PeacockCB::new(&window);
     window.add_node(Box::new(node), 0);
+    let node = Cataract::new(&window);
+    window.add_node(Box::new(node), 0);
     let node = Display::new(&window);
     window.add_node(Box::new(node), 0);
     window.update_nodes();
 
+    window.set_value("ct_onoff".to_string(), Value::Bool(true), 0);
+    window.set_value("ct_blur_factor".to_string(), Value::Number(50.0), 0);
+    window.set_value("ct_contrast_factor".to_string(), Value::Number(50.0), 0);
     window.set_value("peacock_cb_onoff".to_string(), Value::Bool(true), 0);
     window.set_value("peacock_cb_strength".to_string(), Value::Number(1.0), 0);
     window.set_value("peacock_cb_type".to_string(), Value::Number(0.0), 0);

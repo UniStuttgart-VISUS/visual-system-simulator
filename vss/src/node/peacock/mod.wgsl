@@ -19,11 +19,6 @@ struct Uniforms{
 @group(0) @binding(0)
 var<uniform> uniforms: Uniforms;
 
-struct VertexOutput {
-    @builtin(position) clip_position: vec4<f32>,
-    @location(0) tex_coords: vec2<f32>,
-};
-
 struct FragmentOutput {
     @location(0) color: vec4<f32>,
     @location(1) deflection: vec4<f32>,
@@ -31,24 +26,6 @@ struct FragmentOutput {
     @location(3) color_uncertainty: vec4<f32>,
     @location(4) covariances: vec4<f32>,
 };
-
-@vertex
-fn vs_main(
-    @builtin(vertex_index) in_vertex_index: u32,
-) -> VertexOutput {
-    var out: VertexOutput;
-    // create two triangles with edges (0,0),(1,0),(1,1) and (1,1),(0,1),(0,0)
-    var x = f32((i32(in_vertex_index) % 3) > 0);
-    var y = f32((i32(in_vertex_index) % 3) > 1);
-    if((i32(in_vertex_index) / 3) > 0){
-        x = 1.0-x;
-        y = 1.0-y;
-    }
-    let pos = vec2<f32>(x, y);
-    out.tex_coords = pos;
-    out.clip_position = vec4<f32>(pos * 2.0 - 1.0, 0.0, 1.0);
-    return out;
-}
 
 let rgb2xyz = mat3x3<f32>(vec3<f32>(0.430574, 0.341550, 0.178325), vec3<f32>(0.222015, 0.706655, 0.071330), vec3<f32>(0.020183, 0.129553, 0.939180));
 let xyz2rgb = mat3x3<f32>(vec3<f32>(3.063218,-1.393325,-0.475802), vec3<f32>(-0.969243, 1.875966, 0.041555), vec3<f32>(0.067871,-0.228834, 1.069251));

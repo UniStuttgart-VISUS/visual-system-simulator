@@ -147,7 +147,9 @@ impl Node for UploadRgbBuffer {
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("UploadNode Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("upload.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(concat!(
+                include_str!("../vert.wgsl"),
+                include_str!("upload.wgsl")).into()),
         });
         
         let pipeline = create_render_pipeline(
