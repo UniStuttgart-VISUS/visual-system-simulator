@@ -8,20 +8,6 @@ struct Uniforms{
     proj_view: [[f32; 4];4],
 }
 
-struct Sources{
-    s_rgb: texture::Texture,
-    s_rgb_bind_group: wgpu::BindGroup,
-}
-
-struct Targets{
-    rt_color: RenderTexture,
-    rt_depth: RenderTexture,
-    rt_deflection: RenderTexture,
-    rt_color_change: RenderTexture,
-    rt_color_uncertainty: RenderTexture,
-    rt_covariances: RenderTexture,
-}
-
 bitflags! {
     pub struct RgbInputFlags : u32 {
         const EQUIRECTANGULAR = 1;
@@ -62,8 +48,8 @@ pub struct UploadRgbBuffer {
 
     pipeline: wgpu::RenderPipeline,
     uniforms: ShaderUniforms<Uniforms>,
-    sources: Sources,
-    targets: Targets,
+    source_bind_group: wgpu::BindGroup,
+    targets: ColorDepthTargets,
     // pso: gfx::PipelineState<Resources, pipe::Meta>,
     // pso_data: pipe::Data<Resources>,
 }
@@ -120,7 +106,7 @@ impl UploadRgbBuffer {
     }
 
     pub fn set_flags(&mut self, flags: RgbInputFlags) {
-        // self.uniforms.flags = flags.bits();
+        self.uniforms.data.flags = flags.bits();
     }
 }
 
@@ -135,15 +121,8 @@ impl Node for UploadRgbBuffer {
                 proj_view: [[0.0; 4]; 4],
             });
         
-        let s_rgb = placeholder_texture(&device, &queue, Some("UploadNode s_rgb")).unwrap();
-        let (s_rgb_bind_group_layout, s_rgb_bind_group) = s_rgb.create_bind_group(&device);
-
-        let rt_color = placeholder_color_rt(&device, Some("UploadNode rt_color"));
-        let rt_depth = placeholder_depth_rt(&device, Some("UploadNode rt_depth"));
-        let rt_deflection = placeholder_highp_rt(&device, Some("UploadNode rt_deflection"));
-        let rt_color_change = placeholder_highp_rt(&device, Some("UploadNode rt_color_change"));
-        let rt_color_uncertainty = placeholder_highp_rt(&device, Some("UploadNode rt_color_uncertainty"));
-        let rt_covariances = placeholder_highp_rt(&device, Some("UploadNode rt_covariances"));
+        let source_texture = placeholder_texture(&device, &queue, Some("UploadNode source_texture")).unwrap();
+        let (source_bind_group_layout, source_bind_group) = source_texture.create_bind_group(&device);
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("UploadNode Shader"),
@@ -156,15 +135,9 @@ impl Node for UploadRgbBuffer {
             &device,
             &[&shader, &shader],
             &["vs_main", "fs_main"],
-            &[&s_rgb_bind_group_layout, &uniforms.bind_group_layout],
-            &[
-                blended_color_state(ColorFormat), 
-                simple_color_state(HighpFormat),
-                simple_color_state(HighpFormat),
-                simple_color_state(HighpFormat),
-                simple_color_state(HighpFormat),
-                ],
-            simple_depth_state(DepthFormat),
+            &[&source_bind_group_layout, &uniforms.bind_group_layout],
+            &all_color_states(),
+            simple_depth_state(DEPTH_FORMAT),
             Some("UploadNode Render Pipeline"));
 
         UploadRgbBuffer {
@@ -175,18 +148,8 @@ impl Node for UploadRgbBuffer {
 
             pipeline,
             uniforms,
-            sources: Sources{
-                s_rgb,
-                s_rgb_bind_group,
-            },
-            targets: Targets{
-                rt_color,
-                rt_depth,
-                rt_deflection,
-                rt_color_change,
-                rt_color_uncertainty,
-                rt_covariances,
-            },
+            source_bind_group,
+            targets: ColorDepthTargets::new(&device, "UploadNode"),
         }
     }
 
@@ -206,7 +169,7 @@ impl Node for UploadRgbBuffer {
                 Some("UploadNode s_rgb"),
             )
             .unwrap();
-            (_, self.sources.s_rgb_bind_group) = texture.create_bind_group(&device);
+            (_, self.source_bind_group) = texture.create_bind_group(&device);
             self.texture = Some(texture);
         }
 
@@ -228,12 +191,7 @@ impl Node for UploadRgbBuffer {
         }
 
         let slots = slots.emplace_color_depth_output(window, width, height);
-        (self.targets.rt_color,
-         self.targets.rt_depth,
-         self.targets.rt_deflection,
-         self.targets.rt_color_change,
-         self.targets.rt_color_uncertainty,
-         self.targets.rt_covariances) = slots.as_all_output();
+        self.targets = slots.as_all_target();
 
         slots
     }
@@ -266,18 +224,12 @@ impl Node for UploadRgbBuffer {
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("UploadNode render_pass"),
-            color_attachments: &[
-                screen.unwrap_or(&self.targets.rt_color).to_color_attachment(),
-                self.targets.rt_deflection.to_color_attachment(),
-                self.targets.rt_color_change.to_color_attachment(),
-                self.targets.rt_color_uncertainty.to_color_attachment(),
-                self.targets.rt_covariances.to_color_attachment(),
-                ],
-            depth_stencil_attachment: self.targets.rt_depth.to_depth_attachment(),
+            color_attachments: &self.targets.color_attachments(screen),
+            depth_stencil_attachment: self.targets.depth_attachment(),
         });
     
         render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_bind_group(0, &self.sources.s_rgb_bind_group, &[]);
+        render_pass.set_bind_group(0, &self.source_bind_group, &[]);
         render_pass.set_bind_group(1, &self.uniforms.bind_group, &[]);
         render_pass.draw(0..6, 0..1);
     }

@@ -109,7 +109,7 @@ impl Window {
 
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: ColorFormat,// surface.get_supported_formats(&adapter)[0],
+            format: COLOR_FORMAT,// surface.get_supported_formats(&adapter)[0],
             width: window_size.width,
             height: window_size.height,
             present_mode: wgpu::PresentMode::Fifo,
@@ -222,9 +222,9 @@ impl Window {
         self.flow[flow_index].add_node(node);
     }
 
-    //TODO-WGPU pub fn replace_node(&mut self, index: usize, node: Box<dyn Node>, flow_index: usize) {
-    //TODO-WGPU     self.flow[flow_index].replace_node(index, node);
-    //TODO-WGPU }
+    pub fn replace_node(&mut self, index: usize, node: Box<dyn Node>, flow_index: usize) {
+        self.flow[flow_index].replace_node(index, node);
+    }
 
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
@@ -242,10 +242,9 @@ impl Window {
         return 0.0;
     }
 
-    // TODO WGPU all of these functions
-    // pub fn nodes_len(&self) -> usize {//TODO: return vector of lengths
-    //     self.flow[0].nodes_len()
-    // }
+    pub fn nodes_len(&self) -> usize {//TODO: return vector of lengths
+        self.flow[0].nodes_len()
+    }
 
     // pub fn update_last_node(&mut self) {
     //     self.flow.iter().for_each(|f| f.update_last_slot(&self));
@@ -254,7 +253,7 @@ impl Window {
     pub fn update_nodes(&mut self) {
         for (i, f) in self.flow.iter().enumerate(){
             f.negociate_slots(&self);
-            // f.update_values(&self, &self.values[i].borrow());
+            f.update_values(&self, &self.values[i].borrow());
         }
     }
 
@@ -629,6 +628,7 @@ impl Window {
                 }
                 Event::RedrawEventsCleared => {
                     *control_flow = ControlFlow::Exit;
+                    self.wgpu_window.request_redraw();
                 }
                 _ => {}
             }
@@ -638,7 +638,7 @@ impl Window {
             // Update pipline IO.
             let new_size = PhysicalSize::new(1920 as u32, 1080 as u32);
             //self.wgpu_window.resize(size);
-            &self.resize(new_size);
+            self.resize(new_size);
             // TODO-WGPU
             // gfx_window_glutin::update_views(
             //     &self.wgpu_window,
@@ -658,7 +658,7 @@ impl Window {
             // Update pipline IO.
             // let dpi_factor = self.wgpu_window.scale_factor();
             // let size = size.to_physical(dpi_factor);
-            &self.resize(new_size);
+            self.resize(new_size);
             // self.wgpu_window.resize(size);
             // TODO-WGPU 
             // gfx_window_glutin::update_views(
@@ -676,46 +676,44 @@ impl Window {
         }
 
         // Update input.
-        // TODO-WGPU
-        // for f in self.flow.iter(){
-        //     if *self.override_view.borrow() || *self.override_gaze.borrow() {
-        //         let window_size = &self.wgpu_window.window().get_inner_size().unwrap();
-        //         let cursor_pos = self.cursor_pos.borrow();
-        //         //println!("{} {}",cursor_pos.x as f32 ,cursor_pos.y as f32);
-        //         let view_input = match self.forced_view {
-        //             Some(pos) =>{
-        //                 pos
-        //             }
-        //             None =>{
-        //                 (cursor_pos.x as f32 ,cursor_pos.y as f32)
-        //             }
-        //         };
+        for f in self.flow.iter(){
+            if *self.override_view.borrow() || *self.override_gaze.borrow() {
+                let cursor_pos = self.cursor_pos.borrow();
+                //println!("{} {}",cursor_pos.x as f32 ,cursor_pos.y as f32);
+                let view_input = match self.forced_view {
+                    Some(pos) =>{
+                        pos
+                    }
+                    None =>{
+                        (cursor_pos.x as f32 ,cursor_pos.y as f32)
+                    }
+                };
 
-        //         self.vis_param.borrow_mut().highlight_position = (cursor_pos.x/window_size.width, cursor_pos.y/window_size.height);
-        //         let yaw = view_input.0 as f32 / window_size.width as f32
-        //             * std::f32::consts::PI
-        //             * 2.0
-        //             - 0.5;
-        //         let pitch = view_input.1 as f32 / window_size.height as f32
-        //             * std::f32::consts::PI
-        //             - 0.5;//50 mm lens
-        //         let view = Matrix4::from_angle_x(cgmath::Rad(pitch)) * Matrix4::from_angle_y(cgmath::Rad(yaw));
+                self.vis_param.borrow_mut().highlight_position = (cursor_pos.x/self.window_size.width as f64, cursor_pos.y/self.window_size.height as f64);
+                let yaw = view_input.0 as f32 / self.window_size.width as f32
+                    * std::f32::consts::PI
+                    * 2.0
+                    - 0.5;
+                let pitch = view_input.1 as f32 / self.window_size.height as f32
+                    * std::f32::consts::PI
+                    - 0.5;//50 mm lens
+                let view = Matrix4::from_angle_x(cgmath::Rad(pitch)) * Matrix4::from_angle_y(cgmath::Rad(yaw));
 
-        //         let mut perspective = f.last_perspective.borrow_mut();
+                let mut perspective = f.last_perspective.borrow_mut();
 
-        //         if *self.override_view.borrow() {
-        //             if !*self.override_gaze.borrow(){
-        //                 perspective.gaze = (view * perspective.view.invert().unwrap() * perspective.gaze.extend(1.0)).truncate();
-        //             }
-        //             perspective.view = view;
-        //         }
-        //         if *self.override_gaze.borrow() {
-        //             perspective.gaze = (perspective.view * view.invert().unwrap() * Vector4::unit_z()).truncate();
-        //         }
-        //     }            
-        //     f.input(&self.vis_param.borrow());
-        // }
-        //println!("Rendered with: {:?}", self.vis_param.borrow_mut());
+                if *self.override_view.borrow() {
+                    if !*self.override_gaze.borrow(){
+                        perspective.gaze = (view * perspective.view.invert().unwrap() * perspective.gaze.extend(1.0)).truncate();
+                    }
+                    perspective.view = view;
+                }
+                if *self.override_gaze.borrow() {
+                    perspective.gaze = (perspective.view * view.invert().unwrap() * Vector4::unit_z()).truncate();
+                }
+            }            
+            f.input(&self.vis_param.borrow());
+        }
+        // println!("Rendered with: {:?}", self.vis_param.borrow_mut());
 
         if redraw_requested {
             match self.surface.get_current_texture(){

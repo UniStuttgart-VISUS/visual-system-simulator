@@ -89,16 +89,7 @@ impl Node for Display {
                 _padding: 0,
             });
         
-        let (sources_bind_group_layout, sources_bind_group) = create_textures_bind_group(
-            &device,
-            &[
-                &placeholder_texture(&device, &queue, Some("DisplayNode s_color")).unwrap(),
-                &placeholder_highp_texture(&device, &queue, Some("DisplayNode s_deflection")).unwrap(),
-                &placeholder_highp_texture(&device, &queue, Some("DisplayNode s_color_change")).unwrap(),
-                &placeholder_highp_texture(&device, &queue, Some("DisplayNode s_color_uncertainty")).unwrap(),
-                &placeholder_highp_texture(&device, &queue, Some("DisplayNode s_covariances")).unwrap(),
-            ],
-        );
+        let (sources_bind_group_layout, sources_bind_group) = create_color_sources_bind_group(&device, &queue, "DisplayNode");
 
         let original_tex = placeholder_texture(&device, &queue, Some("DisplayNode s_original")).unwrap();
         let(original_bind_group_layout, original_bind_group) = original_tex.create_bind_group(&device);
@@ -117,7 +108,7 @@ impl Node for Display {
             &[&shader, &shader],
             &["vs_main", "fs_main"],
             &[&uniforms.bind_group_layout, &sources_bind_group_layout, &original_bind_group_layout],
-            &[blended_color_state(ColorFormat)],
+            &[blended_color_state(COLOR_FORMAT)],
             None,
             Some("DisplayNode Render Pipeline")
         );
@@ -208,10 +199,10 @@ impl Node for Display {
         self.uniforms.data.hive_position[1] = vis_param.highlight_position.1 as f32;
         self.uniforms.data.hive_visible = vis_param.bees_visible as i32;
 
-        self.uniforms.data.base_image =  ((vis_param.vis_type.base_image) as u32) as i32;
-        self.uniforms.data.combination_function = ((vis_param.vis_type.combination_function) as u32) as i32;
-        self.uniforms.data.mix_type = ((vis_param.vis_type.mix_type) as u32) as i32;
-        self.uniforms.data.colormap_type = ((vis_param.vis_type.color_map_type) as u32) as i32;
+        self.uniforms.data.base_image =  vis_param.vis_type.base_image as i32;
+        self.uniforms.data.combination_function = vis_param.vis_type.combination_function as i32;
+        self.uniforms.data.mix_type = vis_param.vis_type.mix_type as i32;
+        self.uniforms.data.colormap_type = vis_param.vis_type.color_map_type as i32;
 
         // let mut raw_input = eframe::egui::RawInput::default();
         // raw_input.events.push(eframe::egui::Event::PointerButton{

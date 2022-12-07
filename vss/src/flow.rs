@@ -95,8 +95,8 @@ impl Flow {
     // }
 
     pub fn negociate_slots(&self, window: &Window) {
-        let mut slot_a = NodeSlots::new(window);
-        let mut slot_b = NodeSlots::new(window);
+        let mut slot_a = NodeSlots::new();
+        let mut slot_b = NodeSlots::new();
         let nodes_len = self.nodes.borrow().len();
         for (idx, node) in self.nodes.borrow_mut().iter_mut().enumerate() {
 
@@ -129,13 +129,12 @@ impl Flow {
                 };
 
                 NodeSlots::new_io(
-                    window,
                     slot_b.take_output(),
                     output_slot
                 )
             } else {
                 // Suggest reusing output of the pre-predecessor.
-                NodeSlots::new_io(window, slot_b.take_output(), slot_a.take_output())
+                NodeSlots::new_io(slot_b.take_output(), slot_a.take_output())
             };
             // Negociate and swap.
             slot_a = node.negociate_slots_wk(window, suggested_slot, &self.well_known);
@@ -166,16 +165,16 @@ impl Flow {
         }
     }
 
-    // pub fn input(&self, vis_param: &VisualizationParameters) {
-    //     let mut perspective = self.last_perspective.borrow().clone();
-    //     perspective.view = self.configured_view.borrow().mul(perspective.view );
+    pub fn input(&self, vis_param: &VisualizationParameters) {
+        let mut perspective = self.last_perspective.borrow().clone();
+        perspective.view = self.configured_view.borrow().mul(perspective.view );
 
-    //     // Propagate to nodes.
-    //     for node in self.nodes.borrow_mut().iter_mut().rev() {
-    //         perspective = node.input( &perspective, vis_param);
-    //     }
-    //     //self.last_perspective.replace(perspective);
-    // }
+        // Propagate to nodes.
+        for node in self.nodes.borrow_mut().iter_mut().rev() {
+            perspective = node.input( &perspective, vis_param);
+        }
+        //self.last_perspective.replace(perspective);
+    }
 
     pub fn render(&self, window: &Window, encoder: &mut CommandEncoder, screen: &RenderTexture) {
         // Render all nodes.

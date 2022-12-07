@@ -43,7 +43,7 @@ impl Node for TestNode {
             &[&shader, &shader],
             &["vs_main", "fs_main"],
             &[&s_rgb_bind_group_layout, &uniforms.bind_group_layout],
-            &[blended_color_state(ColorFormat)],
+            &[blended_color_state(COLOR_FORMAT)],
             None,
             Some("TestNode Render Pipeline"));
 

@@ -11,19 +11,11 @@ struct Uniforms{
     cb_strength: f32,
 }
 
-struct Targets{
-    rt_color: RenderTexture,
-    rt_deflection: RenderTexture,
-    rt_color_change: RenderTexture,
-    rt_color_uncertainty: RenderTexture,
-    rt_covariances: RenderTexture,
-}
-
 pub struct PeacockCB {
     pipeline: wgpu::RenderPipeline,
     uniforms: ShaderUniforms<Uniforms>,
     sources_bind_group: wgpu::BindGroup,
-    targets: Targets,
+    targets: ColorTargets,
 }
 
 impl PeacockCB{}
@@ -44,23 +36,8 @@ impl Node for PeacockCB {
                 cb_strength: 0.0,
             });
 
-        let (sources_bind_group_layout, sources_bind_group) = create_textures_bind_group(
-            &device,
-            &[
-                &placeholder_texture(&device, &queue, Some("Peacock s_color")).unwrap(),
-                &placeholder_highp_texture(&device, &queue, Some("Peacock s_deflection")).unwrap(),
-                &placeholder_highp_texture(&device, &queue, Some("Peacock s_color_change")).unwrap(),
-                &placeholder_highp_texture(&device, &queue, Some("Peacock s_color_uncertainty")).unwrap(),
-                &placeholder_highp_texture(&device, &queue, Some("Peacock s_covariances")).unwrap(),
-            ],
-        );
+        let (sources_bind_group_layout, sources_bind_group) = create_color_sources_bind_group(&device, &queue, "Peacock");
 
-        let rt_color = placeholder_color_rt(&device, Some("Peacock rt_color"));
-        let rt_deflection = placeholder_highp_rt(&device, Some("Peacock rt_deflection"));
-        let rt_color_change = placeholder_highp_rt(&device, Some("Peacock rt_color_change"));
-        let rt_color_uncertainty = placeholder_highp_rt(&device, Some("Peacock rt_color_uncertainty"));
-        let rt_covariances = placeholder_highp_rt(&device, Some("Peacock rt_covariances"));
-        
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Peacock Shader"),
             source: wgpu::ShaderSource::Wgsl(concat!(
@@ -73,27 +50,15 @@ impl Node for PeacockCB {
             &[&shader, &shader],
             &["vs_main", "fs_main"],
             &[&uniforms.bind_group_layout, &sources_bind_group_layout],
-            &[
-                blended_color_state(ColorFormat),
-                simple_color_state(HighpFormat),
-                simple_color_state(HighpFormat),
-                simple_color_state(HighpFormat),
-                simple_color_state(HighpFormat),
-                ],
-                None,
+            &all_color_states(),
+            None,
             Some("Peacock Render Pipeline"));
 
         PeacockCB {
             pipeline,
             uniforms,
-            sources_bind_group: sources_bind_group,
-            targets: Targets{
-                rt_color,
-                rt_deflection,
-                rt_color_change,
-                rt_color_uncertainty,
-                rt_covariances,
-            },
+            sources_bind_group,
+            targets: ColorTargets::new(&device, "Peacock"),
         }
     }
 
@@ -102,11 +67,7 @@ impl Node for PeacockCB {
         let device = window.device().borrow_mut();
 
         self.sources_bind_group = slots.as_all_colors_source(&device);
-        (self.targets.rt_color,
-            self.targets.rt_deflection,
-            self.targets.rt_color_change,
-            self.targets.rt_color_uncertainty,
-            self.targets.rt_covariances) = slots.as_all_color_output();
+        self.targets = slots.as_all_colors_target();
 
         slots
     }
@@ -147,13 +108,7 @@ impl Node for PeacockCB {
         
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Peacock render_pass"),
-            color_attachments: &[
-                screen.unwrap_or(&self.targets.rt_color).to_color_attachment(),
-                self.targets.rt_deflection.to_color_attachment(),
-                self.targets.rt_color_change.to_color_attachment(),
-                self.targets.rt_color_uncertainty.to_color_attachment(),
-                self.targets.rt_covariances.to_color_attachment(),
-                ],
+            color_attachments: &self.targets.color_attachments(screen),
             depth_stencil_attachment: None,
         });
     

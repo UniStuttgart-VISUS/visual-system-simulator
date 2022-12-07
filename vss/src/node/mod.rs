@@ -149,6 +149,16 @@ pub fn blended_color_state(format: wgpu::TextureFormat) -> Option<ColorTargetSta
     })
 }
 
+pub fn all_color_states() -> [Option<ColorTargetState>; 5]{
+    [
+        blended_color_state(COLOR_FORMAT),
+        simple_color_state(HIGHP_FORMAT),
+        simple_color_state(HIGHP_FORMAT),
+        simple_color_state(HIGHP_FORMAT),
+        simple_color_state(HIGHP_FORMAT),
+    ]
+}
+
 pub fn simple_depth_state(format: wgpu::TextureFormat) -> Option<DepthStencilState>{
     Some(DepthStencilState {
         format: format,

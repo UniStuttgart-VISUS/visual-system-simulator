@@ -1,13 +1,93 @@
 use eframe::egui::color;
-use wgpu::BindGroup;
+use env_logger::fmt::Color;
+use wgpu::{BindGroup, RenderPassColorAttachment, RenderPassDepthStencilAttachment};
 
 use super::*;
 use std::cell::RefCell;
 
 // pub static ColorFormat: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm; // old color format
-pub static ColorFormat: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8Unorm;
-pub static HighpFormat: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
-pub static DepthFormat: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+pub static COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8Unorm;
+pub static HIGHP_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
+pub static DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+
+pub struct ColorDepthTargets{
+    rt_color: RenderTexture,
+    rt_depth: RenderTexture,
+    rt_deflection: RenderTexture,
+    rt_color_change: RenderTexture,
+    rt_color_uncertainty: RenderTexture,
+    rt_covariances: RenderTexture,
+}
+
+impl ColorDepthTargets{
+    pub fn new(device: &wgpu::Device, node_name: &str) -> Self{
+        let rt_color = placeholder_color_rt(&device, Some(format!("{}{}", node_name, " rt_color (placeholder)").as_str()));
+        let rt_depth = placeholder_depth_rt(&device, Some(format!("{}{}", node_name, " rt_depth (placeholder)").as_str()));
+        let rt_deflection = placeholder_highp_rt(&device, Some(format!("{}{}", node_name, " rt_deflection (placeholder)").as_str()));
+        let rt_color_change = placeholder_highp_rt(&device, Some(format!("{}{}", node_name, " rt_color_change (placeholder)").as_str()));
+        let rt_color_uncertainty = placeholder_highp_rt(&device, Some(format!("{}{}", node_name, " rt_color_uncertainty (placeholder)").as_str()));
+        let rt_covariances = placeholder_highp_rt(&device, Some(format!("{}{}", node_name, " rt_covariances (placeholder)").as_str()));
+
+        Self{
+            rt_color,
+            rt_depth,
+            rt_deflection,
+            rt_color_change,
+            rt_color_uncertainty,
+            rt_covariances,
+        }
+    }
+
+    pub fn color_attachments<'a>(&'a self, screen: Option<&'a RenderTexture>) -> [Option<RenderPassColorAttachment>; 5]{
+        [
+            screen.unwrap_or(&self.rt_color).to_color_attachment(),
+            self.rt_deflection.to_color_attachment(),
+            self.rt_color_change.to_color_attachment(),
+            self.rt_color_uncertainty.to_color_attachment(),
+            self.rt_covariances.to_color_attachment(),
+        ]
+    }
+
+    pub fn depth_attachment(&self) -> Option<RenderPassDepthStencilAttachment>{
+        self.rt_depth.to_depth_attachment()
+    }
+}
+
+pub struct ColorTargets{
+    rt_color: RenderTexture,
+    rt_deflection: RenderTexture,
+    rt_color_change: RenderTexture,
+    rt_color_uncertainty: RenderTexture,
+    rt_covariances: RenderTexture,
+}
+
+impl ColorTargets{
+    pub fn new(device: &wgpu::Device, node_name: &str) -> Self{
+        let rt_color = placeholder_color_rt(&device, Some(format!("{}{}", node_name, " rt_color (placeholder)").as_str()));
+        let rt_deflection = placeholder_highp_rt(&device, Some(format!("{}{}", node_name, " rt_deflection (placeholder)").as_str()));
+        let rt_color_change = placeholder_highp_rt(&device, Some(format!("{}{}", node_name, " rt_color_change (placeholder)").as_str()));
+        let rt_color_uncertainty = placeholder_highp_rt(&device, Some(format!("{}{}", node_name, " rt_color_uncertainty (placeholder)").as_str()));
+        let rt_covariances = placeholder_highp_rt(&device, Some(format!("{}{}", node_name, " rt_covariances (placeholder)").as_str()));
+
+        Self{
+            rt_color,
+            rt_deflection,
+            rt_color_change,
+            rt_color_uncertainty,
+            rt_covariances,
+        }
+    }
+    
+    pub fn color_attachments<'a>(&'a self, screen: Option<&'a RenderTexture>) -> [Option<RenderPassColorAttachment>; 5]{
+        [
+            screen.unwrap_or(&self.rt_color).to_color_attachment(),
+            self.rt_deflection.to_color_attachment(),
+            self.rt_color_change.to_color_attachment(),
+            self.rt_color_uncertainty.to_color_attachment(),
+            self.rt_covariances.to_color_attachment(),
+        ]
+    }
+}
 
 pub enum Slot {
     Empty,
@@ -48,23 +128,20 @@ impl Default for Slot {
 pub struct NodeSlots {
     input: Slot,
     output: Slot,
-    // sampler: gfx::handle::Sampler<gfx_device_gl::Resources>,
 }
 
 impl NodeSlots {
-    pub fn new(window: &Window) -> Self {
+    pub fn new() -> Self {
         Self {
             input: Slot::default(),
             output: Slot::default(),
-            // sampler: window.factory().borrow_mut().create_sampler_linear(),
         }
     }
 
-    pub fn new_io(window: &Window, input: Slot, output: Slot) -> Self {
+    pub fn new_io(input: Slot, output: Slot) -> Self {
         Self {
             input,
             output,
-            // sampler: window.factory().borrow_mut().create_sampler_linear(),
         }
     }
 
@@ -80,7 +157,6 @@ impl NodeSlots {
         Self {
             input: Slot::Empty,
             output: self.input,
-            // sampler: self.sampler,
         }
     }
 
@@ -106,7 +182,6 @@ impl NodeSlots {
                     covariances_target
                 },
                 output: self.output,
-                // sampler: self.sampler,
             },
         }
     }
@@ -155,7 +230,6 @@ impl NodeSlots {
                         covariances_source: covariances_target.as_texture(),
                         covariances_target
                     },
-                    // sampler: self.sampler,
                 }
             }
             Slot::Rgb { .. } => self,
@@ -176,7 +250,6 @@ impl NodeSlots {
                     covariances_source,
                     covariances_target
                 },
-                // sampler: self.sampler,
             }},
         }
     }
@@ -240,7 +313,6 @@ impl NodeSlots {
     //                     covariances_source,
     //                     covariances_target
     //                 },
-    //                 sampler: self.sampler,
     //             }
     //         }
     //         Slot::Rgb {                 
@@ -270,7 +342,6 @@ impl NodeSlots {
     //                     covariances_source,
     //                     covariances_target
     //                 },
-    //                 sampler: self.sampler,
     //             }
     //         }
     //         Slot::RgbDepth { .. } => self,
@@ -299,7 +370,6 @@ impl NodeSlots {
                 covariances_source: covariances_target.as_texture(),
                 covariances_target
             },
-            // sampler: self.sampler,
         }
     }
 
@@ -328,7 +398,6 @@ impl NodeSlots {
                 covariances_source: covariances_target.as_texture(),
                 covariances_target
             },
-            // sampler: self.sampler,
         }
     }
 
@@ -500,40 +569,40 @@ impl NodeSlots {
         }
     }
 
-    pub fn as_all_output(
+    pub fn as_all_target(
         &self,
-    ) -> (
-        RenderTexture,
-        RenderTexture,
-        RenderTexture,
-        RenderTexture,
-        RenderTexture,
-        RenderTexture,
-    ) {
+    ) -> ColorDepthTargets {
         match &self.output {
             Slot::Empty | Slot::Rgb { .. } => {
                 panic!("RGBD output expected");
             }
             Slot::RgbDepth { color_target, depth_target, deflection_target, color_change_target, color_uncertainty_target, covariances_target, .. } 
-            => (color_target.clone(), depth_target.clone(), deflection_target.clone(), color_change_target.clone(), color_uncertainty_target.clone(),covariances_target.clone()),
+            => ColorDepthTargets{
+                rt_color: color_target.clone(),
+                rt_depth: depth_target.clone(),
+                rt_deflection: deflection_target.clone(),
+                rt_color_change: color_change_target.clone(),
+                rt_color_uncertainty: color_uncertainty_target.clone(),
+                rt_covariances: covariances_target.clone()
+            },
         }
     }
 
-    pub fn as_all_color_output(
+    pub fn as_all_colors_target(
         &self,
-    ) -> (
-        RenderTexture,
-        RenderTexture,
-        RenderTexture,
-        RenderTexture,
-        RenderTexture,
-    ) {
+    ) -> ColorTargets {
         match &self.output {
             Slot::Empty | Slot::RgbDepth { .. } => {
                 panic!("RGB output expected");
             }
             Slot::Rgb { color_target, deflection_target, color_change_target, color_uncertainty_target, covariances_target, .. } 
-            => (color_target.clone(), deflection_target.clone(), color_change_target.clone(), color_uncertainty_target.clone(),covariances_target.clone()),
+            => ColorTargets{
+                rt_color: color_target.clone(),
+                rt_deflection: deflection_target.clone(),
+                rt_color_change: color_change_target.clone(),
+                rt_color_uncertainty: color_uncertainty_target.clone(),
+                rt_covariances: covariances_target.clone()
+            },
         }
     }
 

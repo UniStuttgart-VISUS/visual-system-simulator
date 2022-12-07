@@ -208,6 +208,21 @@ pub fn create_textures_bind_group(device: &wgpu::Device, textures: &[&Texture])
     (layout, bind_group)
 }
 
+pub fn create_color_sources_bind_group(device: &wgpu::Device, queue: &wgpu::Queue, node_name: &str)
+    -> (wgpu::BindGroupLayout, wgpu::BindGroup)
+    {
+    create_textures_bind_group(
+        &device,
+        &[
+            &placeholder_texture(&device, &queue, Some(format!("{}{}", node_name, " s_color (placeholder)").as_str())).unwrap(),
+            &placeholder_highp_texture(&device, &queue, Some(format!("{}{}", node_name, " s_deflection (placeholder)").as_str())).unwrap(),
+            &placeholder_highp_texture(&device, &queue, Some(format!("{}{}", node_name, " s_color_change (placeholder)").as_str())).unwrap(),
+            &placeholder_highp_texture(&device, &queue, Some(format!("{}{}", node_name, " s_color_uncertainty (placeholder)").as_str())).unwrap(),
+            &placeholder_highp_texture(&device, &queue, Some(format!("{}{}", node_name, " s_covariances (placeholder)").as_str())).unwrap(),
+        ],
+    )
+}
+
 ///
 /// Can be used to replace parts of or a whole texture.
 ///
@@ -367,7 +382,7 @@ pub fn placeholder_highp_texture(
         &[0; 16],
         1, 1,
         sampler,
-        HighpFormat,
+        HIGHP_FORMAT,
         label)
 }
 
@@ -699,7 +714,7 @@ pub fn create_depth_rt(
     height: u32,
     label: Option<&str>,
 ) -> RenderTexture{
-    create_render_texture(device, width, height, DepthFormat, create_sampler_linear(device), label)
+    create_render_texture(device, width, height, DEPTH_FORMAT, create_sampler_linear(device), label)
 }
 
 pub fn create_color_rt(
@@ -708,7 +723,7 @@ pub fn create_color_rt(
     height: u32,
     label: Option<&str>,
 ) -> RenderTexture{
-    create_render_texture(device, width, height, ColorFormat, create_sampler_linear(device), label)
+    create_render_texture(device, width, height, COLOR_FORMAT, create_sampler_linear(device), label)
 }
 
 pub fn create_highp_rt(
@@ -717,7 +732,7 @@ pub fn create_highp_rt(
     height: u32,
     label: Option<&str>,
 ) -> RenderTexture{
-    create_render_texture(device, width, height, HighpFormat, create_sampler_nearest(device), label)
+    create_render_texture(device, width, height, HIGHP_FORMAT, create_sampler_nearest(device), label)
 }
 
 /// Creates a texture that can be read from in shaders (view) and rendered to (render target).
@@ -762,27 +777,26 @@ pub fn placeholder_depth_rt(
     device: &wgpu::Device,
     label: Option<&str>,
 ) -> RenderTexture{
-    create_render_texture(device, 1, 1, DepthFormat, create_sampler_linear(device), label)
+    create_render_texture(device, 1, 1, DEPTH_FORMAT, create_sampler_linear(device), label)
 }
 
 pub fn placeholder_color_rt(
     device: &wgpu::Device,
     label: Option<&str>,
 ) -> RenderTexture{
-    create_render_texture(device, 1, 1, ColorFormat, create_sampler_linear(device), label)
+    create_render_texture(device, 1, 1, COLOR_FORMAT, create_sampler_linear(device), label)
 }
 
 pub fn placeholder_highp_rt(
     device: &wgpu::Device,
     label: Option<&str>,
 ) -> RenderTexture{
-    create_render_texture(device, 1, 1, HighpFormat, create_sampler_nearest(device), label)
+    create_render_texture(device, 1, 1, HIGHP_FORMAT, create_sampler_nearest(device), label)
 }
 
 pub fn placeholder_rt(
     device: &wgpu::Device,
     format: wgpu::TextureFormat,
-    filterMode: wgpu::FilterMode,
     sampler: Sampler,
     label: Option<&str>,
 ) -> RenderTexture{
