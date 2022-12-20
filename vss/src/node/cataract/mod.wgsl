@@ -11,14 +11,6 @@ struct Uniforms{
 @group(0) @binding(0)
 var<uniform> uniforms: Uniforms;
 
-struct FragmentOutput {
-    @location(0) color: vec4<f32>,
-    @location(1) deflection: vec4<f32>,
-    @location(2) color_change: vec4<f32>,
-    @location(3) color_uncertainty: vec4<f32>,
-    @location(4) covariances: vec4<f32>,
-};
-
 fn lowerContrastBy(color: vec4<f32>, S: ptr<function, mat3x3<f32>>, value: f32) -> vec4<f32>{
     var newColor = color;
     if (color.r > color.g && color.r > color.b) {
@@ -51,6 +43,14 @@ fn lowerContrastBy(color: vec4<f32>, S: ptr<function, mat3x3<f32>>, value: f32) 
 }
 
 // Fragment shader
+
+struct FragmentOutput {
+    @location(0) color: vec4<f32>,
+    @location(1) deflection: vec4<f32>,
+    @location(2) color_change: vec4<f32>,
+    @location(3) color_uncertainty: vec4<f32>,
+    @location(4) covariances: vec4<f32>,
+};
 
 @group(1) @binding(0)
 var in_color_s: sampler;

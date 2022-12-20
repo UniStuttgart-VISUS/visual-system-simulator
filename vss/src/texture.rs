@@ -2,10 +2,7 @@ use env_logger::fmt::Color;
 use wgpu::{TextureView, RenderPassColorAttachment, RenderPassDepthStencilAttachment};
 
 use crate::*;
-// use gfx::Factory;
-// use gfx_device_gl::CommandBuffer;
-// use gfx_device_gl::Resources;
-// use std::io::Cursor;
+use std::io::Cursor;
 use core::num::NonZeroU32;
 use std::{rc::Rc};
 
@@ -14,6 +11,7 @@ pub struct Texture {
     pub texture: Rc<wgpu::Texture>,
     pub view: Rc<wgpu::TextureView>,
     pub sampler: Rc<Sampler>,
+    pub view_dimension: wgpu::TextureViewDimension,
     pub width: u32,
     pub height: u32,
 }
@@ -22,6 +20,7 @@ pub struct RenderTexture{
     pub texture: Option<Rc<wgpu::Texture>>,
     pub view: Rc<wgpu::TextureView>,
     pub sampler: Rc<Sampler>,
+    pub view_dimension: wgpu::TextureViewDimension,
     pub width: u32,
     pub height: u32,
 }
@@ -34,7 +33,7 @@ pub struct Sampler{
 
 impl Texture{
     pub fn create_bind_group(&self, device: &wgpu::Device)-> (wgpu::BindGroupLayout, wgpu::BindGroup){
-        create_texture_bind_group(device, self.view.as_ref(), self.sampler.as_ref())
+        create_texture_bind_group(device, self)
     }
     
     pub fn clone(&self) -> Texture{
@@ -42,6 +41,7 @@ impl Texture{
             texture: self.texture.clone(),
             view: self.view.clone(),
             sampler: self.sampler.clone(),
+            view_dimension: self.view_dimension,
             width: self.width,
             height: self.height,
         }
@@ -50,7 +50,7 @@ impl Texture{
 
 impl RenderTexture{
     pub fn create_bind_group(&self, device: &wgpu::Device)-> (wgpu::BindGroupLayout, wgpu::BindGroup){
-        create_texture_bind_group(device, self.view.as_ref(), self.sampler.as_ref())
+        create_texture_bind_group(device, &self.as_texture())
     }
 
     pub fn clone(&self) -> RenderTexture{
@@ -58,6 +58,7 @@ impl RenderTexture{
             texture: self.texture.clone(),
             view: self.view.clone(),
             sampler: self.sampler.clone(),
+            view_dimension: self.view_dimension,
             width: self.width,
             height: self.height,
         }
@@ -68,6 +69,7 @@ impl RenderTexture{
             texture: self.texture.clone().unwrap(),
             view: self.view.clone(),
             sampler: self.sampler.clone(),
+            view_dimension: self.view_dimension,
             width: self.width,
             height: self.height,
         }
@@ -101,7 +103,7 @@ impl RenderTexture{
     }
 }
 
-fn create_texture_bind_group(device: &wgpu::Device, view: &TextureView, sampler: &Sampler) 
+fn create_texture_bind_group(device: &wgpu::Device, texture: &Texture) 
     -> (wgpu::BindGroupLayout, wgpu::BindGroup)
     {
     let layout =
@@ -112,15 +114,15 @@ fn create_texture_bind_group(device: &wgpu::Device, view: &TextureView, sampler:
                 visibility: wgpu::ShaderStages::FRAGMENT,
                 ty: wgpu::BindingType::Texture {
                     multisampled: false,
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    sample_type: wgpu::TextureSampleType::Float { filterable: sampler.filterable },
+                    view_dimension: texture.view_dimension,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: texture.sampler.filterable },
                 },
                 count: None,
             },
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
                 visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Sampler(sampler.binding_type),
+                ty: wgpu::BindingType::Sampler(texture.sampler.binding_type),
                 count: None,
             },
         ],
@@ -132,11 +134,11 @@ fn create_texture_bind_group(device: &wgpu::Device, view: &TextureView, sampler:
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::TextureView(view),
+                resource: wgpu::BindingResource::TextureView(texture.view.as_ref()),
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::Sampler(&sampler.sampler),
+                resource: wgpu::BindingResource::Sampler(&texture.sampler.sampler),
             },
         ],
         label: Some("texture_bind_group"),
@@ -351,6 +353,7 @@ pub fn load_texture_from_bytes(
         texture: Rc::new(texture),
         view: Rc::new(view),
         sampler: Rc::new(sampler),
+        view_dimension: wgpu::TextureViewDimension::D2,
         width,
         height,
     })
@@ -422,81 +425,130 @@ pub fn create_sampler_nearest(device: &wgpu::Device) -> Sampler{
     }
 }
 
-// pub fn load_cubemap(
-//     factory: &mut gfx_device_gl::Factory,
-//     mut data: Vec<Cursor<Vec<u8>>>,
-// ) -> Result<
-//     (
-//         gfx::handle::Texture<Resources, gfx::format::R8_G8_B8_A8>,
-//         gfx::handle::ShaderResourceView<Resources, [f32; 4]>,
-//     ),
-//     String,
-// > {
-//     let mut raw_data: [Vec<u8>; 6] = Default::default();
-//     let mut last_width = 0;
-//     for i in 0..6 {
-//         let img = image::load(data.remove(0), image::ImageFormat::Png)
-//             .unwrap()
-//             .flipv()
-//             .to_rgba8();
-//         let (width, height) = img.dimensions();
-//         let raw = img.into_raw();
-//         raw_data[i] = raw;
-//         assert!(width == height, "width must be equal to height in cubemaps");
-//         if i > 0 {
-//             assert!(width == last_width, "sizes of all cubemap sides must be equal");
-//         }
-//         last_width = width;
-//     }
+pub fn load_cubemap(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    mut data: Vec<Cursor<Vec<u8>>>,
+    sampler: Sampler,
+    format: wgpu::TextureFormat,
+    label: Option<&str>,
+) -> Result<Texture, String> {
+    let mut raw_data: [Vec<u8>; 6] = Default::default();
+    let mut last_width = 0;
+    for i in 0..6 {
+        let img = image::load(data.remove(0), image::ImageFormat::Png)
+            .unwrap()
+            .flipv()
+            .to_rgba8();
+        let (width, height) = img.dimensions();
+        let raw = img.into_raw();
+        raw_data[i] = raw;
+        assert!(width == height, "width must be equal to height in cubemaps");
+        if i > 0 {
+            assert!(width == last_width, "sizes of all cubemap sides must be equal");
+        }
+        last_width = width;
+    }
 
-//     load_cubemap_from_bytes(factory, &[raw_data[0].as_slice(), raw_data[1].as_slice(), raw_data[2].as_slice(), raw_data[3].as_slice(), raw_data[4].as_slice(), raw_data[5].as_slice()], last_width)
-// }
+    let data = [raw_data[0].as_slice(), raw_data[1].as_slice(), raw_data[2].as_slice(), raw_data[3].as_slice(), raw_data[4].as_slice(), raw_data[5].as_slice()];
+
+    load_cubemap_from_bytes(device, queue, &data.concat(), last_width, sampler, format, label)
+}
 
 //copy of load_texture_from_bytes
-// pub fn load_cubemap_from_bytes(
-//     factory: &mut gfx_device_gl::Factory,
-//     data: &[&[u8];6],
-//     width: u32,
-// ) -> Result<
-//     (
-//         gfx::handle::Texture<Resources, gfx::format::R8_G8_B8_A8>,
-//         gfx::handle::ShaderResourceView<Resources, [f32; 4]>,
-//     ),
-//     String,
-// > {
-//     let kind = texture::Kind::Cube(
-//         width as texture::Size,
-//     );
+pub fn load_cubemap_from_bytes(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    data: &[u8],
+    width: u32,
+    sampler: Sampler,
+    format: wgpu::TextureFormat,
+    label: Option<&str>,
+) -> Result<Texture, String> {
+    let size = wgpu::Extent3d {
+        width,
+        height: width,
+        depth_or_array_layers: 6,
+    };
 
-//     // inspired by https://github.com/PistonDevelopers/gfx_texture/blob/master/src/lib.rs#L157-L178
-//     use gfx::memory::Typed;
-//     use gfx::memory::Usage;
-//     use gfx::{format, texture};
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label,
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: format,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+    });
 
-//     let surface = gfx::format::SurfaceType::R8_G8_B8_A8;
-//     let desc = texture::Info {
-//         kind,
-//         levels: 1 as texture::Level,
-//         format: surface,
-//         bind: gfx::memory::Bind::all(),
-//         usage: Usage::Dynamic,
-//     };
+    let view = texture.create_view(&wgpu::TextureViewDescriptor{
+        format: Some(format),
+        dimension: Some(wgpu::TextureViewDimension::Cube),
+        aspect: wgpu::TextureAspect::default(),
+        base_mip_level: 0,
+        mip_level_count: NonZeroU32::new(1),
+        base_array_layer: 0, // this is wrong; setting to 6 gets rid of some errors
+        array_layer_count: NonZeroU32::new(6),
+        label,
+    });
 
-//     let cty = gfx::format::ChannelType::Unorm;
-//     let raw = factory
-//         .create_texture_raw(
-//             desc,
-//             Some(cty),
-//             Some((data, gfx::texture::Mipmap::Allocated)),
-//         )
-//         .unwrap();
-//     let levels = (0, raw.get_info().levels - 1);
-//     let tex = Typed::new(raw);
-//     let view = factory
-//         .view_texture_as_shader_resource::<ColorFormat>(&tex, levels, format::Swizzle::new())
-//         .unwrap();
-//     Ok((tex, view))
-// }
+    queue.write_texture(
+        wgpu::ImageCopyTexture {
+            aspect: wgpu::TextureAspect::All,
+            texture: &texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+        },
+        data,
+        wgpu::ImageDataLayout {
+            offset: 0,
+            bytes_per_row: NonZeroU32::new(4 * width),
+            rows_per_image: NonZeroU32::new(width),
+        },
+        size,
+    );
+
+    Ok(Texture {
+        texture: Rc::new(texture),
+        view: Rc::new(view),
+        sampler: Rc::new(sampler),
+        view_dimension: wgpu::TextureViewDimension::Cube,
+        width,
+        height: width,
+    })
+    // let kind = texture::Kind::Cube(
+    //     width as texture::Size,
+    // );
+
+    // // inspired by https://github.com/PistonDevelopers/gfx_texture/blob/master/src/lib.rs#L157-L178
+    // use gfx::memory::Typed;
+    // use gfx::memory::Usage;
+    // use gfx::{format, texture};
+
+    // let surface = gfx::format::SurfaceType::R8_G8_B8_A8;
+    // let desc = texture::Info {
+    //     kind,
+    //     levels: 1 as texture::Level,
+    //     format: surface,
+    //     bind: gfx::memory::Bind::all(),
+    //     usage: Usage::Dynamic,
+    // };
+
+    // let cty = gfx::format::ChannelType::Unorm;
+    // let raw = factory
+    //     .create_texture_raw(
+    //         desc,
+    //         Some(cty),
+    //         Some((data, gfx::texture::Mipmap::Allocated)),
+    //     )
+    //     .unwrap();
+    // let levels = (0, raw.get_info().levels - 1);
+    // let tex = Typed::new(raw);
+    // let view = factory
+    //     .view_texture_as_shader_resource::<ColorFormat>(&tex, levels, format::Swizzle::new())
+    //     .unwrap();
+    // Ok((tex, view))
+}
 
 
 ///
@@ -768,6 +820,7 @@ pub fn create_render_texture(
         texture: Some(Rc::new(texture)),
         view: Rc::new(view),
         sampler: Rc::new(sampler),
+        view_dimension: wgpu::TextureViewDimension::D2,
         width,
         height,
     }

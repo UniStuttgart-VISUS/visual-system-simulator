@@ -18,16 +18,26 @@ pub async fn run() {
     window.add_node(Box::new(node), 0);
     let node = Cataract::new(&window);
     window.add_node(Box::new(node), 0);
+    let node = Retina::new(&window);
+    window.add_node(Box::new(node), 0);
     let node = Display::new(&window);
     window.add_node(Box::new(node), 0);
     window.update_nodes();
 
-    window.set_value("ct_onoff".to_string(), Value::Bool(true), 0);
-    window.set_value("ct_blur_factor".to_string(), Value::Number(50.0), 0);
-    window.set_value("ct_contrast_factor".to_string(), Value::Number(50.0), 0);
-    window.set_value("peacock_cb_onoff".to_string(), Value::Bool(true), 0);
-    window.set_value("peacock_cb_strength".to_string(), Value::Number(1.0), 0);
-    window.set_value("peacock_cb_type".to_string(), Value::Number(0.0), 0);
+    let mut values = ValueMap::new();
+    values.insert("ct_onoff".to_string(), Value::Bool(false));
+    values.insert("ct_blur_factor".to_string(), Value::Number(50.0));
+    values.insert("ct_contrast_factor".to_string(), Value::Number(50.0));
+    values.insert("peacock_cb_onoff".to_string(), Value::Bool(false));
+    values.insert("peacock_cb_strength".to_string(), Value::Number(1.0));
+    values.insert("peacock_cb_type".to_string(), Value::Number(0.0));
+    values.insert("maculardegeneration_veasy".to_string(), Value::Bool(true));
+    values.insert("maculardegeneration_inteasy".to_string(), Value::Number(50.0));
+    values.insert("maculardegeneration_onoff".to_string(), Value::Bool(true));
+    values.insert("colorblindness_type".to_string(), Value::Number(1.0));
+    values.insert("colorblindness_int".to_string(), Value::Number(100.0));
+    values.insert("colorblindness_onoff".to_string(), Value::Bool(true));
+    window.set_values(values, 0);
 
     while !window.poll_events() {}
 }

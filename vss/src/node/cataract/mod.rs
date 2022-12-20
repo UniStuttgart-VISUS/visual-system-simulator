@@ -29,24 +29,24 @@ impl Node for Cataract {
                 track_error: 0,
             });
 
-            let (sources_bind_group_layout, sources_bind_group) = create_color_sources_bind_group(&device, &queue, "Cataract");
-    
-            let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some("Cataract Shader"),
-                source: wgpu::ShaderSource::Wgsl(concat!(
-                    include_str!("../common.wgsl"),
-                    include_str!("../vert.wgsl"),
-                    include_str!("mod.wgsl")).into()),
-            });
-    
-            let pipeline = create_render_pipeline(
-                &device,
-                &[&shader, &shader],
-                &["vs_main", "fs_main"],
-                &[&uniforms.bind_group_layout, &sources_bind_group_layout],
-                &all_color_states(),
-                None,
-                Some("Peacock Render Pipeline"));
+        let (sources_bind_group_layout, sources_bind_group) = create_color_sources_bind_group(&device, &queue, "Cataract");
+
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Cataract Shader"),
+            source: wgpu::ShaderSource::Wgsl(concat!(
+                include_str!("../common.wgsl"),
+                include_str!("../vert.wgsl"),
+                include_str!("mod.wgsl")).into()),
+        });
+
+        let pipeline = create_render_pipeline(
+            &device,
+            &[&shader, &shader],
+            &["vs_main", "fs_main"],
+            &[&uniforms.bind_group_layout, &sources_bind_group_layout],
+            &all_color_states(),
+            None,
+            Some("Peacock Render Pipeline"));
 
         Cataract {
             pipeline,

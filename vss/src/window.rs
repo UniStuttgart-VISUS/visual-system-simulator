@@ -735,6 +735,7 @@ impl Window {
                         texture: None,
                         view: Rc::new(view),
                         sampler: Rc::new(sampler),
+                        view_dimension: wgpu::TextureViewDimension::D2,
                         width: self.window_size.width,
                         height: self.window_size.height,
                     };

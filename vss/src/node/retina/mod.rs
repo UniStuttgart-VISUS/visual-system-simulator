@@ -3,97 +3,111 @@ mod retina_map;
 use self::retina_map::generate_retina_map;
 use super::*;
 use cgmath::{Matrix4, Point3, SquareMatrix, Vector3};
-use gfx;
-use gfx::format::Rgba32F;
 
 
-gfx_defines! {
-    pipeline pipe {
-        u_resolution: gfx::Global<[f32; 2]> = "u_resolution",
-        u_proj: gfx::Global<[[f32; 4];4]> = "u_proj",
-        s_source: gfx::TextureSampler<[f32; 4]> = "s_color",
-        s_retina: gfx::TextureSampler<[f32; 4]> = "s_retina",
-        rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
-        s_deflection: gfx::TextureSampler<[f32; 4]> = "s_deflection",
-        rt_deflection: gfx::RenderTarget<Rgba32F> = "rt_deflection",
-        s_color_change: gfx::TextureSampler<[f32; 4]> = "s_color_change",
-        rt_color_change: gfx::RenderTarget<Rgba32F> = "rt_color_change",
-        s_color_uncertainty: gfx::TextureSampler<[f32; 4]> = "s_color_uncertainty",
-        rt_color_uncertainty: gfx::RenderTarget<Rgba32F> = "rt_color_uncertainty",
-        s_covariances: gfx::TextureSampler<[f32; 4]> = "s_covariances",
-        rt_covariances: gfx::RenderTarget<Rgba32F> = "rt_covariances",
-        u_achromatopsia_blur_factor: gfx::Global<f32> = "u_achromatopsia_blur_factor",
-        u_track_error: gfx::Global<i32> = "u_track_error",
+// gfx_defines! {
+//     pipeline pipe {
+//         u_resolution: gfx::Global<[f32; 2]> = "u_resolution",
+//         u_proj: gfx::Global<[[f32; 4];4]> = "u_proj",
+//         s_source: gfx::TextureSampler<[f32; 4]> = "s_color",
+//         s_retina: gfx::TextureSampler<[f32; 4]> = "s_retina",
+//         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
+//         s_deflection: gfx::TextureSampler<[f32; 4]> = "s_deflection",
+//         rt_deflection: gfx::RenderTarget<Rgba32F> = "rt_deflection",
+//         s_color_change: gfx::TextureSampler<[f32; 4]> = "s_color_change",
+//         rt_color_change: gfx::RenderTarget<Rgba32F> = "rt_color_change",
+//         s_color_uncertainty: gfx::TextureSampler<[f32; 4]> = "s_color_uncertainty",
+//         rt_color_uncertainty: gfx::RenderTarget<Rgba32F> = "rt_color_uncertainty",
+//         s_covariances: gfx::TextureSampler<[f32; 4]> = "s_covariances",
+//         rt_covariances: gfx::RenderTarget<Rgba32F> = "rt_covariances",
+//         u_achromatopsia_blur_factor: gfx::Global<f32> = "u_achromatopsia_blur_factor",
+//         u_track_error: gfx::Global<i32> = "u_track_error",
 
-    }
+//     }
+// }
+
+struct Uniforms{
+    proj: [[f32; 4];4],
+    resolution: [f32; 2],
+    achromatopsia_blur_factor: f32,
+    track_error: i32,
 }
 
 pub struct Retina {
-    pso: gfx::PipelineState<Resources, pipe::Meta>,
-    pso_data: pipe::Data<Resources>,
+    pipeline: wgpu::RenderPipeline,
+    uniforms: ShaderUniforms<Uniforms>,
+    sources_bind_group: wgpu::BindGroup,
+    retina_bind_group: wgpu::BindGroup,
+    targets: ColorTargets,
 }
 
 impl Node for Retina {
     fn new(window: &Window) -> Self {
-        let mut factory = window.factory().borrow_mut();
-        let pso = factory
-            .create_pipeline_simple(
-                &include_glsl!("../mod.vert"),
-                &include_glsl!("mod.frag"),
-                pipe::new(),
-            )
-            .unwrap();
+        let device = window.device().borrow_mut();
+        let queue = window.queue().borrow_mut();
 
-        let (_, mask_view) = load_cubemap_from_bytes(&mut factory, &[&[255; 4]; 6], 1).unwrap();
-        let sampler = factory.create_sampler_linear();
+        let uniforms = ShaderUniforms::new(&device, 
+            Uniforms{
+                proj: [[0.0; 4]; 4],
+                resolution: [0.0; 2],
+                achromatopsia_blur_factor: 0.0,
+                track_error: 0,
+            });
 
-        let (_, src, dst) = factory.create_render_target(1, 1).unwrap();
-        let (_, s_deflection, rt_deflection) = factory.create_render_target(1, 1).unwrap();
-        let (_, s_color_change, rt_color_change) = factory.create_render_target(1, 1).unwrap();
-        let (_, s_color_uncertainty, rt_color_uncertainty) = factory.create_render_target(1, 1).unwrap();
-        let (_, s_covariances, rt_covariances) = factory.create_render_target(1, 1).unwrap();
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Retina Shader"),
+            source: wgpu::ShaderSource::Wgsl(concat!(
+                include_str!("../common.wgsl"),
+                include_str!("../vert.wgsl"),
+                include_str!("mod.wgsl")).into()),
+        });
+
+        let (retina_layout, retina_bind_group) = load_cubemap_from_bytes(
+            &device,
+            &queue,
+            &[0; 4*6],
+            1,
+            create_sampler_linear(&device),
+            wgpu::TextureFormat::Rgba8Unorm,
+            Some("Retina Texture placeholder")
+        ).unwrap().create_bind_group(&device);
+
+        let (sources_bind_group_layout, sources_bind_group) = create_color_sources_bind_group(&device, &queue, "Cataract");
+
+        let pipeline = create_render_pipeline(
+            &device,
+            &[&shader, &shader],
+            &["vs_main", "fs_main"],
+            &[&uniforms.bind_group_layout, &sources_bind_group_layout, &retina_layout],
+            &all_color_states(),
+            None,
+            Some("Retina Render Pipeline"));
 
         Retina {
-            pso,
-            pso_data: pipe::Data {
-                u_resolution: [1.0, 1.0],
-                u_proj: Matrix4::from_scale(1.0).into(),
-                s_source: (src, sampler.clone()),
-                s_retina: (mask_view, sampler.clone()),
-                rt_color: dst,
-                s_deflection:(s_deflection, sampler.clone()),
-                rt_deflection,
-                s_color_change:(s_color_change, sampler.clone()),
-                rt_color_change,
-                s_color_uncertainty:(s_color_uncertainty, sampler.clone()),
-                rt_color_uncertainty,
-                s_covariances: (s_covariances, sampler.clone()),
-                rt_covariances,
-                u_achromatopsia_blur_factor: 1.0,
-                u_track_error: 0
-
-            },
+            pipeline,
+            uniforms,
+            sources_bind_group,
+            retina_bind_group,
+            targets: ColorTargets::new(&device, "Retina"),
         }
     }
 
     fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
         let slots = slots.to_color_input(window).to_color_output(window);
-        self.pso_data.u_resolution = slots.output_size_f32();
-        self.pso_data.s_source = slots.as_color_view();
-        self.pso_data.rt_color = slots.as_color();
-        self.pso_data.s_deflection = slots.as_deflection_view();
-        self.pso_data.rt_deflection = slots.as_deflection();
-        self.pso_data.s_color_change = slots.as_color_change_view();
-        self.pso_data.rt_color_change = slots.as_color_change();  
-        self.pso_data.s_color_uncertainty = slots.as_color_uncertainty_view();
-        self.pso_data.rt_color_uncertainty = slots.as_color_uncertainty();
-        self.pso_data.s_covariances = slots.as_covariances_view();
-        self.pso_data.rt_covariances = slots.as_covariances();
+        self.uniforms.data.resolution = slots.output_size_f32();
+
+        let slots = slots.to_color_input(window).to_color_output(window);
+        let device = window.device().borrow_mut();
+
+        self.sources_bind_group = slots.as_all_colors_source(&device);
+        self.targets = slots.as_all_colors_target();
         slots
     }
 
     fn update_values(&mut self, window: &Window, values: &ValueMap) {
-        let mut factory = window.factory().borrow_mut();
+        let device = window.device().borrow_mut();
+        let queue = window.queue().borrow_mut();
+
         let mut image_data = Vec::new();
         if let Some(Value::Image(retina_map_pos_x_path)) = values.get("retina_map_pos_x_path") {
             image_data.push(load(retina_map_pos_x_path));
@@ -114,16 +128,21 @@ impl Node for Retina {
             image_data.push(load(retina_map_neg_z_path));
         }
         if let Some(Value::Number(achromatopsia_blur_factor)) = values.get("achromatopsia_blur_factor") {
-            self.pso_data.u_achromatopsia_blur_factor = *achromatopsia_blur_factor as f32;
+            self.uniforms.data.achromatopsia_blur_factor = *achromatopsia_blur_factor as f32;
         }
         if image_data.len() == 6 {
-            let (_, retinamap_view) = load_cubemap(&mut factory, image_data).unwrap();
-            self.pso_data.s_retina = (retinamap_view, self.pso_data.s_retina.clone().1);
+            (_, self.retina_bind_group) = load_cubemap(
+                &device,
+                &queue,
+                image_data,
+                create_sampler_linear(&device),
+                wgpu::TextureFormat::Rgba8Unorm,
+                Some("Retina Texture from Images")).unwrap().create_bind_group(&device);
         } else {
             let proj_val = Value::Matrix(Matrix4::from_scale(1.0));
             let projection = values.get("proj_matrix").unwrap_or(&proj_val).as_matrix().unwrap();
-            let res_x = (self.pso_data.u_resolution[0] * 2.0 * projection[0][0]) as f32;
-            let res_y = (self.pso_data.u_resolution[1] * 2.0 * projection[1][1]) as f32;
+            let res_x = (self.uniforms.data.resolution[0] * 2.0 * projection[0][0]) as f32;
+            let res_y = (self.uniforms.data.resolution[1] * 2.0 * projection[1][1]) as f32;
             let resolution = (res_x.max(res_y) + 1.0) as u32;
             let cubemap_resolution = (
                 resolution,
@@ -144,28 +163,41 @@ impl Node for Retina {
             //let _ = image::save_buffer(&Path::new("last.retina_neg_y.png"), &retina_map_neg_y, cubemap_resolution.0, cubemap_resolution.1, image::ColorType::Rgba8);
             //let _ = image::save_buffer(&Path::new("last.retina_pos_z.png"), &retina_map_pos_z, cubemap_resolution.0, cubemap_resolution.1, image::ColorType::Rgba8);
             //let _ = image::save_buffer(&Path::new("last.retina_neg_z.png"), &retina_map_neg_z, cubemap_resolution.0, cubemap_resolution.1, image::ColorType::Rgba8);
-            let (_, retinamap_view) = load_cubemap_from_bytes(
-                &mut factory,
-                &[&retina_map_pos_x, &retina_map_neg_x, &retina_map_pos_y, &retina_map_neg_y, &retina_map_pos_z, &retina_map_neg_z],
+            (_, self.retina_bind_group) = load_cubemap_from_bytes(
+                &device,
+                &queue,
+                &([retina_map_pos_x, retina_map_neg_x, retina_map_pos_y, retina_map_neg_y, retina_map_pos_z, retina_map_neg_z].concat()),
                 cubemap_resolution.0,
+                create_sampler_linear(&device),
+                wgpu::TextureFormat::Rgba8Unorm,
+                Some("Retina Texture from bytes")
             )
-            .unwrap();
-
-            self.pso_data.s_retina = (retinamap_view, self.pso_data.s_retina.clone().1);
+            .unwrap().create_bind_group(&device);
         };
     }
 
     fn input(&mut self, perspective: &EyePerspective, vis_param: &VisualizationParameters) -> EyePerspective {
         let gaze_rotation = Matrix4::look_to_lh(Point3::new(0.0, 0.0, 0.0), perspective.gaze, Vector3::unit_y());
         //let gaze_rotation = Matrix4::from_scale(1.0);
-        self.pso_data.u_proj = (gaze_rotation * perspective.proj.invert().unwrap()).into();
+        self.uniforms.data.proj = (gaze_rotation * perspective.proj.invert().unwrap()).into();
         //self.pso_data.u_proj = (head.proj * (Matrix4::from_translation(-head.position) * head.view)).into();
-        self.pso_data.u_track_error = vis_param.has_to_track_error() as i32;
+        self.uniforms.data.track_error = vis_param.has_to_track_error() as i32;
         perspective.clone()
     }
 
-    fn render(&mut self, window: &Window) {
-        let mut encoder = window.encoder().borrow_mut();
-        encoder.draw(&gfx::Slice::from_vertex_count(6), &self.pso, &self.pso_data);
+    fn render(&mut self, window: &window::Window, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
+        self.uniforms.update(&window.queue().borrow_mut());
+        
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Retina render_pass"),
+            color_attachments: &self.targets.color_attachments(screen),
+            depth_stencil_attachment: None,
+        });
+    
+        render_pass.set_pipeline(&self.pipeline);
+        render_pass.set_bind_group(0, &self.uniforms.bind_group, &[]);
+        render_pass.set_bind_group(1, &self.sources_bind_group, &[]);
+        render_pass.set_bind_group(2, &self.retina_bind_group, &[]);
+        render_pass.draw(0..6, 0..1);
     }
 }
