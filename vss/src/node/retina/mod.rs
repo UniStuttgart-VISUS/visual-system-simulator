@@ -4,28 +4,6 @@ use self::retina_map::generate_retina_map;
 use super::*;
 use cgmath::{Matrix4, Point3, SquareMatrix, Vector3};
 
-
-// gfx_defines! {
-//     pipeline pipe {
-//         u_resolution: gfx::Global<[f32; 2]> = "u_resolution",
-//         u_proj: gfx::Global<[[f32; 4];4]> = "u_proj",
-//         s_source: gfx::TextureSampler<[f32; 4]> = "s_color",
-//         s_retina: gfx::TextureSampler<[f32; 4]> = "s_retina",
-//         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
-//         s_deflection: gfx::TextureSampler<[f32; 4]> = "s_deflection",
-//         rt_deflection: gfx::RenderTarget<Rgba32F> = "rt_deflection",
-//         s_color_change: gfx::TextureSampler<[f32; 4]> = "s_color_change",
-//         rt_color_change: gfx::RenderTarget<Rgba32F> = "rt_color_change",
-//         s_color_uncertainty: gfx::TextureSampler<[f32; 4]> = "s_color_uncertainty",
-//         rt_color_uncertainty: gfx::RenderTarget<Rgba32F> = "rt_color_uncertainty",
-//         s_covariances: gfx::TextureSampler<[f32; 4]> = "s_covariances",
-//         rt_covariances: gfx::RenderTarget<Rgba32F> = "rt_covariances",
-//         u_achromatopsia_blur_factor: gfx::Global<f32> = "u_achromatopsia_blur_factor",
-//         u_track_error: gfx::Global<i32> = "u_track_error",
-
-//     }
-// }
-
 struct Uniforms{
     proj: [[f32; 4];4],
     resolution: [f32; 2],

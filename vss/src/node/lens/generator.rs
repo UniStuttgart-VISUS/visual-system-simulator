@@ -1,48 +1,59 @@
 use super::*;
-use gfx;
-use gfx::{texture};
-
-gfx_defines! {
-    pipeline pipe {
-        rt_color: gfx::RenderTarget<(gfx::format::R32_G32_B32_A32, gfx::format::Float)> = "rt_color",
-    }
-}
+use std::iter;
 
 pub struct NormalMapGenerator {
-    pub texture: gfx::handle::Texture<Resources, gfx::format::R32_G32_B32_A32>,
-    pso: gfx::PipelineState<Resources, pipe::Meta>,
-    pso_data: pipe::Data<Resources>,
+    pub texture: RenderTexture,
+    pipeline: wgpu::RenderPipeline,
 }
 
 impl NormalMapGenerator {
     pub fn new(window: &Window) -> Self {
-        let mut factory = window.factory().borrow_mut();
-        let pso = factory
-            .create_pipeline_simple(
-                &include_glsl!("../mod.vert"),
-                &include_glsl!("generator.frag"),
-                pipe::new(),
-            )
-            .unwrap();
+        let device = window.device().borrow_mut();
 
-        let (texture, _, dst) = factory.create_render_target(1, 1).unwrap();
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Generator Shader"),
+            source: wgpu::ShaderSource::Wgsl(concat!(
+                include_str!("../vert.wgsl"),
+                include_str!("generator.wgsl")).into()),
+        });
+
+        let texture = placeholder_highp_rt(&device, Some("Generator RenderTexture placeholder"));
+
+        let pipeline = create_render_pipeline(
+            &device,
+            &[&shader, &shader],
+            &["vs_main", "fs_main"],
+            &[],
+            &[simple_color_state(HIGHP_FORMAT)],
+            None,
+            Some("Generator Render Pipeline"));
 
         NormalMapGenerator {
             texture,
-            pso,
-            pso_data: pipe::Data {
-                rt_color: dst,
-            },
+            pipeline,
         }
     }
 
-    pub fn generate(&mut self, window: &Window, width: texture::Size, height: texture::Size){
-        let mut factory = window.factory().borrow_mut();
-        let (texture, _, dst) = factory.create_render_target(width, height).unwrap();
-        self.texture = texture;
-        self.pso_data = pipe::Data {rt_color: dst};
+    pub fn generate(&mut self, window: &Window, width: u32, height: u32){
+        let device = window.device().borrow_mut();
+        let queue = window.queue().borrow_mut();
+
+        self.texture = create_highp_rt(&device, width, height, Some("Generator RenderTexture"));
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Generator Encoder"),
+        });
         
-        let mut encoder = window.encoder().borrow_mut();
-        encoder.draw(&gfx::Slice::from_vertex_count(6), &self.pso, &self.pso_data);
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Generator render_pass"),
+                color_attachments: &[self.texture.to_color_attachment()],
+                depth_stencil_attachment: None,
+            });
+            render_pass.set_pipeline(&self.pipeline);
+            render_pass.draw(0..6, 0..1);
+        }
+    
+        queue.submit(iter::once(encoder.finish()));
     }
 }

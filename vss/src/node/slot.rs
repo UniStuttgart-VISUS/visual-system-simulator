@@ -515,6 +515,26 @@ impl NodeSlots {
         }
     }
 
+    pub fn as_all_source(&self, device: &wgpu::Device) -> BindGroup {
+        match &self.input {
+            Slot::Empty | Slot::Rgb { .. } => {
+                panic!("RGB Depth input expected");
+            }
+            Slot::RgbDepth { color_source, depth_source, deflection_source, color_change_source, color_uncertainty_source, covariances_source, .. } => {
+                create_textures_bind_group(
+                    device,
+                    &[
+                        color_source,
+                        depth_source,
+                        deflection_source,
+                        color_change_source,
+                        color_uncertainty_source,
+                        covariances_source,
+                    ]).1
+            }
+        }
+    }
+
     pub fn as_color_target(&self) -> RenderTexture{
         match &self.output {
             Slot::Empty | Slot::RgbDepth { .. } => {

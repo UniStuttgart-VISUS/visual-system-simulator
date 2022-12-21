@@ -5,7 +5,7 @@
 //TODO-WGPU mod macros;
 mod cataract;
 mod display;
-//TODO-WGPU mod lens;
+mod lens;
 //TODO-WGPU mod passthrough;
 mod retina;
 mod rgb_buffer;
@@ -27,7 +27,7 @@ use wgpu::util::DeviceExt;
 
 pub use self::cataract::*;
 pub use self::display::*;
-//TODO-WGPU pub use self::lens::*;
+pub use self::lens::*;
 //TODO-WGPU pub use self::passthrough::*;
 pub use self::retina::*;
 pub use self::rgb_buffer::*;
