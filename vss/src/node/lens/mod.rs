@@ -33,6 +33,8 @@ struct Uniforms{
     astigmatism_angle_deg: f32,
     eye_distance_center: f32,
     track_error: i32,
+
+    _padding: i32,
 }
 
 pub struct Lens {
@@ -68,21 +70,17 @@ impl Node for Lens {
                 astigmatism_ecc_mm: 0.0,
                 astigmatism_angle_deg: 0.0,
                 eye_distance_center: 0.0,
-                track_error: 0
+                track_error: 0,
+                _padding: 0,
             });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Lens Shader"),
             source: wgpu::ShaderSource::Wgsl(concat!(
                 include_str!("../vert.wgsl"),
+                include_str!("lens_model.wgsl"),
                 include_str!("mod.wgsl")).into()),
         });
-
-        let (cornea_layout, cornea_bind_group) = placeholder_texture(
-            &device,
-            &queue,
-            Some("Lens-Cornea Texture placeholder")
-        ).unwrap().create_bind_group(&device);
 
         let (normal_layout, normal_bind_group) = placeholder_highp_texture(
             &device,
@@ -90,7 +88,13 @@ impl Node for Lens {
             Some("Lens-Normal Texture placeholder")
         ).unwrap().create_bind_group(&device);
         
-        let (sources_bind_group_layout, sources_bind_group) = create_color_sources_bind_group(&device, &queue, "Cataract");
+        let (cornea_layout, cornea_bind_group) = placeholder_texture(
+            &device,
+            &queue,
+            Some("Lens-Cornea Texture placeholder")
+        ).unwrap().create_bind_group(&device);
+
+        let (sources_bind_group_layout, sources_bind_group) = create_color_depth_sources_bind_group(&device, &queue, "Cataract");
 
         let pipeline = create_render_pipeline(
             &device,
@@ -98,7 +102,7 @@ impl Node for Lens {
             &["vs_main", "fs_main"],
             &[&uniforms.bind_group_layout, &sources_bind_group_layout, &normal_layout, &cornea_layout],
             &all_color_states(),
-            simple_depth_state(DEPTH_FORMAT),
+            None,
             Some("Lens Render Pipeline"));
 
         Lens {
@@ -115,12 +119,13 @@ impl Node for Lens {
     fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
         let slots = slots.to_color_depth_input(window).to_color_output(window);
         let device = window.device().borrow_mut();
+        let queue = window.queue().borrow_mut();
 
         self.sources_bind_group = slots.as_all_source(&device);
         self.targets = slots.as_all_colors_target();
 
         let size = slots.output_size_f32();
-        self.generator.generate(window, size[0] as u32, size[1] as u32);
+        self.generator.generate(&device, &queue, size[0] as u32, size[1] as u32);
         (_, self.normal_bind_group) = self.generator.texture.create_bind_group(&device);
 
         slots

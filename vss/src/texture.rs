@@ -225,6 +225,22 @@ pub fn create_color_sources_bind_group(device: &wgpu::Device, queue: &wgpu::Queu
     )
 }
 
+pub fn create_color_depth_sources_bind_group(device: &wgpu::Device, queue: &wgpu::Queue, node_name: &str)
+    -> (wgpu::BindGroupLayout, wgpu::BindGroup)
+    {
+    create_textures_bind_group(
+        &device,
+        &[
+            &placeholder_texture(&device, &queue, Some(format!("{}{}", node_name, " s_color (placeholder)").as_str())).unwrap(),
+            &placeholder_depth_texture(&device, Some(format!("{}{}", node_name, " s_depth (placeholder)").as_str())).unwrap(),
+            &placeholder_highp_texture(&device, &queue, Some(format!("{}{}", node_name, " s_deflection (placeholder)").as_str())).unwrap(),
+            &placeholder_highp_texture(&device, &queue, Some(format!("{}{}", node_name, " s_color_change (placeholder)").as_str())).unwrap(),
+            &placeholder_highp_texture(&device, &queue, Some(format!("{}{}", node_name, " s_color_uncertainty (placeholder)").as_str())).unwrap(),
+            &placeholder_highp_texture(&device, &queue, Some(format!("{}{}", node_name, " s_covariances (placeholder)").as_str())).unwrap(),
+        ],
+    )
+}
+
 ///
 /// Can be used to replace parts of or a whole texture.
 ///
@@ -372,6 +388,40 @@ pub fn placeholder_texture(
         sampler,
         wgpu::TextureFormat::Rgba8Unorm,
         label)
+}
+
+pub fn placeholder_depth_texture(
+    device: &wgpu::Device,
+    label: Option<&str>,
+) -> Result<Texture, String> {
+    let sampler = create_sampler_linear(device);
+
+    let size = wgpu::Extent3d {
+        width: 1,
+        height: 1,
+        depth_or_array_layers: 1,
+    };
+
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label,
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: DEPTH_FORMAT,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING,
+    });
+
+    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+    Ok(Texture {
+        texture: Rc::new(texture),
+        view: Rc::new(view),
+        sampler: Rc::new(sampler),
+        view_dimension: wgpu::TextureViewDimension::D2,
+        width: 1,
+        height: 1,
+    })
 }
 
 pub fn placeholder_highp_texture(

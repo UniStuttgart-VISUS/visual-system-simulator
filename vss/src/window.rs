@@ -89,7 +89,6 @@ impl Window {
             },
         ).await.unwrap();
 
-
         let (device, queue) = adapter.request_device(
             &wgpu::DeviceDescriptor {
                 features: wgpu::Features::empty(),
@@ -113,6 +112,7 @@ impl Window {
             width: window_size.width,
             height: window_size.height,
             present_mode: wgpu::PresentMode::Fifo,
+            alpha_mode: wgpu::CompositeAlphaMode::Auto,
         };
         surface.configure(&device, &surface_config);
 

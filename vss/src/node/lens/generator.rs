@@ -14,6 +14,7 @@ impl NormalMapGenerator {
             label: Some("Generator Shader"),
             source: wgpu::ShaderSource::Wgsl(concat!(
                 include_str!("../vert.wgsl"),
+                include_str!("lens_model.wgsl"),
                 include_str!("generator.wgsl")).into()),
         });
 
@@ -34,10 +35,7 @@ impl NormalMapGenerator {
         }
     }
 
-    pub fn generate(&mut self, window: &Window, width: u32, height: u32){
-        let device = window.device().borrow_mut();
-        let queue = window.queue().borrow_mut();
-
+    pub fn generate(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, width: u32, height: u32){
         self.texture = create_highp_rt(&device, width, height, Some("Generator RenderTexture"));
 
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {

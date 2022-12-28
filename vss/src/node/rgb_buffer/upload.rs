@@ -1,11 +1,13 @@
 use super::*;
 use std::io::Cursor;
 use std::path::Path;
+use cgmath::SquareMatrix;
 use wgpu::CommandEncoder;
 
 struct Uniforms{
+    inv_proj_view: [[f32; 4];4],
     flags: u32,
-    proj_view: [[f32; 4];4],
+    _padding: [i32; 3],
 }
 
 bitflags! {
@@ -117,8 +119,9 @@ impl Node for UploadRgbBuffer {
 
         let uniforms = ShaderUniforms::new(&device, 
             Uniforms{
+                inv_proj_view: [[0.0; 4]; 4],
                 flags: RgbInputFlags::empty().bits(),
-                proj_view: [[0.0; 4]; 4],
+                _padding: [0; 3],
             });
         
         let source_texture = placeholder_texture(&device, &queue, Some("UploadNode source_texture")).unwrap();
@@ -198,7 +201,7 @@ impl Node for UploadRgbBuffer {
 
     fn input(&mut self, perspective: &EyePerspective, _vis_param: &VisualizationParameters) -> EyePerspective {
         use cgmath::Matrix4;
-        self.uniforms.data.proj_view = (perspective.proj * (Matrix4::from_translation(-perspective.position) * perspective.view)).into();
+        self.uniforms.data.inv_proj_view = (perspective.proj * (Matrix4::from_translation(-perspective.position) * perspective.view)).invert().unwrap().into();
         perspective.clone()
     }
 
