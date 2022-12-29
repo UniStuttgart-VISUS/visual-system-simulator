@@ -1,136 +1,180 @@
 use super::*;
-use gfx;
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
 
-gfx_defines! {
-    pipeline pipe {
-        u_resolution_in: gfx::Global<[f32; 2]> = "u_resolution_in",
-        u_resolution_out: gfx::Global<[f32; 2]> = "u_resolution_out",
-        u_flow_idx: gfx::Global<i32> = "u_flow_idx",
-        s_source_r: gfx::TextureSampler<[f32; 4]> = "s_color_r",
-        s_source_l: gfx::TextureSampler<[f32; 4]> = "s_color_l",
-        rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
+struct Uniforms {
+    resolution_in: [f32; 2],
+    resolution_out: [f32; 2],
+    flow_idx: i32,
+}
+
+pub struct SharedStereoDesktop {
+    idx_ctr: u32,
+    shared: Rc<RefCell<SharedStereoDesktopData>>,
+}
+
+pub struct SharedStereoDesktopData {
+    s_source_r: Option<Texture>,
+    s_source_l: Option<Texture>,
+}
+
+impl SharedStereoDesktop {
+    pub fn new() -> Self {
+        SharedStereoDesktop {
+            idx_ctr: 0,
+            shared: Rc::new(RefCell::new(SharedStereoDesktopData {
+                s_source_r: None,
+                s_source_l: None,
+            })),
+        }
     }
-}
-
-pub struct SharedStereoDesktop{
-  idx_ctr: u32,
-  shared: Rc<RefCell<SharedStereoDesktopData>>
-}
-
-pub struct SharedStereoDesktopData{
-  s_source_r: Option<gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>>,
-  s_source_l: Option<gfx::handle::ShaderResourceView<gfx_device_gl::Resources, [f32; 4]>>
-}
-
-impl SharedStereoDesktop{
-  pub fn new() -> Self{
-    SharedStereoDesktop{
-      idx_ctr: 0,
-      shared: Rc::new(RefCell::new(SharedStereoDesktopData{s_source_r: None, s_source_l: None}))
+    pub fn get_stereo_desktop_node(&mut self, window: &Window) -> StereoDesktop {
+        let desktop = StereoDesktop::new_from_shared(window, self.shared.clone(), self.idx_ctr);
+        self.idx_ctr += 1;
+        desktop
     }
-  }
-  pub fn get_stereo_desktop_node(&mut self,window: &Window,)->StereoDesktop{
-    let desktop = StereoDesktop::new_from_shared(window, self.shared.clone(), self.idx_ctr);
-    self.idx_ctr+=1;
-    desktop
-  }
 }
 
 pub struct StereoDesktop {
-    pso: gfx::PipelineState<Resources, pipe::Meta>,
-    pso_data: pipe::Data<Resources>,
+    pipeline: wgpu::RenderPipeline,
+    uniforms: ShaderUniforms<Uniforms>,
+    source_r: wgpu::BindGroup,
+    source_l: wgpu::BindGroup,
+    target: RenderTexture,
+
     eye_idx: u32,
-    shared: Option<Rc<RefCell<SharedStereoDesktopData>>>,    
+    shared: Option<Rc<RefCell<SharedStereoDesktopData>>>,
 }
 
-impl StereoDesktop{
-  fn new_from_shared(window: &Window, shared: Rc<RefCell<SharedStereoDesktopData>>, eye_idx: u32) -> Self {
-    let mut proto = StereoDesktop::new(window);
-    proto.shared = Some(shared);
-    proto.eye_idx = eye_idx;
-    proto
-  }
+impl StereoDesktop {
+    fn new_from_shared(
+        window: &Window,
+        shared: Rc<RefCell<SharedStereoDesktopData>>,
+        eye_idx: u32,
+    ) -> Self {
+        let mut proto = StereoDesktop::new(window);
+        proto.shared = Some(shared);
+        proto.eye_idx = eye_idx;
+        proto
+    }
 }
 
 impl Node for StereoDesktop {
     fn new(window: &Window) -> Self {
-        let mut factory = window.factory().borrow_mut();
+        let device = window.device().borrow_mut();
+        let queue = window.queue().borrow_mut();
 
-        let pso = factory
-            .create_pipeline_simple(
-              &include_glsl!("mod.vert"),
-              &include_glsl!("mod.frag"),
-                pipe::new(),
-            )
-            .unwrap();
-
-        let sampler = factory.create_sampler_linear();
-        let (_, src_r, dst) = factory.create_render_target(1, 1).unwrap();
-        let (_, src_l, _): (
-            _,
-            _,
-            gfx::handle::RenderTargetView<gfx_device_gl::Resources, [f32; 4]>,
-        ) = factory.create_render_target(1, 1).unwrap();
-        StereoDesktop {
-            pso,
-            pso_data: pipe::Data {
-              u_resolution_in: [1.0, 1.0],
-                u_resolution_out: [1.0, 1.0],
-                u_flow_idx: 0,
-                s_source_r: (src_r, sampler.clone()),
-                s_source_l: (src_l, sampler),
-                rt_color: dst,
+        let uniforms = ShaderUniforms::new(
+            &device,
+            Uniforms {
+                resolution_in: [1.0, 1.0],
+                resolution_out: [1.0, 1.0],
+                flow_idx: 0,
             },
+        );
+
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Stereo Shader"),
+            source: wgpu::ShaderSource::Wgsl(concat!(include_str!("mod.wgsl")).into()),
+        });
+
+        let (source_r_bind_group_layout, source_r_bind_group) = placeholder_texture(
+            &device,
+            &queue,
+            Some("Stereo Shader source_r (placeholder)"),
+        )
+        .unwrap()
+        .create_bind_group(&device);
+
+        let (source_l_bind_group_layout, source_l_bind_group) = placeholder_texture(
+            &device,
+            &queue,
+            Some("Stereo Shader source_l (placeholder)"),
+        )
+        .unwrap()
+        .create_bind_group(&device);
+
+        let target = placeholder_color_rt(&device, Some("Stereo target (placeholder)"));
+
+        let pipeline = create_render_pipeline(
+            &device,
+            &[&shader, &shader],
+            &["vs_main", "fs_main"],
+            &[&uniforms.bind_group_layout, &source_r_bind_group_layout, &source_l_bind_group_layout],
+            &[simple_color_state(COLOR_FORMAT)],
+            None,
+            Some("Stereo Render Pipeline"));
+
+        StereoDesktop {
+            pipeline,
+            uniforms,
+            source_r: source_r_bind_group,
+            source_l: source_l_bind_group,
+            target,
             eye_idx: 0,
-            shared: None
+            shared: None,
         }
     }
 
-    fn input(&mut self, perspective: &EyePerspective, vis_param: &VisualizationParameters) -> EyePerspective {
-      self.pso_data.u_flow_idx = vis_param.eye_idx as i32;
-      perspective.clone()
+    fn input(
+        &mut self,
+        perspective: &EyePerspective,
+        vis_param: &VisualizationParameters,
+    ) -> EyePerspective {
+        self.uniforms.data.flow_idx = vis_param.eye_idx as i32;
+        perspective.clone()
     }
 
     fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
+        let device = window.device().borrow_mut();
+
         let slots = slots.to_color_input(window).to_color_output(window);
-        self.pso_data.u_resolution_in = slots.input_size_f32();
-        self.pso_data.u_resolution_out = slots.output_size_f32();
+        self.uniforms.data.resolution_in = slots.input_size_f32();
+        self.uniforms.data.resolution_out = slots.output_size_f32();
         // self.pso_data.s_source_r = slots.as_color_view();
-        self.pso_data.rt_color = slots.as_color();
-        let cv = slots.as_color_view();
-        match &self.shared{
-          Some(shared) => {
-            let mut guard = shared.borrow_mut();
-            match self.eye_idx {
-              0 => guard.s_source_r = Some(cv.0),
-              1 => guard.s_source_l = Some(cv.0),
-              _ => panic!("More than two eyes")
+        self.target = slots.as_color_target();
+        let (cv, _) = slots.as_color_source(&device);
+        match &self.shared {
+            Some(shared) => {
+                let mut guard = shared.borrow_mut();
+                match self.eye_idx {
+                    0 => guard.s_source_r = Some(cv),
+                    1 => guard.s_source_l = Some(cv),
+                    _ => panic!("More than two eyes"),
+                }
+                match &guard.s_source_r {
+                    Some(tex) => (_, self.source_r) = tex.create_bind_group(&device),
+                    _ => {}
+                }
+                match &guard.s_source_l {
+                    Some(tex) => (_, self.source_l) = tex.create_bind_group(&device),
+                    _ => {}
+                }
             }
-            match &guard.s_source_r{
-              Some(tex) => self.pso_data.s_source_r = (tex.clone(),cv.1.clone()),
-              _ => {}
-            }
-            match &guard.s_source_l{
-              Some(tex) => self.pso_data.s_source_l = (tex.clone(),cv.1.clone()),
-              _ => {}
-            }
-          },
-          None => {}
+            None => {}
         }
 
         slots
     }
 
-    fn render(&mut self, window: &Window) {
-      if self.eye_idx == 1 {
-        // println!("Draw sd");
-        let mut encoder = window.encoder().borrow_mut();
-        encoder.draw(&gfx::Slice::from_vertex_count(6), &self.pso, &self.pso_data);
-      }
-      else{
-        // println!("Skip sd");
-      }
+    fn render(&mut self, window: &window::Window, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
+        if self.eye_idx == 1 {
+            // println!("Draw sd");
+            self.uniforms.update(&window.queue().borrow_mut());
+        
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Stereo render_pass"),
+                color_attachments: &[screen.unwrap_or(&self.target).to_color_attachment()],
+                depth_stencil_attachment: None,
+            });
+        
+            render_pass.set_pipeline(&self.pipeline);
+            render_pass.set_bind_group(0, &self.uniforms.bind_group, &[]);
+            render_pass.set_bind_group(1, &self.source_r, &[]);
+            render_pass.set_bind_group(2, &self.source_l, &[]);
+            render_pass.draw(0..6, 0..1);
+        } else {
+            // println!("Skip sd");
+        }
     }
 }

@@ -96,7 +96,7 @@ impl Node for Cataract {
         self.uniforms.update(&window.queue().borrow_mut());
         
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Peacock render_pass"),
+            label: Some("Cataract render_pass"),
             color_attachments: &self.targets.color_attachments(screen),
             depth_stencil_attachment: None,
         });

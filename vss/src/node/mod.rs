@@ -6,14 +6,14 @@
 mod cataract;
 mod display;
 mod lens;
-//TODO-WGPU mod passthrough;
+mod passthrough;
 mod retina;
 mod rgb_buffer;
 mod slot;
 mod test_node;
 //TODO-WGPU mod yuv_buffer;
 //TODO-WGPU mod vr_compositor;
-//TODO-WGPU mod stereo_desktop;
+mod stereo_desktop;
 //TODO-WGPU mod variance;
 mod peacock;
 
@@ -28,14 +28,14 @@ use wgpu::util::DeviceExt;
 pub use self::cataract::*;
 pub use self::display::*;
 pub use self::lens::*;
-//TODO-WGPU pub use self::passthrough::*;
+pub use self::passthrough::*;
 pub use self::retina::*;
 pub use self::rgb_buffer::*;
 pub use self::slot::*;
 pub use self::test_node::*;
 //TODO-WGPU pub use self::yuv_buffer::*;
 //TODO-WGPU pub use self::vr_compositor::*;
-//TODO-WGPU pub use self::stereo_desktop::*;
+pub use self::stereo_desktop::*;
 //TODO-WGPU pub use self::variance::*;
 pub use self::peacock::*;
 

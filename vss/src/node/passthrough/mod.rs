@@ -12,5 +12,5 @@ impl Node for Passthrough {
         slots.to_passthrough()
     }
 
-    fn render(&mut self, _window: &Window) {}
+    fn render(&mut self, window: &Window, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {}
 }
