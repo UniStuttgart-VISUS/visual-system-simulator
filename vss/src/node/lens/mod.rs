@@ -88,9 +88,12 @@ impl Node for Lens {
             Some("Lens-Normal Texture placeholder")
         ).unwrap().create_bind_group(&device);
         
-        let (cornea_layout, cornea_bind_group) = placeholder_texture(
-            &device,
-            &queue,
+        let (cornea_layout, cornea_bind_group) = load_texture_from_bytes(
+            &device, &queue,
+            &[127, 127, 0, 0],
+            1, 1,
+            create_sampler_linear(&device),
+            wgpu::TextureFormat::Rgba8Unorm,
             Some("Lens-Cornea Texture placeholder")
         ).unwrap().create_bind_group(&device);
 

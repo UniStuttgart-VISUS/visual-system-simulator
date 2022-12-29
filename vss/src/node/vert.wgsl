@@ -35,7 +35,7 @@ fn vs_main(
         y = 1.0-y;
     }
     let pos = vec2<f32>(x, y);
-    out.tex_coords = pos;
+    out.tex_coords = vec2<f32>(pos.x, 1.0 - pos.y);
     out.clip_position = vec4<f32>(pos * 2.0 - 1.0, 0.0, 1.0);
     return out;
 }

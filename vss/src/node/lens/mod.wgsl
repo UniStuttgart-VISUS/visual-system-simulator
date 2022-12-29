@@ -99,7 +99,7 @@ var in_cornea_s: sampler;
 fn applyCorneaImperfection(pos: vec3<f32>, dir: vec3<f32>) -> vec3<f32> {
     // scale 3D ray to 2D texture coordinates for lookup
     // The size of the cornea (~5.5mm radius) is mapped to [0;1],[0;1] texture coordinates
-    let corneaMapSample = textureSample(in_color_t, in_color_s, pos.xy * vec2<f32>(0.17, -0.17) + 0.5).rg;
+    let corneaMapSample = textureSample(in_cornea_t, in_cornea_s, pos.xy * vec2<f32>(0.17, -0.17) + 0.5).rg;
     let deviation = vec3<f32>((corneaMapSample - 0.5) * vec2<f32>(CORNEA_MAP_FACTOR), 0.0);
     return dir + deviation;
 }

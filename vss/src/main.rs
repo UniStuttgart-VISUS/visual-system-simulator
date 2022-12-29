@@ -12,8 +12,11 @@ pub async fn run() {
     let input_path = std::path::Path::new("./assets/cubes.rgbd.png");
     // let input_path = std::path::Path::new("./assets/test-calibration.png");
     let mut input_node = UploadRgbBuffer::new(&window);
+    input_node.set_flags(RgbInputFlags::from_extension(&input_path));
     input_node.upload_image(load(input_path));
     window.add_node(Box::new(input_node), 0);
+    let node = Lens::new(&window);
+    window.add_node(Box::new(node), 0);
     // let node = TestNode::new(&window);
     // let node = PeacockCB::new(&window);
     // window.add_node(Box::new(node), 0);
@@ -21,8 +24,6 @@ pub async fn run() {
     // window.add_node(Box::new(node), 0);
     // let node = Retina::new(&window);
     // window.add_node(Box::new(node), 0);
-    let node = Lens::new(&window);
-    window.add_node(Box::new(node), 0);
     let node = Display::new(&window);
     window.add_node(Box::new(node), 0);
     window.update_nodes();
@@ -41,7 +42,7 @@ pub async fn run() {
     // values.insert("colorblindness_int".to_string(), Value::Number(100.0));
     // values.insert("colorblindness_onoff".to_string(), Value::Bool(true));
     values.insert("presbyopia_onoff".to_string(), Value::Bool(true));
-    values.insert("presbyopia_near_point".to_string(), Value::Number(600.0));
+    values.insert("presbyopia_near_point".to_string(), Value::Number(0.0));
     window.set_values(values, 0);
 
     while !window.poll_events() {}
