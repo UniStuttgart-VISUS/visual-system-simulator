@@ -9,14 +9,16 @@ pub async fn run() {
 
     let mut window = Window::new(true, None, parameters, 1).await;
 
-    let input_path = std::path::Path::new("./assets/cubes.rgbd.png");
-    // let input_path = std::path::Path::new("./assets/test-calibration.png");
+    // let input_path = std::path::Path::new("./assets/cubes.rgbd.png");
+    let input_path = std::path::Path::new("./assets/test-calibration.png");
     let mut input_node = UploadRgbBuffer::new(&window);
     input_node.set_flags(RgbInputFlags::from_extension(&input_path));
     input_node.upload_image(load(input_path));
     window.add_node(Box::new(input_node), 0);
-    let node = Lens::new(&window);
+    let node = StereoDesktop::new(&window);
     window.add_node(Box::new(node), 0);
+    // let node = Lens::new(&window);
+    // window.add_node(Box::new(node), 0);
     // let node = TestNode::new(&window);
     // let node = PeacockCB::new(&window);
     // window.add_node(Box::new(node), 0);

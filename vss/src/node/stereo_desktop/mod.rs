@@ -1,13 +1,11 @@
 use super::*;
 use std::cell::RefCell;
 use std::rc::Rc;
-
 struct Uniforms {
     resolution_in: [f32; 2],
     resolution_out: [f32; 2],
     flow_idx: i32,
 }
-
 pub struct SharedStereoDesktop {
     idx_ctr: u32,
     shared: Rc<RefCell<SharedStereoDesktopData>>,
@@ -126,9 +124,9 @@ impl Node for StereoDesktop {
     }
 
     fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
+        let slots = slots.to_color_input(window).to_color_output(window);
         let device = window.device().borrow_mut();
 
-        let slots = slots.to_color_input(window).to_color_output(window);
         self.uniforms.data.resolution_in = slots.input_size_f32();
         self.uniforms.data.resolution_out = slots.output_size_f32();
         // self.pso_data.s_source_r = slots.as_color_view();

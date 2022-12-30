@@ -127,5 +127,4 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         }
     }
     return out;
-    // out.depth = vec4<f32>(texture(s_depth, in.tex_coords)).r;
 }

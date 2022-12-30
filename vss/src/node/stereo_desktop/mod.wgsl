@@ -1,51 +1,66 @@
-uniform vec2 u_resolution_in;
-uniform vec2 u_resolution_out;
 
-out vec2 v_tex;
-
-const vec2 pos[6] = vec2[](
-    vec2(-1.0, -1.0),
-    vec2(1.0, -1.0),
-    vec2(1.0, 1.0),
-    vec2(-1.0, -1.0),
-    vec2(1.0, 1.0),
-    vec2(-1.0, 1.0)
-);
-const vec2 tex[6] = vec2[](
-    vec2(0.0, 0.0),
-    vec2(1.0, 0.0),
-    vec2(1.0, 1.0),
-    vec2(0.0, 0.0),
-    vec2(1.0, 1.0),
-    vec2(0.0, 1.0)
-);
-
-void main() {
-    vec2 ratio = u_resolution_out / u_resolution_in;
-    vec2 scale = ratio / min(ratio.x, ratio.y);
-    v_tex = scale * tex[gl_VertexID % 6] - 0.5 * scale + 0.5;    
-    gl_Position = vec4(pos[gl_VertexID], 0.0, 1.0);
+struct Uniforms{
+    resolution_in: vec2<f32>,
+    resolution_out: vec2<f32>,
+    flow_idx: i32,
 }
 
+struct VertexOutput {
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) tex_coords: vec2<f32>,
+};
 
-uniform sampler2D s_color_r;
-uniform sampler2D s_color_l;
+struct FragmentOutput {
+    @location(0) color: vec4<f32>,
+};
 
-uniform int u_flow_idx;
+@group(0) @binding(0)
+var<uniform> uniforms: Uniforms;
 
-in vec2 v_tex;
-out vec4 rt_color;
+@group(1) @binding(0)
+var in_color_r_t: texture_2d<f32>;
+@group(1) @binding(1)
+var in_color_r_s: sampler;
 
-void main() {
+@group(2) @binding(0)
+var in_color_l_t: texture_2d<f32>;
+@group(2) @binding(1)
+var in_color_l_s: sampler;
 
-  if (v_tex.x < 0.0 || v_tex.y < 0.0 ||
-      v_tex.x > 1.0 || v_tex.y > 1.0) {
-      discard;
-  }
-  if ( u_flow_idx == 0) {
-    rt_color =  texture(s_color_r, v_tex);
-  }
-  else{
-    rt_color =  texture(s_color_l, v_tex);
-  }
+@vertex
+fn vs_main(
+    @builtin(vertex_index) in_vertex_index: u32,
+) -> VertexOutput {
+    var out: VertexOutput;
+    // create two triangles with edges (0,0),(1,0),(1,1) and (1,1),(0,1),(0,0)
+    var x = f32((i32(in_vertex_index) % 3) > 0);
+    var y = f32((i32(in_vertex_index) % 3) > 1);
+    if((i32(in_vertex_index) / 3) > 0){
+        x = 1.0-x;
+        y = 1.0-y;
+    }
+    let pos = vec2<f32>(x, y);
+    let ratio = uniforms.resolution_out / uniforms.resolution_in;
+    let scale = ratio / min(ratio.x, ratio.y);
+
+    out.tex_coords = vec2<f32>(pos.x, 1.0 - pos.y);
+    out.tex_coords = scale * (out.tex_coords - 0.5) + 0.5;
+    out.clip_position = vec4<f32>(pos * 2.0 - 1.0, 0.0, 1.0);
+    return out;
+}
+
+@fragment
+fn fs_main(in: VertexOutput) -> FragmentOutput {
+    var out: FragmentOutput;
+
+    let right_color =  textureSample(in_color_r_t, in_color_r_s, in.tex_coords);
+    let left_color =  textureSample(in_color_l_t, in_color_l_s, in.tex_coords);
+    out.color = select(left_color, right_color, uniforms.flow_idx == 0);
+
+    if(in.tex_coords.x < 0.0 || in.tex_coords.y < 0.0 ||
+        in.tex_coords.x > 1.0 || in.tex_coords.y > 1.0){
+        discard;
+    }
+
+    return out;
 }
