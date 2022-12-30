@@ -183,4 +183,10 @@ impl Flow {
             node.render(window, encoder, if idx == last_index {Some(screen)} else {None});
         }
     }
+
+    pub fn post_render(&self, window: &Window){
+        for node in self.nodes.borrow_mut().iter_mut(){
+            node.post_render(window);
+        }
+    }
 }

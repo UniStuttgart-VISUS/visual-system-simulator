@@ -113,9 +113,9 @@ fn build_flow(window: &mut Window, io_generator: &mut IoGenerator, flow_index: u
     window.add_node(input_node, flow_index);
 
     // Visual system passes.
-    let node = Cataract::new(&window);
-    window.add_node(Box::new(node), flow_index);
     let node = Lens::new(&window);
+    window.add_node(Box::new(node), flow_index);
+    let node = Cataract::new(&window);
     window.add_node(Box::new(node), flow_index);
     let node = Retina::new(&window);
     window.add_node(Box::new(node), flow_index);
@@ -123,16 +123,17 @@ fn build_flow(window: &mut Window, io_generator: &mut IoGenerator, flow_index: u
     window.add_node(Box::new(node), flow_index);
     
     // Measure Uncertainty
-    let mut node = VarianceMeasure::new(&window);
-    if variance_log.is_some(){
-        node.log_file = Some(OpenOptions::new()
-            .write(true)
-            .append(true)
-            .create(true)
-            .open(variance_log.unwrap())
-            .unwrap());
-    }
-    window.add_node(Box::new(node), flow_index);
+    // TODO-WGPU
+    // let mut node = VarianceMeasure::new(&window);
+    // if variance_log.is_some(){
+    //     node.log_file = Some(OpenOptions::new()
+    //         .write(true)
+    //         .append(true)
+    //         .create(true)
+    //         .open(variance_log.unwrap())
+    //         .unwrap());
+    // }
+    // window.add_node(Box::new(node), flow_index);
     
     // Add output node, if present.
     if let Some(output_node) = output_node {
@@ -188,7 +189,7 @@ pub fn main() {
         parameters.push(RefCell::new(value_map));
     }
 
-    let mut window = Window::new(config.visible, None, parameters, flow_count);
+    let mut window = pollster::block_on(Window::new(config.visible, None, parameters, flow_count));
 
     let is_output_hack_used = config.output.is_some();
 
@@ -215,7 +216,7 @@ pub fn main() {
     
 
     let mut done = false;
-    window.update_last_node();
+    // window.update_last_node(); // TODO-WGPU
     window.update_nodes();
 
     let mut frame_counter = 0u128; // you know, for the simulations than run longer than the universe exists

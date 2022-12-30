@@ -234,8 +234,8 @@ impl Node for UploadVideo {
         self.uploader.input(perspective, vis_param)
     }
 
-    fn render(&mut self, window: &Window) {
+    fn render(&mut self, window: &Window, encoder: &mut wgpu::CommandEncoder, screen: Option<&RenderTexture>) {
         self.validate_data();
-        self.uploader.render(window)
+        self.uploader.render(window, encoder, screen)
     }
 }

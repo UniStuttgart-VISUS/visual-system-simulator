@@ -50,6 +50,6 @@ pub async fn run() {
     while !window.poll_events() {}
 }
 
-fn main() {
+/*fn main() {
     pollster::block_on(run());
-}
+}*/

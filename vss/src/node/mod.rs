@@ -76,6 +76,9 @@ pub trait Node {
 
     /// Render the node.
     fn render(&mut self, window: &Window, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>);
+
+    #[allow(unused_variables)]
+    fn post_render(&mut self, window: &window::Window){}
 }
 
 pub struct ShaderUniforms<T>{
