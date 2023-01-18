@@ -311,7 +311,7 @@ impl Window {
     pub fn poll_events(&mut self) -> bool {
         let mut done = false;
         let mut deferred_size = None;
-        let mut redraw_requested = false;
+        let mut redraw_requested = true;
 
         // Poll for window events.
         // TODO-WGPU use .run() instead of .run_return() as it is highly discouraged and incompatible with some platforms
@@ -744,6 +744,7 @@ impl Window {
 
                     self.queue.borrow_mut().submit(iter::once(encoder.finish()));
                     output.present();
+                    self.flow.iter().for_each(|f| f.post_render(&self));
                     self.last_render_instant.replace(Instant::now());
                 }
                 _ => {}

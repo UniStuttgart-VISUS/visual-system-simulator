@@ -156,7 +156,7 @@ fn applyColorBlindness(color: vec4<f32>, retina: vec4<f32>, ev: ptr<function, Er
         vec3<f32>(1.0, 1.0, 1.0)
     );
 
-    let color_transformation = neutral * neutral_factor + weak_color * weak_color_factor + achromatopsia * achromatopsia_factor;
+    let color_transformation = (neutral * neutral_factor) + (weak_color * weak_color_factor) + (achromatopsia * achromatopsia_factor);
     newColor = vec4<f32>(color_transformation * newColor.rgb, newColor.a);
 
     if(uniforms.track_error == 1){
@@ -208,7 +208,7 @@ fn applyNyctalopia(color: vec4<f32>, retina: vec4<f32>, ev: ptr<function, ErrorV
 fn glaucoma(color: vec4<f32>, retina: vec4<f32>, ev: ptr<function, ErrorValues>) -> vec4<f32> {
     var newColor = color;
     // find the biggest value
-    var maxValue = max(max(retina.r, retina.g), retina.b);
+    var maxValue = max(max(retina.r, retina.g), max(retina.b, retina.a));
     // only takes effect when everything is lower than 0.25. 
     // This simulates a loss of resolution caused by less-sensitive photoreceptor types
     maxValue *= 4.0;

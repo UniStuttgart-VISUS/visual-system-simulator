@@ -1,4 +1,4 @@
-use wgpu::{ImageCopyTexture};
+use wgpu::{Buffer};
 
 use super::*;
 use std::{path::Path, mem::size_of};
@@ -34,14 +34,14 @@ enum Message {
     Callback(Option<RgbBufferCb>),
 }
 /// A node that downloads RGB buffers.
-pub struct DownloadRgbBuffer<'a> {
+pub struct DownloadRgbBuffer{
     tx: std::sync::mpsc::Sender<Message>,
-    input: Option<RenderTexture>,
-    buffer_slice: Option<wgpu::BufferSlice<'a>>, 
+    input: Texture,
+    buffer: Buffer,
     res: [f32;2]
 }
 
-impl DownloadRgbBuffer<'_> {
+impl DownloadRgbBuffer{
     pub fn set_buffer_cb(&mut self, cb: Option<RgbBufferCb>) {
         self.tx.send(Message::Callback(cb)).unwrap();
     }
@@ -71,8 +71,8 @@ impl DownloadRgbBuffer<'_> {
     }
 }
 
-impl Node for DownloadRgbBuffer<'_> {
-    fn new(_window: &Window) -> Self {
+impl Node for DownloadRgbBuffer{
+    fn new(window: &Window) -> Self {
         let (tx, rx) = std::sync::mpsc::channel::<Message>();
         std::thread::spawn(move || {
             let mut callback: Option<RgbBufferCb> = None;
@@ -90,10 +90,24 @@ impl Node for DownloadRgbBuffer<'_> {
             }
         });
 
-        DownloadRgbBuffer {
+        let device = window.device().borrow_mut();
+        let queue = window.queue().borrow_mut();
+        
+        let buffer_dimensions = BufferDimensions::new(1 as usize, 1 as usize);
+
+        let download_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Download Node Placeholder Buffer"),
+            size: (buffer_dimensions.padded_bytes_per_row * buffer_dimensions.height) as u64,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let texture = placeholder_texture(&device, &queue, Some("Download texture placeholder")).unwrap();
+
+        DownloadRgbBuffer{
             tx,
-            input: None,
-            buffer_slice: None,
+            input: texture,
+            buffer: download_buffer,
             res: [0.0,0.0]
         }
     }
@@ -101,90 +115,83 @@ impl Node for DownloadRgbBuffer<'_> {
     fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
         let slots = slots.to_color_input(window);
         self.res = slots.input_size_f32();
-        self.input = Some(slots.as_color_target());
+        let device = window.device().borrow_mut();
+        
+        (self.input, _) = slots.as_color_source(&device);
+
+        let buffer_dimensions = BufferDimensions::new(self.res[0] as usize, self.res[1] as usize);
+        println!("negociate_slots {}, {}", buffer_dimensions.width, buffer_dimensions.height);
+        let download_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Download Node Buffer"),
+            size: (buffer_dimensions.padded_bytes_per_row * buffer_dimensions.height) as u64,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        self.buffer = download_buffer;
 
         slots
     }
 
-    fn render(&mut self, window: &window::Window, encoder: &mut CommandEncoder, _screen: Option<&RenderTexture>) {
-        match &self.input {
-            Some(_) => {
+    fn render(&mut self, _window: &window::Window, encoder: &mut CommandEncoder, _screen: Option<&RenderTexture>) {
+        let buffer_dimensions = BufferDimensions::new(self.res[0] as usize, self.res[1] as usize);
+        println!("render {}, {}", buffer_dimensions.width, buffer_dimensions.height);
 
-                let device = window.device().borrow_mut();
+        let texture_extent = wgpu::Extent3d {
+            width: buffer_dimensions.width as u32,
+            height: buffer_dimensions.height as u32,
+            depth_or_array_layers: 1,
+        };
 
-                let buffer_dimensions = BufferDimensions::new(self.res[0] as usize, self.res[1] as usize);
-
-                let download_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("Download Node Buffer"),
-                    size: (buffer_dimensions.padded_bytes_per_row * buffer_dimensions.height) as u64,
-                    usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-                    mapped_at_creation: false,
-                });
-            
-                let texture_extent = wgpu::Extent3d {
-                    width: buffer_dimensions.width as u32,
-                    height: buffer_dimensions.height as u32,
-                    depth_or_array_layers: 1,
-                };
-
-                // Schedule download.
-                encoder.copy_texture_to_buffer(
-                    ImageCopyTexture{
-                            texture: self.input.as_ref().unwrap().texture.as_ref().unwrap(),
-                            aspect: wgpu::TextureAspect::All,
-                            mip_level: 0,
-                            origin: wgpu::Origin3d::ZERO,
-                        },
-                    wgpu::ImageCopyBuffer {
-                        buffer: &download_buffer,
-                        layout: wgpu::ImageDataLayout {
-                            offset: 0,
-                            bytes_per_row: Some(
-                                std::num::NonZeroU32::new(buffer_dimensions.padded_bytes_per_row as u32)
-                                    .unwrap(),
-                            ),
-                            rows_per_image: None,
-                        },
-                    },
-                    texture_extent,
-                );
-
-                // Note that we're not calling `.await` here.
-                let buffer_slice = download_buffer.slice(..);
-                
-                let (sender, _receiver) = futures_intrusive::channel::shared::oneshot_channel();
-                buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
-                
-            }
-            _ => {}
-        }
+        // Schedule download.
+        encoder.copy_texture_to_buffer(
+            self.input.texture.as_image_copy(),
+            wgpu::ImageCopyBuffer {
+                buffer: &self.buffer,
+                layout: wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(
+                        std::num::NonZeroU32::new(buffer_dimensions.padded_bytes_per_row as u32)
+                            .unwrap(),
+                    ),
+                    rows_per_image: None,
+                },
+            },
+            texture_extent,
+        );
     }
 
-    fn post_render(&mut self, _window: &window::Window) {
-        match self.buffer_slice {
-            Some(_) => {
-                let buffer_dimensions = BufferDimensions::new(self.res[0] as usize, self.res[1] as usize);
-                let padded_buffer = self.buffer_slice.unwrap().get_mapped_range();
+    fn post_render(&mut self, window: &window::Window) {
+        println!("download post_render");
+        let device = window.device().borrow_mut();
 
-                let mut pixels_rgb = Vec::with_capacity(buffer_dimensions.width * buffer_dimensions.height * 3);
-                // from the padded_buffer we write just the unpadded bytes into the image
-                for chunk in padded_buffer.chunks(buffer_dimensions.padded_bytes_per_row) {
-                    for i in (0 .. buffer_dimensions.unpadded_bytes_per_row).step_by(4) {
-                        pixels_rgb.push(chunk[i]);
-                        pixels_rgb.push(chunk[i+1]);
-                        pixels_rgb.push(chunk[i+2]);
-                    }
-                }
+        // Note that we're not calling `.await` here.
+        let buffer_slice = self.buffer.slice(..);
         
-                let rgb_buffer = RgbBuffer {
-                    pixels_rgb: pixels_rgb.into_boxed_slice(),
-                    width: buffer_dimensions.width as u32,
-                    height: buffer_dimensions.height as u32,
-                };
-        
-                self.tx.send(Message::Buffer(rgb_buffer)).unwrap();
-            },
-            None => {},
+        let (sender, _receiver) = futures_intrusive::channel::shared::oneshot_channel();
+        buffer_slice.map_async(wgpu::MapMode::Read, move |v| {sender.send(v).unwrap(); println!("sender ok");} );
+
+        device.poll(wgpu::Maintain::Wait);
+
+        let buffer_dimensions = BufferDimensions::new(self.res[0] as usize, self.res[1] as usize);
+        println!("post_render {}, {}", buffer_dimensions.width, buffer_dimensions.height);
+        let padded_buffer = buffer_slice.get_mapped_range();
+
+        let mut pixels_rgb = Vec::with_capacity(buffer_dimensions.width * buffer_dimensions.height * 3);
+        // from the padded_buffer we write just the unpadded bytes into the image
+        for chunk in padded_buffer.chunks(buffer_dimensions.padded_bytes_per_row) {
+            for i in (0 .. buffer_dimensions.unpadded_bytes_per_row).step_by(4) {
+                pixels_rgb.push(chunk[i]);
+                pixels_rgb.push(chunk[i+1]);
+                pixels_rgb.push(chunk[i+2]);
+            }
         }
+
+        let rgb_buffer = RgbBuffer {
+            pixels_rgb: pixels_rgb.into_boxed_slice(),
+            width: buffer_dimensions.width as u32,
+            height: buffer_dimensions.height as u32,
+        };
+        self.tx.send(Message::Buffer(rgb_buffer)).unwrap();
     }
 }
