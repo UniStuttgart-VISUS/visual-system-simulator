@@ -345,6 +345,7 @@ pub fn load_texture_from_bytes(
         dimension: wgpu::TextureDimension::D2,
         format: format,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
     });
 
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -410,6 +411,7 @@ pub fn placeholder_depth_texture(
         dimension: wgpu::TextureDimension::D2,
         format: DEPTH_FORMAT,
         usage: wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
     });
 
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -529,6 +531,7 @@ pub fn load_cubemap_from_bytes(
         dimension: wgpu::TextureDimension::D2,
         format: format,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
     });
 
     let view = texture.create_view(&wgpu::TextureViewDescriptor{
@@ -862,6 +865,7 @@ pub fn create_render_texture(
         usage: wgpu::TextureUsages::TEXTURE_BINDING |
                wgpu::TextureUsages::RENDER_ATTACHMENT |
                wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
     });
 
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());

@@ -79,8 +79,11 @@ impl Window {
         wgpu_window.set_cursor_visible(true);
         let window_size = wgpu_window.inner_size();
 
-        let instance = wgpu::Instance::new(wgpu::Backends::VULKAN);
-        let surface = unsafe { instance.create_surface(&wgpu_window) };
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::VULKAN,
+            dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
+        });
+        let surface = unsafe { instance.create_surface(&wgpu_window) }.unwrap();
         let adapter = instance.request_adapter(
             &wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
@@ -113,6 +116,7 @@ impl Window {
             height: window_size.height,
             present_mode: wgpu::PresentMode::Fifo,
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
+            view_formats: vec![wgpu::TextureFormat::Rgba8UnormSrgb],
         };
         surface.configure(&device, &surface_config);
 

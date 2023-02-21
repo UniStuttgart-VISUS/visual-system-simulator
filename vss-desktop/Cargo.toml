@@ -22,7 +22,7 @@ ac_ffmpeg = { package = "ac-ffmpeg", version = "0.15.3", optional = true }
 log = "0.4.11"
 simple-logging = "2.0.2"
 cgmath = "0.18"
-wgpu = "0.14.2"
+wgpu = "0.15.1"
 pollster = "0.2"
 
 [build-dependencies]
