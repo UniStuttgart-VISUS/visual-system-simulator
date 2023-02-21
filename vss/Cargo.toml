@@ -8,7 +8,7 @@ resolver = "2"
 
 [dependencies]
 serde_json = "1"
-eframe = "0.13.0"
+eframe = "0.21.3"
 winit = "0.27.5"
 env_logger = "0.9"
 log = "0.4"

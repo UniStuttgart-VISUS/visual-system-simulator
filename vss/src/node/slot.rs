@@ -1,4 +1,3 @@
-use eframe::egui::color;
 use env_logger::fmt::Color;
 use wgpu::{BindGroup, RenderPassColorAttachment, RenderPassDepthStencilAttachment};
 
