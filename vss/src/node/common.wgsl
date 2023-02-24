@@ -1,4 +1,4 @@
-let BLUR_SIZE: i32 = 9;
+const BLUR_SIZE: i32 = 9;
 
 fn normpdf(x: f32) -> f32 {
     return 0.39894 * exp(-0.5 * x * x / (49.0)) / 7.0;

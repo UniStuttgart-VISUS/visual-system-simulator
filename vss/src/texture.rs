@@ -1,6 +1,3 @@
-use env_logger::fmt::Color;
-use wgpu::{TextureView, RenderPassColorAttachment, RenderPassDepthStencilAttachment};
-
 use crate::*;
 use std::io::Cursor;
 use core::num::NonZeroU32;
@@ -14,6 +11,7 @@ pub struct Texture {
     pub view_dimension: wgpu::TextureViewDimension,
     pub width: u32,
     pub height: u32,
+    pub label: String,
 }
 
 pub struct RenderTexture{
@@ -23,6 +21,7 @@ pub struct RenderTexture{
     pub view_dimension: wgpu::TextureViewDimension,
     pub width: u32,
     pub height: u32,
+    pub label: String,
 }
 
 pub struct Sampler{
@@ -44,6 +43,7 @@ impl Texture{
             view_dimension: self.view_dimension,
             width: self.width,
             height: self.height,
+            label: format!("{}{}", self.label, " (Clone)"),
         }
     }
 }
@@ -61,6 +61,7 @@ impl RenderTexture{
             view_dimension: self.view_dimension,
             width: self.width,
             height: self.height,
+            label: format!("{}{}", self.label, " (Clone)"),
         }
     }
 
@@ -72,10 +73,11 @@ impl RenderTexture{
             view_dimension: self.view_dimension,
             width: self.width,
             height: self.height,
+            label: format!("{}{}", self.label, " (Clone from RT)"),
         }
     }
 
-    pub fn to_color_attachment(&self) -> Option<RenderPassColorAttachment>{
+    pub fn to_color_attachment(&self) -> Option<wgpu::RenderPassColorAttachment>{
         Some(wgpu::RenderPassColorAttachment {
             view: self.view.as_ref(),
             resolve_target: None,
@@ -91,7 +93,7 @@ impl RenderTexture{
         })
     }
 
-    pub fn to_depth_attachment(&self) -> Option<RenderPassDepthStencilAttachment>{
+    pub fn to_depth_attachment(&self) -> Option<wgpu::RenderPassDepthStencilAttachment>{
         Some(wgpu::RenderPassDepthStencilAttachment {
             view: self.view.as_ref(),
             depth_ops: Some(wgpu::Operations {
@@ -345,7 +347,7 @@ pub fn load_texture_from_bytes(
         dimension: wgpu::TextureDimension::D2,
         format: format,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
+        view_formats: &[format],
     });
 
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -373,6 +375,7 @@ pub fn load_texture_from_bytes(
         view_dimension: wgpu::TextureViewDimension::D2,
         width,
         height,
+        label: label.unwrap_or("Unlabeled").to_string(),
     })
 }
 
@@ -387,7 +390,7 @@ pub fn placeholder_texture(
         &[0; 4],
         1, 1,
         sampler,
-        wgpu::TextureFormat::Rgba8Unorm,
+        COLOR_FORMAT,
         label)
 }
 
@@ -395,7 +398,7 @@ pub fn placeholder_depth_texture(
     device: &wgpu::Device,
     label: Option<&str>,
 ) -> Result<Texture, String> {
-    let sampler = create_sampler_linear(device);
+    let sampler = create_sampler_nearest(device);
 
     let size = wgpu::Extent3d {
         width: 1,
@@ -411,7 +414,7 @@ pub fn placeholder_depth_texture(
         dimension: wgpu::TextureDimension::D2,
         format: DEPTH_FORMAT,
         usage: wgpu::TextureUsages::TEXTURE_BINDING,
-        view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
+        view_formats: &[DEPTH_FORMAT],
     });
 
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -423,6 +426,7 @@ pub fn placeholder_depth_texture(
         view_dimension: wgpu::TextureViewDimension::D2,
         width: 1,
         height: 1,
+        label: label.unwrap_or("Unlabeled").to_string(),
     })
 }
 
@@ -531,7 +535,7 @@ pub fn load_cubemap_from_bytes(
         dimension: wgpu::TextureDimension::D2,
         format: format,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
+        view_formats: &[format],
     });
 
     let view = texture.create_view(&wgpu::TextureViewDescriptor{
@@ -568,6 +572,7 @@ pub fn load_cubemap_from_bytes(
         view_dimension: wgpu::TextureViewDimension::Cube,
         width,
         height: width,
+        label: label.unwrap_or("Unlabeled").to_string(),
     })
     // let kind = texture::Kind::Cube(
     //     width as texture::Size,
@@ -819,7 +824,7 @@ pub fn create_depth_rt(
     height: u32,
     label: Option<&str>,
 ) -> RenderTexture{
-    create_render_texture(device, width, height, DEPTH_FORMAT, create_sampler_linear(device), label)
+    create_render_texture(device, width, height, DEPTH_FORMAT, create_sampler_nearest(device), label)
 }
 
 pub fn create_color_rt(
@@ -865,7 +870,7 @@ pub fn create_render_texture(
         usage: wgpu::TextureUsages::TEXTURE_BINDING |
                wgpu::TextureUsages::RENDER_ATTACHMENT |
                wgpu::TextureUsages::COPY_SRC,
-        view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
+        view_formats: &[format],
     });
 
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -877,6 +882,7 @@ pub fn create_render_texture(
         view_dimension: wgpu::TextureViewDimension::D2,
         width,
         height,
+        label: label.unwrap_or("Unlabeled").to_string(),
     }
 }
 
@@ -884,7 +890,7 @@ pub fn placeholder_depth_rt(
     device: &wgpu::Device,
     label: Option<&str>,
 ) -> RenderTexture{
-    create_render_texture(device, 1, 1, DEPTH_FORMAT, create_sampler_linear(device), label)
+    create_render_texture(device, 1, 1, DEPTH_FORMAT, create_sampler_nearest(device), label)
 }
 
 pub fn placeholder_color_rt(

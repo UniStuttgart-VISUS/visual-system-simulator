@@ -1,6 +1,6 @@
 // plane in front of the eye
-let TEXTURE_DISTANCE: f32 = 1000.0;
-let TEXTURE_SCALE: f32 = 2000.0;
+const TEXTURE_DISTANCE: f32 = 1000.0;
+const TEXTURE_SCALE: f32 = 2000.0;
 
 struct FragmentOutput {
     @location(0) color: vec4<f32>,

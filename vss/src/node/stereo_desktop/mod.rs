@@ -124,7 +124,7 @@ impl Node for StereoDesktop {
     }
 
     fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
-        let slots = slots.to_color_input(window).to_color_output(window);
+        let slots = slots.to_color_input(window).to_color_output(window, "StereoNode");
         let device = window.device().borrow_mut();
 
         self.uniforms.data.resolution_in = slots.input_size_f32();

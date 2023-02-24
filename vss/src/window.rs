@@ -116,7 +116,7 @@ impl Window {
             height: window_size.height,
             present_mode: wgpu::PresentMode::Fifo,
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
-            view_formats: vec![wgpu::TextureFormat::Rgba8UnormSrgb],
+            view_formats: vec![COLOR_FORMAT.add_srgb_suffix()],
         };
         surface.configure(&device, &surface_config);
 
@@ -742,6 +742,7 @@ impl Window {
                         view_dimension: wgpu::TextureViewDimension::D2,
                         width: self.window_size.width,
                         height: self.window_size.height,
+                        label: "surface render texture".to_string(),
                     };
                 
                     self.flow.iter().for_each(|f| f.render(&self, &mut encoder, &render_texture));

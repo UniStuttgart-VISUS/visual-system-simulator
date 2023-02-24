@@ -1,5 +1,5 @@
 // The resulting color will converge to this color in case of a glaucoma 
-let GLAUCOMA_COLOR: vec4<f32> = vec4<f32>(0.02, 0.02, 0.02, 1.0);
+const GLAUCOMA_COLOR: vec4<f32> = vec4<f32>(0.02, 0.02, 0.02, 1.0);
 
 struct Uniforms{
     proj: mat4x4<f32>,

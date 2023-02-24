@@ -1,4 +1,3 @@
-use env_logger::fmt::Color;
 use wgpu::{BindGroup, RenderPassColorAttachment, RenderPassDepthStencilAttachment};
 
 use super::*;
@@ -197,7 +196,7 @@ impl NodeSlots {
         }
     }
 
-    pub fn to_color_output(self, window: &Window) -> Self {
+    pub fn to_color_output(self, window: &Window, node_name: &str) -> Self {
         match self.output {
             Slot::Empty => {
                 // Guess output size, based on input.
@@ -209,11 +208,11 @@ impl NodeSlots {
                     Slot::RgbDepth { color_target, .. } => (color_target.width, color_target.height),
                 };
                 let device = window.device().borrow_mut();
-                let color_target = create_color_rt(&device, width, height, Some("to_color_output color"));
-                let deflection_target = create_highp_rt(&device, width, height, Some("to_color_output deflection"));
-                let color_change_target = create_highp_rt(&device, width, height, Some("to_color_output color_change"));
-                let color_uncertainty_target = create_highp_rt(&device, width, height, Some("to_color_output color_uncertainty"));
-                let covariances_target = create_highp_rt(&device, width, height, Some("to_color_output covariances"));
+                let color_target = create_color_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_output color").as_str()));
+                let deflection_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_output deflection").as_str()));
+                let color_change_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_output color_change").as_str()));
+                let color_uncertainty_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_output color_uncertainty").as_str()));
+                let covariances_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_output covariances").as_str()));
 
                 Self {
                     input: self.input,
@@ -347,13 +346,13 @@ impl NodeSlots {
     //     }
     // }
 
-    pub fn emplace_color_output(self, window: &Window, width: u32, height: u32) -> Self {
+    pub fn emplace_color_output(self, window: &Window, width: u32, height: u32, node_name: &str) -> Self {
         let device = window.device().borrow_mut();
-        let color_target = create_color_rt(&device, width, height, Some("emplace_color_output color"));
-        let deflection_target = create_highp_rt(&device, width, height, Some("emplace_color_output deflection"));
-        let color_change_target = create_highp_rt(&device, width, height, Some("emplace_color_output color_change"));
-        let color_uncertainty_target = create_highp_rt(&device, width, height, Some("emplace_color_output color_uncertainty"));
-        let covariances_target = create_highp_rt(&device, width, height, Some("emplace_color_output covariances"));
+        let color_target = create_color_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_output color").as_str()));
+        let deflection_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_output deflection").as_str()));
+        let color_change_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_output color_change").as_str()));
+        let color_uncertainty_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_output color_uncertainty").as_str()));
+        let covariances_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_output covariances").as_str()));
 
         Self {
             input: self.input,
@@ -372,14 +371,14 @@ impl NodeSlots {
         }
     }
 
-    pub fn emplace_color_depth_output(self, window: &Window, width: u32, height: u32) -> Self {
+    pub fn emplace_color_depth_output(self, window: &Window, width: u32, height: u32, node_name: &str) -> Self {
         let device = window.device().borrow_mut();
-        let color_target = create_color_rt(&device, width, height, Some("emplace_color_depth_output color"));
-        let depth_target = create_depth_rt(&device, width, height, Some("emplace_color_depth_output depth"));
-        let deflection_target = create_highp_rt(&device, width, height, Some("emplace_color_depth_output deflection"));
-        let color_change_target = create_highp_rt(&device, width, height, Some("emplace_color_depth_output color_change"));
-        let color_uncertainty_target = create_highp_rt(&device, width, height, Some("emplace_color_depth_output color_uncertainty"));
-        let covariances_target = create_highp_rt(&device, width, height, Some("emplace_color_depth_output covariances"));
+        let color_target = create_color_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_depth_output color").as_str()));
+        let depth_target = create_depth_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_depth_output depth").as_str()));
+        let deflection_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_depth_output deflection").as_str()));
+        let color_change_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_depth_output color_change").as_str()));
+        let color_uncertainty_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_depth_output color_uncertainty").as_str()));
+        let covariances_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_depth_output covariances").as_str()));
 
         Self {
             input: self.input,

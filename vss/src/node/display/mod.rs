@@ -1,5 +1,3 @@
-use core::f32;
-
 use super::*;
 use cgmath::Matrix4;
 use cgmath::Rad;
@@ -7,6 +5,12 @@ use wgpu::CommandEncoder;
 
 // #[repr(C, align(8))]
 struct Uniforms{
+    hive_rotation: [[f32; 4];4],
+
+    resolution_in: [f32; 2],
+    resolution_out: [f32; 2],
+    hive_position: [f32; 2],
+
     hive_visible: i32,
     stereo: i32,
     flow_idx: i32,
@@ -20,12 +24,6 @@ struct Uniforms{
     colormap_type: i32,
     
     _padding: u32, // fill up 16 byte pattern
-
-    resolution_in: [f32; 2],
-    resolution_out: [f32; 2],
-    hive_position: [f32; 2],
-    
-    hive_rotation: [[f32; 4];4],
 }
 
 // gfx_defines! {
@@ -149,7 +147,7 @@ impl Node for Display {
     }
 
     fn negociate_slots(&mut self, window: &window::Window, slots: NodeSlots) -> NodeSlots {
-        let slots = slots.to_color_input(window).to_color_output(window);
+        let slots = slots.to_color_input(window).to_color_output(window, "DisplayNode");
         let device = window.device().borrow_mut();
 
         self.uniforms.data.resolution_in = slots.input_size_f32();
@@ -157,9 +155,6 @@ impl Node for Display {
 
         self.sources_bind_group = slots.as_all_colors_source(&device);
         self.render_target = slots.as_color_target();
-
-        self.uniforms.data.resolution_in = slots.input_size_f32();
-        self.uniforms.data.resolution_out = slots.output_size_f32();
 
         slots
     }

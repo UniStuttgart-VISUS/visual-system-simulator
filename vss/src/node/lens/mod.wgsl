@@ -1,7 +1,7 @@
 // plane in front of the eye
-let TEXTURE_SCALE: f32 = 2.0;
+const TEXTURE_SCALE: f32 = 2.0;
 
-let CORNEA_MAP_FACTOR: f32 = 0.2;
+const CORNEA_MAP_FACTOR: f32 = 0.2;
 
 struct Uniforms {
     lens_position: vec2<f32>,

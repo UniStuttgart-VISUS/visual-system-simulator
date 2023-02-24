@@ -193,7 +193,7 @@ impl Node for UploadRgbBuffer {
             }
         }
 
-        let slots = slots.emplace_color_depth_output(window, width, height);
+        let slots = slots.emplace_color_depth_output(window, width, height, "UploadNode");
         self.targets = slots.as_all_target();
 
         slots

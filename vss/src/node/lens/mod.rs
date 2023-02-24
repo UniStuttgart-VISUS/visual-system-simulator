@@ -120,7 +120,7 @@ impl Node for Lens {
     }
 
     fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
-        let slots = slots.to_color_depth_input(window).to_color_output(window);
+        let slots = slots.to_color_depth_input(window).to_color_output(window, "LensNode");
         let device = window.device().borrow_mut();
         let queue = window.queue().borrow_mut();
 

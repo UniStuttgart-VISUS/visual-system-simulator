@@ -57,10 +57,9 @@ impl Node for Cataract {
     }
 
     fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
-        let slots = slots.to_color_input(window).to_color_output(window);
+        let slots = slots.to_color_input(window).to_color_output(window, "CataractNode");
         self.uniforms.data.resolution = slots.output_size_f32();
 
-        let slots = slots.to_color_input(window).to_color_output(window);
         let device = window.device().borrow_mut();
 
         self.sources_bind_group = slots.as_all_colors_source(&device);
