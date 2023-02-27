@@ -1,6 +1,12 @@
 // Vertex shader
 
 struct Uniforms{
+    hive_rotation: mat4x4<f32>,
+
+    resolution_in: vec2<f32>,
+    resolution_out: vec2<f32>,
+    hive_position: vec2<f32>,
+
     hive_visible: i32,
     stereo: i32,
     flow_idx: i32,
@@ -13,11 +19,7 @@ struct Uniforms{
     mix_type: i32,
     colormap_type: i32,
 
-    resolution_in: vec2<f32>,
-    resolution_out: vec2<f32>,
-    hive_position: vec2<f32>,
-
-    hive_rotation: mat4x4<f32>,
+    _padding: u32,
 };
 
 @group(0) @binding(0)
@@ -42,7 +44,7 @@ fn vs_main(
     // for every 6 vertices create two triangles with edges (0,0),(1,0),(1,1) and (1,1),(0,1),(0,0)
     var x = f32((i32(in_vertex_index) % 3) > 0);
     var y = f32((i32(in_vertex_index) % 3) > 1);
-    if(((i32(in_vertex_index) / 3) % 2) == 1){
+    if(((i32(in_vertex_index) % 6) / 3) > 0){
         x = 1.0-x;
         y = 1.0-y;
     }
@@ -61,24 +63,24 @@ fn vs_main(
 }
 
 // Viridis colormap, based on https://github.com/glslify/glsl-colormap
-let e0 = 0.0;
-let v0 = vec3<f32>(0.26666666666666666,0.00392156862745098,0.32941176470588235);
-let e1 = 0.13;
-let v1 = vec3<f32>(0.2784313725490196,0.17254901960784313,0.47843137254901963);
-let e2 = 0.25;
-let v2 = vec3<f32>(0.23137254901960785,0.3176470588235294,0.5450980392156862);
-let e3 = 0.38;
-let v3 = vec3<f32>(0.17254901960784313,0.44313725490196076,0.5568627450980392);
-let e4 = 0.5;
-let v4 = vec3<f32>(0.12941176470588237,0.5647058823529412,0.5529411764705883);
-let e5 = 0.63;
-let v5 = vec3<f32>(0.15294117647058825,0.6784313725490196,0.5058823529411764);
-let e6 = 0.75;
-let v6 = vec3<f32>(0.3607843137254902,0.7843137254901961,0.38823529411764707);
-let e7 = 0.88;
-let v7 = vec3<f32>(0.6666666666666666,0.8627450980392157,0.19607843137254902);
-let e8 = 1.0;
-let v8 = vec3<f32>(0.9921568627450981,0.9058823529411765,0.1450980392156863);
+const e0 = 0.0;
+const v0 = vec3<f32>(0.26666666666666666,0.00392156862745098,0.32941176470588235);
+const e1 = 0.13;
+const v1 = vec3<f32>(0.2784313725490196,0.17254901960784313,0.47843137254901963);
+const e2 = 0.25;
+const v2 = vec3<f32>(0.23137254901960785,0.3176470588235294,0.5450980392156862);
+const e3 = 0.38;
+const v3 = vec3<f32>(0.17254901960784313,0.44313725490196076,0.5568627450980392);
+const e4 = 0.5;
+const v4 = vec3<f32>(0.12941176470588237,0.5647058823529412,0.5529411764705883);
+const e5 = 0.63;
+const v5 = vec3<f32>(0.15294117647058825,0.6784313725490196,0.5058823529411764);
+const e6 = 0.75;
+const v6 = vec3<f32>(0.3607843137254902,0.7843137254901961,0.38823529411764707);
+const e7 = 0.88;
+const v7 = vec3<f32>(0.6666666666666666,0.8627450980392157,0.19607843137254902);
+const e8 = 1.0;
+const v8 = vec3<f32>(0.9921568627450981,0.9058823529411765,0.1450980392156863);
 
 fn ViridisColormap(x_0: f32) -> vec3<f32>{
   let a0 = mix(v0,v1,smoothstep(e0,e1,x_0))*step(e0,x_0)*step(x_0,e1);
@@ -202,7 +204,7 @@ fn watsons_params_y(y: f32) -> vec3<f32>{
     }
 }
 
-let max_d_rgcf = 33163.2;
+const max_d_rgcf = 33163.2;
 
 fn weighted_density_meridian(x: f32, r_xy: f32, params: vec3<f32>) -> f32{
     let rel_density =  params.x * pow(1.0+(r_xy/params.y),-2.0) + (1.0-params.x) * exp(-1.0 * r_xy/params.z);

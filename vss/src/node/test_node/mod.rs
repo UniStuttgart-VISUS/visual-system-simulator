@@ -61,7 +61,7 @@ impl Node for TestNode {
     }
 
     fn negociate_slots(&mut self, window: &window::Window, slots: NodeSlots) -> NodeSlots {
-        let slots = slots.to_color_input(window).to_color_output(window);
+        let slots = slots.to_color_input(window).to_color_output(window, "TestNode");
         (self.sources.s_rgb, self.sources.s_rgb_bind_group) = slots.as_color_source(&(window.device().borrow_mut()));
         self.targets.rt_color = slots.as_color_target();
 

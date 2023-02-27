@@ -1,6 +1,6 @@
 // https://www.w3.org/TR/2022/WD-WGSL-20220922/
 
-let PI: f32 = 3.14159265359;
+const PI: f32 = 3.14159265359;
 
 struct Uniforms{
     inv_proj_view: mat4x4<f32>,
