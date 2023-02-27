@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<android.support.v7.widget.RecyclerView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.recyclerview.widget.RecyclerView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/list"
-    android:name="de.uni_stuttgart.vss.KnowledgebaseListFragment"
+    android:name="com.vss.KnowledgebaseListFragment"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:layout_marginLeft="16dp"
     android:layout_marginRight="16dp"
     app:layoutManager="LinearLayoutManager"
-    tools:context="de.uni_stuttgart.vss.fragments.KnowledgebaseListFragment"
+    tools:context="com.vss.fragments.KnowledgebaseListFragment"
     tools:listitem="@layout/fragment_knowledgebaselist" />

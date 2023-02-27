@@ -1,4 +1,4 @@
-package de.uni_stuttgart.vss.activities;
+package com.vss.activities;
 
 /* this class contains code from The Android Open Source Project,
  Licensed under the Apache License, Version 2.0
@@ -30,8 +30,8 @@ import android.media.ImageReader;
 import android.opengl.GLES20;
 import android.os.Bundle;
 import android.os.Handler;
-import android.support.annotation.NonNull;
-import android.support.v4.app.ActivityCompat;
+import androidx.annotation.NonNull;
+
 import android.util.Log;
 import android.util.Size;
 import android.view.Surface;
@@ -42,24 +42,51 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
-import de.uni_stuttgart.vss.edsettings.EDSettingsController;
-import de.uni_stuttgart.vss.edsettings.EDSettingsListener;
 
 import static android.opengl.GLES11Ext.GL_TEXTURE_EXTERNAL_OES;
+
+
+import android.content.Intent;
+
+import androidx.core.app.ActivityCompat;
+
+import android.widget.TextView;
+
+import com.vss.R;
+
 
 /**
  * Created by marco on 9/16/17.
  */
 
-public class CoreActivity extends NativeActivity implements EDSettingsListener {
+public class FullscreenActivity extends NativeActivity implements   ActivityCompat.OnRequestPermissionsResultCallback{
 
+
+    /**
+     * stores if simulation core successfully loaded
+     */
+    private static boolean simCoreLoaded = false;
+
+    //try to load core library
     static {
+        Log.d("CoreLoaderActivity", "Loading Simulation-Core library ...");
+        try {
 
+            //load core library
+            System.loadLibrary("core");
+            simCoreLoaded = true;
+
+            Log.d("CoreLoaderActivity", "Loading Simulation-Core library successful!");
+        } catch (Exception e) {
+            Log.d("CoreLoaderActivity", "Loading Simulation-Core library failed!", e);
+        }
     }
+
+
+
 
     private boolean active;
 
@@ -107,19 +134,51 @@ START Android Lifecycle
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         System.out.println("#-# OnCreate");
-        
 
+//set layout
+        setContentView(R.layout.activity_main_loader);
+        TextView text = findViewById(R.id.status_text);
+
+        //Simulation-Core loaded
+        if (simCoreLoaded) {
+
+            Log.d("CoreLoaderActivity", "Changing into native activity ...");
+
+            //set text that "simulation core is loading"
+            text.setText(R.string.main_loader_status);
+
+            try {
+                //changing activity
+                startActivity(new Intent(getBaseContext(), FullscreenActivity.class));
+
+                Log.d("CoreLoaderActivity", "Changing into native activity successful!");
+
+            } catch (Exception e) {
+
+                Log.d("CoreLoaderActivity", "Changing into native activity failed!", e);
+
+                //set text that "loading simulation core failed"
+             //   text.setText(R.string.core_loader_text_load_failed);
+            }
+        }
+
+        //Simulation-Core not loaded
+        else {
+
+            //set text that "loading simulation core failed"
+//            text.setText(R.string.core_loader_text_load_failed);
+        }
         
         /*edIf.changeValues("xres", Integer.toString(width));
         edIf.changeValues("yres", Integer.toString(height));*/
         
-        String simSettings = EDSettingsController.getSimulationSettings();
+         String simSettings = "";//EDSettingsController.getSimulationSettings();
         simSettings = new StringBuilder(simSettings).insert(simSettings.length() - 1, String.format(",\"xres\":%d,\"yres\":%d", width, height)).toString();
         System.out.println("#-# Settings: "+ simSettings);
         postConfig(simSettings);
         System.out.println("#-# OnCreateAfterPostConfig");
 
-        EDSettingsListener.Provider.getInstance().addListener(this);
+     //   EDSettingsListener.Provider.getInstance().addListener(this);
 
         //we do not want to simulate darkness
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -425,7 +484,7 @@ START Camera
                 //noinspection ConstantConditions
                 mSensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
 
-                String simSettings = EDSettingsController.getSimulationSettings();
+                String simSettings = "";//EDSettingsController.getSimulationSettings();
                 simSettings = new StringBuilder(simSettings).insert(simSettings.length() - 1, String.format(",\"xres\":%d,\"yres\":%d,\"rotation\":%d",width, height,mSensorOrientation)).toString();
                 postConfig(simSettings);
 
@@ -569,10 +628,10 @@ START Simulation Settings
 
     public static native void postConfig(String string);
 
-    @Override
+
     public void updateSettings(String simulationSettings) {
         if (active) {
-            String simSettings = EDSettingsController.getSimulationSettings();
+            String simSettings = "";//EDSettingsController.getSimulationSettings();
             simSettings = new StringBuilder(simSettings).insert(simSettings.length() - 1, String.format(",\"xres\":%d,\"yres\":%d,\"rotation\":%d",width, height,mSensorOrientation)).toString();
             postConfig(simSettings);        }
     }

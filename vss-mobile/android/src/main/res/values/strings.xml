@@ -1,5 +1,6 @@
 <resources>
-    <string name="app_name">FIST</string>
+    <string name="app_name">VSS</string>
+    <string name="app_native_lib">vss</string>
     <string name="title_activity_main_menu">MainMenuActivity</string>
     <string name="navigation_drawer_open">Open navigation drawer</string>
     <string name="navigation_drawer_close">Schublade schließen</string>
@@ -19,13 +20,13 @@
     <string name="app_settings">App</string>
     <string name="webui_server">Server</string>
     <string name="webui_onoff">An/Aus</string>
-    <string name="simulation_core">Simulations Kern</string>
+    <string name="main_loader_status">Starting…</string>
     <string name="app_description">Fehlsichtigkeitssimulator</string>
     <string name="cancel">Abbrechen</string>
     <string name="eyediseases_settings_reset_confirmation">Sind Sie sicher, dass sie die Simulation-Einstellungen zurücksetzen wollen?\nFalls Sie diese nicht gespeicher haben, gehen sie verloren!</string>
     <string name="store">Speichern</string>
-    <string name="core_loader_text_load_successful">Simulationskern wird geladen …</string>
-    <string name="core_loader_text_load_failed">Simulationskern konnte nicht geladen werden!</string>
+    <string name="main_loader_status_successful">Success!</string>
+    <string name="main_loader_status_failed">Whoops! 😅\n\nLoading native code failed.</string>
     <string name="store_connection">Verbindung speichern</string>
     <string name="new_server_connection">Neue Verbindung</string>
     <string name="webui_disconnect">Verbindung trennen</string>
@@ -136,4 +137,5 @@
     <string name="webui_channel_leaving_confirmation">sicher?</string>
     <string name="send_feedback">Feedback abschicken</string>
     <string name="feedback">Feedback</string>
+    <string name="loading">Loading...</string>
 </resources>

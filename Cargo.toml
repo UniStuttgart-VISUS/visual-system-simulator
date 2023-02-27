@@ -3,7 +3,7 @@ resolver = "2"
 members = [
   "vss",
   "vss-desktop",
-  #"vss-mobile"
+  "vss-mobile"
 ]
 
 

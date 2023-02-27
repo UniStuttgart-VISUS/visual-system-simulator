@@ -1,12 +1,12 @@
-package de.uni_stuttgart.vss.fragments;
+package com.vss.fragments;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
-import android.support.v4.app.Fragment;
-import android.support.v7.widget.LinearLayoutManager;
-import android.support.v7.widget.RecyclerView;
+import androidx.annotation.NonNull;
+import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -14,9 +14,7 @@ import android.view.ViewGroup;
 
 import java.io.IOException;
 
-import de.uni_stuttgart.vss.KnowledgebaseContentItem;
-import de.uni_stuttgart.vss.KnowledgebaseListContent;
-import de.uni_stuttgart.vss.R;
+import com.vss.R;
 
 /**
  * fragment containing list of knowledgebase-items
@@ -27,7 +25,7 @@ public class KnowledgebaseListFragment extends Fragment {
     /**
      * knowledgebase-content
      */
-    private KnowledgebaseListContent knowledgebaseListContent;
+  //  private KnowledgebaseListContent knowledgebaseListContent;
 
     /**
      * default constructor
@@ -44,7 +42,7 @@ public class KnowledgebaseListFragment extends Fragment {
             OnListFragmentInteractionListener mListener = (OnListFragmentInteractionListener) context;
 
             //load content
-            this.knowledgebaseListContent = new KnowledgebaseListContent(mListener, context);
+         //   this.knowledgebaseListContent = new KnowledgebaseListContent(mListener, context);
         }
 
         //context is no listener for knowledgebase-list
@@ -76,7 +74,7 @@ public class KnowledgebaseListFragment extends Fragment {
             Context context = view.getContext();
             RecyclerView recyclerView = (RecyclerView) view;
             recyclerView.setLayoutManager(new LinearLayoutManager(context));
-            recyclerView.setAdapter(this.knowledgebaseListContent);
+        //    recyclerView.setAdapter(this.knowledgebaseListContent);
         }
 
         Log.d("KnowledgebaseListFragment", "END creating KnowledgebaseListView");
@@ -95,6 +93,6 @@ public class KnowledgebaseListFragment extends Fragment {
          *
          * @param item selected knowledgebase-item
          */
-        void openKnowledgebaseContentFragment(KnowledgebaseContentItem item);
+      //  void openKnowledgebaseContentFragment(KnowledgebaseContentItem item);
     }
 }

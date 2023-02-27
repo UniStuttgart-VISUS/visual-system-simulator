@@ -1,11 +1,11 @@
-package de.uni_stuttgart.vss.fragments;
+package com.vss.fragments;
 
 import android.annotation.SuppressLint;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.support.annotation.NonNull;
-import android.support.v4.app.Fragment;
+import androidx.annotation.NonNull;
+import androidx.fragment.app.Fragment;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -13,16 +13,14 @@ import android.view.ViewGroup;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 
-import de.uni_stuttgart.vss.R;
-import de.uni_stuttgart.vss.edsettings.EDSettingsController;
-import de.uni_stuttgart.vss.edsettings.EDSettingsListener;
+import com.vss.R;
 
 /**
  * fragment containing the simulation-settings-web-view and
  * the interface between java-script in the sim-set-web-view and java
  */
 @SuppressLint("ValidFragment")
-public class EDControlFragment extends Fragment implements EDSettingsListener {
+public class SimulatorValueFragment extends Fragment   {
 
     /**
      * interface name for java script in web-view
@@ -37,7 +35,7 @@ public class EDControlFragment extends Fragment implements EDSettingsListener {
     /**
      * reference to simulation settings controller
      */
-    private EDSettingsController edSettingsController;
+  //  private EDSettingsController edSettingsController;
 
     /**
      * initializes simulation settings fragment
@@ -46,13 +44,13 @@ public class EDControlFragment extends Fragment implements EDSettingsListener {
      * @param edSettingsController simulation settings controller connected to the fragment
      */
     @SuppressLint("ValidFragment")
-    public EDControlFragment(EDSettingsController edSettingsController) {
+    public SimulatorValueFragment( ) {
 
         Log.d("EDControlFragment", "START initializing EDControlFragment");
 
         //connectToServerFromRes to simulation settings controller
-        this.edSettingsController = edSettingsController;
-        this.edSettingsController.addListener(this);
+     //   this.edSettingsController = edSettingsController;
+     //   this.edSettingsController.addListener(this);
 
         Log.d("EDControlFragment", "END initializing EDControlFragment");
     }
@@ -91,7 +89,7 @@ public class EDControlFragment extends Fragment implements EDSettingsListener {
     /**
      * updates the simulation settings and reloads the view
      */
-    @Override
+
     public void updateSettings(String simulationSettings) {
 
         new Handler(Looper.getMainLooper()).post(() -> {
@@ -122,7 +120,7 @@ public class EDControlFragment extends Fragment implements EDSettingsListener {
     @JavascriptInterface
     public void changeValues(String id, String value) {
         Log.d("EDControlFragment", "START change value of " + id + " to " + value);
-        edSettingsController.updateSettings(this, id, value);
+     //   edSettingsController.updateSettings(this, id, value);
         Log.d("EDControlFragment", "END change value");
     }
 
@@ -134,7 +132,7 @@ public class EDControlFragment extends Fragment implements EDSettingsListener {
     @JavascriptInterface
     public void activateED(String id) {
         Log.d("EDControlFragment", "START activating eye disease " + id);
-        edSettingsController.activateED(this, id);
+      //  edSettingsController.activateED(this, id);
         Log.d("EDControlFragment", "END activating eye disease " + id);
     }
 
@@ -146,7 +144,7 @@ public class EDControlFragment extends Fragment implements EDSettingsListener {
     @JavascriptInterface
     public void deactivateED(String id) {
         Log.d("EDControlFragment", "START deactivating eye disease " + id);
-        edSettingsController.deactivateED(this, id);
+    //    edSettingsController.deactivateED(this, id);
         Log.d("EDControlFragment", "END deactivating eye disease " + id);
     }
 
@@ -158,7 +156,8 @@ public class EDControlFragment extends Fragment implements EDSettingsListener {
      */
     @JavascriptInterface
     public boolean getBooleanValue(String id) {
-        return this.edSettingsController.getBooleanValue(id);
+        return false;
+      //  return this.edSettingsController.getBooleanValue(id);
     }
 
     /**
@@ -169,6 +168,7 @@ public class EDControlFragment extends Fragment implements EDSettingsListener {
      */
     @JavascriptInterface
     public long getLongValue(String id) {
-        return this.edSettingsController.getLongValue(id);
+        return 0;
+   //     return this.edSettingsController.getLongValue(id);
     }
 }

@@ -2,7 +2,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context="de.uni_stuttgart.vss.fragments.KnowledgebaseWebFragment">
+    tools:context="com.vss.fragments.KnowledgebaseWebFragment">
 
     <!-- TODO: Update blank fragment layout -->
     <WebView

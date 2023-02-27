@@ -6,12 +6,19 @@ authors = ["The Visual System Simulator Developers"]
 license = "Apache-2.0"
 
 [lib]
-crate-type = ["rlib", "dylib"]
+name = "vss"
+crate-type = ["cdylib"]
 
 [dependencies]
 vss = { path = "../vss" }
+lazy_static = "1.4.0"
 
 [target.'cfg(target_os="android")'.dependencies]
-jni = { version = "0.5", default-features = false }
-android_glue="0.2.3"
-android_injected_glue = "0.2.2"
+jni = "0.21"
+ndk-glue = "0.7.0"
+ndk = "0.7"
+android-activity = { version = "0.4.1", features = ["native-activity"] }
+
+[package.metadata.android.sdk]
+min_sdk_version = 24
+target_sdk_version = 33

@@ -1,9 +1,9 @@
-package de.uni_stuttgart.vss.fragments;
+package com.vss.fragments;
 
 import android.annotation.SuppressLint;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
-import android.support.v4.app.Fragment;
+import androidx.annotation.NonNull;
+import androidx.fragment.app.Fragment;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -11,11 +11,7 @@ import android.view.ViewGroup;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 
-import java.io.IOException;
-
-import de.uni_stuttgart.vss.KnowledgebaseContentItem;
-import de.uni_stuttgart.vss.R;
-import de.uni_stuttgart.vss.edsettings.EDSettingsController;
+import com.vss.R;
 
 /**
  * fragment containing the knowledgebase-web-view
@@ -26,12 +22,12 @@ public class KnowledgebaseWebFragment extends Fragment {
     /**
      * displayed knowledgebase entry
      */
-    private final KnowledgebaseContentItem contentItem;
+   // private final KnowledgebaseContentItem contentItem;
 
     /**
      * reference to simulation settings controller
      */
-    private EDSettingsController edSettingsController;
+   // private EDSettingsController edSettingsController;
 
     /**
      * initializes knowledgebase-web-view
@@ -39,16 +35,16 @@ public class KnowledgebaseWebFragment extends Fragment {
      * @param edSettingsController simulation settings controller connected to the fragment
      * @param item                 knowledgebase entry to display
      */
-    @SuppressLint("ValidFragment")
-    public KnowledgebaseWebFragment(EDSettingsController edSettingsController, KnowledgebaseContentItem item) {
+  //  @SuppressLint("ValidFragment")
+   // public KnowledgebaseWebFragment( KnowledgebaseContentItem item) {
 
-        Log.d("KnowledgebaseWebFragment", "START initializing KnowledgebaseWebFragment");
+   //     Log.d("KnowledgebaseWebFragment", "START initializing KnowledgebaseWebFragment");
 
-        this.edSettingsController = edSettingsController;
-        this.contentItem = item;
+ //this.edSettingsController = edSettingsController;
+   //     this.contentItem = item;
 
-        Log.d("KnowledgebaseWebFragment", "END initializing KnowledgebaseWebFragment");
-    }
+    //    Log.d("KnowledgebaseWebFragment", "END initializing KnowledgebaseWebFragment");
+  //  }
 
     /**
      * create the web-view
@@ -70,7 +66,7 @@ public class KnowledgebaseWebFragment extends Fragment {
 
         //manipulate view - load html-file, enable java-script and load java-script-interface
         webView.getSettings().setJavaScriptEnabled(true);
-        webView.loadUrl(contentItem.contentUrl);
+     //   webView.loadUrl(contentItem.contentUrl);
         webView.addJavascriptInterface(this, "Android");
 
         Log.d("KnowledgebaseWebFragment", "END creating KnowledgebaseWebView");
@@ -90,19 +86,19 @@ public class KnowledgebaseWebFragment extends Fragment {
         Log.d("KnowledgebaseWebFragment", "Load preset simulation-setting (" + file + ")...");
 
         //try to load prepared simulation-settings
-        try {
+     //   try {
 
             //load prepared simulation-settings
-            edSettingsController.loadPreparedSimulationSettings(file);
+         //   edSettingsController.loadPreparedSimulationSettings(file);
 
             Log.d("KnowledgebaseWebFragment", "Load preset simulation-setting successful!");
-        }
+      //  }
 
         //load settings failed
-        catch (IOException e) {
+      //  catch (IOException e) {
 
-            Log.d("KnowledgebaseWebFragment", "Load preset simulation-setting failed!", e);
-        }
+        //    Log.d("KnowledgebaseWebFragment", "Load preset simulation-setting failed!", e);
+      //  }
     }
 
 }
