@@ -27,7 +27,7 @@ cargo {
     module = "../"
     libname = "vss"
     targets = ["arm", "arm64", "x86", "x86_64"]
-    targetDirectory = '../../target'
+    targetDirectory = "../../target"
 }
 
 android {
@@ -62,8 +62,13 @@ android {
     }
     namespace 'com.vss'
     tasks.whenTaskAdded { task ->
-        if ((task.name == 'javaPreCompileDebug' || task.name == 'javaPreCompileRelease')) {
+        // Require cargo to be run before copying JNI libraries.
+        if ((task.name == 'mergeDebugJniLibFolders' || task.name == 'mergeReleaseJniLibFolders')) {
             task.dependsOn 'cargoBuild'
+        }
+        // Require "clean builds" to avoid issues with build caches.
+        if (task.name == 'assembleDebug' || task.name == 'assembleRelease')  {
+            task.dependsOn 'clean'
         }
     }
 }

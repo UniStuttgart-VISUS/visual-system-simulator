@@ -1,11 +1,10 @@
 package com.vss.activities;
 
 import android.app.Activity;
-import android.content.Intent;
 import android.os.Bundle;
-import android.util.Log;
 import android.widget.TextView;
 
+import com.vss.LibBridge;
 import com.vss.R;
 
 /**
@@ -21,22 +20,18 @@ public class MainLoaderActivity extends Activity {
         setContentView(R.layout.activity_main_loader);
         statusText = findViewById(R.id.status_text);
 
-        if (tryLoadNativeLibrary()) {
-            startActivity(new Intent(getBaseContext(), MainActivity.class));
+        LibBridge bridge = new LibBridge();
+        bridge.draw();
+
+        if (LibBridge.tryLoadLibrary()) {
+            statusText.setText(R.string.main_loader_status_successful);
+
+
+
+           // startActivity(new Intent(getBaseContext(), MainActivity.class));
+        } else {
+             statusText.setText(R.string.main_loader_status_failed);
         }
     }
 
-    private boolean tryLoadNativeLibrary() {
-        try {
-            Log.d("MainLoaderActivity", "Loading native library...");
-            System.loadLibrary("vss");
-            statusText.setText(R.string.main_loader_status_successful);
-            Log.d("MainLoaderActivity", "Loading native library: successful");
-            return true;
-        } catch (java.lang.UnsatisfiedLinkError e) {
-            statusText.setText(R.string.main_loader_status_failed);
-            Log.e("MainLoaderActivity", "Loading native library: failed", e);
-            return false;
-        }
-    }
 }

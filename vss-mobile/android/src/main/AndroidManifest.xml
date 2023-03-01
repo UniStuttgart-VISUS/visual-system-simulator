@@ -26,25 +26,7 @@
 
         <activity
             android:name=".activities.MainActivity"
-            android:theme="@style/AppTheme.NoActionBar">
-
-            <meta-data
-                android:name="android.app.lib_name"
-                android:value="@string/app_native_lib" />
-
-        </activity>
-
-        <activity
-            android:name=".activities.FullscreenActivity"
-            android:configChanges="keyboardHidden|orientation|screenSize"
-            android:noHistory="true"
-            android:screenOrientation="portrait">
-
-            <meta-data
-                android:name="android.app.lib_name"
-                android:value="@string/app_native_lib" />
-
-        </activity>
+            android:theme="@style/AppTheme.NoActionBar" />
 
     </application>
 
