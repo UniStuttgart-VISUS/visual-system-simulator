@@ -12,12 +12,12 @@ crate-type = ["cdylib"]
 [dependencies]
 vss = { path = "../vss" }
 lazy_static = "1.4.0"
+log = "0.4"
 
 [target.'cfg(target_os="android")'.dependencies]
 jni = "0.21"
-ndk-glue = "0.7.0"
+ndk-glue = "0.7"
 ndk = "0.7"
-android-activity = { version = "0.4.1", features = ["native-activity"] }
 
 [package.metadata.android.sdk]
 min_sdk_version = 24

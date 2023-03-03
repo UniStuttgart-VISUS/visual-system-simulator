@@ -1,61 +1,59 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-<androidx.slidingpanelayout.widget.SlidingPaneLayout
-     android:id="@+id/persona_simulation_pane"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent">
-
-
-
-
-    <LinearLayout
+    <androidx.slidingpanelayout.widget.SlidingPaneLayout
+        android:id="@+id/persona_simulator_pane"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical">
+        android:layout_height="match_parent">
 
-        <ImageView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal"
-            android:src="@drawable/ic_launcher_background"
-            tools:ignore="ContentDescription" />
-
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/preset_view"
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="100dp" />
+            android:layout_height="match_parent"
+            android:orientation="vertical">
 
-        <WebView
-            android:id="@+id/inspector_view"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent" />
-    </LinearLayout>
+            <ImageView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:src="@drawable/ic_launcher_background"
+                tools:ignore="ContentDescription" />
 
-    <androidx.fragment.app.FragmentContainerView
-        android:id="@+id/simulator_view"
-        android:layout_width="550dp"
-        android:layout_height="match_parent"
-        android:layout_weight="1"
-        android:background="#181818" />
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/preset_view"
+                android:layout_width="match_parent"
+                android:layout_height="100dp" />
 
-</androidx.slidingpanelayout.widget.SlidingPaneLayout>
+            <WebView
+                android:id="@+id/inspector_view"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+        </LinearLayout>
+
+        <com.vss.simulator.SimulatorSurfaceView
+            android:id="@+id/simulator_view"
+            android:layout_width="550dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="#181818" />
+
+    </androidx.slidingpanelayout.widget.SlidingPaneLayout>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/floatingActionButton"
+        android:id="@+id/start_button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_margin="@dimen/fab_margin"
         android:clickable="true"
-        android:focusable="true"
         android:contentDescription="Start Simulation"
+        android:focusable="true"
+        android:onClick="startSimulator"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-         app:srcCompat="@android:drawable/ic_media_play"
-     />
+        app:srcCompat="@android:drawable/ic_media_play" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>

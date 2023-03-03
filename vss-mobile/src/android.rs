@@ -7,17 +7,16 @@ use jni::objects::{JClass, JObject, JString};
 use jni::sys::{jbyteArray, jint};
 use jni::JNIEnv;
 
-use android_activity::AndroidApp;
+/* 
+use std::{os::raw::c_void, panic::catch_unwind, sync::mpsc, thread, time::Duration};
+use jni::{JNIEnv, JavaVM};
+use jni::objects::{GlobalRef, JClass, JObject, JString};
+use jni::sys::{jbyteArray, jint, jlong, jstring, JNI_VERSION_1_6};
+*/
 
 pub enum Message {
-    Config(String),
-    Frame {
-        y: Box<[u8]>,
-        u: Box<[u8]>,
-        v: Box<[u8]>,
-        width: u32,
-        height: u32,
-    },
+    Config(vss::ValueMap),
+    Frame(vss::RgbBuffer)  , //TODO: should be a YUV buffer
 }
 
 lazy_static::lazy_static! {
@@ -28,53 +27,45 @@ lazy_static::lazy_static! {
     };
 }
 
-/// Program entry point for Android.
 #[no_mangle]
-fn android_main(_app: AndroidApp) {
-    println!("Hello World");
-    /*
-    let mut config = config::get_default_config();
-    config.input_file = String::from("flowers.png");
-    config.loop_provider = String::from("camera");
-    config.special_loop_provider_set = true;
-
-
-    let (mut device, mut flow) = config.build();
-
-    let mut done = false;
-    while !done {
-        device.begin_frame();
-        flow.render(&mut device);
-        device.end_frame(&mut done);
-    }
-    */
-}
-
-#[no_mangle]
-pub extern "system" fn Java_com_vss_activities_MainActivity_postConfig(
+pub extern "system" fn  Java_com_vss_simulator_SimulatorBridge_nativeCreate(
     env: JNIEnv,
     _class: JClass,
-    json_string: JString,
+      surface: JObject, 
+        assetManager : JObject,
 ) {
-    println!("Config!");
-
-    /*
-      let conf: String = env.get_string(conf).expect("Couldn't get java string!").into();
-       let mut s = &ED_CONFIG.lock().unwrap();
-       let mut s = s.borrow_mut();
-       s.clear();
-       s.push_str(conf.as_str());
-
-       let flag = &ED_CONFIG_UPDATE_FLAG.lock().unwrap();
-       let mut flag = flag.borrow_mut();
-       *flag = true;
-
-       println!("RustConfReceiver: {}",conf);
-    */
+    println!("Create!");
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_vss_activities_MainActivity_postFrame(
+pub extern "system" fn  Java_com_vss_simulator_SimulatorBridge_nativeDestroy(
+    env: JNIEnv,
+    _class: JClass,
+) {
+    println!("Destroy!");
+}
+
+#[no_mangle]
+pub extern "system" fn  Java_com_vss_simulator_SimulatorBridge_nativeResize(
+    env: JNIEnv,
+    _class: JClass,
+    width: jint,
+    height: jint,
+) {
+    println!("Resize!");
+}
+ 
+ 
+#[no_mangle]
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDraw(
+    env: JNIEnv,
+    _class: JClass, 
+) {
+    println!("Draw!");
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_postFrame(
     env: JNIEnv,
     _class: JClass,
     width: jint,
@@ -111,4 +102,27 @@ pub extern "system" fn Java_com_vss_activities_MainActivity_postFrame(
 
     }
      */
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostSettings(
+    env: JNIEnv,
+    _class: JClass,
+    json_string: JString,
+) {
+    println!("Config!");
+
+    /*
+      let conf: String = env.get_string(conf).expect("Couldn't get java string!").into();
+       let mut s = &ED_CONFIG.lock().unwrap();
+       let mut s = s.borrow_mut();
+       s.clear();
+       s.push_str(conf.as_str());
+
+       let flag = &ED_CONFIG_UPDATE_FLAG.lock().unwrap();
+       let mut flag = flag.borrow_mut();
+       *flag = true;
+
+       println!("RustConfReceiver: {}",conf);
+    */
 }
