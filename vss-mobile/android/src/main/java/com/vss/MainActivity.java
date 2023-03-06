@@ -1,26 +1,13 @@
 package com.vss;
 
-import static android.hardware.camera2.CameraDevice.TEMPLATE_PREVIEW;
-
 import android.Manifest;
 import android.app.AlertDialog;
-import android.content.Context;
 import android.content.pm.PackageManager;
-import android.graphics.ImageFormat;
-import android.hardware.camera2.CameraAccessException;
-import android.hardware.camera2.CameraCaptureSession;
-import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
-import android.hardware.camera2.CameraManager;
-import android.hardware.camera2.CaptureRequest;
-import android.hardware.camera2.params.StreamConfigurationMap;
-import android.media.Image;
-import android.media.ImageReader;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.StrictMode;
 import android.util.Log;
-import android.util.Size;
 import android.view.View;
 import android.view.WindowManager;
 import android.webkit.WebResourceRequest;
@@ -36,14 +23,10 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.slidingpanelayout.widget.SlidingPaneLayout;
 
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.vss.personas.Persona;
 import com.vss.personas.PersonasAdapter;
 import com.vss.simulator.SimulatorSurfaceView;
-
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
 
 /**
  * Main activity.
@@ -54,6 +37,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     private static final int CAMERA_REQUEST_CODE = 100;
 
     private SlidingPaneLayout personaSimulationPane;
+    private FloatingActionButton startButton;
 
     private PersonasAdapter personasAdapter;
     private RecyclerView personasView;
@@ -61,7 +45,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     private WebView inspectorView;
 
     private SimulatorSurfaceView simulatorView;
-    private ImageReader imageReader;
+    private CameraAccess cameraAccess;
 
     //region Android activity lifecycle
 
@@ -83,6 +67,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
 
         // Setup UI elements.
         this.personaSimulationPane = findViewById(R.id.persona_simulator_pane);
+        this.startButton = findViewById(R.id.start_button);
         setupPersonasView();
         setupInspectorView();
         this.simulatorView = findViewById(R.id.simulator_view);
@@ -115,16 +100,11 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
 
     //region Android permissions
 
-    private boolean checkCameraPermission(boolean requestIfMissing) {
+    private void checkCameraPermission() {
         if (ActivityCompat.checkSelfPermission(this,
                 Manifest.permission.CAMERA) == PackageManager.PERMISSION_DENIED) {
-            if (requestIfMissing) {
-                ActivityCompat.requestPermissions(this,
-                        new String[]{Manifest.permission.CAMERA}, CAMERA_REQUEST_CODE);
-            }
-            return false;
-        } else {
-            return true;
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.CAMERA}, CAMERA_REQUEST_CODE);
         }
     }
 
@@ -194,21 +174,42 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     public void startSimulator(View view) {
         Log.d(LOG_TAG, "Starting simulator");
 
-        if (checkCameraPermission(true)) {
-            Toast.makeText(this, R.string.start_simulator, Toast.LENGTH_LONG).show();
+        Toast.makeText(this, R.string.start_simulator, Toast.LENGTH_LONG).show();
 
-            setupCamera();
+        this.cameraAccess = new CameraAccess(this, new CameraAccess.CameraDelegate() {
+            @Override
+            public void onCameraOpen(CameraDevice cameraDevice) {
+            }
 
-            // Prevent screen from turning off.
-            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            @Override
+            public void onCameraDisconnected(CameraDevice cameraDevice) {
+            }
 
-            // Switch to simulator (low-resolution only)
-            this.personaSimulationPane.open();
-            //this.simulatorView.postSettings(jsonString);
-            //this.simulatorView.start()
-        } else {
-            Toast.makeText(this, "Camera permission required", Toast.LENGTH_SHORT).show();
-        }
+            @Override
+            public void onCameraError(CameraDevice cameraDevice, int error) {
+            }
+
+            @Override
+            public void onCameraPermissionDenied() {
+                checkCameraPermission();
+            }
+
+            @Override
+            public void onFrameAvailable(int width, int height, byte[] y, byte[] u, byte[] v) {
+                Log.i("Camera", "Frame available");
+                simulatorView.postFrame(width, height, y, u, v);
+            }
+        });
+
+        // Prevent screen from turning off.
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        // Switch to simulator (low-resolution only)
+        this.personaSimulationPane.open();
+        //this.simulatorView.postSettings(jsonString);
+        //this.simulatorView.start()
+
+        this.startButton.hide();
     }
 
     /**
@@ -332,144 +333,14 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         //  }
     }
 
-    //endregion
-
-
-    //region Camera
-
-    private void setupCamera() {
-        if (!checkCameraPermission(false)) {
-            return;
-        }
-
-        CameraManager manager = (CameraManager) this.getSystemService(Context.CAMERA_SERVICE);
-        try {
-            for (String cameraId : manager.getCameraIdList()) {
-                CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
-
-                // Do not use front facing camera.
-                Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
-                if (facing != null && facing == CameraCharacteristics.LENS_FACING_FRONT) {
-                    continue;
-                }
-
-                // We need a stream configuration.
-                StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
-                if (map == null) {
-                    continue;
-                }
-
-                // Determine possible output sizes.
-                final int imageFormat = ImageFormat.YUV_420_888;
-                final List<Size> outputSizes = Arrays.asList(map.getOutputSizes(imageFormat));
-
-                // Log some useful information.
-                Log.i("Camera", map.toString());
-                for (Size size : outputSizes) {
-                    Log.i("Camera", size.toString());
-                }
-
-                // Use the largest available size for the given format.
-                final Size largestSize = Collections.max(outputSizes, new Comparator<Size>() {
-                    @Override
-                    public int compare(Size lhs, Size rhs) {
-                        // We cast here to ensure the multiplications won't overflow
-                        return Long.signum((long) lhs.getWidth() * lhs.getHeight() - (long) rhs.getWidth() * rhs.getHeight());
-                    }
-                });
-
-                //TODO: use multi-camera API (camera2) or FEATURE_CAMERA_CONCURRENT (camera2) for front/back camera
-
-                manager.openCamera(cameraId, new CameraDevice.StateCallback() {
-                    @Override
-                    public void onOpened(CameraDevice cameraDevice) {
-                        Log.i("Camera", "Device opened");
-                        setupCameraSession(cameraDevice, imageFormat, largestSize);
-
-                    }
-
-                    @Override
-                    public void onDisconnected(CameraDevice cameraDevice) {
-                        Log.i("Camera", "Device disconnected");
-                    }
-
-                    @Override
-                    public void onError(CameraDevice cameraDevice, int error) {
-
-                        Log.e("Camera", "Device error (" + error + ")");
-                    }
-                }, null);
-
-                // Bail out if we found a suitable one.
-                break;
-            }
-        } catch (CameraAccessException e) {
-            Log.e("Camera", "Setting up camera failed", e);
-        }
-    }
-
-    private void setupCameraSession(CameraDevice cameraDevice, int imageFormat, Size largestSize) {
-        final int width = largestSize.getWidth();
-        final int height = largestSize.getHeight();
-
-        // Create buffers for copying channels to.
-        int size = width * height;
-        byte[] y = new byte[size];
-        byte[] u = new byte[size / 2 - 1];
-        byte[] v = new byte[size / 2 - 1];
-
-        // Create image reader for accessing pixel data.
-        imageReader = ImageReader.newInstance(width, height, imageFormat, 2);
-        imageReader.setOnImageAvailableListener(new ImageReader.OnImageAvailableListener() {
-            public void onImageAvailable(ImageReader reader) {
-                Image image = reader.acquireLatestImage();
-                if (image == null) {
-                    return;
-                }
-
-                // Copy planes to buffers.
+    /*
+      // Copy planes to buffers.
                 image.getPlanes()[0].getBuffer().get(y);
                 image.getPlanes()[1].getBuffer().get(u);
                 image.getPlanes()[2].getBuffer().get(v);
 
-                // Post frame to simulator.
-                simulatorView.postFrame(width, height, y, u, v);
-
-                // Free manually
-                image.close();
-            }
-        }, null);
-
-        try {
-            // Create a CameraCaptureSession for camera preview.
-            final List outputs = Arrays.asList(imageReader.getSurface());
-            cameraDevice.createCaptureSession(outputs, new CameraCaptureSession.StateCallback() {
-                @Override
-                public void onConfigured(@NonNull CameraCaptureSession captureSession) {
-                    try {
-                        CaptureRequest.Builder requestBuilder = cameraDevice.createCaptureRequest(TEMPLATE_PREVIEW);
-                        requestBuilder.addTarget(imageReader.getSurface());
-
-                        // Set continuous auto focus.
-                        requestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
-
-                        // Finally, start requesting frames.
-                        captureSession.setRepeatingRequest(requestBuilder.build(), new CameraCaptureSession.CaptureCallback() {
-                        }, null);
-                    } catch (CameraAccessException e) {
-                        Log.e("CameraSession", "Configure failed", e);
-                    }
-                }
-
-                @Override
-                public void onConfigureFailed(@NonNull CameraCaptureSession cameraCaptureSession) {
-                    Log.e("CameraSession", "Configure failed");
-                }
-            }, null);
-        } catch (CameraAccessException e) {
-            Log.e("CameraSession", "Creating session", e);
-        }
-    }
+                //TODO: simulatorView.postFrame(width, height, y, u, v);
+     */
 
     //endregion
 }

@@ -65,7 +65,7 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDraw(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_postFrame(
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostFrame(
     env: JNIEnv,
     _class: JClass,
     width: jint,
