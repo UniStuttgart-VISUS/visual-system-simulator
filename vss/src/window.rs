@@ -28,30 +28,8 @@ use winit::{
 /// Represents a window along with its associated rendering context and [Flow].
 pub struct Window {
     wgpu_window: winit::window::Window,
-    events_loop: RefCell<EventLoop<()>>,
-    pub window_size: PhysicalSize<u32>,
-    surface: wgpu::Surface,
-    surface_config: RefCell<wgpu::SurfaceConfiguration>,
-    device: RefCell<wgpu::Device>,
-    queue: RefCell<wgpu::Queue>,
-    //TODO-WGPU factory: RefCell<DeviceFactory>,
-    //TODO-WGPU encoder: RefCell<CommandEncoder>,
-
-    //TODO-remove render_target: RefCell<TextureView>, //Rgba8Unorm
-    //TODO-WGPU main_depth: RefCell<RenderTargetDepth>,
-    should_swap_buffers: RefCell<bool>,
-    cursor_pos: RefCell<PhysicalPosition<f64>>,
-    override_view: RefCell<bool>,
-    override_gaze: RefCell<bool>,
-
-    active: RefCell<bool>,
-    values: Vec<RefCell<ValueMap>>,
-
-    remote: Option<Remote>,
-    flow: Vec<Flow>,
-    vis_param: RefCell<VisualizationParameters>,
-    last_render_instant: RefCell<Instant>,
-    forced_view: Option<(f32,f32)>
+    events_loop: RefCell<EventLoop<()>>, 
+    pub surface: surface::Surface,
 }
 
 impl Window {
@@ -78,240 +56,19 @@ impl Window {
         let wgpu_window = window_builder.build(&events_loop).unwrap();
         wgpu_window.set_cursor_visible(true);
         let window_size = wgpu_window.inner_size();
-
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::VULKAN,
-            dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
-        });
-        let surface = unsafe { instance.create_surface(&wgpu_window) }.unwrap();
-        let adapter = instance.request_adapter(
-            &wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                compatible_surface: Some(&surface),
-                force_fallback_adapter: false,
-            },
-        ).await.unwrap();
-
-        let (device, queue) = adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                features: wgpu::Features::empty(),
-                // WebGL doesn't support all of wgpu's features, so if
-                // we're building for the web we'll have to disable some.
-                // TODO-WGPU will look into this at a later point
-                // limits: if cfg!(target_arch = "wasm32") {
-                //     wgpu::Limits::downlevel_webgl2_defaults()
-                // } else {
-                //     wgpu::Limits::default()
-                // },
-                limits: wgpu::Limits::default(),
-                label: None,
-            },
-            None,
-        ).await.unwrap();
-
-        let surface_config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: COLOR_FORMAT,// surface.get_supported_formats(&adapter)[0],
-            width: window_size.width,
-            height: window_size.height,
-            present_mode: wgpu::PresentMode::Fifo,
-            alpha_mode: wgpu::CompositeAlphaMode::Auto,
-            view_formats: vec![COLOR_FORMAT.add_srgb_suffix()],
-        };
-        surface.configure(&device, &surface_config);
-
-        // Create a command buffer.
-        //TODO-WGPU let encoder: CommandEncoder = factory.create_command_buffer().into();
-
-        //TODO-WGPU maybe use "surface.get_supported_formats(&adapter)[0].describe().srgb" to filter;
-        // unsafe {
-        //     device.with_gl(|gl| gl.Disable(gfx_gl::FRAMEBUFFER_SRGB));
-        //     
-        // }
-
-        let mut flow = Vec::new();
-        flow.resize_with(flow_count, Flow::new);
-
-        //TODO set perspective from values here ?
-
-        let mut vis_param = VisualizationParameters::default();
-        if let Some(Value::Number(file_base_image)) = values[0].borrow().get("file_base_image") {
-            vis_param.vis_type.base_image = match *file_base_image as i32{
-                0 => BaseImage::Output,
-                1 => BaseImage::Original,
-                2 => BaseImage::Ganglion,
-                _ => panic!("No BaseImage of {} found", file_base_image)
-            };
-        }
-        if let Some(Value::Number(file_mix_type)) = values[0].borrow().get("file_mix_type") {
-            vis_param.vis_type.mix_type = match *file_mix_type as i32{
-                0 => MixType::BaseImageOnly,
-                1 => MixType::ColorMapOnly,
-                2 => MixType::OverlayThreshold,
-                _ => panic!("No MixType of {} found", file_mix_type)
-            };
-        }
-        if let Some(Value::Number(file_color_map_type)) = values[0].borrow().get("file_cm_type") {
-            vis_param.vis_type.color_map_type = match *file_color_map_type as i32{
-                0 => ColorMapType::Viridis,
-                1 => ColorMapType::Turbo,
-                2 => ColorMapType::Grayscale,
-                _ => panic!("No ColorMapType of {} found", file_color_map_type)
-            };
-        }
-        if let Some(Value::Number(combination_function)) = values[0].borrow().get("file_cf") {
-            vis_param.vis_type.combination_function = match *combination_function as i32{
-                0 => CombinationFunction::AbsoluteErrorRGBVectorLength,
-                1 => CombinationFunction::AbsoluteErrorXYVectorLength,
-                2 => CombinationFunction::AbsoluteErrorRGBXYVectorLength,
-                3 => CombinationFunction::UncertaintyRGBVectorLength,
-                4 => CombinationFunction::UncertaintyXYVectorLength,
-                5 => CombinationFunction::UncertaintyRGBXYVectorLength,
-                6 => CombinationFunction::UncertaintyGenVar,
-                _ => panic!("No CombinationFunction of {} found", combination_function)
-            };
-        }
-        if let Some(Value::Number(cm_scale)) = values[0].borrow().get("cm_scale") {
-            vis_param.heat_scale = *cm_scale as f32;
-        }
-        if let Some(Value::Number(measure_variance)) = values[0].borrow().get("measure_variance") {
-            vis_param.measure_variance = *measure_variance as u32;
-        }
-        if let Some(Value::Number(variance_metric)) = values[0].borrow().get("variance_metric") {
-            vis_param.variance_metric = *variance_metric as u32;
-        }
-        if let Some(Value::Number(variance_color_space)) = values[0].borrow().get("variance_color_space") {
-            vis_param.variance_color_space = *variance_color_space as u32;
-        }
-
-        let mut override_view = false;
-
-        let mut forced_view = None;
-        if let (Some(Value::Number(view_x)), Some(Value::Number(view_y)) ) = (values[0].borrow().get("view_x"),(values[0].borrow().get("view_y"))) {
-            forced_view = Some((*view_x as f32,*view_y as f32));
-            override_view = true;
-        }
-        let override_view =  RefCell::new(override_view);
-
-        let vis_param = RefCell::new(vis_param);
-
+ 
+        let surface = surface::Surface::new(
+            [window_size.width, window_size.height],
+             &wgpu_window, remote, values, flow_count)
+            .await;
+             
         Window {
             wgpu_window,
             events_loop: RefCell::new(events_loop),
-            window_size,
             surface,
-            surface_config: RefCell::new(surface_config),
-            device: RefCell::new(device),
-            queue: RefCell::new(queue),
-            //TODO-WGPU factory: RefCell::new(factory),
-            //TODO-WGPU encoder: RefCell::new(encoder),
-            //TODO-WGPU main_depth: RefCell::new(main_depth),
-            flow,
-            remote,
-            should_swap_buffers: RefCell::new(true),
-            cursor_pos: RefCell::new(PhysicalPosition{x:0.0, y:0.0}),
-            override_view,
-            override_gaze: RefCell::new(false),
-            active: RefCell::new(false),
-            values: values,
-            vis_param,
-            last_render_instant: RefCell::new(Instant::now()),
-            forced_view,
         }
     }
-}
-
-impl Window {
-    pub fn add_node(&mut self, node: Box<dyn Node>, flow_index: usize) {
-        self.flow[flow_index].add_node(node);
-    }
-
-    pub fn replace_node(&mut self, index: usize, node: Box<dyn Node>, flow_index: usize) {
-        self.flow[flow_index].replace_node(index, node);
-    }
-
-    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-        if new_size.width > 0 && new_size.height > 0 {
-            self.window_size = new_size;
-            self.surface_config.borrow_mut().width = new_size.width;
-            self.surface_config.borrow_mut().height = new_size.height;
-            self.surface.configure(&self.device.borrow_mut(), &self.surface_config.borrow());
-        }
-    }
-
-    pub fn delta_t(&self)  -> f32{
-        if self.vis_param.borrow().bees_flying {
-            return self.last_render_instant.borrow().elapsed().as_micros() as f32;
-        }
-        return 0.0;
-    }
-
-    pub fn nodes_len(&self) -> usize {//TODO: return vector of lengths
-        self.flow[0].nodes_len()
-    }
-
-    // pub fn update_last_node(&mut self) {
-    //     self.flow.iter().for_each(|f| f.update_last_slot(&self));
-    // }
-
-    pub fn update_nodes(&mut self) {
-        for (i, f) in self.flow.iter().enumerate(){
-            f.negociate_slots(&self);
-            f.update_values(&self, &self.values[i].borrow());
-        }
-    }
-
-    pub fn set_values(&self, values: ValueMap, flow_index: usize) {
-        self.values[flow_index].replace(values);
-        self.flow[flow_index].update_values(&self, &self.values[flow_index].borrow());
-    }
-    
-    pub fn set_value(&self, key: String, value: Value, flow_index: usize) {
-        self.values[flow_index].borrow_mut().insert(key, value);
-        self.flow[flow_index].update_values(&self, &self.values[flow_index].borrow());
-    }
-    
-    // pub fn set_perspective(&self, new_perspective: EyePerspective, flow_index: usize) {
-    //     self.flow[flow_index].last_perspective.replace(new_perspective);
-    // }
-
-    // pub fn factory(&self) -> &RefCell<DeviceFactory> {
-    //     &self.factory
-    // }
-
-    // pub fn encoder(&self) -> &RefCell<DeviceEncoder> {
-    //     &self.encoder
-    // }
-
-    pub fn device(&self) -> & RefCell<wgpu::Device> {
-        &self.device
-    }
-
-    pub fn queue(&self) -> & RefCell<wgpu::Queue> {
-        &self.queue
-    }
-
-    pub fn surface_config(&self) -> & RefCell<wgpu::SurfaceConfiguration> {
-        &self.surface_config
-    }
-
-    // pub fn flush(&self, encoder: &mut DeviceEncoder) {
-    //     use std::ops::DerefMut;
-    //     let mut device = self.device.borrow_mut();
-    //     encoder.flush(device.deref_mut());
-    // }
-
-    // pub fn target(&self) -> & RefCell<TextureView> {
-    //     &self.render_target
-    //     //self.render_target.borrow().clone()
-    // }
-
-    // pub fn replace_targets(&self, target_color: RenderTargetColor, target_depth: RenderTargetDepth, should_swap_buffers: bool) {
-    //     self.render_target.replace(target_color);
-    //     self.main_depth.replace(target_depth);
-    //     self.should_swap_buffers.replace(should_swap_buffers);
-    // }
-
+ 
     pub fn poll_events(&mut self) -> bool {
         let mut done = false;
         let mut deferred_size = None;
@@ -333,11 +90,11 @@ impl Window {
                         } => {
                             match state{
                                 ElementState::Pressed => {
-                                    let mut vp = self.vis_param.borrow_mut();
+                                    let mut vp = self.surface.vis_param.borrow_mut();
                                     vp.edit_eye_position = 1;
                                 },
                                 ElementState::Released => {
-                                    let mut vp = self.vis_param.borrow_mut();
+                                    let mut vp = self.surface.vis_param.borrow_mut();
                                     vp.edit_eye_position = 0;
                                 },
                             }
@@ -351,7 +108,7 @@ impl Window {
                                 },
                             ..
                         } => {
-                            let mut vp = self.vis_param.borrow_mut();
+                            let mut vp = self.surface.vis_param.borrow_mut();
                             vp.bees_flying = !vp.bees_flying;
                         }, 
                         WindowEvent::KeyboardInput {
@@ -363,7 +120,7 @@ impl Window {
                                 },
                             ..
                         } => {
-                            let mut vp = self.vis_param.borrow_mut();
+                            let mut vp = self.surface.vis_param.borrow_mut();
                             vp.bees_visible = !vp.bees_visible;
                         }, 
                         WindowEvent::KeyboardInput {
@@ -375,7 +132,7 @@ impl Window {
                                 },
                             ..
                         } => {
-                            let mut vp = self.vis_param.borrow_mut();
+                            let mut vp = self.surface.vis_param.borrow_mut();
                             if vp.edit_eye_position > 0 {
                                 vp.eye_position = (0.0, 0.0);
                             }
@@ -389,7 +146,7 @@ impl Window {
                                 },
                             ..
                         } => {
-                            let mut vp = self.vis_param.borrow_mut();
+                            let mut vp = self.surface.vis_param.borrow_mut();
                             // println!("Space: eye was {}",(vp.eye_idx as u32));
                             vp.eye_idx = (vp.eye_idx+1)%2
                         },                
@@ -402,7 +159,7 @@ impl Window {
                                 },
                             ..
                         } => {
-                            let mut vp = self.vis_param.borrow_mut();
+                            let mut vp = self.surface.vis_param.borrow_mut();
                             vp.test_depth_max+=100.0;
                             println!("Depth min,max [{},{}]",
                                 vp.test_depth_min,
@@ -418,7 +175,7 @@ impl Window {
                                 },
                             ..
                         } => {
-                            let mut vp = self.vis_param.borrow_mut();
+                            let mut vp = self.surface.vis_param.borrow_mut();
                             vp.test_depth_max-=100.0;
                             println!("Depth min,max [{},{}]",
                                 vp.test_depth_min,
@@ -434,7 +191,7 @@ impl Window {
                                 },
                             ..
                         } => {
-                            let mut vp = self.vis_param.borrow_mut();
+                            let mut vp = self.surface.vis_param.borrow_mut();
                             vp.test_depth_min+=10.0;
                             println!("Depth min,max [{},{}]",
                                 vp.test_depth_min,
@@ -450,7 +207,7 @@ impl Window {
                                 },
                             ..
                         } => {
-                            let mut vp = self.vis_param.borrow_mut();
+                            let mut vp = self.surface.vis_param.borrow_mut();
                             vp.test_depth_min-=10.0;
                             println!("Depth min,max [{},{}]",
                                 vp.test_depth_min,
@@ -466,7 +223,7 @@ impl Window {
                                 },
                             ..
                         } => {
-                            self.vis_param.borrow_mut().dir_calc_scale-=5.0;
+                            self.surface.vis_param.borrow_mut().dir_calc_scale-=5.0;
                         },
                         WindowEvent::KeyboardInput {
                             input:
@@ -477,7 +234,7 @@ impl Window {
                                 },
                             ..
                         } => {
-                            self.vis_param.borrow_mut().dir_calc_scale+=5.0;
+                            self.surface.vis_param.borrow_mut().dir_calc_scale+=5.0;
                         },
                         WindowEvent::KeyboardInput {
                             input:
@@ -488,7 +245,7 @@ impl Window {
                                 },
                             ..
                         } => {
-                            self.vis_param.borrow_mut().heat_scale+=0.5;
+                            self.surface.vis_param.borrow_mut().heat_scale+=0.5;
                         },
                         WindowEvent::KeyboardInput {
                             input:
@@ -499,7 +256,7 @@ impl Window {
                                 },
                             ..
                         } => {
-                            self.vis_param.borrow_mut().heat_scale-=0.5;
+                            self.surface.vis_param.borrow_mut().heat_scale-=0.5;
                         },
                         WindowEvent::KeyboardInput {
                             input:
@@ -510,7 +267,7 @@ impl Window {
                                 },
                             ..
                         } => {
-                            self.vis_param.borrow_mut().astigmatism_strength-=0.5;
+                            self.surface.vis_param.borrow_mut().astigmatism_strength-=0.5;
                         },
                         WindowEvent::KeyboardInput {
                             input:
@@ -521,7 +278,7 @@ impl Window {
                                 },
                             ..
                         } => {
-                            self.vis_param.borrow_mut().astigmatism_strength+=0.5;
+                            self.surface.vis_param.borrow_mut().astigmatism_strength+=0.5;
                         },
                         WindowEvent::KeyboardInput {
                             input:
@@ -532,7 +289,7 @@ impl Window {
                                 },
                             ..
                         } => {
-                            let mut vp = self.vis_param.borrow_mut();
+                            let mut vp = self.surface.vis_param.borrow_mut();
                             match vp.vis_type.color_map_type {
                                 ColorMapType::Viridis => (*vp).vis_type.color_map_type = ColorMapType::Turbo,
                                 ColorMapType::Turbo => (*vp).vis_type.color_map_type = ColorMapType::Grayscale,
@@ -552,15 +309,15 @@ impl Window {
                             done = true;
                         }
                         WindowEvent::Focused(active) => {
-                            self.active.replace(*active);
+                            self.surface.active.replace(*active);
                         }
                         WindowEvent::Resized(size) => {
                             deferred_size = Some(*size);
                         }
                         WindowEvent::CursorMoved { position, .. } => {
-                            if *self.active.borrow() {
-                                self.cursor_pos.replace(*position);
-                                let mut vp = self.vis_param.borrow_mut();
+                            if *self.surface.active.borrow() {
+                                self.surface.cursor_pos.replace([position.x, position.y]);
+                                let mut vp = self.surface.vis_param.borrow_mut();
                                 vp.mouse_input.position = (position.x as f32, position.y as f32);
                                 match vp.edit_eye_position {
                                     1 => {
@@ -578,22 +335,22 @@ impl Window {
                             }
                         }
                         WindowEvent::CursorLeft { .. } => {
-                            if *self.active.borrow() {
-                                self.override_view.replace(false);
-                                self.override_gaze.replace(false);
+                            if *self.surface.active.borrow() {
+                                self.surface.override_view.replace(false);
+                                self.surface.override_gaze.replace(false);
                                 //reset gaze ?
                             }
                         }
                         WindowEvent::MouseInput { state, button, .. } => {
-                            if *self.active.borrow() {
-                                let mut vp = self.vis_param.borrow_mut();
+                            if *self.surface.active.borrow() {
+                                let mut vp = self.surface.vis_param.borrow_mut();
                                 match button {
                                     MouseButton::Left => {
-                                        self.override_view.replace(*state == ElementState::Pressed);
+                                        self.surface.override_view.replace(*state == ElementState::Pressed);
                                         vp.mouse_input.left_button = *state == ElementState::Pressed;
                                     }
                                     MouseButton::Right => {
-                                        self.override_gaze.replace(*state == ElementState::Pressed);
+                                        self.surface.override_gaze.replace(*state == ElementState::Pressed);
                                         vp.mouse_input.right_button = *state == ElementState::Pressed;
                                     }
                                     _ => {}
@@ -603,7 +360,7 @@ impl Window {
                         WindowEvent::KeyboardInput {
                             input:KeyboardInput {virtual_keycode, ..}, ..
                         } => {
-                            let mut vp = self.vis_param.borrow_mut();
+                            let mut vp = self.surface.vis_param.borrow_mut();
                             match virtual_keycode{
                                 Some(VirtualKeyCode::O) => vp.vis_type.base_image=BaseImage::Output,
                                 Some(VirtualKeyCode::I) => vp.vis_type.base_image=BaseImage::Original,
@@ -638,11 +395,11 @@ impl Window {
             }
         });
 
-        if let Some(_) = self.forced_view {
+        if let Some(_) = self.surface.forced_view {
             // Update pipline IO.
             let new_size = PhysicalSize::new(1920 as u32, 1080 as u32);
             //self.wgpu_window.resize(size);
-            self.resize(new_size);
+            self.surface.resize(new_size);
             // TODO-WGPU
             // gfx_window_glutin::update_views(
             //     &self.wgpu_window,
@@ -662,7 +419,7 @@ impl Window {
             // Update pipline IO.
             // let dpi_factor = self.wgpu_window.scale_factor();
             // let size = size.to_physical(dpi_factor);
-            self.resize(new_size);
+            self.surface.resize(new_size);
             // self.wgpu_window.resize(size);
             // TODO-WGPU 
             // gfx_window_glutin::update_views(
@@ -680,56 +437,56 @@ impl Window {
         }
 
         // Update input.
-        for f in self.flow.iter(){
-            if *self.override_view.borrow() || *self.override_gaze.borrow() {
-                let cursor_pos = self.cursor_pos.borrow();
+        for f in self.surface.flow.iter(){
+            if *self.surface.override_view.borrow() || *self.surface.override_gaze.borrow() {
+                let cursor_pos = self.surface.cursor_pos.borrow();
                 //println!("{} {}",cursor_pos.x as f32 ,cursor_pos.y as f32);
-                let view_input = match self.forced_view {
+                let view_input = match self.surface.forced_view {
                     Some(pos) =>{
                         pos
                     }
                     None =>{
-                        (cursor_pos.x as f32 ,cursor_pos.y as f32)
+                        (cursor_pos[0] as f32 ,cursor_pos[1] as f32)
                     }
                 };
 
-                self.vis_param.borrow_mut().highlight_position = (cursor_pos.x/self.window_size.width as f64, cursor_pos.y/self.window_size.height as f64);
-                let yaw = view_input.0 as f32 / self.window_size.width as f32
+                self.surface.vis_param.borrow_mut().highlight_position = (cursor_pos[0]/self.surface.surface_size[0] as f64, cursor_pos[1]/self.surface.surface_size[1] as f64);
+                let yaw = view_input.0 as f32 / self.surface.surface_size[0] as f32
                     * std::f32::consts::PI
                     * 2.0
                     - 0.5;
-                let pitch = view_input.1 as f32 / self.window_size.height as f32
+                let pitch = view_input.1 as f32 / self.surface.surface_size[1] as f32
                     * std::f32::consts::PI
                     - 0.5;//50 mm lens
                 let view = Matrix4::from_angle_x(cgmath::Rad(pitch)) * Matrix4::from_angle_y(cgmath::Rad(yaw));
 
                 let mut perspective = f.last_perspective.borrow_mut();
 
-                if *self.override_view.borrow() {
-                    if !*self.override_gaze.borrow(){
+                if *self.surface.override_view.borrow() {
+                    if !*self.surface.override_gaze.borrow(){
                         perspective.gaze = (view * perspective.view.invert().unwrap() * perspective.gaze.extend(1.0)).truncate();
                     }
                     perspective.view = view;
                 }
-                if *self.override_gaze.borrow() {
+                if *self.surface.override_gaze.borrow() {
                     perspective.gaze = (perspective.view * view.invert().unwrap() * Vector4::unit_z()).truncate();
                 }
             }            
-            f.input(&self.vis_param.borrow());
+            f.input(&self.surface.vis_param.borrow());
         }
-        // println!("Rendered with: {:?}", self.vis_param.borrow_mut());
+        // println!("Rendered with: {:?}", self.surface.vis_param.borrow_mut());
 
         if redraw_requested {
-            match self.surface.get_current_texture(){
+            match self.surface.surface.get_current_texture(){
                 Ok(output) => {
                     let view = output
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
-                    let sampler = create_sampler_linear(&(self.device.borrow_mut()));
+                    let sampler = create_sampler_linear(&(self.surface.device.borrow_mut()));
 
                     let mut encoder = self
-                        .device
+                    .surface.device
                         .borrow_mut()
                         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                             label: Some("Render Encoder"),
@@ -740,17 +497,17 @@ impl Window {
                         view: Rc::new(view),
                         sampler: Rc::new(sampler),
                         view_dimension: wgpu::TextureViewDimension::D2,
-                        width: self.window_size.width,
-                        height: self.window_size.height,
+                        width: self.surface.surface_size[0],
+                        height: self.surface.surface_size[1],
                         label: "surface render texture".to_string(),
                     };
                 
-                    self.flow.iter().for_each(|f| f.render(&self, &mut encoder, &render_texture));
+                    self.surface.flow.iter().for_each(|f| f.render(&self.surface, &mut encoder, &render_texture));
 
-                    self.queue.borrow_mut().submit(iter::once(encoder.finish()));
+                    self.surface.queue.borrow_mut().submit(iter::once(encoder.finish()));
                     output.present();
-                    self.flow.iter().for_each(|f| f.post_render(&self));
-                    self.last_render_instant.replace(Instant::now());
+                    self.surface.flow.iter().for_each(|f| f.post_render(&self.surface));
+                    self.surface.last_render_instant.replace(Instant::now());
                 }
                 _ => {}
             }
@@ -760,7 +517,7 @@ impl Window {
         //     self.wgpu_window.swap_buffers().unwrap();
         // }
 
-        if let Some(remote) = &self.remote {
+        if let Some(remote) = &self.surface.remote {
             remote.send_frame();
         }
 

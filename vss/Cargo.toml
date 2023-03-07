@@ -22,3 +22,4 @@ bitflags = "1.2"
 # only needed for testing (in main.rs)
 pollster = "0.2"
 futures-intrusive = "0.5.0"
+raw-window-handle = "0.5.0"

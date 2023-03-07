@@ -21,9 +21,9 @@ pub struct PeacockCB {
 impl PeacockCB{}
 
 impl Node for PeacockCB {
-    fn new(window: &Window) -> Self {
-        let device = window.device().borrow_mut();
-        let queue = window.queue().borrow_mut();
+    fn new(surface: &Surface) -> Self {
+        let device = surface.device().borrow_mut();
+        let queue = surface.queue().borrow_mut();
 
         let uniforms = ShaderUniforms::new(&device, 
             Uniforms{
@@ -62,9 +62,9 @@ impl Node for PeacockCB {
         }
     }
 
-    fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
-        let slots = slots.to_color_input(window).to_color_output(window, "PeacockNode");
-        let device = window.device().borrow_mut();
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
+        let slots = slots.to_color_input(surface).to_color_output(surface, "PeacockNode");
+        let device = surface.device().borrow_mut();
 
         self.sources_bind_group = slots.as_all_colors_source(&device);
         self.targets = slots.as_all_colors_target();
@@ -72,7 +72,7 @@ impl Node for PeacockCB {
         slots
     }
 
-    fn update_values(&mut self, _window: &Window, values: &ValueMap) {
+    fn update_values(&mut self, _surface: &Surface, values: &ValueMap) {
         let v_cpu: [f32; 3] = [0.753, 1.140, 0.171];
         let v_cpv: [f32; 3] = [0.265,-0.140,-0.003];
         let v_am: [f32; 3] = [1.273463, 0.968437, 0.062921];
@@ -103,8 +103,8 @@ impl Node for PeacockCB {
         perspective.clone()
     }
 
-    fn render(&mut self, window: &window::Window, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
-        self.uniforms.update(&window.queue().borrow_mut());
+    fn render(&mut self, surface: &Surface, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
+        self.uniforms.update(&surface.queue().borrow_mut());
         
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Peacock render_pass"),

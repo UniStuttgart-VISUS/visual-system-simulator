@@ -37,7 +37,7 @@ pub struct VarianceMeasure {
 }
 
 impl VarianceMeasure{
-    fn measure_variance(&mut self, window: &Window) -> (f32, f32){
+    fn measure_variance(&mut self, surface: &Surface) -> (f32, f32){
         use gfx::format::Formatted;
         use gfx::memory::Typed;
 
@@ -111,7 +111,7 @@ impl VarianceMeasure{
 
 
 impl Node for VarianceMeasure {
-    fn new(window: &Window) -> Self {
+    fn new(surface: &Surface) -> Self {
         let mut factory = window.factory().borrow_mut();
 
         let pso = factory
@@ -158,7 +158,7 @@ impl Node for VarianceMeasure {
         }
     }
 
-    fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
         let slots = slots
             .to_color_input(window)
             .to_color_output(window);
@@ -193,7 +193,7 @@ impl Node for VarianceMeasure {
         perspective.clone()
     }
 
-    fn render(&mut self, window: &Window) {
+    fn render(&mut self, surface: &Surface) {
         if self.log_file.is_some(){
             self.pso_data.u_show_variance =  2;
             self.pso_data.u_variance_metric =  4;

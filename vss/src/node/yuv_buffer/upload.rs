@@ -62,7 +62,7 @@ impl UploadYuvBuffer {
 }
 
 impl Node for UploadYuvBuffer {
-    fn new(window: &Window) -> Self {
+    fn new(surface: &Surface) -> Self {
         let mut factory = window.factory().borrow_mut();
 
         let pso = factory
@@ -98,7 +98,7 @@ impl Node for UploadYuvBuffer {
         }
     }
 
-    fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
         if let Some(buffer) = &self.buffer_next {
             let mut factory = window.factory().borrow_mut();
 
@@ -148,7 +148,7 @@ impl Node for UploadYuvBuffer {
         slots
     }
 
-    fn render(&mut self, window: &Window) {
+    fn render(&mut self, surface: &Surface) {
         let mut encoder = window.encoder().borrow_mut();
 
         if let Some(texture_y) = &self.texture_y {

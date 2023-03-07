@@ -16,9 +16,9 @@ pub struct Cataract {
 }
 
 impl Node for Cataract {
-    fn new(window: &Window) -> Self {
-        let device = window.device().borrow_mut();
-        let queue = window.queue().borrow_mut();
+    fn new(surface: &Surface) -> Self {
+        let device = surface.device().borrow_mut();
+        let queue = surface.queue().borrow_mut();
 
         let uniforms = ShaderUniforms::new(&device, 
             Uniforms{
@@ -56,11 +56,11 @@ impl Node for Cataract {
         }
     }
 
-    fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
-        let slots = slots.to_color_input(window).to_color_output(window, "CataractNode");
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
+        let slots = slots.to_color_input(surface).to_color_output(surface, "CataractNode");
         self.uniforms.data.resolution = slots.output_size_f32();
 
-        let device = window.device().borrow_mut();
+        let device = surface.device().borrow_mut();
 
         self.sources_bind_group = slots.as_all_colors_source(&device);
         self.targets = slots.as_all_colors_target();
@@ -68,7 +68,7 @@ impl Node for Cataract {
         slots
     }
 
-    fn update_values(&mut self, _window: &Window, values: &ValueMap) {
+    fn update_values(&mut self, _surface: &Surface, values: &ValueMap) {
         if let Some(Value::Bool(true)) = values.get("ct_onoff") {
             self.uniforms.data.active = 1;
             if let Some(Value::Number(ct_blur_factor)) = values.get("ct_blur_factor") {
@@ -91,8 +91,8 @@ impl Node for Cataract {
         perspective.clone()
     }
 
-    fn render(&mut self, window: &window::Window, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
-        self.uniforms.update(&window.queue().borrow_mut());
+    fn render(&mut self, surface: &Surface, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
+        self.uniforms.update(&surface.queue().borrow_mut());
         
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Cataract render_pass"),

@@ -22,9 +22,9 @@ pub struct TestNode {
 }
 
 impl Node for TestNode {
-    fn new(window: &window::Window) -> Self {
-        let device = window.device().borrow_mut();
-        let queue = window.queue().borrow_mut();
+    fn new(surface: &Surface) -> Self {
+        let device = surface.device().borrow_mut();
+        let queue = surface.queue().borrow_mut();
 
         let uniforms = ShaderUniforms::new(&device, Uniforms{test_color: [1.0, 1.0, 1.0, 1.0]});
 
@@ -60,16 +60,16 @@ impl Node for TestNode {
         }
     }
 
-    fn negociate_slots(&mut self, window: &window::Window, slots: NodeSlots) -> NodeSlots {
-        let slots = slots.to_color_input(window).to_color_output(window, "TestNode");
-        (self.sources.s_rgb, self.sources.s_rgb_bind_group) = slots.as_color_source(&(window.device().borrow_mut()));
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
+        let slots = slots.to_color_input(surface).to_color_output(surface, "TestNode");
+        (self.sources.s_rgb, self.sources.s_rgb_bind_group) = slots.as_color_source(&(surface.device().borrow_mut()));
         self.targets.rt_color = slots.as_color_target();
 
         slots
     }
 
-    fn render(&mut self, window: &window::Window, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
-        let queue = window.queue().borrow_mut();
+    fn render(&mut self, surface: &Surface, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
+        let queue = surface.queue().borrow_mut();
         self.uniforms.data.test_color = [1.0, 0.1, 0.1, 1.0];
         self.uniforms.update(&queue);
 

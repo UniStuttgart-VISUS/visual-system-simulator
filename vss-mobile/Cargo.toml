@@ -18,6 +18,8 @@ log = "0.4"
 jni = "0.21"
 ndk-glue = "0.7"
 ndk = "0.7"
+ndk-sys = "0.4.1+23.1.7779620"
+raw-window-handle = "0.5.0"
 
 [package.metadata.android.sdk]
 min_sdk_version = 24

@@ -52,21 +52,21 @@ use super::*;
 /// An executable function that implements an aspect of the simulation.
 pub trait Node {
     /// Initializes this node.
-    fn new(window: &Window) -> Self
+    fn new(surface: &Surface) -> Self
     where
         Self: Sized;
 
     /// Negociates input and output for this node (source texture and render target),
     /// possibly re-using suggested `slots` (for efficiency).
-    fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots;
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots;
 
-    fn negociate_slots_wk(&mut self, window: &Window, slots: NodeSlots, _well_known: &WellKnownSlots) -> NodeSlots{
-        self.negociate_slots(window, slots)
+    fn negociate_slots_wk(&mut self, surface: &Surface, slots: NodeSlots, _well_known: &WellKnownSlots) -> NodeSlots{
+        self.negociate_slots(surface, slots)
     }
 
     /// Set new parameters for this effect
     #[allow(unused_variables)]
-    fn update_values(&mut self, window: &Window, values: &ValueMap) {}
+    fn update_values(&mut self, surface: &Surface, values: &ValueMap) {}
 
     /// Handle input.
     #[allow(unused_variables)]
@@ -75,10 +75,10 @@ pub trait Node {
     }
 
     /// Render the node.
-    fn render(&mut self, window: &Window, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>);
+    fn render(&mut self, surface: &Surface, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>);
 
     #[allow(unused_variables)]
-    fn post_render(&mut self, window: &window::Window){}
+    fn post_render(&mut self, surface: &Surface){}
 }
 
 pub struct ShaderUniforms<T>{

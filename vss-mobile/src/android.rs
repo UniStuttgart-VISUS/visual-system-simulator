@@ -1,66 +1,111 @@
 #![allow(non_snake_case)]
 #![cfg(target_os = "android")]
 
+use std::cell::RefCell;
+use std::ptr::NonNull;
 use std::sync::{mpsc, Mutex};
 
 use jni::objects::{JClass, JObject, JString};
 use jni::sys::{jbyteArray, jint};
 use jni::JNIEnv;
 
-/* 
-use std::{os::raw::c_void, panic::catch_unwind, sync::mpsc, thread, time::Duration};
-use jni::{JNIEnv, JavaVM};
-use jni::objects::{GlobalRef, JClass, JObject, JString};
-use jni::sys::{jbyteArray, jint, jlong, jstring, JNI_VERSION_1_6};
-*/
+use ndk_sys;
 
-pub enum Message {
+use raw_window_handle;
+
+use vss::*;
+
+enum Message {
     Config(vss::ValueMap),
-    Frame(vss::RgbBuffer)  , //TODO: should be a YUV buffer
+    Frame(vss::RgbBuffer), //TODO: should be a YUV buffer
 }
 
+struct Bridge {
+    pub queue: (
+        Mutex<mpsc::SyncSender<Message>>,
+        Mutex<mpsc::Receiver<Message>>,
+    ),
+    pub surface: Option<Surface>,
+}
+
+unsafe impl Send for Bridge {}
+unsafe impl Sync for Bridge {}
+
 lazy_static::lazy_static! {
-    pub static ref MESSAGE_QUEUE : (Mutex<mpsc::SyncSender<Message>>,Mutex<mpsc::Receiver<Message>>)= {
-        // Create a message queue that blocks the sender when the queue is full.
-        let (tx,rx) = mpsc::sync_channel(2);
-        (Mutex::new(tx),Mutex::new(rx))
+    static ref BRIDGE : Bridge = Bridge {
+        queue:  {
+            // Create a message queue that blocks the sender when the queue is full.
+            let (tx,rx) = mpsc::sync_channel(2);
+            (Mutex::new(tx),Mutex::new(rx))
+        },
+        surface: None
     };
 }
 
 #[no_mangle]
-pub extern "system" fn  Java_com_vss_simulator_SimulatorBridge_nativeCreate(
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate(
     env: JNIEnv,
     _class: JClass,
-      surface: JObject, 
-        assetManager : JObject,
+    surface: JObject,
+    assetManager: JObject,
 ) {
+    let window = unsafe {
+        ndk::native_window::NativeWindow::from_ptr(
+            NonNull::new(ndk_sys::ANativeWindow_fromSurface(
+                env.get_raw(),
+                surface.as_raw(),
+            ))
+            .unwrap(),
+        )
+    };
+    let assetManager = unsafe {
+        ndk::asset::AssetManager::from_ptr(
+            NonNull::new(ndk_sys::AAssetManager_fromJava(
+                env.get_raw(),
+                assetManager.as_raw(),
+            ))
+            .unwrap(),
+        );
+    };
     println!("Create!");
+
+    let mut parameters: Vec<RefCell<ValueMap>> = Vec::new();
+    // let raw_window = raw_window_handle::AndroidNdkWindowHandle {
+    //     a_native_window : window.ptr().as_ptr() as c_void
+    // } ;
+    // let surface = Surface::new([window.width(), window.height()], raw_window, None, parameters, 1);
+    // BRIDGE.surface.replace(surface);
 }
 
 #[no_mangle]
-pub extern "system" fn  Java_com_vss_simulator_SimulatorBridge_nativeDestroy(
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDestroy(
     env: JNIEnv,
     _class: JClass,
 ) {
-    println!("Destroy!");
+    //BRIDGE.surface.take();
 }
 
 #[no_mangle]
-pub extern "system" fn  Java_com_vss_simulator_SimulatorBridge_nativeResize(
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeResize(
     env: JNIEnv,
     _class: JClass,
     width: jint,
     height: jint,
 ) {
+    if let Some(ref surface) = BRIDGE.surface {
+        //surface.resize()
+    }
     println!("Resize!");
 }
- 
- 
+
 #[no_mangle]
 pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDraw(
     env: JNIEnv,
-    _class: JClass, 
+    _class: JClass,
 ) {
+    if let Some(ref surface) = BRIDGE.surface {
+        //surface.draw()
+    }
     println!("Draw!");
 }
 
