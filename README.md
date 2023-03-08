@@ -64,7 +64,7 @@ Again, you need to have Rust installed. Then run `cargo build --release`. You ca
 
 ### Enabling Video Support
 
-To enable video file support (MP4, AVI, etc.), you have to install [libav 4.x (FFmpeg)](https://www.ffmpeg.org/download.html). Linux users know what to do here. Windows users may extract the pre-compiled binaries to `<FFMPEG_HOME>` and add the following paths to their environment variables `C_INCLUDE_PATH=<FFMPEG_HOME>/include`, `LIB=<FFMPEG_HOME>/lib`, and `PATH=<FFMPEG_HOME>/bin` so that the C++ compiler and runtime linker can use the library properly. Then, video support can be enabled using `cargo --features "video"`.
+To enable video file support (MP4, AVI, etc.), you have to install [libav 4.x (FFmpeg)](https://www.ffmpeg.org/download.html), e.g., `ffmpeg-n4.4-latest-win64-lgpl-shared-4.4.zip`. Linux users know what to do here. Windows users may extract the pre-compiled binaries to `<FFMPEG_HOME>` and add the following paths to their environment variables `FFMPEG_INCLUDE_DIR=<FFMPEG_HOME>/include`, `FFMPEG_LIB_DIR=<FFMPEG_HOME>/lib`, and `PATH=<FFMPEG_HOME>/bin` so that the C++ compiler and linker can use the library. Then, video support can be enabled using `cargo build --features "video"`.
 
 ## <a name="Android"></a>Android App
 
