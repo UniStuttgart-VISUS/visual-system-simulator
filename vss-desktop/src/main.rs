@@ -123,8 +123,8 @@ fn build_flow(window: &mut Window, io_generator: &mut IoGenerator, flow_index: u
     window.add_node(Box::new(node), flow_index);
     
     // Measure Uncertainty
-    // TODO-WGPU
     // let mut node = VarianceMeasure::new(&window);
+    // TODO-WGPU
     // if variance_log.is_some(){
     //     node.log_file = Some(OpenOptions::new()
     //         .write(true)

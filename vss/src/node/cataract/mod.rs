@@ -46,7 +46,7 @@ impl Node for Cataract {
             &[&uniforms.bind_group_layout, &sources_bind_group_layout],
             &all_color_states(),
             None,
-            Some("Peacock Render Pipeline"));
+            Some("Cataract Render Pipeline"));
 
         Cataract {
             pipeline,

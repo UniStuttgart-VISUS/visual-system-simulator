@@ -1,43 +1,54 @@
+use super::*;
+
 use std::borrow::BorrowMut;
 use std::collections::HashMap;
 use std::io::Write;
 use std::fs::File;
 
-use super::*;
-use gfx;
-use gfx::format::Rgba32F;
+// gfx_defines! {
+//     pipeline pipe {
+//         u_resolution: gfx::Global<[f32; 2]> = "u_resolution",
+//         s_color: gfx::TextureSampler<[f32; 4]> = "s_color",
+//         s_original: gfx::TextureSampler<[f32; 4]> = "s_original",
+//         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
+//         rt_measure: gfx::RenderTarget<HighpFormat> = "rt_measure",
+//         s_deflection: gfx::TextureSampler<[f32; 4]> = "s_deflection",
+//         rt_deflection: gfx::RenderTarget<Rgba32F> = "rt_deflection",
+//         s_color_change: gfx::TextureSampler<[f32; 4]> = "s_color_change",
+//         rt_color_change: gfx::RenderTarget<Rgba32F> = "rt_color_change",
+//         s_color_uncertainty: gfx::TextureSampler<[f32; 4]> = "s_color_uncertainty",
+//         rt_color_uncertainty: gfx::RenderTarget<Rgba32F> = "rt_color_uncertainty",
+//         s_covariances: gfx::TextureSampler<[f32; 4]> = "s_covariances",
+//         rt_covariances: gfx::RenderTarget<Rgba32F> = "rt_covariances",
+//         u_track_error: gfx::Global<i32> = "u_track_error",
+//         u_show_variance: gfx::Global<u32> = "u_show_variance",
+//         u_variance_metric: gfx::Global<u32> = "u_variance_metric",
+//         u_color_space: gfx::Global<u32> = "u_color_space",
+//     }
+// }
 
-gfx_defines! {
-    pipeline pipe {
-        u_resolution: gfx::Global<[f32; 2]> = "u_resolution",
-        s_color: gfx::TextureSampler<[f32; 4]> = "s_color",
-        s_original: gfx::TextureSampler<[f32; 4]> = "s_original",
-        rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
-        rt_measure: gfx::RenderTarget<HighpFormat> = "rt_measure",
-        s_deflection: gfx::TextureSampler<[f32; 4]> = "s_deflection",
-        rt_deflection: gfx::RenderTarget<Rgba32F> = "rt_deflection",
-        s_color_change: gfx::TextureSampler<[f32; 4]> = "s_color_change",
-        rt_color_change: gfx::RenderTarget<Rgba32F> = "rt_color_change",
-        s_color_uncertainty: gfx::TextureSampler<[f32; 4]> = "s_color_uncertainty",
-        rt_color_uncertainty: gfx::RenderTarget<Rgba32F> = "rt_color_uncertainty",
-        s_covariances: gfx::TextureSampler<[f32; 4]> = "s_covariances",
-        rt_covariances: gfx::RenderTarget<Rgba32F> = "rt_covariances",
-        u_track_error: gfx::Global<i32> = "u_track_error",
-        u_show_variance: gfx::Global<u32> = "u_show_variance",
-        u_variance_metric: gfx::Global<u32> = "u_variance_metric",
-        u_color_space: gfx::Global<u32> = "u_color_space",
-    }
+struct Uniforms{
+    resolution: [f32; 2],
+    track_error: i32,
+    show_variance: u32,
+    variance_metric: u32,
+    color_space: u32,
 }
 
 pub struct VarianceMeasure {
-    pso: gfx::PipelineState<Resources, pipe::Meta>,
-    pso_data: pipe::Data<Resources>,
+    pipeline: wgpu::RenderPipeline,
+    uniforms: ShaderUniforms<Uniforms>,
+    sources_bind_group: wgpu::BindGroup,
+    original_bind_group: wgpu::BindGroup,
+    targets: ColorTargets,
+    rt_measurement: RenderTexture,
+
     pub log_file: Option<File>,
     last_info: f32,
 }
 
 impl VarianceMeasure{
-    fn measure_variance(&mut self, window: &Window) -> (f32, f32){
+/*    fn measure_variance(&mut self, window: &Window) -> (f32, f32){
         use gfx::format::Formatted;
         use gfx::memory::Typed;
 
@@ -106,96 +117,92 @@ impl VarianceMeasure{
             }
             (sum_variance, sum_variance/(download.len() as f32))
         }
-    }
+    }*/
 }
 
 
 impl Node for VarianceMeasure {
     fn new(window: &Window) -> Self {
-        let mut factory = window.factory().borrow_mut();
+        let device = window.device().borrow_mut();
+        let queue = window.queue().borrow_mut();
 
-        let pso = factory
-            .create_pipeline_simple(
-                &include_glsl!("../mod.vert"),
-                &include_glsl!("mod.frag"),
-                pipe::new(),
-            )
-            .unwrap();
+        let uniforms = ShaderUniforms::new(&device, 
+            Uniforms{
+                resolution: [1.0, 1.0],
+                track_error: 0,
+                show_variance: 0,
+                variance_metric: 0,
+                color_space: 0,
+            }
+        );
 
-        let sampler = factory.create_sampler_linear();
-        let (_, color_view) = load_texture_from_bytes(&mut factory, &[0; 4], 1, 1).unwrap();
-        let (_, capture_view) = load_texture_from_bytes(&mut factory, &[0; 4], 1, 1).unwrap();
-        let (_, _, rt_color) = factory.create_render_target(1, 1).unwrap();
-        let (_, _, rt_measure) = factory.create_render_target(1, 1).unwrap();
-        let (_, s_deflection, rt_deflection) = factory.create_render_target(1, 1).unwrap();
-        let (_, s_color_change, rt_color_change) = factory.create_render_target(1, 1).unwrap();
-        let (_, s_color_uncertainty, rt_color_uncertainty) = factory.create_render_target(1, 1).unwrap();
-        let (_, s_covariances, rt_covariances) = factory.create_render_target(1, 1).unwrap();
+        let (sources_bind_group_layout, sources_bind_group) = create_color_sources_bind_group(&device, &queue, "Variance");
+
+        let original_tex = placeholder_texture(&device, &queue, Some("VarianceNode s_original")).unwrap();
+        let(original_bind_group_layout, original_bind_group) = original_tex.create_bind_group(&device);
+
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("VarianceNode Shader"),
+            source: wgpu::ShaderSource::Wgsl(concat!(
+                include_str!("../vert.wgsl"),
+                include_str!("mod.wgsl")).into()),
+        });
+
+        let pipeline = create_render_pipeline(
+            &device,
+            &[&shader, &shader],
+            &["vs_main", "fs_main"],
+            &[&uniforms.bind_group_layout, &sources_bind_group_layout, &original_bind_group_layout],
+            &all_color_states(),
+            None,
+            Some("VarianceNode Render Pipeline"));
+    
+        // let (_, _, rt_measure) = factory.create_render_target(1, 1).unwrap();
 
         VarianceMeasure {
-            pso,
-            pso_data: pipe::Data {
-                u_resolution: [1.0, 1.0],
-                s_color: (color_view, sampler.clone()),
-                s_original: (capture_view.clone(), sampler.clone()),
-                rt_color,
-                rt_measure,
-                s_deflection:(s_deflection, sampler.clone()),
-                rt_deflection,
-                s_color_change:(s_color_change, sampler.clone()),
-                rt_color_change,
-                s_color_uncertainty:(s_color_uncertainty, sampler.clone()),
-                rt_color_uncertainty,
-                s_covariances: (s_covariances, sampler.clone()),
-                rt_covariances,
-                u_track_error: 0,
-                u_show_variance: 0,
-                u_variance_metric: 0,
-                u_color_space: 0,
-            },
+            pipeline,
+            uniforms,
+            sources_bind_group,
+            original_bind_group,
+            targets: ColorTargets::new(&device, "VarianceNode"),
+            rt_measurement: placeholder_highp_rt(&device, Some("VarianceNode rt_measurement (placeholder)")),
             log_file: None,
             last_info: 1.0,
         }
     }
 
     fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
-        let slots = slots
-            .to_color_input(window)
-            .to_color_output(window);
+        let slots = slots.to_color_input(window).to_color_output(window, "VarianceNode");
+        self.uniforms.data.resolution = slots.output_size_f32();
 
-        self.pso_data.u_resolution = slots.output_size_f32();
-        self.pso_data.s_color = slots.as_color_view();
-        self.pso_data.rt_color = slots.as_color();
-        self.pso_data.s_deflection = slots.as_deflection_view();
-        self.pso_data.rt_deflection = slots.as_deflection();
-        self.pso_data.s_color_change = slots.as_color_change_view();
-        self.pso_data.rt_color_change = slots.as_color_change();  
-        self.pso_data.s_color_uncertainty = slots.as_color_uncertainty_view();
-        self.pso_data.rt_color_uncertainty = slots.as_color_uncertainty();
-        self.pso_data.s_covariances = slots.as_covariances_view();
-        self.pso_data.rt_covariances = slots.as_covariances();
-            
-        let (color, _) = create_texture_render_target::<HighpFormat>(
-            &mut window.factory().borrow_mut(),
-            self.pso_data.u_resolution[0] as u32,
-            self.pso_data.u_resolution[1] as u32,
+        let device = window.device().borrow_mut();
+
+        self.sources_bind_group = slots.as_all_colors_source(&device);
+        self.targets = slots.as_all_colors_target();
+
+        self.rt_measurement = create_render_texture(
+            &device,
+            self.uniforms.data.resolution[0] as u32,
+            self.uniforms.data.resolution[1] as u32,
+            HIGHP_FORMAT,
+            create_sampler_nearest(&device),
+            Some("VarianceNode rt_measurement")
         );
-        self.pso_data.rt_measure = color;
 
         slots
     }
 
     fn input(&mut self, perspective: &EyePerspective, vis_param: &VisualizationParameters) -> EyePerspective {
-        self.pso_data.u_track_error = vis_param.has_to_track_error() as i32;
-        self.pso_data.u_show_variance =  vis_param.measure_variance;
-        self.pso_data.u_variance_metric =  vis_param.variance_metric;
-        self.pso_data.u_color_space =  vis_param.variance_color_space;
+        self.uniforms.data.track_error = vis_param.has_to_track_error() as i32;        
+        self.uniforms.data.show_variance =  vis_param.measure_variance;
+        self.uniforms.data.variance_metric =  vis_param.variance_metric;
+        self.uniforms.data.color_space =  vis_param.variance_color_space;
         perspective.clone()
     }
 
-    fn render(&mut self, window: &Window) {
+    fn render(&mut self, window: &window::Window, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
         if self.log_file.is_some(){
-            self.pso_data.u_show_variance =  2;
+            /*self.pso_data.u_show_variance =  2;
             self.pso_data.u_variance_metric =  4;
             self.pso_data.u_color_space =  2;
             window.encoder().borrow_mut().draw(&gfx::Slice::from_vertex_count(6), &self.pso, &self.pso_data);
@@ -212,10 +219,22 @@ impl Node for VarianceMeasure {
             self.pso_data.u_color_space =  2;
             window.encoder().borrow_mut().draw(&gfx::Slice::from_vertex_count(6), &self.pso, &self.pso_data);
             let (sum, avg) = self.measure_variance(window);
-            write!(self.log_file.as_ref().unwrap(), "{:?}, {:?}\n", sum, avg).unwrap();
+            write!(self.log_file.as_ref().unwrap(), "{:?}, {:?}\n", sum, avg).unwrap();*/
         }else{
-            window.encoder().borrow_mut().draw(&gfx::Slice::from_vertex_count(6), &self.pso, &self.pso_data);
-            self.last_info += window.delta_t()/1000000.0;
+            self.uniforms.update(&window.queue().borrow_mut());
+
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Variance render_pass"),
+                color_attachments: &self.targets.color_attachments(screen),
+                depth_stencil_attachment: None,
+            });
+        
+            render_pass.set_pipeline(&self.pipeline);
+            render_pass.set_bind_group(0, &self.uniforms.bind_group, &[]);
+            render_pass.set_bind_group(1, &self.sources_bind_group, &[]);
+            render_pass.set_bind_group(2, &self.original_bind_group, &[]);
+            render_pass.draw(0..6, 0..1);
+            /* self.last_info += window.delta_t()/1000000.0;
             if self.last_info >= 1.0 && self.pso_data.u_show_variance > 0 {
                 self.last_info = 0.0;
 
@@ -225,7 +244,7 @@ impl Node for VarianceMeasure {
                 }else{
                     println!("Variance sum: {:?}\t Avg variance per pixel: {:?}", sum, avg);
                 }
-            }
+            }*/
         }
     }
 }

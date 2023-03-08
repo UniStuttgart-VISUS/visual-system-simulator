@@ -184,6 +184,7 @@ impl Flow {
         }
     }
 
+    // TODO replace with callback, where each node that needs to do post-processing registers
     pub fn post_render(&self, window: &Window){
         for node in self.nodes.borrow_mut().iter_mut(){
             node.post_render(window);

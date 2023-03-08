@@ -83,7 +83,7 @@ impl Window {
             backends: wgpu::Backends::VULKAN,
             dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
         });
-        let surface = unsafe { instance.create_surface(&wgpu_window) }.unwrap();
+        let surface = unsafe { instance.create_surface(&wgpu_window) }.unwrap(); //TODO-ANDROID this is where we might get the android app surface instead
         let adapter = instance.request_adapter(
             &wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
@@ -312,6 +312,7 @@ impl Window {
     //     self.should_swap_buffers.replace(should_swap_buffers);
     // }
 
+    //TODO-ANDROID split into update and render 
     pub fn poll_events(&mut self) -> bool {
         let mut done = false;
         let mut deferred_size = None;

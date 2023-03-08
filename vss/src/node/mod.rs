@@ -14,7 +14,7 @@ mod test_node;
 //TODO-WGPU mod yuv_buffer;
 //TODO-WGPU mod vr_compositor;
 mod stereo_desktop;
-//TODO-WGPU mod variance;
+mod variance;
 mod peacock;
 
 use wgpu::BindGroupLayout;
@@ -36,7 +36,7 @@ pub use self::test_node::*;
 //TODO-WGPU pub use self::yuv_buffer::*;
 //TODO-WGPU pub use self::vr_compositor::*;
 pub use self::stereo_desktop::*;
-//TODO-WGPU pub use self::variance::*;
+pub use self::variance::*;
 pub use self::peacock::*;
 
 //TODO-WGPU use self::macros::*;
