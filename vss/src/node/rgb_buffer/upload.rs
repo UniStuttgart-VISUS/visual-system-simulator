@@ -113,9 +113,9 @@ impl UploadRgbBuffer {
 }
 
 impl Node for UploadRgbBuffer {
-    fn new(window: &Window) -> Self {
-        let device = window.device().borrow_mut();
-        let queue = window.queue().borrow_mut();
+    fn new(surface: &Surface) -> Self {
+        let device = surface.device().borrow_mut();
+        let queue = surface.queue().borrow_mut();
 
         let uniforms = ShaderUniforms::new(&device, 
             Uniforms{
@@ -156,10 +156,10 @@ impl Node for UploadRgbBuffer {
         }
     }
 
-    fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
         if self.buffer_upload {
-            let device = window.device().borrow_mut();
-            let queue = window.queue().borrow_mut();
+            let device = surface.device().borrow_mut();
+            let queue = surface.queue().borrow_mut();
             let sampler = create_sampler_linear(&device);
             let texture = load_texture_from_bytes(
                 &device,
@@ -193,7 +193,7 @@ impl Node for UploadRgbBuffer {
             }
         }
 
-        let slots = slots.emplace_color_depth_output(window, width, height, "UploadNode");
+        let slots = slots.emplace_color_depth_output(surface, width, height, "UploadNode");
         self.targets = slots.as_all_target();
 
         slots
@@ -205,8 +205,8 @@ impl Node for UploadRgbBuffer {
         perspective.clone()
     }
 
-    fn render(&mut self, window: &window::Window, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
-        let queue = window.queue().borrow_mut();
+    fn render(&mut self, surface: &Surface, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
+        let queue = surface.queue().borrow_mut();
         self.uniforms.update(&queue);
 
         if let Some(texture) = &self.texture {

@@ -7,7 +7,7 @@
     <item
         android:id="@+id/nav_start_simulation"
         android:icon="@android:drawable/ic_media_play"
-        android:title="@string/start_simulation" />
+        android:title="@string/start_simulator" />
 
     <item android:title="@string/simulation"
         android:id="@+id/nav_settings">
@@ -22,8 +22,7 @@
                 android:title="@string/eyediseases_settings_reset" />
             <item
                 android:id="@+id/nav_splitscreen_simulation"
-                android:title="@string/splitscreen_simulation"
-                app:actionLayout="@layout/nav_splitscreen_simulation_switch" />
+                android:title="@string/splitscreen_simulation" />
         </menu>
     </item>
     <item android:title="@string/knowledgebase">
@@ -44,18 +43,15 @@
         <menu>
             <item
                 android:id="@+id/nav_webui_onoff"
-                android:title="@string/webui_onoff"
-                app:actionLayout="@layout/nav_webui_onoff_switch" />
+                android:title="@string/webui_onoff" />
             <item
                 android:id="@+id/nav_webui_server"
                 android:icon="@drawable/ic_menu_manage"
-                android:title="@string/webui_server"
-                app:actionLayout="@layout/nav_webui_connection_indicator" />
+                android:title="@string/webui_server" />
             <item
                 android:id="@+id/nav_webui_channel"
                 android:icon="@drawable/ic_menu_manage"
-                android:title="@string/webui_channel"
-                app:actionLayout="@layout/nav_webui_channel_indicator" />
+                android:title="@string/webui_channel" />
         </menu>
     </item>
     <item android:title="@string/app_settings">

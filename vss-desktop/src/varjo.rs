@@ -97,7 +97,7 @@ impl Varjo {
         Self { varjo, render_targets_color: Vec::new(), render_targets_depth: Vec::new(), logging_enabled: true}
     }
 
-    pub fn create_render_targets(&mut self, window: &Window) -> Vec<varjo_Viewport>{
+    pub fn create_render_targets(&mut self, surface: &Surface) -> Vec<varjo_Viewport>{
         let mut render_targets = std::ptr::null_mut::<VarjoRenderTarget>();
         let mut viewports = std::ptr::null_mut::<varjo_Viewport>();
         let mut render_targets_size = 0u32;

@@ -1,80 +1,126 @@
 #![allow(non_snake_case)]
 #![cfg(target_os = "android")]
 
-use std::sync::{mpsc, Mutex};
+use std::cell::RefCell;
+use std::ffi::c_void;
+use std::ptr::NonNull;
+use std::sync::{mpsc, Mutex, MutexGuard};
+
+use futures::executor::block_on;
 
 use jni::objects::{JClass, JObject, JString};
 use jni::sys::{jbyteArray, jint};
 use jni::JNIEnv;
 
-use android_activity::AndroidApp;
+use ndk_sys;
 
-pub enum Message {
-    Config(String),
-    Frame {
-        y: Box<[u8]>,
-        u: Box<[u8]>,
-        v: Box<[u8]>,
-        width: u32,
-        height: u32,
-    },
+use raw_window_handle::*;
+
+use vss::*;
+
+enum Message {
+    Config(vss::ValueMap),
+    Frame(vss::RgbBuffer), //TODO: should be a YUV buffer
 }
+
+struct AndroidHandle(RawWindowHandle);
+
+unsafe impl HasRawWindowHandle for AndroidHandle {
+    fn raw_window_handle(&self) -> RawWindowHandle {
+        self.0
+    }
+}
+
+unsafe impl HasRawDisplayHandle for AndroidHandle {
+    fn raw_display_handle(&self) -> RawDisplayHandle {
+        RawDisplayHandle::Android(AndroidDisplayHandle::empty())
+    }
+}
+
+struct Bridge {
+    pub surface: Surface,
+}
+
+unsafe impl Send for Bridge {}
 
 lazy_static::lazy_static! {
-    pub static ref MESSAGE_QUEUE : (Mutex<mpsc::SyncSender<Message>>,Mutex<mpsc::Receiver<Message>>)= {
-        // Create a message queue that blocks the sender when the queue is full.
-        let (tx,rx) = mpsc::sync_channel(2);
-        (Mutex::new(tx),Mutex::new(rx))
-    };
-}
-
-/// Program entry point for Android.
-#[no_mangle]
-fn android_main(_app: AndroidApp) {
-    println!("Hello World");
-    /*
-    let mut config = config::get_default_config();
-    config.input_file = String::from("flowers.png");
-    config.loop_provider = String::from("camera");
-    config.special_loop_provider_set = true;
-
-
-    let (mut device, mut flow) = config.build();
-
-    let mut done = false;
-    while !done {
-        device.begin_frame();
-        flow.render(&mut device);
-        device.end_frame(&mut done);
-    }
-    */
+    static ref BRIDGE : Mutex<Option<Bridge>> = Mutex::new(None);
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_vss_activities_MainActivity_postConfig(
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate(
     env: JNIEnv,
     _class: JClass,
-    json_string: JString,
+    surface: JObject,
+    assetManager: JObject,
 ) {
-    println!("Config!");
+    let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
 
-    /*
-      let conf: String = env.get_string(conf).expect("Couldn't get java string!").into();
-       let mut s = &ED_CONFIG.lock().unwrap();
-       let mut s = s.borrow_mut();
-       s.clear();
-       s.push_str(conf.as_str());
+    let window = unsafe {
+        ndk::native_window::NativeWindow::from_ptr(
+            NonNull::new(ndk_sys::ANativeWindow_fromSurface(
+                env.get_raw(),
+                surface.as_raw(),
+            ))
+            .unwrap(),
+        )
+    };
+    let assetManager = unsafe {
+        ndk::asset::AssetManager::from_ptr(
+            NonNull::new(ndk_sys::AAssetManager_fromJava(
+                env.get_raw(),
+                assetManager.as_raw(),
+            ))
+            .unwrap(),
+        );
+    };
 
-       let flag = &ED_CONFIG_UPDATE_FLAG.lock().unwrap();
-       let mut flag = flag.borrow_mut();
-       *flag = true;
+    let mut parameters: Vec<RefCell<ValueMap>> = Vec::new();
+    let mut window_handle = AndroidNdkWindowHandle::empty();
+    window_handle.a_native_window = window.ptr().as_ptr() as *mut c_void;
+    let handle = AndroidHandle(RawWindowHandle::AndroidNdk(window_handle));
+    let size = [window.width() as u32, window.height() as u32];
+    let surface = vss::Surface::new(size, handle, None, parameters, 1);
+    let surface = futures::executor::block_on(surface);
 
-       println!("RustConfReceiver: {}",conf);
-    */
+    *guard = Some(Bridge { surface });
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_vss_activities_MainActivity_postFrame(
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDestroy(
+    env: JNIEnv,
+    _class: JClass,
+) {
+    let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
+    *guard = None;
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeResize(
+    env: JNIEnv,
+    _class: JClass,
+    width: jint,
+    height: jint,
+) {
+    let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
+    if let Some(ref mut bridge) = *guard {
+        bridge.surface.resize([width as u32, height as u32])
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDraw(
+    env: JNIEnv,
+    _class: JClass,
+) {
+    let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
+    if let Some(ref bridge) = *guard {
+        //TODO: bridge.render_the_flow()
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostFrame(
     env: JNIEnv,
     _class: JClass,
     width: jint,
@@ -83,32 +129,36 @@ pub extern "system" fn Java_com_vss_activities_MainActivity_postFrame(
     u: jbyteArray,
     v: jbyteArray,
 ) {
-    println!("Frame!");
+    let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
 
-    /*
-
-    let mutex = &event_queue.0;
-    let sender = mutex.lock().unwrap();
-
-    {
-        let ya = env.convert_byte_array(y).unwrap();
-        let ua = env.convert_byte_array(u).unwrap();
-        let va = env.convert_byte_array(v).unwrap();
+    if let Some(ref bridge) = *guard {
+        /*
+        let y = env.convert_byte_array(y).unwrap().into_boxed_slice();
+        let u = env.convert_byte_array(u).unwrap().into_boxed_slice();
+        let v = env.convert_byte_array(v).unwrap().into_boxed_slice();
 
         let frame = Frame {
-            y: ya.into_boxed_slice(),
-            u: ua.into_boxed_slice(),
-            v: va.into_boxed_slice(),
+            y, u, v,
             width:width as u32,
             height:height as u32,
         };
 
-        let res = sender.try_send(frame);
-
-        if res.is_err() {
-            println!("SendError: {} ", res.err().unwrap());
-        }
-
+        //TODO: bridge.post_frame()
+        */
     }
-     */
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostSettings(
+    env: JNIEnv,
+    _class: JClass,
+    json_string: JString,
+) {
+    let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
+    
+    //let json_string: String = env.get_string(son_string).expect("Java String expected").into();
+   
+    if let Some(ref bridge) = *guard {
+       //TODO: bridge.post_settings()
+    }
 }

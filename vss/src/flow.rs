@@ -52,7 +52,7 @@ impl Flow {
         self.nodes.borrow().len()
     }
     
-    // pub fn update_last_slot(&self, window: &Window) {
+    // pub fn update_last_slot(&self, surface: &Surface) {
     //     if self.last_slot.borrow().is_some() {
     //         let output = self.last_slot.borrow_mut().as_mut().unwrap().take_output();
     //         let suggested_slot = 
@@ -94,7 +94,7 @@ impl Flow {
     //     }
     // }
 
-    pub fn negociate_slots(&self, window: &Window) {
+    pub fn negociate_slots(&self, surface: &Surface) {
         let mut slot_a = NodeSlots::new();
         let mut slot_b = NodeSlots::new();
         let nodes_len = self.nodes.borrow().len();
@@ -102,10 +102,10 @@ impl Flow {
 
             let suggested_slot = if idx + 1 == nodes_len {
                 // Suggest window as final output.
-                let device = window.device().borrow_mut();
+                let device = surface.device().borrow_mut();
         
-                let width = window.window_size.width;
-                let height = window.window_size.height;
+                let width = surface.surface_size[0];
+                let height = surface.surface_size[1];
 
                 let color_target = create_color_rt(&device, width, height, Some("flow_negociate_slots color"));
                 let deflection_target = create_highp_rt(&device, width, height, Some("flow_negociate_slots deflection"));
@@ -137,13 +137,13 @@ impl Flow {
                 NodeSlots::new_io(slot_b.take_output(), slot_a.take_output())
             };
             // Negociate and swap.
-            slot_a = node.negociate_slots_wk(window, suggested_slot, &self.well_known);
+            slot_a = node.negociate_slots_wk(surface, suggested_slot, &self.well_known);
             std::mem::swap(&mut slot_a, &mut slot_b);
         }
         self.last_slot.replace(Some(slot_b));
     }
 
-    pub fn update_values(&self, window: &Window, values: &ValueMap) {
+    pub fn update_values(&self, surface: &Surface, values: &ValueMap) {
         let mut perspective = self.last_perspective.borrow_mut();
         let mut configured_view = Matrix4::from_scale(1.0);
         // if the eye has strabism, it needs some angle offset
@@ -161,7 +161,7 @@ impl Flow {
 
         // Propagate to nodes.
         for node in self.nodes.borrow_mut().iter_mut() {
-            node.update_values(window, &values);
+            node.update_values(surface, &values);
         }
     }
 
@@ -176,18 +176,17 @@ impl Flow {
         //self.last_perspective.replace(perspective);
     }
 
-    pub fn render(&self, window: &Window, encoder: &mut CommandEncoder, screen: &RenderTexture) {
+    pub fn render(&self, surface: &Surface, encoder: &mut CommandEncoder, screen: &RenderTexture) {
         // Render all nodes.
         let last_index = self.nodes.borrow_mut().len() - 1;
         for (idx, node) in self.nodes.borrow_mut().iter_mut().enumerate(){
-            node.render(window, encoder, if idx == last_index {Some(screen)} else {None});
+            node.render(surface, encoder, if idx == last_index {Some(screen)} else {None});
         }
     }
 
-    // TODO replace with callback, where each node that needs to do post-processing registers
-    pub fn post_render(&self, window: &Window){
+    pub fn post_render(&self, surface: &Surface){
         for node in self.nodes.borrow_mut().iter_mut(){
-            node.post_render(window);
+            node.post_render(surface);
         }
     }
 }

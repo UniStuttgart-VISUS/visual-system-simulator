@@ -202,8 +202,8 @@ impl UploadVideo {
 }
 
 impl Node for UploadVideo {
-    fn new(window: &Window) -> Self {
-        let mut uploader = UploadRgbBuffer::new(window);
+    fn new(surface: &Surface) -> Self {
+        let mut uploader = UploadRgbBuffer::new(surface);
         uploader.set_flags(RgbInputFlags::VERTICALLY_FLIPPED);
         Self {
             upload_start: None,
@@ -221,21 +221,21 @@ impl Node for UploadVideo {
         }
     }
 
-    fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
         self.validate_data();
-        self.uploader.negociate_slots(window, slots)
+        self.uploader.negociate_slots(surface, slots)
     }
 
-    fn update_values(&mut self, window: &Window, values: &ValueMap) {
-        self.uploader.update_values(window, values);
+    fn update_values(&mut self, surface: &Surface, values: &ValueMap) {
+        self.uploader.update_values(surface, values);
     }
 
     fn input(&mut self, perspective: &EyePerspective, vis_param: &VisualizationParameters) -> EyePerspective {
         self.uploader.input(perspective, vis_param)
     }
 
-    fn render(&mut self, window: &Window, encoder: &mut wgpu::CommandEncoder, screen: Option<&RenderTexture>) {
+    fn render(&mut self, surface: &Surface, encoder: &mut wgpu::CommandEncoder, screen: Option<&RenderTexture>) {
         self.validate_data();
-        self.uploader.render(window, encoder, screen)
+        self.uploader.render(surface, encoder, screen)
     }
 }

@@ -40,7 +40,7 @@ impl OpenXR {
         }
     }
 
-    pub fn create_session(&self, window: &Window){
+    pub fn create_session(&self, surface: &Surface){
 
         //TODO do
         unsafe {
@@ -48,7 +48,7 @@ impl OpenXR {
         }
 
     }
-    pub fn create_render_targets(&mut self, window: &Window) -> (u32, u32){
+    pub fn create_render_targets(&mut self, surface: &Surface) -> (u32, u32){
 
         let mut render_targets_size = 0u32;
         let mut surface_width = 0u32;

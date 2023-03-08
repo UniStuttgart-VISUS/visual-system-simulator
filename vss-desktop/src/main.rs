@@ -40,24 +40,24 @@ impl IoGenerator {
         *self.input_processed.read().unwrap()
     }
 
-    fn _next(&mut self, window: &Window, render_resolution: Option<[u32; 2]>) -> Option<IoNodePair> {
+    fn _next(&mut self, surface: &Surface, render_resolution: Option<[u32; 2]>) -> Option<IoNodePair> {
         self.input_idx += 1;
-        self.current(&window, render_resolution,0)
+        self.current(&surface, render_resolution,0)
     }
 
-    fn current(&mut self, window: &Window, render_resolution: Option<[u32; 2]>, flow_index: usize) -> Option<IoNodePair> {
+    fn current(&mut self, surface: &Surface, render_resolution: Option<[u32; 2]>, flow_index: usize) -> Option<IoNodePair> {
         if self.input_idx >= self.inputs.len() {
             None
         } else {
             let input = &self.inputs[self.input_idx];
             if UploadRgbBuffer::has_image_extension(&input) {
                 let input_path = std::path::Path::new(input);
-                let mut input_node = UploadRgbBuffer::new(&window);
+                let mut input_node = UploadRgbBuffer::new(&surface);
                 input_node.upload_image(load(input_path));
                 input_node.set_flags(RgbInputFlags::from_extension(&input));
                 input_node.set_render_resolution(render_resolution);
                 let output_node = if let Some(output) = &self.output {
-                    let mut output_node = DownloadRgbBuffer::new(&window);
+                    let mut output_node = DownloadRgbBuffer::new(&surface);
                     let output_info = OutputInfo {
                         configname: self.config_name.clone(),
                         dirname: input_path
@@ -95,7 +95,7 @@ impl IoGenerator {
                 };
                 Some((Box::new(input_node), output_node))
             } else if UploadVideo::has_video_extension(&input) {
-                let mut input_node = UploadVideo::new(&window);
+                let mut input_node = UploadVideo::new(&surface);
                 input_node.set_flags(RgbInputFlags::from_extension(&input));
                 input_node.open(input).unwrap();
                 Some((Box::new(input_node), None))
@@ -107,20 +107,20 @@ impl IoGenerator {
 }
 
 fn build_flow(window: &mut Window, io_generator: &mut IoGenerator, flow_index: usize, render_resolution: Option<[u32; 2]>, variance_log: Option<String>){
-    let (input_node, output_node) = io_generator.current(&window, render_resolution, flow_index).unwrap();
+    let (input_node, output_node) = io_generator.current(&window.surface, render_resolution, flow_index).unwrap();
 
     // Add input node.
-    window.add_node(input_node, flow_index);
+    window.surface.add_node(input_node, flow_index);
 
     // Visual system passes.
-    let node = Lens::new(&window);
-    window.add_node(Box::new(node), flow_index);
-    let node = Cataract::new(&window);
-    window.add_node(Box::new(node), flow_index);
-    let node = Retina::new(&window);
-    window.add_node(Box::new(node), flow_index);
-    let node = PeacockCB::new(&window);
-    window.add_node(Box::new(node), flow_index);
+    let node = Lens::new(&window.surface);
+    window.surface.add_node(Box::new(node), flow_index);
+    let node = Cataract::new(&window.surface);
+    window.surface.add_node(Box::new(node), flow_index);
+    let node = Retina::new(&window.surface);
+    window.surface.add_node(Box::new(node), flow_index);
+    let node = PeacockCB::new(&window.surface);
+    window.surface.add_node(Box::new(node), flow_index);
     
     // Measure Uncertainty
     // let mut node = VarianceMeasure::new(&window);
@@ -138,14 +138,14 @@ fn build_flow(window: &mut Window, io_generator: &mut IoGenerator, flow_index: u
     // Add output node, if present.
     if let Some(output_node) = output_node {
         // Display node.
-        let node = Display::new(&window);
-        window.add_node(Box::new(node), flow_index);
-        window.add_node(output_node, flow_index);
+        let node = Display::new(&window.surface);
+        window.surface.add_node(Box::new(node), flow_index);
+        window.surface.add_node(output_node, flow_index);
     } else {
         // window.add_node(Box::new(Passthrough::new(&window)), flow_index)
         // Display node.
-        let node = Display::new(&window);
-        window.add_node(Box::new(node), flow_index);
+        let node = Display::new(&window.surface);
+        window.surface.add_node(Box::new(node), flow_index);
     }
 
 
@@ -209,15 +209,15 @@ pub fn main() {
         build_flow(&mut window, &mut io_generator, index, config.resolution, config.variance_log.clone());
 
         if flow_count > 1 {
-            let node = desktop.get_stereo_desktop_node(&window);
-            window.add_node(Box::new(node), index);
+            let node = desktop.get_stereo_desktop_node(&window.surface);
+            window.surface.add_node(Box::new(node), index);
         }
     }
     
 
     let mut done = false;
     // window.update_last_node(); // TODO-WGPU
-    window.update_nodes();
+    window.surface.update_nodes();
 
     let mut frame_counter = 0u128; // you know, for the simulations than run longer than the universe exists
 

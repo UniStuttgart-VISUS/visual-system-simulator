@@ -72,7 +72,7 @@ impl DownloadRgbBuffer{
 }
 
 impl Node for DownloadRgbBuffer{
-    fn new(window: &Window) -> Self {
+    fn new(surface: &Surface) -> Self {
         let (tx, rx) = std::sync::mpsc::channel::<Message>();
         std::thread::spawn(move || {
             let mut callback: Option<RgbBufferCb> = None;
@@ -90,8 +90,8 @@ impl Node for DownloadRgbBuffer{
             }
         });
 
-        let device = window.device().borrow_mut();
-        let queue = window.queue().borrow_mut();
+        let device = surface.device().borrow_mut();
+        let queue = surface.queue().borrow_mut();
         
         let buffer_dimensions = BufferDimensions::new(1 as usize, 1 as usize);
 
@@ -112,10 +112,10 @@ impl Node for DownloadRgbBuffer{
         }
     }
 
-    fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
-        let slots = slots.to_color_input(window);
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
+        let slots = slots.to_color_input(surface);
         self.res = slots.input_size_f32();
-        let device = window.device().borrow_mut();
+        let device = surface.device().borrow_mut();
         
         (self.input, _) = slots.as_color_source(&device);
 
@@ -133,7 +133,7 @@ impl Node for DownloadRgbBuffer{
         slots
     }
 
-    fn render(&mut self, _window: &window::Window, encoder: &mut CommandEncoder, _screen: Option<&RenderTexture>) {
+    fn render(&mut self, _surface: &Surface, encoder: &mut CommandEncoder, _screen: Option<&RenderTexture>) {
         let buffer_dimensions = BufferDimensions::new(self.res[0] as usize, self.res[1] as usize);
         println!("render {}, {}", buffer_dimensions.width, buffer_dimensions.height);
 
@@ -161,9 +161,9 @@ impl Node for DownloadRgbBuffer{
         );
     }
 
-    fn post_render(&mut self, window: &window::Window) {
+    fn post_render(&mut self, surface: &Surface) {
         println!("download post_render");
-        let device = window.device().borrow_mut();
+        let device = surface.device().borrow_mut();
 
         // Note that we're not calling `.await` here.
         let buffer_slice = self.buffer.slice(..);

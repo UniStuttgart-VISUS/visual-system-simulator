@@ -22,7 +22,7 @@ impl VRCompositor{
 }
 
 impl Node for VRCompositor {
-    fn new(window: &Window) -> Self {
+    fn new(surface: &Surface) -> Self {
         let mut factory = window.factory().borrow_mut();
 
         let pso = factory
@@ -47,7 +47,7 @@ impl Node for VRCompositor {
         }
     }
 
-    fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
         let slots = slots.to_color_input(window).to_color_output(window);
 
         self.pso_data.u_resolution_out = slots.output_size_f32();
@@ -56,7 +56,7 @@ impl Node for VRCompositor {
         slots
     }
 
-    fn render(&mut self, window: &Window) {
+    fn render(&mut self, surface: &Surface) {
         let mut encoder = window.encoder().borrow_mut();
         encoder.draw(&gfx::Slice::from_vertex_count(6), &self.pso, &self.pso_data);
     }

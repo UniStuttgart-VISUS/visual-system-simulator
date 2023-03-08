@@ -26,8 +26,8 @@ impl SharedStereoDesktop {
             })),
         }
     }
-    pub fn get_stereo_desktop_node(&mut self, window: &Window) -> StereoDesktop {
-        let desktop = StereoDesktop::new_from_shared(window, self.shared.clone(), self.idx_ctr);
+    pub fn get_stereo_desktop_node(&mut self, surface: &Surface) -> StereoDesktop {
+        let desktop = StereoDesktop::new_from_shared(surface, self.shared.clone(), self.idx_ctr);
         self.idx_ctr += 1;
         desktop
     }
@@ -46,11 +46,11 @@ pub struct StereoDesktop {
 
 impl StereoDesktop {
     fn new_from_shared(
-        window: &Window,
+        surface: &Surface,
         shared: Rc<RefCell<SharedStereoDesktopData>>,
         eye_idx: u32,
     ) -> Self {
-        let mut proto = StereoDesktop::new(window);
+        let mut proto = StereoDesktop::new(surface);
         proto.shared = Some(shared);
         proto.eye_idx = eye_idx;
         proto
@@ -58,9 +58,9 @@ impl StereoDesktop {
 }
 
 impl Node for StereoDesktop {
-    fn new(window: &Window) -> Self {
-        let device = window.device().borrow_mut();
-        let queue = window.queue().borrow_mut();
+    fn new(surface: &Surface) -> Self {
+        let device = surface.device().borrow_mut();
+        let queue = surface.queue().borrow_mut();
 
         let uniforms = ShaderUniforms::new(
             &device,
@@ -123,9 +123,9 @@ impl Node for StereoDesktop {
         perspective.clone()
     }
 
-    fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
-        let slots = slots.to_color_input(window).to_color_output(window, "StereoNode");
-        let device = window.device().borrow_mut();
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
+        let slots = slots.to_color_input(surface).to_color_output(surface, "StereoNode");
+        let device = surface.device().borrow_mut();
 
         self.uniforms.data.resolution_in = slots.input_size_f32();
         self.uniforms.data.resolution_out = slots.output_size_f32();
@@ -155,10 +155,10 @@ impl Node for StereoDesktop {
         slots
     }
 
-    fn render(&mut self, window: &window::Window, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
+    fn render(&mut self, surface: &Surface, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
         if self.eye_idx == 1 {
             // println!("Draw sd");
-            self.uniforms.update(&window.queue().borrow_mut());
+            self.uniforms.update(&surface.queue().borrow_mut());
         
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Stereo render_pass"),

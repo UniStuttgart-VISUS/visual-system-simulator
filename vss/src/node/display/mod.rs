@@ -62,9 +62,9 @@ pub struct Display {
 }
 
 impl Node for Display {
-    fn new(window: &window::Window) -> Self {
-        let device = window.device().borrow_mut();
-        let queue = window.queue().borrow_mut();
+    fn new(surface: &Surface) -> Self {
+        let device = surface.device().borrow_mut();
+        let queue = surface.queue().borrow_mut();
 
         let uniforms = ShaderUniforms::new(&device, 
             Uniforms{
@@ -146,9 +146,9 @@ impl Node for Display {
         }
     }
 
-    fn negociate_slots(&mut self, window: &window::Window, slots: NodeSlots) -> NodeSlots {
-        let slots = slots.to_color_input(window).to_color_output(window, "DisplayNode");
-        let device = window.device().borrow_mut();
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
+        let slots = slots.to_color_input(surface).to_color_output(surface, "DisplayNode");
+        let device = surface.device().borrow_mut();
 
         self.uniforms.data.resolution_in = slots.input_size_f32();
         self.uniforms.data.resolution_out = slots.output_size_f32();
@@ -159,19 +159,19 @@ impl Node for Display {
         slots
     }
 
-    fn negociate_slots_wk(&mut self, window: &window::Window, slots: NodeSlots, well_known: &WellKnownSlots) -> NodeSlots{
+    fn negociate_slots_wk(&mut self, surface: &Surface, slots: NodeSlots, well_known: &WellKnownSlots) -> NodeSlots{
         match well_known.get_original() {
             Some(o) => {
-                let device = window.device().borrow_mut();
+                let device = surface.device().borrow_mut();
                 self.original_bind_group = o.create_bind_group(&device).1
             },
             None => {},
         };
-        self.negociate_slots(window, slots)
+        self.negociate_slots(surface, slots)
     }
 
 
-    fn update_values(&mut self, _window: &window::Window, values: &ValueMap) {
+    fn update_values(&mut self, _surface: &Surface, values: &ValueMap) {
         self.uniforms.data.stereo = if values
             .get("split_screen_switch")
             .unwrap_or(&Value::Bool(false))
@@ -220,16 +220,16 @@ impl Node for Display {
         perspective.clone()
     }
 
-    fn render(&mut self, window: &window::Window, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
+    fn render(&mut self, surface: &Surface, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
         let speed = 4.0;
 
-        self.hive_rot= self.hive_rot*Matrix4::from_angle_x(Rad(       speed * window.delta_t()/1_000_000.0));
-        self.hive_rot= self.hive_rot*Matrix4::from_angle_y(Rad( 0.7 * speed * window.delta_t()/1_000_000.0));
-        self.hive_rot= self.hive_rot*Matrix4::from_angle_z(Rad( 0.2 * speed * window.delta_t()/1_000_000.0));
+        self.hive_rot= self.hive_rot*Matrix4::from_angle_x(Rad(       speed * surface.delta_t()/1_000_000.0));
+        self.hive_rot= self.hive_rot*Matrix4::from_angle_y(Rad( 0.7 * speed * surface.delta_t()/1_000_000.0));
+        self.hive_rot= self.hive_rot*Matrix4::from_angle_z(Rad( 0.2 * speed * surface.delta_t()/1_000_000.0));
 
         self.uniforms.data.hive_rotation = self.hive_rot.into();
 
-        self.uniforms.update(&window.queue().borrow_mut());
+        self.uniforms.update(&surface.queue().borrow_mut());
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("DisplayNode render_pass"),

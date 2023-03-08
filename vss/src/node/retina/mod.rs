@@ -20,9 +20,9 @@ pub struct Retina {
 }
 
 impl Node for Retina {
-    fn new(window: &Window) -> Self {
-        let device = window.device().borrow_mut();
-        let queue = window.queue().borrow_mut();
+    fn new(surface: &Surface) -> Self {
+        let device = surface.device().borrow_mut();
+        let queue = surface.queue().borrow_mut();
 
         let uniforms = ShaderUniforms::new(&device, 
             Uniforms{
@@ -70,20 +70,20 @@ impl Node for Retina {
         }
     }
 
-    fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
-        let slots = slots.to_color_input(window).to_color_output(window, "RetinaNode");
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
+        let slots = slots.to_color_input(surface).to_color_output(surface, "RetinaNode");
         self.uniforms.data.resolution = slots.output_size_f32();
 
-        let device = window.device().borrow_mut();
+        let device = surface.device().borrow_mut();
 
         self.sources_bind_group = slots.as_all_colors_source(&device);
         self.targets = slots.as_all_colors_target();
         slots
     }
 
-    fn update_values(&mut self, window: &Window, values: &ValueMap) {
-        let device = window.device().borrow_mut();
-        let queue = window.queue().borrow_mut();
+    fn update_values(&mut self, surface: &Surface, values: &ValueMap) {
+        let device = surface.device().borrow_mut();
+        let queue = surface.queue().borrow_mut();
 
         let mut image_data = Vec::new();
         if let Some(Value::Image(retina_map_pos_x_path)) = values.get("retina_map_pos_x_path") {
@@ -162,8 +162,8 @@ impl Node for Retina {
         perspective.clone()
     }
 
-    fn render(&mut self, window: &window::Window, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
-        self.uniforms.update(&window.queue().borrow_mut());
+    fn render(&mut self, surface: &Surface, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
+        self.uniforms.update(&surface.queue().borrow_mut());
         
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Retina render_pass"),

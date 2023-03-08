@@ -48,10 +48,10 @@ pub struct Lens {
 }
 
 impl Node for Lens {
-    fn new(window: &Window) -> Self {
-        let generator = NormalMapGenerator::new(&window);
-        let device = window.device().borrow_mut();
-        let queue = window.queue().borrow_mut();
+    fn new(surface: &Surface) -> Self {
+        let generator = NormalMapGenerator::new(&surface);
+        let device = surface.device().borrow_mut();
+        let queue = surface.queue().borrow_mut();
 
         let uniforms = ShaderUniforms::new(&device, 
             Uniforms{
@@ -119,10 +119,10 @@ impl Node for Lens {
         }
     }
 
-    fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
-        let slots = slots.to_color_depth_input(window).to_color_output(window, "LensNode");
-        let device = window.device().borrow_mut();
-        let queue = window.queue().borrow_mut();
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
+        let slots = slots.to_color_depth_input(surface).to_color_output(surface, "LensNode");
+        let device = surface.device().borrow_mut();
+        let queue = surface.queue().borrow_mut();
 
         self.sources_bind_group = slots.as_all_source(&device);
         self.targets = slots.as_all_colors_target();
@@ -134,7 +134,7 @@ impl Node for Lens {
         slots
     }
 
-    fn update_values(&mut self, _window: &Window, values: &ValueMap) {
+    fn update_values(&mut self, _surface: &Surface, values: &ValueMap) {
         // default values
         self.uniforms.data.near_point = 0.0;
         self.uniforms.data.far_point = f32::INFINITY;
@@ -207,8 +207,8 @@ impl Node for Lens {
         perspective.clone()
     }
 
-    fn render(&mut self, window: &window::Window, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
-        self.uniforms.update(&window.queue().borrow_mut());
+    fn render(&mut self, surface: &Surface, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
+        self.uniforms.update(&surface.queue().borrow_mut());
         
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Lens render_pass"),

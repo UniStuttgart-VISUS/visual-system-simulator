@@ -7,7 +7,7 @@
     <string name="eyediseases_settings_load">Load settings</string>
     <string name="eyediseases_settings_reset">Reset settings</string>
     <string name="splitscreen_simulation">Splitscreen Simulation</string>
-    <string name="start_simulation">Start simulation</string>
+    <string name="start_simulator">Start simulation</string>
     <string name="eyediseases_settings">Settings</string>
     <string name="simulation_source">Source</string>
     <string name="simulation">Simulation</string>

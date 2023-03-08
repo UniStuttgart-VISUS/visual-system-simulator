@@ -48,7 +48,7 @@ pub struct VarianceMeasure {
 }
 
 impl VarianceMeasure{
-/*    fn measure_variance(&mut self, window: &Window) -> (f32, f32){
+/*  fn measure_variance(&mut self, surface: &Surface) -> (f32, f32){
         use gfx::format::Formatted;
         use gfx::memory::Typed;
 
@@ -122,9 +122,9 @@ impl VarianceMeasure{
 
 
 impl Node for VarianceMeasure {
-    fn new(window: &Window) -> Self {
-        let device = window.device().borrow_mut();
-        let queue = window.queue().borrow_mut();
+    fn new(surface: &Surface) -> Self {
+        let device = surface.device().borrow_mut();
+        let queue = surface.queue().borrow_mut();
 
         let uniforms = ShaderUniforms::new(&device, 
             Uniforms{
@@ -171,11 +171,11 @@ impl Node for VarianceMeasure {
         }
     }
 
-    fn negociate_slots(&mut self, window: &Window, slots: NodeSlots) -> NodeSlots {
-        let slots = slots.to_color_input(window).to_color_output(window, "VarianceNode");
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
+        let slots = slots.to_color_input(surface).to_color_output(surface, "VarianceNode");
         self.uniforms.data.resolution = slots.output_size_f32();
 
-        let device = window.device().borrow_mut();
+        let device = surface.device().borrow_mut();
 
         self.sources_bind_group = slots.as_all_colors_source(&device);
         self.targets = slots.as_all_colors_target();
@@ -200,7 +200,7 @@ impl Node for VarianceMeasure {
         perspective.clone()
     }
 
-    fn render(&mut self, window: &window::Window, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
+    fn render(&mut self, surface: &surface::Surface, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
         if self.log_file.is_some(){
             /*self.pso_data.u_show_variance =  2;
             self.pso_data.u_variance_metric =  4;
@@ -221,7 +221,7 @@ impl Node for VarianceMeasure {
             let (sum, avg) = self.measure_variance(window);
             write!(self.log_file.as_ref().unwrap(), "{:?}, {:?}\n", sum, avg).unwrap();*/
         }else{
-            self.uniforms.update(&window.queue().borrow_mut());
+            self.uniforms.update(&surface.queue().borrow_mut());
 
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Variance render_pass"),
