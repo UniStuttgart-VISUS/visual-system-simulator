@@ -66,5 +66,7 @@ public class SimulatorSurfaceView extends SurfaceView implements SurfaceHolder.C
         SimulatorBridge.postSettings(jsonString);
     }
 
-    public void postFrame(int width, int height, byte[] y, byte[] u, byte[] v) { SimulatorBridge.postFrame(width,height,y,u,v);}
+    public void postFrame(int width, int height, byte[] y, byte[] u, byte[] v) {
+        SimulatorBridge.postFrame(width, height, y, u, v);
+    }
 }

@@ -399,7 +399,7 @@ impl Window {
             // Update pipline IO.
             let new_size = PhysicalSize::new(1920 as u32, 1080 as u32);
             //self.wgpu_window.resize(size);
-            self.surface.resize(new_size);
+            self.surface.resize([new_size.width, new_size.height]);
             // TODO-WGPU
             // gfx_window_glutin::update_views(
             //     &self.wgpu_window,
@@ -419,7 +419,7 @@ impl Window {
             // Update pipline IO.
             // let dpi_factor = self.wgpu_window.scale_factor();
             // let size = size.to_physical(dpi_factor);
-            self.surface.resize(new_size);
+            self.surface.resize([new_size.width, new_size.height]);
             // self.wgpu_window.resize(size);
             // TODO-WGPU 
             // gfx_window_glutin::update_views(

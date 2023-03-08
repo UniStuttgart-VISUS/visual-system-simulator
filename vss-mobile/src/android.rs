@@ -4,7 +4,9 @@
 use std::cell::RefCell;
 use std::ffi::c_void;
 use std::ptr::NonNull;
-use std::sync::{mpsc, Mutex};
+use std::sync::{mpsc, Mutex, MutexGuard};
+
+use futures::executor::block_on;
 
 use jni::objects::{JClass, JObject, JString};
 use jni::sys::{jbyteArray, jint};
@@ -36,25 +38,13 @@ unsafe impl HasRawDisplayHandle for AndroidHandle {
 }
 
 struct Bridge {
-    pub queue: (
-        Mutex<mpsc::SyncSender<Message>>,
-        Mutex<mpsc::Receiver<Message>>,
-    ),
-    pub surface: Option<Surface>,
+    pub surface: Surface,
 }
 
 unsafe impl Send for Bridge {}
-unsafe impl Sync for Bridge {}
 
 lazy_static::lazy_static! {
-    static ref BRIDGE : Bridge = Bridge {
-        queue:  {
-            // Create a message queue that blocks the sender when the queue is full.
-            let (tx,rx) = mpsc::sync_channel(2);
-            (Mutex::new(tx),Mutex::new(rx))
-        },
-        surface: None
-    };
+    static ref BRIDGE : Mutex<Option<Bridge>> = Mutex::new(None);
 }
 
 #[no_mangle]
@@ -64,6 +54,8 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate(
     surface: JObject,
     assetManager: JObject,
 ) {
+    let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
+
     let window = unsafe {
         ndk::native_window::NativeWindow::from_ptr(
             NonNull::new(ndk_sys::ANativeWindow_fromSurface(
@@ -82,15 +74,16 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate(
             .unwrap(),
         );
     };
-    println!("Create!");
 
     let mut parameters: Vec<RefCell<ValueMap>> = Vec::new();
     let mut window_handle = AndroidNdkWindowHandle::empty();
     window_handle.a_native_window = window.ptr().as_ptr() as *mut c_void;
     let handle = AndroidHandle(RawWindowHandle::AndroidNdk(window_handle));
     let size = [window.width() as u32, window.height() as u32];
-    let surface = Surface::new(size, handle, None, parameters, 1);
-    //BRIDGE.surface.replace(surface);
+    let surface = vss::Surface::new(size, handle, None, parameters, 1);
+    let surface = futures::executor::block_on(surface);
+
+    *guard = Some(Bridge { surface });
 }
 
 #[no_mangle]
@@ -98,7 +91,8 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDestroy(
     env: JNIEnv,
     _class: JClass,
 ) {
-    //BRIDGE.surface.take();
+    let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
+    *guard = None;
 }
 
 #[no_mangle]
@@ -108,10 +102,10 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeResize(
     width: jint,
     height: jint,
 ) {
-    if let Some(ref surface) = BRIDGE.surface {
-        //surface.resize()
+    let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
+    if let Some(ref mut bridge) = *guard {
+        bridge.surface.resize([width as u32, height as u32])
     }
-    println!("Resize!");
 }
 
 #[no_mangle]
@@ -119,10 +113,10 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDraw(
     env: JNIEnv,
     _class: JClass,
 ) {
-    if let Some(ref surface) = BRIDGE.surface {
-        //surface.draw()
+    let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
+    if let Some(ref bridge) = *guard {
+        //TODO: bridge.render_the_flow()
     }
-    println!("Draw!");
 }
 
 #[no_mangle]
@@ -135,34 +129,23 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostFrame(
     u: jbyteArray,
     v: jbyteArray,
 ) {
-    println!("Frame!");
+    let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
 
-    /*
-
-    let mutex = &event_queue.0;
-    let sender = mutex.lock().unwrap();
-
-    {
-        let ya = env.convert_byte_array(y).unwrap();
-        let ua = env.convert_byte_array(u).unwrap();
-        let va = env.convert_byte_array(v).unwrap();
+    if let Some(ref bridge) = *guard {
+        /*
+        let y = env.convert_byte_array(y).unwrap().into_boxed_slice();
+        let u = env.convert_byte_array(u).unwrap().into_boxed_slice();
+        let v = env.convert_byte_array(v).unwrap().into_boxed_slice();
 
         let frame = Frame {
-            y: ya.into_boxed_slice(),
-            u: ua.into_boxed_slice(),
-            v: va.into_boxed_slice(),
+            y, u, v,
             width:width as u32,
             height:height as u32,
         };
 
-        let res = sender.try_send(frame);
-
-        if res.is_err() {
-            println!("SendError: {} ", res.err().unwrap());
-        }
-
+        //TODO: bridge.post_frame()
+        */
     }
-     */
 }
 
 #[no_mangle]
@@ -171,19 +154,11 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostSettings
     _class: JClass,
     json_string: JString,
 ) {
-    println!("Config!");
-
-    /*
-      let conf: String = env.get_string(conf).expect("Couldn't get java string!").into();
-       let mut s = &ED_CONFIG.lock().unwrap();
-       let mut s = s.borrow_mut();
-       s.clear();
-       s.push_str(conf.as_str());
-
-       let flag = &ED_CONFIG_UPDATE_FLAG.lock().unwrap();
-       let mut flag = flag.borrow_mut();
-       *flag = true;
-
-       println!("RustConfReceiver: {}",conf);
-    */
+    let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
+    
+    //let json_string: String = env.get_string(son_string).expect("Java String expected").into();
+   
+    if let Some(ref bridge) = *guard {
+       //TODO: bridge.post_settings()
+    }
 }

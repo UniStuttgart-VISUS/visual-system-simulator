@@ -197,11 +197,11 @@ impl Surface {
         self.flow[flow_index].replace_node(index, node);
     }
 
-    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-        if new_size.width > 0 && new_size.height > 0 {
-            self.surface_size = [new_size.width, new_size.height];
-            self.surface_config.borrow_mut().width = new_size.width;
-            self.surface_config.borrow_mut().height = new_size.height;
+    pub fn resize(&mut self, new_size: [u32;2]) {
+        if new_size[0] > 0 && new_size[1] > 0 {
+            self.surface_size = [new_size[0], new_size[1]];
+            self.surface_config.borrow_mut().width = new_size[0];
+            self.surface_config.borrow_mut().height = new_size[1];
             self.surface.configure(&self.device.borrow_mut(), &self.surface_config.borrow());
         }
     }
