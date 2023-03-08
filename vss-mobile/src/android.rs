@@ -2,6 +2,7 @@
 #![cfg(target_os = "android")]
 
 use std::cell::RefCell;
+use std::ffi::c_void;
 use std::ptr::NonNull;
 use std::sync::{mpsc, Mutex};
 
@@ -11,13 +12,27 @@ use jni::JNIEnv;
 
 use ndk_sys;
 
-use raw_window_handle;
+use raw_window_handle::*;
 
 use vss::*;
 
 enum Message {
     Config(vss::ValueMap),
     Frame(vss::RgbBuffer), //TODO: should be a YUV buffer
+}
+
+struct AndroidHandle(RawWindowHandle);
+
+unsafe impl HasRawWindowHandle for AndroidHandle {
+    fn raw_window_handle(&self) -> RawWindowHandle {
+        self.0
+    }
+}
+
+unsafe impl HasRawDisplayHandle for AndroidHandle {
+    fn raw_display_handle(&self) -> RawDisplayHandle {
+        RawDisplayHandle::Android(AndroidDisplayHandle::empty())
+    }
 }
 
 struct Bridge {
@@ -70,11 +85,12 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate(
     println!("Create!");
 
     let mut parameters: Vec<RefCell<ValueMap>> = Vec::new();
-    // let raw_window = raw_window_handle::AndroidNdkWindowHandle {
-    //     a_native_window : window.ptr().as_ptr() as c_void
-    // } ;
-    // let surface = Surface::new([window.width(), window.height()], raw_window, None, parameters, 1);
-    // BRIDGE.surface.replace(surface);
+    let mut window_handle = AndroidNdkWindowHandle::empty();
+    window_handle.a_native_window = window.ptr().as_ptr() as *mut c_void;
+    let handle = AndroidHandle(RawWindowHandle::AndroidNdk(window_handle));
+    let size = [window.width() as u32, window.height() as u32];
+    let surface = Surface::new(size, handle, None, parameters, 1);
+    //BRIDGE.surface.replace(surface);
 }
 
 #[no_mangle]
