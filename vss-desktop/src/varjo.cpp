@@ -204,9 +204,9 @@ public:
                     //gaze.requestCalibration();
                 }
                 break;
-            case varjo_EventType_FoveationStatus:
-                //renderer->useFoveatedViewports(evt.data.foveationStatus.status == varjo_FoveationStatus_Ok);
-                break;
+            // case varjo_EventType_FoveationStatus:
+            //     //renderer->useFoveatedViewports(evt.data.foveationStatus.status == varjo_FoveationStatus_Ok);
+            //     break;
             }
         }
         if (m_visible)

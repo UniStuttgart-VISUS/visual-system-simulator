@@ -36,11 +36,13 @@ impl IoGenerator {
         }
     }
 
-    fn _is_ready(&self) -> bool {
+    #[cfg(feature = "varjo")]
+    fn is_ready(&self) -> bool {
         *self.input_processed.read().unwrap()
     }
 
-    fn _next(&mut self, window: &Window, render_resolution: Option<[u32; 2]>) -> Option<IoNodePair> {
+    #[cfg(feature = "varjo")]
+    fn next(&mut self, window: &Window, render_resolution: Option<[u32; 2]>) -> Option<IoNodePair> {
         self.input_idx += 1;
         self.current(&window, render_resolution,0)
     }
@@ -439,7 +441,7 @@ pub fn main() {
 
     for index in 0 .. flow_count {
         let viewport = &varjo_viewports[index];
-        build_flow(&mut window, &mut io_generator, index, Some([viewport.width, viewport.height]));
+        build_flow(&mut window, &mut io_generator, index, Some([viewport.width, viewport.height]), None);
         let mut node = VRCompositor::new(&window);
         node.set_viewport(viewport.x as f32, viewport.y as f32, viewport.width as f32, viewport.height as f32);
         window.add_node(Box::new(node), index);
