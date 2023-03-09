@@ -30,6 +30,7 @@ pub struct Window {
     wgpu_window: winit::window::Window,
     events_loop: RefCell<EventLoop<()>>, 
     pub surface: surface::Surface,
+     active: RefCell<bool>,
 }
 
 impl Window {
@@ -66,6 +67,7 @@ impl Window {
             wgpu_window,
             events_loop: RefCell::new(events_loop),
             surface,
+            active: RefCell::new(false),
         }
     }
  
@@ -309,13 +311,13 @@ impl Window {
                             done = true;
                         }
                         WindowEvent::Focused(active) => {
-                            self.surface.active.replace(*active);
+                            self.active.replace(*active);
                         }
                         WindowEvent::Resized(size) => {
                             deferred_size = Some(*size);
                         }
                         WindowEvent::CursorMoved { position, .. } => {
-                            if *self.surface.active.borrow() {
+                            if *self.active.borrow() {
                                 self.surface.cursor_pos.replace([position.x, position.y]);
                                 let mut vp = self.surface.vis_param.borrow_mut();
                                 vp.mouse_input.position = (position.x as f32, position.y as f32);
@@ -335,14 +337,14 @@ impl Window {
                             }
                         }
                         WindowEvent::CursorLeft { .. } => {
-                            if *self.surface.active.borrow() {
+                            if *self.active.borrow() {
                                 self.surface.override_view.replace(false);
                                 self.surface.override_gaze.replace(false);
                                 //reset gaze ?
                             }
                         }
                         WindowEvent::MouseInput { state, button, .. } => {
-                            if *self.surface.active.borrow() {
+                            if *self.active.borrow() {
                                 let mut vp = self.surface.vis_param.borrow_mut();
                                 match button {
                                     MouseButton::Left => {

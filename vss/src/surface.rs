@@ -1,41 +1,21 @@
-use crate::{*, Texture};
-use std::rc::Rc;
-use std::{cell::RefCell, borrow::BorrowMut};
+use crate::*;
+use std::{cell::RefCell};
 use std::time::Instant;
-use std::iter;
-use std::num::NonZeroU32;
-use cgmath::{Matrix4, Vector4, SquareMatrix};
-use wgpu::*;
+use wgpu;
 
-/// A factory to create device objects.
-//TODO-WGPU pub type DeviceFactory = gfx_device_gl::Factory;
-
-/// An encoder to manipulate a device command queue.
-//TODO-WGPU pub type DeviceEncoder = gfx::Encoder<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer>;
-
-/// Render Target Types of this Window.
-//TODO-WGPU pub type RenderTargetColor = gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat>;
-//TODO-WGPU pub type RenderTargetDepthFormat = (gfx::format::D24_S8, gfx::format::Unorm);
-//TODO-WGPU pub type RenderTargetDepth = gfx::handle::DepthStencilView<gfx_device_gl::Resources, RenderTargetDepthFormat>;
-
-/// Represents a window along with its associated rendering context and [Flow].
+/// Represents a rendering surface and its associated [Flow].
 pub struct Surface {
-    pub surface_size: [u32;2],
     pub surface: wgpu::Surface,
+    pub surface_size: [u32;2],
     surface_config: RefCell<wgpu::SurfaceConfiguration>,
     pub device: RefCell<wgpu::Device>,
     pub queue: RefCell<wgpu::Queue>,
-    //TODO-WGPU factory: RefCell<DeviceFactory>,
-    //TODO-WGPU encoder: RefCell<CommandEncoder>,
 
-    //TODO-remove render_target: RefCell<TextureView>, //Rgba8Unorm
-    //TODO-WGPU main_depth: RefCell<RenderTargetDepth>,
     should_swap_buffers: RefCell<bool>,
     pub cursor_pos: RefCell<[f64;2]>,
     pub override_view: RefCell<bool>,
     pub override_gaze: RefCell<bool>,
 
-    pub active: RefCell<bool>,
     values: Vec<RefCell<ValueMap>>,
 
     pub remote: Option<Remote>,
@@ -78,6 +58,7 @@ impl Surface {
             None,
         ).await.unwrap();
 
+        // Query surface capablities, preferably with sRGB support.
         let swapchain_capabilities = surface.get_capabilities(&adapter);
         let mut view_formats = vec![];
         let srgb_format = swapchain_capabilities.formats[0].add_srgb_suffix();
@@ -96,15 +77,7 @@ impl Surface {
         };
         surface.configure(&device, &surface_config);
 
-        // Create a command buffer.
-        //TODO-WGPU let encoder: CommandEncoder = factory.create_command_buffer().into();
-
-        //TODO-WGPU maybe use "surface.get_supported_formats(&adapter)[0].describe().srgb" to filter;
-        // unsafe {
-        //     device.with_gl(|gl| gl.Disable(gfx_gl::FRAMEBUFFER_SRGB));
-        //     
-        // }
-
+        // Create flows.
         let mut flow = Vec::new();
         flow.resize_with(flow_count, Flow::new);
 
@@ -172,23 +145,17 @@ impl Surface {
         let vis_param = RefCell::new(vis_param);
 
         Surface {
-           // wgpu_window,
-         //   events_loop: RefCell::new(events_loop),
+             surface,
              surface_size,
-            surface,
-            surface_config: RefCell::new(surface_config),
+             surface_config: RefCell::new(surface_config),
             device: RefCell::new(device),
             queue: RefCell::new(queue),
-            //TODO-WGPU factory: RefCell::new(factory),
-            //TODO-WGPU encoder: RefCell::new(encoder),
-            //TODO-WGPU main_depth: RefCell::new(main_depth),
             flow,
             remote,
             should_swap_buffers: RefCell::new(true),
             cursor_pos: RefCell::new([0.0, 0.0]),
             override_view,
             override_gaze: RefCell::new(false),
-            active: RefCell::new(false),
             values: values,
             vis_param,
             last_render_instant: RefCell::new(Instant::now()),
@@ -247,14 +214,6 @@ impl Surface {
     
     // pub fn set_perspective(&self, new_perspective: EyePerspective, flow_index: usize) {
     //     self.flow[flow_index].last_perspective.replace(new_perspective);
-    // }
-
-    // pub fn factory(&self) -> &RefCell<DeviceFactory> {
-    //     &self.factory
-    // }
-
-    // pub fn encoder(&self) -> &RefCell<DeviceEncoder> {
-    //     &self.encoder
     // }
 
     pub fn device(&self) -> & RefCell<wgpu::Device> {
