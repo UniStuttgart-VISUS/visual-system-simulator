@@ -78,14 +78,21 @@ impl Surface {
             None,
         ).await.unwrap();
 
+        let swapchain_capabilities = surface.get_capabilities(&adapter);
+        let mut view_formats = vec![];
+        let srgb_format = swapchain_capabilities.formats[0].add_srgb_suffix();
+        if swapchain_capabilities.formats.contains(&srgb_format) {
+            view_formats.push(srgb_format);
+        }
+ 
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: COLOR_FORMAT,// surface.get_supported_formats(&adapter)[0],
+            format: swapchain_capabilities.formats[0],
             width: surface_size[0],
             height: surface_size[1],
             present_mode: wgpu::PresentMode::Fifo,
-            alpha_mode: wgpu::CompositeAlphaMode::Auto,
-            view_formats: vec![COLOR_FORMAT.add_srgb_suffix()],
+            alpha_mode: swapchain_capabilities.alpha_modes[0],
+            view_formats,
         };
         surface.configure(&device, &surface_config);
 

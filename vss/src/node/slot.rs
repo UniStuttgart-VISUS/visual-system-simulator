@@ -3,7 +3,10 @@ use wgpu::{BindGroup, RenderPassColorAttachment, RenderPassDepthStencilAttachmen
 use super::*;
 use std::cell::RefCell;
 
-// pub static ColorFormat: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm; // old color format
+//TODO: we might need to select this at runtime.
+#[cfg(target_os = "android")]
+pub static COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+#[cfg(not(target_os = "android"))]
 pub static COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8Unorm;
 pub static HIGHP_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
 pub static DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;

@@ -3,16 +3,21 @@
 
 use std::cell::RefCell;
 use std::ffi::c_void;
+use std::panic;
 use std::ptr::NonNull;
 use std::sync::{mpsc, Mutex, MutexGuard};
 
 use futures::executor::block_on;
+
+use log::*;
 
 use jni::objects::{JClass, JObject, JString};
 use jni::sys::{jbyteArray, jint};
 use jni::JNIEnv;
 
 use ndk_sys;
+
+use android_logger::{Config, FilterBuilder};
 
 use raw_window_handle::*;
 
@@ -54,6 +59,16 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate(
     surface: JObject,
     assetManager: JObject,
 ) {
+    android_logger::init_once(
+        Config::default()
+            .with_max_level(LevelFilter::Trace)
+            .with_tag("VSS"),
+    );
+
+    panic::set_hook(Box::new(|info| {
+        error!("{}", info.to_string());
+    }));
+
     let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
 
     let window = unsafe {
@@ -155,10 +170,10 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostSettings
     json_string: JString,
 ) {
     let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
-    
+
     //let json_string: String = env.get_string(son_string).expect("Java String expected").into();
-   
+
     if let Some(ref bridge) = *guard {
-       //TODO: bridge.post_settings()
+        //TODO: bridge.post_settings()
     }
 }

@@ -40,11 +40,13 @@ public class SimulatorBridge {
 
     public static void create(Surface surface, AssetManager assetManager) {
         assert loadedLibrary : "Native library not loaded";
+        Log.d("SimulatorBridge", "Creating...");
         nativeCreate(surface, assetManager);
     }
 
     public static void destroy() {
         assert loadedLibrary : "Native library not loaded";
+        Log.d("SimulatorBridge", "Destroying...");
         nativeDestroy();
     }
 
