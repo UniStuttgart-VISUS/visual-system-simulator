@@ -104,8 +104,8 @@ impl Flow {
                 // Suggest window as final output.
                 let device = surface.device().borrow_mut();
         
-                let width = surface.surface_size[0];
-                let height = surface.surface_size[1];
+                let width = surface.width();
+                let height = surface.height();
 
                 let color_target = create_color_rt(&device, width, height, Some("flow_negociate_slots color"));
                 let deflection_target = create_highp_rt(&device, width, height, Some("flow_negociate_slots deflection"));

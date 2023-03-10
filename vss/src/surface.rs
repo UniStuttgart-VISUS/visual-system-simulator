@@ -1,28 +1,24 @@
 use crate::*;
+use std::iter;
+use std::rc::Rc;
 use std::{cell::RefCell};
 use std::time::Instant;
-use wgpu;
+use wgpu::{self, SurfaceTexture, SurfaceError};
 
 /// Represents a rendering surface and its associated [Flow].
 pub struct Surface {
-    pub surface: wgpu::Surface,
-    pub surface_size: [u32;2],
+    surface: wgpu::Surface,
+    surface_size: [u32;2],
     surface_config: RefCell<wgpu::SurfaceConfiguration>,
-    pub device: RefCell<wgpu::Device>,
-    pub queue: RefCell<wgpu::Queue>,
-
-    should_swap_buffers: RefCell<bool>,
-    pub cursor_pos: RefCell<[f64;2]>,
-    pub override_view: RefCell<bool>,
-    pub override_gaze: RefCell<bool>,
-
+    device: RefCell<wgpu::Device>,
+    queue: RefCell<wgpu::Queue>,
+ 
     values: Vec<RefCell<ValueMap>>,
 
     pub remote: Option<Remote>,
     pub flow: Vec<Flow>,
     pub vis_param: RefCell<VisualizationParameters>,
-    pub last_render_instant: RefCell<Instant>,
-    pub forced_view: Option<(f32,f32)>
+    last_render_instant: RefCell<Instant>,
 }
 
 impl Surface {
@@ -133,33 +129,19 @@ impl Surface {
             vis_param.variance_color_space = *variance_color_space as u32;
         }
 
-        let mut override_view = false;
-
-        let mut forced_view = None;
-        if let (Some(Value::Number(view_x)), Some(Value::Number(view_y)) ) = (values[0].borrow().get("view_x"),(values[0].borrow().get("view_y"))) {
-            forced_view = Some((*view_x as f32,*view_y as f32));
-            override_view = true;
-        }
-        let override_view =  RefCell::new(override_view);
-
         let vis_param = RefCell::new(vis_param);
 
         Surface {
-             surface,
-             surface_size,
-             surface_config: RefCell::new(surface_config),
+            surface,
+            surface_size,
+            surface_config: RefCell::new(surface_config),
             device: RefCell::new(device),
             queue: RefCell::new(queue),
             flow,
             remote,
-            should_swap_buffers: RefCell::new(true),
-            cursor_pos: RefCell::new([0.0, 0.0]),
-            override_view,
-            override_gaze: RefCell::new(false),
-            values: values,
+            values,
             vis_param,
             last_render_instant: RefCell::new(Instant::now()),
-            forced_view,
         }
     }
 
@@ -228,6 +210,55 @@ impl Surface {
         &self.surface_config
     }
 
+    pub fn width(&self) -> u32 {
+        return self.surface_size[0];
+    }
+
+    pub fn height(&self) -> u32 {
+        return self.surface_size[1];
+    }
+
+    pub fn get_current_texture(&self) -> Result<SurfaceTexture, SurfaceError> {
+        return self.surface.get_current_texture();
+    }
+
+    pub fn draw(&self) {
+        match self.get_current_texture(){
+            Ok(output) => {
+                let view = output
+                .texture
+                .create_view(&wgpu::TextureViewDescriptor::default());
+
+                let sampler = create_sampler_linear(&(self.device.borrow_mut()));
+
+                let mut encoder = self
+                .device
+                    .borrow_mut()
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("Render Encoder"),
+                    });
+
+                let render_texture = RenderTexture{
+                    texture: None,
+                    view: Rc::new(view),
+                    sampler: Rc::new(sampler),
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    width: self.width(),
+                    height: self.height(),
+                    label: "surface render texture".to_string(),
+                };
+            
+                self.flow.iter().for_each(|f| f.render(&self, &mut encoder, &render_texture));
+
+                self.queue.borrow_mut().submit(iter::once(encoder.finish()));
+                output.present();
+                self.flow.iter().for_each(|f| f.post_render(&self));
+                self.last_render_instant.replace(Instant::now());
+            }
+            _ => {}
+        }
+    }
+
     // pub fn flush(&self, encoder: &mut DeviceEncoder) {
     //     use std::ops::DerefMut;
     //     let mut device = self.device.borrow_mut();
@@ -239,10 +270,9 @@ impl Surface {
     //     //self.render_target.borrow().clone()
     // }
 
-    // pub fn replace_targets(&self, target_color: RenderTargetColor, target_depth: RenderTargetDepth, should_swap_buffers: bool) {
+    // pub fn replace_targets(&self, target_color: RenderTargetColor, target_depth: RenderTargetDepth) {
     //     self.render_target.replace(target_color);
     //     self.main_depth.replace(target_depth);
-    //     self.should_swap_buffers.replace(should_swap_buffers);
     // }
 
 }

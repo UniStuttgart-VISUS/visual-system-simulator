@@ -1,11 +1,6 @@
-use crate::{*, Texture};
-use std::rc::Rc;
-use std::{cell::RefCell, borrow::BorrowMut};
-use std::time::Instant;
-use std::iter;
-use std::num::NonZeroU32;
+use crate::*;
+use std::{cell::RefCell};
 use cgmath::{Matrix4, Vector4, SquareMatrix};
-use wgpu::*;
 use winit::{
     event::*,
     dpi::*,
@@ -30,11 +25,26 @@ pub struct Window {
     wgpu_window: winit::window::Window,
     events_loop: RefCell<EventLoop<()>>, 
     pub surface: surface::Surface,
-     active: RefCell<bool>,
+
+    active: RefCell<bool>,
+    cursor_pos: RefCell<[f64;2]>,
+
+    override_gaze: RefCell<bool>,
+    override_view: RefCell<bool>,
+    forced_view: Option<(f32,f32)>
 }
 
 impl Window {
     pub async fn new(visible: bool, remote: Option<Remote>, values: Vec<RefCell<ValueMap>>, flow_count: usize) -> Self {
+        let mut override_view = false;
+
+        let mut forced_view = None;
+        if let (Some(Value::Number(view_x)), Some(Value::Number(view_y)) ) = (values[0].borrow().get("view_x"),(values[0].borrow().get("view_y"))) {
+            forced_view = Some((*view_x as f32,*view_y as f32));
+            override_view = true;
+        }
+        let override_view =  RefCell::new(override_view);
+
         // Create a window and context.
         let events_loop = EventLoop::new();
 
@@ -62,12 +72,16 @@ impl Window {
             [window_size.width, window_size.height],
              &wgpu_window, remote, values, flow_count)
             .await;
-             
+    
         Window {
             wgpu_window,
             events_loop: RefCell::new(events_loop),
             surface,
             active: RefCell::new(false),
+            cursor_pos: RefCell::new([0.0, 0.0]),
+            override_view,
+            override_gaze: RefCell::new(false),
+            forced_view,
         }
     }
  
@@ -318,7 +332,7 @@ impl Window {
                         }
                         WindowEvent::CursorMoved { position, .. } => {
                             if *self.active.borrow() {
-                                self.surface.cursor_pos.replace([position.x, position.y]);
+                                self.cursor_pos.replace([position.x, position.y]);
                                 let mut vp = self.surface.vis_param.borrow_mut();
                                 vp.mouse_input.position = (position.x as f32, position.y as f32);
                                 match vp.edit_eye_position {
@@ -338,8 +352,8 @@ impl Window {
                         }
                         WindowEvent::CursorLeft { .. } => {
                             if *self.active.borrow() {
-                                self.surface.override_view.replace(false);
-                                self.surface.override_gaze.replace(false);
+                                self.override_view.replace(false);
+                                self.override_gaze.replace(false);
                                 //reset gaze ?
                             }
                         }
@@ -348,11 +362,11 @@ impl Window {
                                 let mut vp = self.surface.vis_param.borrow_mut();
                                 match button {
                                     MouseButton::Left => {
-                                        self.surface.override_view.replace(*state == ElementState::Pressed);
+                                        self.override_view.replace(*state == ElementState::Pressed);
                                         vp.mouse_input.left_button = *state == ElementState::Pressed;
                                     }
                                     MouseButton::Right => {
-                                        self.surface.override_gaze.replace(*state == ElementState::Pressed);
+                                        self.override_gaze.replace(*state == ElementState::Pressed);
                                         vp.mouse_input.right_button = *state == ElementState::Pressed;
                                     }
                                     _ => {}
@@ -397,7 +411,7 @@ impl Window {
             }
         });
 
-        if let Some(_) = self.surface.forced_view {
+        if let Some(_) = self.forced_view {
             // Update pipline IO.
             let new_size = PhysicalSize::new(1920 as u32, 1080 as u32);
             //self.wgpu_window.resize(size);
@@ -440,10 +454,10 @@ impl Window {
 
         // Update input.
         for f in self.surface.flow.iter(){
-            if *self.surface.override_view.borrow() || *self.surface.override_gaze.borrow() {
-                let cursor_pos = self.surface.cursor_pos.borrow();
+            if *self.override_view.borrow() || *self.override_gaze.borrow() {
+                let cursor_pos = self.cursor_pos.borrow();
                 //println!("{} {}",cursor_pos.x as f32 ,cursor_pos.y as f32);
-                let view_input = match self.surface.forced_view {
+                let view_input = match self.forced_view {
                     Some(pos) =>{
                         pos
                     }
@@ -452,25 +466,25 @@ impl Window {
                     }
                 };
 
-                self.surface.vis_param.borrow_mut().highlight_position = (cursor_pos[0]/self.surface.surface_size[0] as f64, cursor_pos[1]/self.surface.surface_size[1] as f64);
-                let yaw = view_input.0 as f32 / self.surface.surface_size[0] as f32
+                self.surface.vis_param.borrow_mut().highlight_position = (cursor_pos[0]/self.surface.width() as f64, cursor_pos[1]/self.surface.height() as f64);
+                let yaw = view_input.0 as f32 / self.surface.width() as f32
                     * std::f32::consts::PI
                     * 2.0
                     - 0.5;
-                let pitch = view_input.1 as f32 / self.surface.surface_size[1] as f32
+                let pitch = view_input.1 as f32 / self.surface.height() as f32
                     * std::f32::consts::PI
                     - 0.5;//50 mm lens
                 let view = Matrix4::from_angle_x(cgmath::Rad(pitch)) * Matrix4::from_angle_y(cgmath::Rad(yaw));
 
                 let mut perspective = f.last_perspective.borrow_mut();
 
-                if *self.surface.override_view.borrow() {
-                    if !*self.surface.override_gaze.borrow(){
+                if *self.override_view.borrow() {
+                    if !*self.override_gaze.borrow(){
                         perspective.gaze = (view * perspective.view.invert().unwrap() * perspective.gaze.extend(1.0)).truncate();
                     }
                     perspective.view = view;
                 }
-                if *self.surface.override_gaze.borrow() {
+                if *self.override_gaze.borrow() {
                     perspective.gaze = (perspective.view * view.invert().unwrap() * Vector4::unit_z()).truncate();
                 }
             }            
@@ -479,45 +493,8 @@ impl Window {
         // println!("Rendered with: {:?}", self.surface.vis_param.borrow_mut());
 
         if redraw_requested {
-            match self.surface.surface.get_current_texture(){
-                Ok(output) => {
-                    let view = output
-                    .texture
-                    .create_view(&wgpu::TextureViewDescriptor::default());
-
-                    let sampler = create_sampler_linear(&(self.surface.device.borrow_mut()));
-
-                    let mut encoder = self
-                    .surface.device
-                        .borrow_mut()
-                        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                            label: Some("Render Encoder"),
-                        });
-
-                    let render_texture = RenderTexture{
-                        texture: None,
-                        view: Rc::new(view),
-                        sampler: Rc::new(sampler),
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        width: self.surface.surface_size[0],
-                        height: self.surface.surface_size[1],
-                        label: "surface render texture".to_string(),
-                    };
-                
-                    self.surface.flow.iter().for_each(|f| f.render(&self.surface, &mut encoder, &render_texture));
-
-                    self.surface.queue.borrow_mut().submit(iter::once(encoder.finish()));
-                    output.present();
-                    self.surface.flow.iter().for_each(|f| f.post_render(&self.surface));
-                    self.surface.last_render_instant.replace(Instant::now());
-                }
-                _ => {}
-            }
+            self.surface.draw();
         }
-
-        // if *self.should_swap_buffers.borrow(){
-        //     self.wgpu_window.swap_buffers().unwrap();
-        // }
 
         if let Some(remote) = &self.surface.remote {
             remote.send_frame();
