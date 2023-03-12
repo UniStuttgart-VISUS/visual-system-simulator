@@ -151,6 +151,7 @@ fn build_flow(window: &mut Window, io_generator: &mut IoGenerator, flow_index: u
 
 }
 
+// "Default" main
 #[cfg(not(any(feature = "varjo", feature = "openxr")))]
 pub fn main() {
     let config = cmd_parse();
@@ -191,7 +192,7 @@ pub fn main() {
 
     let mut window = pollster::block_on(Window::new(config.visible, None, parameters, flow_count));
 
-    let is_output_hack_used = config.output.is_some();
+     
 
     // let viewports = vec![
     //     (0, 0, 640, 360),
@@ -237,7 +238,8 @@ pub fn main() {
 
         done = window.poll_events();
 
-        if !config.visible || is_output_hack_used && frame_counter == 3 {
+        // Batch output and automatic exit should happen after ~3 frames to ensure proper/stable results.
+        if !config.visible || config.output.is_some() && frame_counter == 3 {
             // Exit once all inputs have been processed, unless visible.
             done = true;
         }
@@ -306,6 +308,7 @@ fn dump_perf_data(frame_times: Vec<(u128,u128,(u32,u32),u32,u32)>){
     }
 }
 
+//TODO: this one is super unfinished.
 #[cfg(feature = "openxr")]
 pub fn main() {
     let mut oxr = openxr::OpenXR::new();

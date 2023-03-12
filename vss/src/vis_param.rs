@@ -68,6 +68,7 @@ pub struct VisMouseInput{
   pub right_button: bool,
 }
 
+//TODO: rework Node.input() and Node.Values to be as fast... we need something smart to "invalidate" values.
 #[derive(Copy, Clone, Debug)]
 pub struct VisualizationParameters{
   pub vis_type: VisualizationType,

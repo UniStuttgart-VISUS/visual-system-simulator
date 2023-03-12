@@ -44,3 +44,4 @@ impl Value {
 }
 
 pub type ValueMap = HashMap<String, Value>;
+//TODO: register strings and ints as value keys. (e.g., once lookup HashMap<String, ValueKey>; use Vec<Value> for acccess; for updates something with "value changed flag" Vec<(Changed, ValueKey, Value>))

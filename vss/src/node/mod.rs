@@ -60,6 +60,7 @@ pub trait Node {
     /// possibly re-using suggested `slots` (for efficiency).
     fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots;
 
+    //TODO: merge with negociate_slots?
     fn negociate_slots_wk(&mut self, surface: &Surface, slots: NodeSlots, _well_known: &WellKnownSlots) -> NodeSlots{
         self.negociate_slots(surface, slots)
     }
@@ -74,9 +75,10 @@ pub trait Node {
         perspective.clone()
     }
 
-    /// Render the node.
+    /// Issue render commands for the node.
     fn render(&mut self, surface: &Surface, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>);
 
+    /// Invoked after all rendering commands have completed. (TODO: rename to on_frame_complete)
     #[allow(unused_variables)]
     fn post_render(&mut self, surface: &Surface){}
 }
