@@ -11,6 +11,7 @@ import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.EditText;
@@ -27,6 +28,10 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.vss.personas.Persona;
 import com.vss.personas.PersonasAdapter;
 import com.vss.simulator.SimulatorSurfaceView;
+
+import java.io.File;
+import java.net.URI;
+import java.util.Locale;
 
 /**
  * Main activity.
@@ -57,17 +62,12 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         // Test for debug mode.
         if (BuildConfig.DEBUG) {
             Log.w(LOG_TAG, "======= APPLICATION IN STRICT MODE - DEBUGGING =======");
-            StrictMode.setVmPolicy(new StrictMode.VmPolicy.Builder()
-                    .detectAll().penaltyLog()
-                    .build());
-            StrictMode.setThreadPolicy(new StrictMode.ThreadPolicy.Builder()
-                    .detectAll().permitDiskReads()
-                    .penaltyFlashScreen().penaltyLog().build());
+            StrictMode.setVmPolicy(new StrictMode.VmPolicy.Builder().detectAll().penaltyLog().build());
+            StrictMode.setThreadPolicy(new StrictMode.ThreadPolicy.Builder().detectAll().permitDiskReads().penaltyFlashScreen().penaltyLog().build());
         }
 
         // Setup UI elements.
-        this.personaSimulationPane = findViewById(R.id.persona_simulator_pane);
-        this.startButton = findViewById(R.id.start_button);
+        setupPersonasSimulationChanger();
         setupPersonasView();
         setupInspectorView();
         this.simulatorView = findViewById(R.id.simulator_view);
@@ -75,25 +75,11 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
 
     @Override
     public void onBackPressed() {
-       /* if (((DrawerLayout) findViewById(R.id.drawer_layout)).isDrawerOpen(GravityCompat.START)) {
-            closeNavMenu();
+        if (this.personaSimulationPane.isOpen()) {
+            stopSimulator();
         } else {
-            switch (fragmentState) {
-                case READ_ME:
-                case WEBUI_SETTINGS:
-                case KNOWLEDGEBASE_LIST:
-                    openEDSettingsFragment();
-                    break;
-                case KNOWLEDGEBASE_CONTENT:
-                    openKnowledgebaseListFragment();
-                    break;
-                case ED_SETTINGS:
-                default:
-                    super.onBackPressed();
-                    break;
-            }
+            super.onBackPressed();
         }
-        */
     }
 
     //endregion
@@ -101,10 +87,8 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     //region Android permissions
 
     private void checkCameraPermission() {
-        if (ActivityCompat.checkSelfPermission(this,
-                Manifest.permission.CAMERA) == PackageManager.PERMISSION_DENIED) {
-            ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.CAMERA}, CAMERA_REQUEST_CODE);
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_DENIED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, CAMERA_REQUEST_CODE);
         }
     }
 
@@ -122,17 +106,42 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
 
     //endregion
 
+    //region Personas-Simulation
+
+    private void setupPersonasSimulationChanger() {
+        this.personaSimulationPane = findViewById(R.id.persona_simulator_pane);
+
+        // Suppress user swipes (we use the start button instead).
+        this.personaSimulationPane.setLockMode(SlidingPaneLayout.LOCK_MODE_LOCKED);
+
+        this.startButton = findViewById(R.id.start_button);
+    }
+
+    public void startStopClicked(View view) {
+        this.startSimulator();
+    }
+
+    //endregion
+
     //region Personas
 
     private void setupPersonasView() {
-        Persona[] personas = {new Persona("yyy", "Custom", "<html>"), new Persona("xxx", "Achromataposie", "<html>"), new Persona("xxx", "Ametropie", "<html>"), new Persona("xxx", "Katarrakt", "<html>"), new Persona("xxx", "Dyschro...", "<html>"), new Persona("xxx", "Glaukom", "<html>"), new Persona("xxx", "X", "<html>"), new Persona("xxx", "Y", "<html>"), new Persona("xxx", "Z", "<html>")};
+        //@formatter:off
+        Persona[] personas = {
+            new Persona("custom.html", "custom", "Custom"),
+            new Persona("achromatopsia.html", "custom", "Achromatopsia"),
+            new Persona("ametropia.html", "custom", "Ametropia"),
+            new Persona("cataract.html", "custom", "Cataract"),
+            new Persona("color-blindness.html", "custom", "Color Blindness"),
+            new Persona("glaucoma.html", "custom", "Glaucoma"),
+            new Persona("macular-degeneration.html", "custom", "Macular Degeneration"),
+            new Persona("night-blindness.html", "custom", "Night Blindness"),
+            new Persona("presbyopia.html", "custom", "Presbyopia")
+        };
+        //@formatter:on
         personasAdapter = new PersonasAdapter(personas);
 
         personasView = findViewById(R.id.preset_view);
-        personasView.setHasFixedSize(true);
-        LinearLayoutManager layoutManager = new LinearLayoutManager(this);
-        layoutManager.setOrientation(LinearLayoutManager.HORIZONTAL);
-        personasView.setLayoutManager(layoutManager);
         personasView.setAdapter(personasAdapter);
     }
 
@@ -143,13 +152,16 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     private void setupInspectorView() {
         inspectorView = findViewById(R.id.inspector_view);
 
+        // Configure WebView.
+        inspectorView.setHorizontalScrollBarEnabled(false);
+
         // Intercept URL loading.
         inspectorView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 final Uri url = request.getUrl();
-                // Allow local files.
-                // Suppress other links.
+                // Allow local files and suppress other URLs.
+                Log.i(LOG_TAG, "Loading URL: " + url);
                 return url.getScheme() != "file";
             }
         });
@@ -161,7 +173,22 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         //TODO: add event listener for "config changed/loaded" or something like that?
 
         // Load welcome page.
-        inspectorView.loadUrl("file:///android_asset/welcome.html");
+        loadInspectorPage("index.html");
+    }
+
+    private void loadInspectorPage(String pageName) {
+        Locale currentLocale = getResources().getConfiguration().getLocales().get(0);
+        String isoName = currentLocale.getISO3Country();
+        String url = "file:///android_asset/" + isoName + "/" + pageName;
+        File file = new File(URI.create(isoName).getPath());
+        if (file.exists()) {
+            Log.i(LOG_TAG, "Loading " + url);
+            inspectorView.loadUrl(url);
+        } else {
+            String urlFallback = "file:///android_asset/en/" + pageName;
+            Log.w(LOG_TAG, "Loading fallback " + urlFallback);
+            inspectorView.loadUrl(urlFallback);
+        }
     }
 
     //endregion
@@ -171,11 +198,10 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     /**
      * Starts the simulator.
      */
-    public void startSimulator(View view) {
+    public void startSimulator() {
         Log.d(LOG_TAG, "Starting simulator");
 
-        Toast.makeText(this, R.string.start_simulator, Toast.LENGTH_LONG).show();
-
+        // Open camera.
         this.cameraAccess = new CameraAccess(this, new CameraAccess.CameraDelegate() {
             @Override
             public void onCameraOpen(CameraDevice cameraDevice) {
@@ -196,7 +222,6 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
 
             @Override
             public void onFrameAvailable(int width, int height, byte[] y, byte[] u, byte[] v) {
-                Log.i("Camera", "Frame available");
                 simulatorView.postFrame(width, height, y, u, v);
             }
         });
@@ -210,6 +235,19 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         //this.simulatorView.start()
 
         this.startButton.hide();
+    }
+
+    void stopSimulator() {
+        // Close camera.
+        this.cameraAccess.close();
+        this.cameraAccess = null;
+
+        // Allow screen turning off.
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        // Switch to inspector.
+        this.personaSimulationPane.close();
+        this.startButton.show();
     }
 
     /**

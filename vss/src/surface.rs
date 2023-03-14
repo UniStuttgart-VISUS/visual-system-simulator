@@ -64,7 +64,7 @@ impl Surface {
  
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: swapchain_capabilities.formats[0].remove_srgb_suffix(),
+            format: swapchain_capabilities.formats[0],
             width: surface_size[0],
             height: surface_size[1],
             present_mode: wgpu::PresentMode::Fifo,

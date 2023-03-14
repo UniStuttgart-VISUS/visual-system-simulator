@@ -1,13 +1,13 @@
 package com.vss.personas;
 
 public class Persona {
+    public String pageName;
     public String icon;
-    public String name;
-    public String details;
+    public String text;
 
-    public Persona(String icon, String name, String details) {
+    public Persona(String pageName, String icon, String text) {
+        this.pageName = pageName;
         this.icon = icon;
-        this.name = name;
-        this.details = details;
+        this.text = text;
     }
 }

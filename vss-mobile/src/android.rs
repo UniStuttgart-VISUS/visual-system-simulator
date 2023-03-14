@@ -90,7 +90,8 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate(
         );
     };
 
-    let mut parameters: Vec<RefCell<ValueMap>> = Vec::new();
+    let mut value_map = ValueMap::new();
+    let mut parameters: Vec<RefCell<ValueMap>> = vec![RefCell::new(value_map)];
     let mut window_handle = AndroidNdkWindowHandle::empty();
     window_handle.a_native_window = window.ptr().as_ptr() as *mut c_void;
     let handle = AndroidHandle(RawWindowHandle::AndroidNdk(window_handle));

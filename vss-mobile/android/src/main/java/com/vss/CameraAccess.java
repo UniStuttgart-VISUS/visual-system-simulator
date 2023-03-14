@@ -37,6 +37,7 @@ public class CameraAccess {
     private final CameraDelegate delegate;
 
     private ImageReader imageReader;
+    private CameraDevice cameraDevice;
 
     public CameraAccess(Context context, CameraDelegate delegate) {
         this.context = context;
@@ -45,8 +46,7 @@ public class CameraAccess {
     }
 
     private boolean checkCameraPermission() {
-        if (ActivityCompat.checkSelfPermission(context,
-                Manifest.permission.CAMERA) == PackageManager.PERMISSION_DENIED) {
+        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_DENIED) {
             delegate.onCameraPermissionDenied();
             return false;
         } else {
@@ -187,6 +187,12 @@ public class CameraAccess {
         } catch (CameraAccessException e) {
             Log.e("CameraSession", "Creating session", e);
         }
+
+        this.cameraDevice = cameraDevice;
+    }
+
+    void close() {
+        cameraDevice.close();
     }
 
     public interface CameraDelegate {

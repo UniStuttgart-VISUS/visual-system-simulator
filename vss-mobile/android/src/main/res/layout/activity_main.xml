@@ -23,9 +23,11 @@
                 tools:ignore="ContentDescription" />
 
             <androidx.recyclerview.widget.RecyclerView
+                app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
                 android:id="@+id/preset_view"
                 android:layout_width="match_parent"
-                android:layout_height="100dp" />
+                android:layout_height="100dp"
+                android:orientation="horizontal" />
 
             <WebView
                 android:id="@+id/inspector_view"
@@ -51,7 +53,7 @@
         android:clickable="true"
         android:contentDescription="Start Simulation"
         android:focusable="true"
-        android:onClick="startSimulator"
+        android:onClick="startStopClicked"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:srcCompat="@android:drawable/ic_media_play" />

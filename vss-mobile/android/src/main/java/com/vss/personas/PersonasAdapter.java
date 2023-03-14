@@ -26,6 +26,12 @@ public class PersonasAdapter extends RecyclerView.Adapter<PersonasAdapter.ViewHo
     public ViewHolder onCreateViewHolder(ViewGroup viewGroup, int viewType) {
         // Create a new view, which defines the UI of the list item
         View view = LayoutInflater.from(viewGroup.getContext()).inflate(R.layout.persona_item, viewGroup, false);
+        view.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                //TODO
+            }
+        });
         return new ViewHolder(view);
     }
 
@@ -35,7 +41,7 @@ public class PersonasAdapter extends RecyclerView.Adapter<PersonasAdapter.ViewHo
 
     @Override
     public void onBindViewHolder(ViewHolder viewHolder, final int position) {
-        viewHolder.getTextView().setText(personas[position].name);
+        viewHolder.getTextView().setText(personas[position].text);
     }
 
     @Override
