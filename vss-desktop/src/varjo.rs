@@ -1,17 +1,28 @@
-use std::os::raw::{c_char, c_void};
+use std::{os::raw::{c_char, c_void}, rc::Rc, num::NonZeroU32};
 use log::LevelFilter;
+use ash::vk;
 
 use vss::*;
-use vss::gfx::Factory;
 use cgmath::{Matrix4, Vector3};
 
 type VarjoPtr = *mut c_void;
 
 #[repr(C)]
 #[derive(Clone)]
+struct VulkanData{
+    pub instance: vk::Instance,
+    pub device: vk::Device,
+    pub queue_family_index: u32,
+    pub queue_index: u32,
+}
+
+#[repr(C)]
+#[derive(Clone)]
 struct VarjoRenderTarget {
-    pub color_texture_id: u32,
-    pub depth_texture_id: u32,
+    pub color_image: vk::Image,
+    pub depth_image: vk::Image,
+    // pub color_texture_id: u32,
+    // pub depth_texture_id: u32,
     pub width: u32,
     pub height: u32,
 }
@@ -35,7 +46,10 @@ pub struct VarjoGazeData {
 }
 
 extern "C" {
-    fn varjo_new(varjo: *mut VarjoPtr) -> *const c_char;
+    fn varjo_new(
+        varjo: *mut VarjoPtr,
+        vulkan_data: *mut VulkanData,
+    ) -> *const c_char;
     fn varjo_render_targets(
         varjo: VarjoPtr,
         render_targets: *mut *mut VarjoRenderTarget,
@@ -83,17 +97,31 @@ fn try_fail(error: *const c_char) -> Result<(), VarjoErr> {
 
 pub struct Varjo {
     varjo: VarjoPtr,
-    render_targets_color: Vec<RenderTargetColor>,
-    render_targets_depth: Vec<RenderTargetDepth>,
+    render_targets_color: Vec<RenderTexture>,
+    render_targets_depth: Vec<RenderTexture>,
     pub logging_enabled: bool,
 }
 
 impl Varjo {
-    pub fn new() -> Self {
+    pub fn new(surface: &Surface) -> Self {
         simple_logging::log_to_file("vss_latest.log", LevelFilter::Info).unwrap();
 
+        let mut vulkan_data = unsafe{
+            surface.device().borrow_mut().as_hal::<wgpu_hal::vulkan::Api, _, _>(
+                |vk_device: Option<&wgpu_hal::vulkan::Device>| -> VulkanData{
+                    let dev = vk_device.unwrap();
+                    VulkanData{
+                        instance: dev.shared_instance().raw_instance().handle(),
+                        device: dev.raw_device().handle(),
+                        queue_family_index: dev.queue_family_index(),
+                        queue_index: dev.queue_index(),
+                    }
+                }
+            )
+        };
+        println!("rust-side: instance: {:?}, device: {:?}", vulkan_data.instance, vulkan_data.device);
         let mut varjo = std::ptr::null_mut();
-        try_fail(unsafe { varjo_new(&mut varjo as *mut *mut _) }).unwrap();
+        try_fail(unsafe { varjo_new(&mut varjo as *mut *mut _, &mut vulkan_data) }).unwrap();
         Self { varjo, render_targets_color: Vec::new(), render_targets_depth: Vec::new(), logging_enabled: true}
     }
 
@@ -117,25 +145,48 @@ impl Varjo {
 
         //let mut textures = Vec::new();
         //let mut depth_textures = Vec::new();
-        let mut factory = window.factory().borrow_mut();
+        let mut device = surface.device().borrow_mut();
         for render_target in render_targets {
-            let color_texture =texture_from_id_and_size::<ColorFormat>(
-                render_target.color_texture_id,
-                render_target.width,
-                render_target.height,
-            );
-            let depth_texture = depth_texture_from_id_and_size::<RenderTargetDepthFormat>(
-                render_target.depth_texture_id,
-                render_target.width,
-                render_target.height,
-            );
-            self.render_targets_color.push(factory.view_texture_as_render_target(&color_texture, 0, None).unwrap());
-            self.render_targets_depth.push(factory.view_texture_as_depth_stencil(&depth_texture, 0, None, gfx::texture::DepthStencilFlags::empty()).unwrap());
+            let size = wgpu::Extent3d {
+                width: render_target.width,
+                height: render_target.height,
+                depth_or_array_layers: 1,
+            };
+            let (color_texture, depth_texture) = unsafe{
+                (create_render_texture_from_hal(
+                    &device,
+                    render_target.color_image,
+                    // NonZeroU32::new(render_target.color_texture_id).unwrap(),
+                    render_target.width,
+                    render_target.height,
+                    wgpu::TextureFormat::Rgba8Unorm,
+                    create_sampler_nearest(&device),
+                    Some("Varjo RenderTexture Color")
+                    // usage: wgpu::TextureUsages::TEXTURE_BINDING |
+                    //         wgpu::TextureUsages::RENDER_ATTACHMENT |
+                    //         wgpu::TextureUsages::COPY_SRC,
+                ),
+                create_render_texture_from_hal(
+                    &device,
+                    render_target.depth_image,
+                    // NonZeroU32::new(render_target.depth_texture_id).unwrap(),
+                    render_target.width,
+                    render_target.height,
+                    wgpu::TextureFormat::Depth24PlusStencil8,
+                    create_sampler_nearest(&device),
+                    Some("Varjo RenderTexture Depth")
+                    // usage: wgpu::TextureUsages::TEXTURE_BINDING |
+                    //         wgpu::TextureUsages::RENDER_ATTACHMENT |
+                    //         wgpu::TextureUsages::COPY_SRC,
+                ))
+            };
+            self.render_targets_color.push(color_texture);
+            self.render_targets_depth.push(depth_texture);
         }
         viewports.to_vec()
     }
 
-    pub fn get_current_render_target(&self) -> (RenderTargetColor, RenderTargetDepth){
+    pub fn get_current_render_target(&self) -> (RenderTexture, RenderTexture){
         let mut current_swap_chain_index = 0u32;
         try_fail(unsafe {
             varjo_current_swap_chain_index(
@@ -248,5 +299,71 @@ impl Drop for Varjo {
         unsafe {
             varjo_drop(&mut self.varjo as *mut *mut _);
         }
+    }
+}
+
+pub fn create_render_texture_from_hal(
+    device: &wgpu::Device,
+    raw_image: vk::Image,
+    // raw_image: std::num::NonZeroU32,
+    width: u32,
+    height: u32,
+    format: wgpu::TextureFormat,
+    sampler: Sampler,
+    label: Option<&str>,
+) -> RenderTexture{
+
+    let size = wgpu::Extent3d {
+        width,
+        height,
+        depth_or_array_layers: 1,
+    };
+
+    let hal_texture = unsafe{
+        wgpu_hal::vulkan::Device::texture_from_raw(
+                raw_image,
+            &wgpu_hal::TextureDescriptor{
+                label,
+                size: size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: format,
+                usage: wgpu_hal::TextureUses::COLOR_TARGET,
+                memory_flags: wgpu_hal::MemoryFlags::TRANSIENT,
+                view_formats: vec![format],
+            },
+            None,
+        )
+    };
+
+    let texture = unsafe{
+        device.create_texture_from_hal::<wgpu_hal::vulkan::Api>(hal_texture,
+        // device.create_texture_from_hal::<wgpu_hal::gles::Api>(hal_texture,
+                &wgpu::TextureDescriptor {
+                label,
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: format,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING |
+                    wgpu::TextureUsages::RENDER_ATTACHMENT |
+                    wgpu::TextureUsages::COPY_SRC, // TODO double check these to lign up with the ones above
+                view_formats: &[format],
+            }
+        )
+    };
+
+    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+    RenderTexture{
+        texture: Some(Rc::new(texture)),
+        view: Rc::new(view),
+        sampler: Rc::new(sampler),
+        view_dimension: wgpu::TextureViewDimension::D2,
+        width,
+        height,
+        label: label.unwrap_or("Unlabeled").to_string(),
     }
 }

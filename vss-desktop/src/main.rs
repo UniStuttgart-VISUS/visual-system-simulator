@@ -386,7 +386,7 @@ pub fn main() {
 #[cfg(feature = "varjo")]
 pub fn set_varjo_data(window: &mut Window, last_fov: &mut Vec<(f32, f32)>, varjo: &mut varjo::Varjo){
     let (varjo_target_color, varjo_target_depth) = varjo.get_current_render_target();
-    window.replace_targets(varjo_target_color, varjo_target_depth, false);
+    // window.replace_targets(varjo_target_color, varjo_target_depth, false); // TODO-readd
 
     let view_matrices = varjo.get_current_view_matrices();
     let proj_matrices = varjo.get_current_proj_matrices();
@@ -397,18 +397,18 @@ pub fn set_varjo_data(window: &mut Window, last_fov: &mut Vec<(f32, f32)>, varjo
         let fov_x = 2.0*(1.0/proj_matrices[index][0][0]).atan();// * 180.0 / 3.1415926535;
         let fov_y = 2.0*(1.0/proj_matrices[index][1][1]).atan();// * 180.0 / 3.1415926535;
         if last_fov[index].0 != fov_x || last_fov[index].1 != fov_y {
-            window.set_value("fov_x".to_string(), Value::Number(fov_x as f64), index);
-            window.set_value("fov_y".to_string(), Value::Number(fov_y as f64), index);
-            window.set_value("proj_matrix".to_string(), Value::Matrix(proj_matrices[index%2]), index);
+            window.surface.set_value("fov_x".to_string(), Value::Number(fov_x as f64), index);
+            window.surface.set_value("fov_y".to_string(), Value::Number(fov_y as f64), index);
+            window.surface.set_value("proj_matrix".to_string(), Value::Matrix(proj_matrices[index%2]), index);
             last_fov[index].0 = fov_x;
             last_fov[index].1 = fov_y;
         }
-        window.set_perspective(EyePerspective{
-            position: head_position,
-            view: view_matrices[index],
-            proj: proj_matrices[index],
-            gaze: if index%2 == 0 {left_gaze} else {right_gaze},
-        },index);
+        // window.set_perspective(EyePerspective{
+        //     position: head_position,
+        //     view: view_matrices[index],
+        //     proj: proj_matrices[index],
+        //     gaze: if index%2 == 0 {left_gaze} else {right_gaze},
+        // },index); // TODO-readd
     }
 }
 
@@ -432,21 +432,21 @@ pub fn main() {
         parameters.push(RefCell::new(value_map));
     }
 
-    let mut window = Window::new(config.visible, remote, parameters, flow_count);
+    let mut window = pollster::block_on(Window::new(config.visible, None, parameters, flow_count));
 
-    let mut varjo = varjo::Varjo::new();
+    let mut varjo = varjo::Varjo::new(&window.surface);
     let mut log_counter = 0; //TODO: used to reduce log spam, remove when no longer needed or replace with a better solution
-    let varjo_viewports = varjo.create_render_targets(&window);
+    let varjo_viewports = varjo.create_render_targets(&window.surface);
     let mut varjo_fov = vec![(100.0, 70.0); 4];
 
     let mut io_generator = IoGenerator::new(config.inputs, config.name.clone(), config.output);
 
     for index in 0 .. flow_count {
         let viewport = &varjo_viewports[index];
-        build_flow(&mut window, &mut io_generator, index, Some([viewport.width, viewport.height]));
-        let mut node = VRCompositor::new(&window);
+        build_flow(&mut window, &mut io_generator, index, Some([viewport.width, viewport.height]), None);
+        let mut node = VRCompositor::new(&window.surface);
         node.set_viewport(viewport.x as f32, viewport.y as f32, viewport.width as f32, viewport.height as f32);
-        window.add_node(Box::new(node), index);
+        window.surface.add_node(Box::new(node), index);
     }
 
     let mut done = false;
@@ -459,31 +459,13 @@ pub fn main() {
             set_varjo_data(&mut window, &mut varjo_fov, &mut varjo);
         }
         
-        window.update_last_node();
+        // window.update_last_node(); // TODO-readd
         
         done = window.poll_events();
 
         if varjo_should_render {
             varjo.end_frame();
             log_counter = (log_counter+1) % 10;
-        }
-
-        if io_generator.is_ready() {
-            if let Some((input_node, output_node)) = io_generator.next(&window, None) {
-                window.replace_node(0, input_node, 0);
-                let output_node = if let Some(output_node) = output_node {
-                    output_node
-                } else {
-                    Box::new(Passthrough::new(&window))
-                };
-                window.replace_node(window.nodes_len() - 2, output_node, 0);
-                window.update_nodes();
-            } else {
-                if !config.visible {
-                    // Exit once all inputs have been processed, unless visible.
-                    done = true;
-                }
-            }
         }
     }
 }
