@@ -11,7 +11,7 @@ mod retina;
 mod rgb_buffer;
 mod slot;
 mod test_node;
-//TODO-WGPU mod yuv_buffer;
+mod yuv_buffer;
 //TODO-WGPU mod vr_compositor;
 mod stereo_desktop;
 mod variance;

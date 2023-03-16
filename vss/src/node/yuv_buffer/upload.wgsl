@@ -1,13 +1,30 @@
-uniform int u_format;
+struct Uniforms {
+    format: i32
+}
 
-uniform sampler2D s_y;
-uniform sampler2D s_u;
-uniform sampler2D s_v;
+@group(0) @binding(0)
+var<uniform> uniforms: Uniforms;
 
-in vec2 v_tex;
-out vec4 rt_color;
+@group(1) @binding(0)
+var in_y_s: sampler;
+@group(1) @binding(1)
+var in_y_t: texture_2d<f32>;
+@group(1) @binding(0)
+var in_u_s: sampler;
+@group(1) @binding(1)
+var in_u_t: texture_2d<f32>;
+@group(1) @binding(0)
+var in_v_s: sampler;
+@group(1) @binding(1)
+var in_v_t: texture_2d<f32>;
 
-void main() {
+struct FragmentOutput {
+    @location(0) color: vec4<f32>,
+};
+
+@fragment
+fn fs_main(in: VertexOutput) -> FragmentOutput {
+    var out: FragmentOutput;
     if (u_format == 0) {
         // YUV/YCbCr to RGB color space conversion using ITU recommendation [BT.709][1].
         // We assume the following input:
@@ -16,11 +33,11 @@ void main() {
         //   - All channels are vertically flipped
         //
         // [1]: https://www.itu.int/rec/R-REC-BT.709 "BT.709"
-        vec2 v_tex_flipped = vec2(v_tex.x, 1.0 - v_tex.y);
+        let v_tex_flipped = vec2<f32>(v_tex.x, 1.0 - v_tex.y);
         
-        float Y = texture(s_y, v_tex_flipped).r;
-        float Cb = texture(s_u, v_tex_flipped).r - 0.5;
-        float Cr = texture(s_v, v_tex_flipped).r - 0.5;
+        let Y = textureSample(in_y_t, in_y_s, v_tex_flipped).r;
+        let Cb = textureSample(in_u_t, in_u_s,  v_tex_flipped).r - 0.5;
+        let Cr = textureSample(in_v_t, in_v_s,  v_tex_flipped).r - 0.5;
 
         // | | [BT.601][1] | [BT.709][2] | [BT.2020][3] |
         // |--|-------|-------|-------|
@@ -33,12 +50,12 @@ void main() {
         // [1]: https://www.itu.int/rec/R-REC-BT.601 "BT.601"
         // [2]: https://www.itu.int/rec/R-REC-BT.709 "BT.709"
         // [3]: https://www.itu.int/rec/R-REC-BT.2020 "BT.2020"
-        const float a = 0.2126;
-        const float b = 0.7152;
-        const float c = 0.0722;
-        const float d = 1.8556;
-        const float e = 1.5748;
-        rt_color = vec4(
+        let a: f32 = 0.2126;
+        let b: f32 = 0.7152;
+        let c: f32 = 0.0722;
+        let d: f32 = 1.8556;
+        let e: f32 = 1.5748;
+        out.color = vec4<f32>(
             Y + e * Cr,
             Y - (a * e / b) * Cr - (c * d / b) * Cb,
             Y + d * Cb,
@@ -51,29 +68,29 @@ void main() {
         //    y: [y1, y2, y3, y4], [y5, y6, y7, y8] ...
         //    u: [u1, v2, u3, v4], [u5, v6, u7, v8] ...
         //    v: [v1, u2, v3, u4], [v5, u6, v7, u8] ...
-        ivec2 v_tex_i = ivec2(0,0); //XXX ivec2(v_tex * vec2(textureSize(s_u)));
+        var v_tex_i = vec2<i32>(0, 0); //XXX ivec2(v_tex * vec2(textureSize(s_u)));
         v_tex_i.y /= 2;
 
-        float y = texture(s_y, v_tex).r;
-        float u = texelFetch(s_u, v_tex_i, 0).r;
-        float v = texelFetch(s_v, v_tex_i, 0).r;
+        let y = textureSample(in_y_t, in_y_s, v_tex).r;
+        let u = textureLoad(in_y_t, v_tex_i, 0).r;
+        let v = textureLoad(in_t_v, v_tex_i, 0).r;
 
         if ((v_tex_i.x) % 2 == 1) {
-            float temp = u;
+            let temp = u;
             u = v;
             v = temp;
         }
 
-        vec4 yuva = vec4(y, (u - 0.5), (v - 0.5), 1.0);
+        let yuva = vec4<f32>(y, (u - 0.5), (v - 0.5), 1.0);
 
-        vec4 rgba = vec4(0.0);
+        let rgba = vec4<f32>(0.0);
         rgba.r = yuva.x * 1.0 + yuva.y * 0.0 + yuva.z * 1.4;
         rgba.g = yuva.x * 1.0 + yuva.y * -0.343 + yuva.z * -0.711;
         rgba.b = yuva.x * 1.0 + yuva.y * 1.765 + yuva.z * 0.0;
         rgba.a = 1.0;
 
-        rt_color = rgba;
+        out.color = rgba;
     } else {
-        rt_color = vec4(1.0, 0.0, 1.0, 1.0);
+        out.color = vec4(1.0, 0.0, 1.0, 1.0);
     }
 }
