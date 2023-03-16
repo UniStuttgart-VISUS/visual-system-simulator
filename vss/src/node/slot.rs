@@ -5,7 +5,7 @@ use std::cell::RefCell;
 
 //TODO: we might need to select this at runtime.
 #[cfg(target_os = "android")]
-pub static COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+pub static COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 #[cfg(not(target_os = "android"))]
 pub static COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8Unorm;
 pub static HIGHP_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;

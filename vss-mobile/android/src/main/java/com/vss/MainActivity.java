@@ -202,7 +202,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     //endregion
 
     //region Simulator
-    
+
     /**
      * Starts the simulator.
      */

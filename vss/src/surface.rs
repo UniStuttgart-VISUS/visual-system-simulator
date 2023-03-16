@@ -57,10 +57,13 @@ impl Surface {
         // Query surface capablities, preferably with sRGB support.
         let swapchain_capabilities = surface.get_capabilities(&adapter);
         let mut view_formats = vec![];
-        let srgb_format = swapchain_capabilities.formats[0].add_srgb_suffix();
-        if swapchain_capabilities.formats.contains(&srgb_format) {
-            view_formats.push(srgb_format);
-        }
+        // #[cfg(target_os = "android")]
+        // {
+        //     let srgb_format = swapchain_capabilities.formats[0].add_srgb_suffix();
+        //     if swapchain_capabilities.formats.contains(&srgb_format) {
+        //         view_formats.push(srgb_format);
+        //     }
+        // }
  
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
