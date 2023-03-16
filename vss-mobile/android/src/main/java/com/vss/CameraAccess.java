@@ -21,6 +21,7 @@ import android.util.Size;
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 
+import java.nio.BufferUnderflowException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -139,19 +140,28 @@ public class CameraAccess {
         // Create image reader for accessing pixel data.
         imageReader = ImageReader.newInstance(width, height, imageFormat, 2);
         imageReader.setOnImageAvailableListener(new ImageReader.OnImageAvailableListener() {
+            private boolean logUnexpected = true;
+
             public void onImageAvailable(ImageReader reader) {
                 Image image = reader.acquireLatestImage();
                 if (image == null) {
                     return;
                 }
 
-                // Copy planes to buffers.
-                image.getPlanes()[0].getBuffer().get(y);
-                image.getPlanes()[1].getBuffer().get(u);
-                image.getPlanes()[2].getBuffer().get(v);
+                try {
+                    // Copy planes to buffers.
+                    image.getPlanes()[0].getBuffer().get(y);
+                    image.getPlanes()[1].getBuffer().get(u);
+                    image.getPlanes()[2].getBuffer().get(v);
 
-                // Emit frame.
-                delegate.onFrameAvailable(width, height, y, u, v);
+                    // Emit frame.
+                    delegate.onFrameAvailable(width, height, y, u, v);
+                } catch (BufferUnderflowException e) {
+                    if (logUnexpected) {
+                        Log.w("ImageReader", "Unexpectedly sized frame. Ignoring.");
+                        logUnexpected = false;
+                    }
+                }
 
                 // Free manually
                 image.close();
@@ -192,7 +202,9 @@ public class CameraAccess {
     }
 
     void close() {
-        cameraDevice.close();
+        if (cameraDevice != null) {
+            cameraDevice.close();
+        }
     }
 
     public interface CameraDelegate {

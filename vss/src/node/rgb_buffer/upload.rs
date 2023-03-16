@@ -79,6 +79,8 @@ impl UploadRgbBuffer {
     }
 
     pub fn upload_buffer(&mut self, buffer: &RgbBuffer) {
+        assert_eq!(buffer.pixels_rgb.len(), (buffer.width * buffer.height * 4) as usize, "Unexpected RGBA pixel buffer size");
+
         // Test if we have to invalidate the texture.
         if let Some(texture) = &self.texture {
             if buffer.width != texture.width || buffer.height != texture.height {
