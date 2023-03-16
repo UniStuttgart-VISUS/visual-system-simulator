@@ -11,7 +11,6 @@ import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
 import android.webkit.WebResourceRequest;
-import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.EditText;
@@ -20,7 +19,9 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
-import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.slidingpanelayout.widget.SlidingPaneLayout;
 
@@ -41,9 +42,9 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     private static final String LOG_TAG = "MainActivity";
     private static final int CAMERA_REQUEST_CODE = 100;
 
+    private ActivityState activityState = ActivityState.Inspecting;
     private SlidingPaneLayout personaSimulationPane;
     private FloatingActionButton startButton;
-
     private PersonasAdapter personasAdapter;
     private RecyclerView personasView;
 
@@ -75,7 +76,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
 
     @Override
     public void onBackPressed() {
-        if (this.personaSimulationPane.isOpen()) {
+        if (activityState == ActivityState.Simulating) {
             stopSimulator();
         } else {
             super.onBackPressed();
@@ -86,14 +87,9 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
 
     //region Android permissions
 
-    private void checkCameraPermission() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_DENIED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, CAMERA_REQUEST_CODE);
-        }
-    }
-
     @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
+                                           @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == CAMERA_REQUEST_CODE) {
             if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
@@ -101,6 +97,13 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
             } else {
                 Log.i("Permission", "Camera: DENIED");
             }
+        }
+    }
+
+    private void checkCameraPermission() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_DENIED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA},
+                    CAMERA_REQUEST_CODE);
         }
     }
 
@@ -139,7 +142,12 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
             new Persona("presbyopia.html", "custom", "Presbyopia")
         };
         //@formatter:on
-        personasAdapter = new PersonasAdapter(personas);
+        personasAdapter = new PersonasAdapter(personas, new PersonasAdapter.PersonasDelegate() {
+            @Override
+            public void onSelected(Persona persona) {
+                loadInspectorPage(persona.pageName);
+            }
+        });
 
         personasView = findViewById(R.id.preset_view);
         personasView.setAdapter(personasAdapter);
@@ -226,15 +234,21 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
             }
         });
 
-        // Prevent screen from turning off.
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-
-        // Switch to simulator (low-resolution only)
-        this.personaSimulationPane.open();
+        // Setup simulator.
         //this.simulatorView.postSettings(jsonString);
         //this.simulatorView.start()
 
+        // Enter immersive mode and prevent screen from turning off.
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        WindowInsetsControllerCompat windowInsetsController =
+                WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        windowInsetsController.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_BARS_BY_TOUCH);
+        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars());
+
+        // Switch to simulation state.
+        this.personaSimulationPane.open();
         this.startButton.hide();
+        activityState = ActivityState.Simulating;
     }
 
     void stopSimulator() {
@@ -242,12 +256,16 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         this.cameraAccess.close();
         this.cameraAccess = null;
 
-        // Allow screen turning off.
+        // Leave immersive mode and allow turning off the screen.
+        WindowInsetsControllerCompat windowInsetsController =
+                WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        windowInsetsController.show(WindowInsetsCompat.Type.systemBars());
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        // Switch to inspector.
+        // Switch to inspection state.
         this.personaSimulationPane.close();
         this.startButton.show();
+        activityState = ActivityState.Inspecting;
     }
 
     /**
@@ -307,7 +325,8 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         // catch (IOException | IndexOutOfBoundsException e) {
 
         //print message
-        //    Toast.makeText(this, R.string.eyediseases_settings_load_failed, Toast.LENGTH_SHORT).show();
+        //    Toast.makeText(this, R.string.eyediseases_settings_load_failed, Toast.LENGTH_SHORT)
+        //    .show();
 
         //   Log.d("MainMenu", "Load simulator settings failed!", e);
         //}
@@ -337,7 +356,8 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         //  catch (IOException e) {
 
         //print message
-        //     Toast.makeText(this, R.string.eyediseases_settings_store_failed, Toast.LENGTH_SHORT).show();
+        //     Toast.makeText(this, R.string.eyediseases_settings_store_failed, Toast
+        //     .LENGTH_SHORT).show();
 
         //     Log.d("MainMenu", "Store simulator settings failed", e);
         //  }
@@ -365,10 +385,15 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         //  catch (IOException e) {
 
         //print message
-        //    Toast.makeText(this, R.string.eyediseases_settings_reset_failed, Toast.LENGTH_SHORT).show();
+        //    Toast.makeText(this, R.string.eyediseases_settings_reset_failed, Toast
+        //    .LENGTH_SHORT).show();
 
         //     Log.d("MainMenu", "Reset simulator settings failed!", e);
         //  }
+    }
+
+    private enum ActivityState {
+        Simulating, Inspecting,
     }
 
     /*

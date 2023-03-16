@@ -97,9 +97,29 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate(
     let handle = AndroidHandle(RawWindowHandle::AndroidNdk(window_handle));
     let size = [window.width() as u32, window.height() as u32];
     let surface = vss::Surface::new(size, handle, None, parameters, 1);
-    let surface = futures::executor::block_on(surface);
+    let mut surface = futures::executor::block_on(surface);
+
+    build_flow(&mut surface);
+
+    surface.update_nodes();
 
     *guard = Some(Bridge { surface });
+}
+
+fn build_flow(surface: &mut Surface) {
+    //TODO: use a proper set of nodes.
+
+    let buffer = RgbBuffer {
+        pixels_rgb: Box::new([127; 16*16*4]),
+        width: 16,
+        height: 16,
+    };
+    let mut node = UploadRgbBuffer::new(&surface);
+    node.upload_buffer(&buffer);
+    surface.add_node(Box::new(node), 0);
+
+    let node = Display::new(&surface);
+    surface.add_node(Box::new(node), 0);
 }
 
 #[no_mangle]
@@ -131,7 +151,7 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDraw(
 ) {
     let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
     if let Some(ref bridge) = *guard {
-        //TODO: bridge.render_the_flow()
+        bridge.surface.draw()
     }
 }
 
