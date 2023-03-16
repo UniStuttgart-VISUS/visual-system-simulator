@@ -157,12 +157,11 @@ impl Surface {
     }
 
     pub fn resize(&mut self, new_size: [u32;2]) {
-        if new_size[0] > 0 && new_size[1] > 0 {
-            self.surface_size = [new_size[0], new_size[1]];
-            self.surface_config.borrow_mut().width = new_size[0];
-            self.surface_config.borrow_mut().height = new_size[1];
-            self.surface.configure(&self.device.borrow_mut(), &self.surface_config.borrow());
-        }
+        assert!(new_size[0] > 0 && new_size[1] > 0, "Non-positive size");
+        self.surface_size = [new_size[0], new_size[1]];
+        self.surface_config.borrow_mut().width = new_size[0];
+        self.surface_config.borrow_mut().height = new_size[1];
+        self.surface.configure(&self.device.borrow_mut(), &self.surface_config.borrow());
     }
 
     pub fn delta_t(&self)  -> f32{
@@ -226,40 +225,37 @@ impl Surface {
     }
 
     pub fn draw(&self) {
-        match self.get_current_texture(){
-            Ok(output) => {
-                let view = output
-                .texture
-                .create_view(&wgpu::TextureViewDescriptor::default());
+        let output = self.get_current_texture().unwrap();
+    
+        let view = output
+        .texture
+        .create_view(&wgpu::TextureViewDescriptor::default());
 
-                let sampler = create_sampler_linear(&(self.device.borrow_mut()));
+        let sampler = create_sampler_linear(&(self.device.borrow_mut()));
 
-                let mut encoder = self
-                .device
-                    .borrow_mut()
-                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                        label: Some("Render Encoder"),
-                    });
+        let mut encoder = self
+        .device
+            .borrow_mut()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Render Encoder"),
+            });
 
-                let render_texture = RenderTexture{
-                    texture: None,
-                    view: Rc::new(view),
-                    sampler: Rc::new(sampler),
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    width: self.width(),
-                    height: self.height(),
-                    label: "surface render texture".to_string(),
-                };
-            
-                self.flow.iter().for_each(|f| f.render(&self, &mut encoder, &render_texture));
+        let render_texture = RenderTexture{
+            texture: None,
+            view: Rc::new(view),
+            sampler: Rc::new(sampler),
+            view_dimension: wgpu::TextureViewDimension::D2,
+            width: self.width(),
+            height: self.height(),
+            label: "surface render texture".to_string(),
+        };
+    
+        self.flow.iter().for_each(|f| f.render(&self, &mut encoder, &render_texture));
 
-                self.queue.borrow_mut().submit(iter::once(encoder.finish()));
-                output.present();
-                self.flow.iter().for_each(|f| f.post_render(&self));
-                self.last_render_instant.replace(Instant::now());
-            }
-            _ => {}
-        }
+        self.queue.borrow_mut().submit(iter::once(encoder.finish()));
+        output.present();
+        self.flow.iter().for_each(|f| f.post_render(&self));
+        self.last_render_instant.replace(Instant::now());
     }
 
     // pub fn flush(&self, encoder: &mut DeviceEncoder) {

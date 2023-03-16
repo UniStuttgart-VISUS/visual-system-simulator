@@ -100,7 +100,6 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate(
     let mut surface = futures::executor::block_on(surface);
 
     build_flow(&mut surface);
-
     surface.update_nodes();
 
     *guard = Some(Bridge { surface });
@@ -110,7 +109,7 @@ fn build_flow(surface: &mut Surface) {
     //TODO: use a proper set of nodes.
 
     let buffer = RgbBuffer {
-        pixels_rgb: Box::new([127; 16*16*4]),
+        pixels_rgb: Box::new([127; 16 * 16 * 4]),
         width: 16,
         height: 16,
     };
@@ -139,9 +138,8 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeResize(
     height: jint,
 ) {
     let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
-    if let Some(ref mut bridge) = *guard {
-        bridge.surface.resize([width as u32, height as u32])
-    }
+    let mut bridge = (*guard).as_mut().expect("Bridge should be created");
+    bridge.surface.resize([width as u32, height as u32]);
 }
 
 #[no_mangle]
@@ -150,9 +148,8 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDraw(
     _class: JClass,
 ) {
     let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
-    if let Some(ref bridge) = *guard {
-        bridge.surface.draw()
-    }
+    let mut bridge = (*guard).as_mut().expect("Bridge should be created");
+    bridge.surface.draw();
 }
 
 #[no_mangle]
@@ -166,22 +163,20 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostFrame(
     v: jbyteArray,
 ) {
     let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
+    let mut bridge = (*guard).as_mut().expect("Bridge should be created");
+    /*
+    let y = env.convert_byte_array(y).unwrap().into_boxed_slice();
+    let u = env.convert_byte_array(u).unwrap().into_boxed_slice();
+    let v = env.convert_byte_array(v).unwrap().into_boxed_slice();
 
-    if let Some(ref bridge) = *guard {
-        /*
-        let y = env.convert_byte_array(y).unwrap().into_boxed_slice();
-        let u = env.convert_byte_array(u).unwrap().into_boxed_slice();
-        let v = env.convert_byte_array(v).unwrap().into_boxed_slice();
+    let frame = Frame {
+        y, u, v,
+        width:width as u32,
+        height:height as u32,
+    };
 
-        let frame = Frame {
-            y, u, v,
-            width:width as u32,
-            height:height as u32,
-        };
-
-        //TODO: bridge.post_frame()
-        */
-    }
+    //TODO: bridge.post_frame()
+    */
 }
 
 #[no_mangle]
@@ -191,10 +186,9 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostSettings
     json_string: JString,
 ) {
     let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
+    let mut bridge = (*guard).as_mut().expect("Bridge should be created");
 
     //let json_string: String = env.get_string(son_string).expect("Java String expected").into();
 
-    if let Some(ref bridge) = *guard {
-        //TODO: bridge.post_settings()
-    }
+    //TODO: bridge.post_settings()
 }
