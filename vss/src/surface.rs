@@ -67,7 +67,10 @@ impl Surface {
  
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            #[cfg(target_os = "android")]
             format: swapchain_capabilities.formats[0],
+            #[cfg(target_os = "windows")]
+            format: swapchain_capabilities.formats[0].remove_srgb_suffix(), // TODO find a better workaround for this (e.g. adjust output format of last node)
             width: surface_size[0],
             height: surface_size[1],
             present_mode: wgpu::PresentMode::Fifo,

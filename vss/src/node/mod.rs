@@ -33,7 +33,7 @@ pub use self::retina::*;
 pub use self::rgb_buffer::*;
 pub use self::slot::*;
 pub use self::test_node::*;
-//TODO-WGPU pub use self::yuv_buffer::*;
+pub use self::yuv_buffer::*;
 pub use self::vr_compositor::*;
 pub use self::stereo_desktop::*;
 pub use self::variance::*;
