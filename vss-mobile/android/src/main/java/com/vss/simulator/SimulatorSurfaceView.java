@@ -49,12 +49,6 @@ public class SimulatorSurfaceView extends SurfaceView implements SurfaceHolder.C
     }
 
     @Override
-    public void surfaceRedrawNeededAsync(@NonNull SurfaceHolder holder, @NonNull Runnable drawingFinished) {
-        SimulatorBridge.draw();
-        drawingFinished.run();
-    }
-
-    @Override
     public void surfaceRedrawNeeded(SurfaceHolder holder) {
         SimulatorBridge.draw();
     }
@@ -62,9 +56,11 @@ public class SimulatorSurfaceView extends SurfaceView implements SurfaceHolder.C
     @JavascriptInterface
     public void postSettings(String jsonString) {
         SimulatorBridge.postSettings(jsonString);
+        postInvalidate();
     }
 
     public void postFrame(int width, int height, byte[] y, byte[] u, byte[] v) {
         SimulatorBridge.postFrame(width, height, y, u, v);
+        postInvalidate();
     }
 }

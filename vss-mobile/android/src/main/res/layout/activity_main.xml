@@ -40,8 +40,7 @@
             android:id="@+id/simulator_view"
             android:layout_width="550dp"
             android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="#181818" />
+            android:layout_weight="1" />
 
     </androidx.slidingpanelayout.widget.SlidingPaneLayout>
 
