@@ -13,8 +13,6 @@ import androidx.annotation.NonNull;
  */
 public class SimulatorSurfaceView extends SurfaceView implements SurfaceHolder.Callback2 {
 
-    private SimulatorBridge libBridge;
-
     public SimulatorSurfaceView(Context context) {
         super(context);
         initialize();

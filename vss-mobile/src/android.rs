@@ -55,12 +55,21 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate<'loca
     android_logger::init_once(
         Config::default()
             .with_max_level(LevelFilter::Trace)
-            .with_tag("VSS"),
+            .with_tag("libvss"),
     );
 
     panic::set_hook(Box::new(|info| {
         error!("{}", info.to_string());
     }));
+
+    info!(
+        "Logger setup complete ({})",
+        if cfg!(debug_assertions) {
+            "debug"
+        } else {
+            "release"
+        }
+    );
 
     let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
 
