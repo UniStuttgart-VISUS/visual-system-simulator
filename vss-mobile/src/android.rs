@@ -111,9 +111,9 @@ fn build_flow(surface: &mut Surface) {
     //TODO: use a proper set of nodes.
 
     let buffer = RgbBuffer {
-        pixels_rgb: Box::new([127; 16 * 16 * 4]),
-        width: 16,
-        height: 16,
+        pixels_rgb: Box::new([127; 128 * 128 * 4]),
+        width: 128,
+        height: 128,
     };
     let mut node = UploadRgbBuffer::new(&surface);
     node.upload_buffer(&buffer);
