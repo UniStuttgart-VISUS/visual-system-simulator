@@ -5,28 +5,21 @@ use std::cell::RefCell;
 use std::ffi::c_void;
 use std::panic;
 use std::ptr::NonNull;
-use std::sync::{mpsc, Mutex, MutexGuard};
-
-use futures::executor::block_on;
+use std::sync::{Mutex, MutexGuard};
 
 use log::*;
 
-use jni::objects::{JClass, JObject, JString};
-use jni::sys::{jbyteArray, jint};
+use jni::objects::{JByteArray, JClass, JObject, JString};
+use jni::sys::jint;
 use jni::JNIEnv;
 
 use ndk_sys;
 
-use android_logger::{Config, FilterBuilder};
+use android_logger::Config;
 
 use raw_window_handle::*;
 
 use vss::*;
-
-enum Message {
-    Config(vss::ValueMap),
-    Frame(vss::RgbBuffer), //TODO: should be a YUV buffer
-}
 
 struct AndroidHandle(RawWindowHandle);
 
@@ -53,11 +46,11 @@ lazy_static::lazy_static! {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate(
-    env: JNIEnv,
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate<'local>(
+    env: JNIEnv<'local>,
     _class: JClass,
-    surface: JObject,
-    assetManager: JObject,
+    surface: JObject<'local>,
+    assetManager: JObject<'local>,
 ) {
     android_logger::init_once(
         Config::default()
@@ -90,8 +83,8 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate(
         );
     };
 
-    let mut value_map = ValueMap::new();
-    let mut parameters: Vec<RefCell<ValueMap>> = vec![RefCell::new(value_map)];
+    let value_map = ValueMap::new();
+    let parameters: Vec<RefCell<ValueMap>> = vec![RefCell::new(value_map)];
     let mut window_handle = AndroidNdkWindowHandle::empty();
     window_handle.a_native_window = window.ptr().as_ptr() as *mut c_void;
     let handle = AndroidHandle(RawWindowHandle::AndroidNdk(window_handle));
@@ -122,8 +115,8 @@ fn build_flow(surface: &mut Surface) {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDestroy(
-    env: JNIEnv,
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDestroy<'local>(
+    _env: JNIEnv<'local>,
     _class: JClass,
 ) {
     let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
@@ -131,64 +124,68 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDestroy(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeResize(
-    env: JNIEnv,
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeResize<'local>(
+    _env: JNIEnv<'local>,
     _class: JClass,
     width: jint,
     height: jint,
 ) {
     let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
-    let mut bridge = (*guard).as_mut().expect("Bridge should be created");
+    let bridge = (*guard).as_mut().expect("Bridge should be created");
     bridge.surface.resize([width as u32, height as u32]);
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDraw(
-    env: JNIEnv,
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDraw<'local>(
+    _env: JNIEnv<'local>,
     _class: JClass,
 ) {
     let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
-    let mut bridge = (*guard).as_mut().expect("Bridge should be created");
+    let bridge = (*guard).as_mut().expect("Bridge should be created");
     bridge.surface.draw();
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostFrame(
-    env: JNIEnv,
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostFrame<'local>(
+    env: JNIEnv<'local>,
     _class: JClass,
     width: jint,
     height: jint,
-    y: jbyteArray,
-    u: jbyteArray,
-    v: jbyteArray,
+    y: JByteArray<'local>,
+    u: JByteArray<'local>,
+    v: JByteArray<'local>,
 ) {
     let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
-    let mut bridge = (*guard).as_mut().expect("Bridge should be created");
-    /*
-    let y = env.convert_byte_array(y).unwrap().into_boxed_slice();
-    let u = env.convert_byte_array(u).unwrap().into_boxed_slice();
-    let v = env.convert_byte_array(v).unwrap().into_boxed_slice();
+    let bridge = (*guard).as_mut().expect("Bridge should be created");
 
-    let frame = Frame {
-        y, u, v,
-        width:width as u32,
-        height:height as u32,
+    let pixels_y = env.convert_byte_array(&y).unwrap().into_boxed_slice();
+    let pixels_u = env.convert_byte_array(&u).unwrap().into_boxed_slice();
+    let pixels_v = env.convert_byte_array(&v).unwrap().into_boxed_slice();
+
+    let buffer = YuvBuffer {
+        pixels_y,
+        pixels_u,
+        pixels_v,
+        width: width as u32,
+        height: height as u32,
     };
 
     //TODO: bridge.post_frame()
-    */
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostSettings(
-    env: JNIEnv,
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostSettings<'local>(
+    mut env: JNIEnv<'local>,
     _class: JClass,
-    json_string: JString,
+    json_string: JString<'local>,
 ) {
     let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
-    let mut bridge = (*guard).as_mut().expect("Bridge should be created");
+    let bridge = (*guard).as_mut().expect("Bridge should be created");
 
-    //let json_string: String = env.get_string(son_string).expect("Java String expected").into();
+    let json_string: String = env
+        .get_string(&json_string)
+        .expect("Should be a Java String")
+        .into();
 
     //TODO: bridge.post_settings()
 }
