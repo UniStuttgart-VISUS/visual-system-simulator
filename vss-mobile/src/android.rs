@@ -111,7 +111,7 @@ fn build_flow(surface: &mut Surface) {
     //TODO: use a proper set of nodes.
 
     let buffer = RgbBuffer {
-        pixels_rgb: Box::new([127; 128 * 128 * 4]),
+        pixels_rgb: Box::new([64; 128 * 128 * 4]),
         width: 128,
         height: 128,
     };

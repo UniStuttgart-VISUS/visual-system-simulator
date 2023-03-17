@@ -6,35 +6,14 @@
     android:layout_height="match_parent">
 
     <androidx.slidingpanelayout.widget.SlidingPaneLayout
-        android:id="@+id/persona_simulator_pane"
+        android:id="@+id/inspector_simulator_pane"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
-        <LinearLayout
+        <WebView
+            android:id="@+id/inspector_view"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="vertical">
-
-            <ImageView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center_horizontal"
-                android:src="@drawable/ic_launcher_background"
-                tools:ignore="ContentDescription" />
-
-            <androidx.recyclerview.widget.RecyclerView
-                app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
-                android:id="@+id/preset_view"
-                android:layout_width="match_parent"
-                android:layout_height="100dp"
-                android:orientation="horizontal" />
-
-            <WebView
-                android:id="@+id/inspector_view"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent" />
-
-        </LinearLayout>
+            android:layout_height="match_parent" />
 
         <com.vss.simulator.SimulatorSurfaceView
             android:id="@+id/simulator_view"

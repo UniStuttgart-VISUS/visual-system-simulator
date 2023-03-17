@@ -10,6 +10,7 @@ import android.os.StrictMode;
 import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -22,12 +23,9 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
-import androidx.recyclerview.widget.RecyclerView;
 import androidx.slidingpanelayout.widget.SlidingPaneLayout;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
-import com.vss.personas.Persona;
-import com.vss.personas.PersonasAdapter;
 import com.vss.simulator.SimulatorSurfaceView;
 
 import java.io.File;
@@ -42,11 +40,9 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     private static final String LOG_TAG = "MainActivity";
     private static final int CAMERA_REQUEST_CODE = 100;
 
-    private ActivityState activityState = ActivityState.Inspecting;
-    private SlidingPaneLayout personaSimulationPane;
+    private ActivityState activityState = ActivityState.Welcome;
+    private SlidingPaneLayout inspectorSimulatorPane;
     private FloatingActionButton startButton;
-    private PersonasAdapter personasAdapter;
-    private RecyclerView personasView;
 
     private WebView inspectorView;
 
@@ -68,8 +64,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         }
 
         // Setup UI elements.
-        setupPersonasSimulationChanger();
-        setupPersonasView();
+        setupInspectorSimulatorChanger();
         setupInspectorView();
         this.simulatorView = findViewById(R.id.simulator_view);
     }
@@ -78,6 +73,8 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     public void onBackPressed() {
         if (activityState == ActivityState.Simulating) {
             stopSimulator();
+        } else if (activityState == ActivityState.Inspecting) {
+            loadPage("index.html");
         } else {
             super.onBackPressed();
         }
@@ -109,48 +106,19 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
 
     //endregion
 
-    //region Personas-Simulation
+    //region Inspector-Simulation Changer
 
-    private void setupPersonasSimulationChanger() {
-        this.personaSimulationPane = findViewById(R.id.persona_simulator_pane);
+    private void setupInspectorSimulatorChanger() {
+        this.inspectorSimulatorPane = findViewById(R.id.inspector_simulator_pane);
 
         // Suppress user swipes (we use the start button instead).
-        this.personaSimulationPane.setLockMode(SlidingPaneLayout.LOCK_MODE_LOCKED);
+        this.inspectorSimulatorPane.setLockMode(SlidingPaneLayout.LOCK_MODE_LOCKED);
 
         this.startButton = findViewById(R.id.start_button);
     }
 
     public void startStopClicked(View view) {
         this.startSimulator();
-    }
-
-    //endregion
-
-    //region Personas
-
-    private void setupPersonasView() {
-        //@formatter:off
-        Persona[] personas = {
-            new Persona("custom.html", "custom", "Custom"),
-            new Persona("achromatopsia.html", "custom", "Achromatopsia"),
-            new Persona("ametropia.html", "custom", "Ametropia"),
-            new Persona("cataract.html", "custom", "Cataract"),
-            new Persona("color-blindness.html", "custom", "Color Blindness"),
-            new Persona("glaucoma.html", "custom", "Glaucoma"),
-            new Persona("macular-degeneration.html", "custom", "Macular Degeneration"),
-            new Persona("night-blindness.html", "custom", "Night Blindness"),
-            new Persona("presbyopia.html", "custom", "Presbyopia")
-        };
-        //@formatter:on
-        personasAdapter = new PersonasAdapter(personas, new PersonasAdapter.PersonasDelegate() {
-            @Override
-            public void onSelected(Persona persona) {
-                loadInspectorPage(persona.pageName);
-            }
-        });
-
-        personasView = findViewById(R.id.preset_view);
-        personasView.setAdapter(personasAdapter);
     }
 
     //endregion
@@ -176,27 +144,48 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
 
         // Add JavaScript callback.
         inspectorView.getSettings().setJavaScriptEnabled(true);
-        inspectorView.addJavascriptInterface(this.simulatorView, "SimulatorView");
+        inspectorView.addJavascriptInterface(this, "Activity");
 
         //TODO: add event listener for "config changed/loaded" or something like that?
 
         // Load welcome page.
-        loadInspectorPage("index.html");
+        loadPage("index.html");
     }
 
-    private void loadInspectorPage(String pageName) {
-        Locale currentLocale = getResources().getConfiguration().getLocales().get(0);
-        String isoName = currentLocale.getISO3Country();
-        String url = "file:///android_asset/" + isoName + "/" + pageName;
-        File file = new File(URI.create(isoName).getPath());
-        if (file.exists()) {
-            Log.i(LOG_TAG, "Loading " + url);
-            inspectorView.loadUrl(url);
-        } else {
-            String urlFallback = "file:///android_asset/en/" + pageName;
-            Log.w(LOG_TAG, "Loading fallback " + urlFallback);
-            inspectorView.loadUrl(urlFallback);
-        }
+    @JavascriptInterface
+    public void loadPage(String pageName) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (pageName == "index.html") {
+                    activityState = ActivityState.Welcome;
+                } else {
+                    activityState = ActivityState.Inspecting;
+                }
+                Locale currentLocale = getResources().getConfiguration().getLocales().get(0);
+                String isoName = currentLocale.getISO3Country();
+                String url = "file:///android_asset/" + isoName + "/" + pageName;
+                File file = new File(URI.create(isoName).getPath());
+                if (file.exists()) {
+                    Log.i(LOG_TAG, "Loading " + url);
+                    inspectorView.loadUrl(url);
+                } else {
+                    String urlFallback = "file:///android_asset/en/" + pageName;
+                    Log.w(LOG_TAG, "Loading fallback " + urlFallback);
+                    inspectorView.loadUrl(urlFallback);
+                }
+            }
+        });
+    }
+
+    @JavascriptInterface
+    public void postSettings(String jsonString) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                simulatorView.postSettings(jsonString);
+            }
+        });
     }
 
     //endregion
@@ -246,7 +235,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         windowInsetsController.hide(WindowInsetsCompat.Type.systemBars());
 
         // Switch to simulation state.
-        this.personaSimulationPane.open();
+        this.inspectorSimulatorPane.open();
         this.startButton.hide();
         activityState = ActivityState.Simulating;
     }
@@ -263,7 +252,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         // Switch to inspection state.
-        this.personaSimulationPane.close();
+        this.inspectorSimulatorPane.close();
         this.startButton.show();
         activityState = ActivityState.Inspecting;
     }
@@ -393,7 +382,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     }
 
     private enum ActivityState {
-        Simulating, Inspecting,
+        Welcome, Simulating, Inspecting,
     }
 
     /*

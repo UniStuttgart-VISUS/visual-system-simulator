@@ -53,7 +53,6 @@ public class SimulatorSurfaceView extends SurfaceView implements SurfaceHolder.C
         SimulatorBridge.draw();
     }
 
-    @JavascriptInterface
     public void postSettings(String jsonString) {
         SimulatorBridge.postSettings(jsonString);
         postInvalidate();
