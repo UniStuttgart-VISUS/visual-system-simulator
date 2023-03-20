@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">FIST</string>
+    <string name="share">Share</string>
     <string name="navigation_drawer_close">Close drawer</string>
     <string name="action_settings">Settings</string>
     <string name="eyediseases_settings_store">Save settings</string>

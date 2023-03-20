@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/share"
+        android:title="@string/share"
+        android:icon="@android:drawable/ic_menu_share"
+        app:showAsAction="ifRoom" />
+    <item
+        android:id="@+id/load_settings"
+        android:title="@string/eyediseases_settings_load" />
+    <item
+        android:id="@+id/save_settings"
+        android:title="@string/eyediseases_settings_store" />
+    <item
+        android:id="@+id/reset_settings"
+        android:title="@string/eyediseases_settings_reset" />
+</menu>
