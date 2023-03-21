@@ -106,24 +106,24 @@ impl IoGenerator {
     }
 }
 
-fn build_flow(window: &mut Window, io_generator: &mut IoGenerator, flow_index: usize, render_resolution: Option<[u32; 2]>, variance_log: Option<String>){
-    let (input_node, output_node) = io_generator.current(&window.surface, render_resolution, flow_index).unwrap();
+fn build_flow(surface: &mut Surface, io_generator: &mut IoGenerator, flow_index: usize, render_resolution: Option<[u32; 2]>, variance_log: Option<String>){
+    let (input_node, output_node) = io_generator.current(&surface, render_resolution, flow_index).unwrap();
 
     // Add input node.
-    window.surface.add_node(input_node, flow_index);
+    surface.add_node(input_node, flow_index);
 
     // Visual system passes.
-    let node = Lens::new(&window.surface);
-    window.surface.add_node(Box::new(node), flow_index);
-    let node = Cataract::new(&window.surface);
-    window.surface.add_node(Box::new(node), flow_index);
-    let node = Retina::new(&window.surface);
-    window.surface.add_node(Box::new(node), flow_index);
-    let node = PeacockCB::new(&window.surface);
-    window.surface.add_node(Box::new(node), flow_index);
+    let node = Lens::new(&surface);
+    surface.add_node(Box::new(node), flow_index);
+    let node = Cataract::new(&surface);
+    surface.add_node(Box::new(node), flow_index);
+    let node = Retina::new(&surface);
+    surface.add_node(Box::new(node), flow_index);
+    let node = PeacockCB::new(&surface);
+    surface.add_node(Box::new(node), flow_index);
     
     // Measure Uncertainty
-    // let mut node = VarianceMeasure::new(&window);
+    // let mut node = VarianceMeasure::new(&surface);
     // TODO-WGPU
     // if variance_log.is_some(){
     //     node.log_file = Some(OpenOptions::new()
@@ -133,22 +133,16 @@ fn build_flow(window: &mut Window, io_generator: &mut IoGenerator, flow_index: u
     //         .open(variance_log.unwrap())
     //         .unwrap());
     // }
-    // window.add_node(Box::new(node), flow_index);
-    
+    // add_node(Box::new(node), flow_index);
+
+    // Display node.
+    let node = Display::new(&surface);
+    surface.add_node(Box::new(node), flow_index);
+
     // Add output node, if present.
     if let Some(output_node) = output_node {
-        // Display node.
-        let node = Display::new(&window.surface);
-        window.surface.add_node(Box::new(node), flow_index);
-        window.surface.add_node(output_node, flow_index);
-    } else {
-        // window.add_node(Box::new(Passthrough::new(&window)), flow_index)
-        // Display node.
-        let node = Display::new(&window.surface);
-        window.surface.add_node(Box::new(node), flow_index);
+        surface.add_node(output_node, flow_index);
     }
-
-
 }
 
 // "Default" main
@@ -207,7 +201,7 @@ pub fn main() {
             config.name.clone(),
             config.output.clone(),
         );
-        build_flow(&mut window, &mut io_generator, index, config.resolution, config.variance_log.clone());
+        build_flow(&mut window.surface, &mut io_generator, index, config.resolution, config.variance_log.clone());
 
         if flow_count > 1 {
             let node = desktop.get_stereo_desktop_node(&window.surface);
@@ -364,7 +358,7 @@ pub fn main() {
             config.output.clone(),
         );
 
-        build_flow(&mut window, &mut io_generator, index, config.resolution);
+        build_flow(&mut window.surface, &mut io_generator, index, config.resolution);
         let mut node = desktop.get_stereo_desktop_node(&window);
 
         window.add_node(Box::new(node), index);
@@ -443,7 +437,7 @@ pub fn main() {
 
     for index in 0 .. flow_count {
         let viewport = &varjo_viewports[index];
-        build_flow(&mut window, &mut io_generator, index, Some([viewport.width, viewport.height]), None);
+        build_flow(&mut window.surface, &mut io_generator, index, Some([viewport.width, viewport.height]), None);
         let mut node = VRCompositor::new(&window.surface);
         node.set_viewport(viewport.x as f32, viewport.y as f32, viewport.width as f32, viewport.height as f32);
         window.surface.add_node(Box::new(node), index);
