@@ -268,7 +268,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         input.setSingleLine();
 
         // Show dialog.
-        new AlertDialog.Builder(this).setTitle(R.string.eyediseases_settings_store).setMessage(R.string.save_as).setView(input).setPositiveButton(R.string.store, (dialogInterface, i) -> {
+        new AlertDialog.Builder(this).setTitle(R.string.settings_save).setMessage(R.string.save_as).setView(input).setPositiveButton(R.string.store, (dialogInterface, i) -> {
             saveSimulatorSettings(input.getText().toString());
         }).setNegativeButton(R.string.cancel, null).setOnDismissListener(dialogInterface -> {
             Log.d(LOG_TAG, "CLOSE save simulator settings dialog");
@@ -283,7 +283,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         Log.d(LOG_TAG, "OPEN reset simulator settings dialog");
 
         // Show dialog.
-        new AlertDialog.Builder(this).setTitle(R.string.eyediseases_settings_reset).setMessage(R.string.eyediseases_settings_reset_confirmation).setPositiveButton(R.string.eyediseases_settings_reset, (dialogInterface, i) -> {
+        new AlertDialog.Builder(this).setTitle(R.string.settings_reset).setMessage(R.string.eyediseases_settings_reset_confirmation).setPositiveButton(R.string.settings_reset, (dialogInterface, i) -> {
             resetSimulatorSettings();
         }).setNegativeButton(R.string.cancel, null).setOnDismissListener(dialogInterface -> {
             Log.d(LOG_TAG, "CLOSE reset simulator settings dialog");

@@ -3,16 +3,14 @@
     xmlns:android="http://schemas.android.com/apk/res/android">
     <item
         android:id="@+id/share"
-        android:title="@string/share"
-        android:icon="@android:drawable/ic_menu_share"
-        app:showAsAction="ifRoom" />
+        android:title="@string/share" />
     <item
-        android:id="@+id/load_settings"
-        android:title="@string/eyediseases_settings_load" />
+        android:id="@+id/settings_load"
+        android:title="@string/settings_load" />
     <item
-        android:id="@+id/save_settings"
-        android:title="@string/eyediseases_settings_store" />
+        android:id="@+id/settings_save"
+        android:title="@string/settings_save" />
     <item
-        android:id="@+id/reset_settings"
-        android:title="@string/eyediseases_settings_reset" />
+        android:id="@+id/settings_reset"
+        android:title="@string/settings_reset" />
 </menu>

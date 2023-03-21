@@ -6,9 +6,9 @@
     <string name="navigation_drawer_open">Open navigation drawer</string>
     <string name="navigation_drawer_close">Schublade schließen</string>
     <string name="action_settings">Einstellungen</string>
-    <string name="eyediseases_settings_store">Einstellungen speichern</string>
-    <string name="eyediseases_settings_load">Einstellungen laden</string>
-    <string name="eyediseases_settings_reset">Einstellungen zurücksetzen</string>
+    <string name="settings_save">Einstellungen speichern</string>
+    <string name="settings_load">Einstellungen laden</string>
+    <string name="settings_reset">Einstellungen zurücksetzen</string>
     <string name="splitscreen_simulation">Splitscreen Simulation</string>
     <string name="start_simulator">Simulation starten</string>
     <string name="eyediseases_settings">Einstellungen</string>
