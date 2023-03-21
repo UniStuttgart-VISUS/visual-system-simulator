@@ -48,6 +48,56 @@ pub struct VarianceMeasure {
 }
 
 impl VarianceMeasure{
+    pub fn new(surface: &Surface) -> Self {
+        let device = surface.device().borrow_mut();
+        let queue = surface.queue().borrow_mut();
+
+        let uniforms = ShaderUniforms::new(&device, 
+            Uniforms{
+                resolution: [1.0, 1.0],
+                track_error: 0,
+                show_variance: 0,
+                variance_metric: 0,
+                color_space: 0,
+            }
+        );
+
+        let (sources_bind_group_layout, sources_bind_group) = create_color_sources_bind_group(&device, &queue, "Variance");
+
+        let original_tex = placeholder_texture(&device, &queue, Some("VarianceNode s_original")).unwrap();
+        let(original_bind_group_layout, original_bind_group) = original_tex.create_bind_group(&device);
+
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("VarianceNode Shader"),
+            source: wgpu::ShaderSource::Wgsl(concat!(
+                include_str!("../vert.wgsl"),
+                include_str!("mod.wgsl")).into()),
+        });
+
+        let pipeline = create_render_pipeline(
+            &device,
+            &[&shader, &shader],
+            &["vs_main", "fs_main"],
+            &[&uniforms.bind_group_layout, &sources_bind_group_layout, &original_bind_group_layout],
+            &all_color_states(),
+            None,
+            Some("VarianceNode Render Pipeline"));
+    
+        // let (_, _, rt_measure) = factory.create_render_target(1, 1).unwrap();
+
+        VarianceMeasure {
+            pipeline,
+            uniforms,
+            sources_bind_group,
+            original_bind_group,
+            targets: ColorTargets::new(&device, "VarianceNode"),
+            rt_measurement: placeholder_highp_rt(&device, Some("VarianceNode rt_measurement (placeholder)")),
+            log_file: None,
+            last_info: 1.0,
+        }
+    }
+
+
 /*  fn measure_variance(&mut self, surface: &Surface) -> (f32, f32){
         use gfx::format::Formatted;
         use gfx::memory::Typed;
@@ -122,55 +172,7 @@ impl VarianceMeasure{
 
 
 impl Node for VarianceMeasure {
-    fn new(surface: &Surface) -> Self {
-        let device = surface.device().borrow_mut();
-        let queue = surface.queue().borrow_mut();
-
-        let uniforms = ShaderUniforms::new(&device, 
-            Uniforms{
-                resolution: [1.0, 1.0],
-                track_error: 0,
-                show_variance: 0,
-                variance_metric: 0,
-                color_space: 0,
-            }
-        );
-
-        let (sources_bind_group_layout, sources_bind_group) = create_color_sources_bind_group(&device, &queue, "Variance");
-
-        let original_tex = placeholder_texture(&device, &queue, Some("VarianceNode s_original")).unwrap();
-        let(original_bind_group_layout, original_bind_group) = original_tex.create_bind_group(&device);
-
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("VarianceNode Shader"),
-            source: wgpu::ShaderSource::Wgsl(concat!(
-                include_str!("../vert.wgsl"),
-                include_str!("mod.wgsl")).into()),
-        });
-
-        let pipeline = create_render_pipeline(
-            &device,
-            &[&shader, &shader],
-            &["vs_main", "fs_main"],
-            &[&uniforms.bind_group_layout, &sources_bind_group_layout, &original_bind_group_layout],
-            &all_color_states(),
-            None,
-            Some("VarianceNode Render Pipeline"));
     
-        // let (_, _, rt_measure) = factory.create_render_target(1, 1).unwrap();
-
-        VarianceMeasure {
-            pipeline,
-            uniforms,
-            sources_bind_group,
-            original_bind_group,
-            targets: ColorTargets::new(&device, "VarianceNode"),
-            rt_measurement: placeholder_highp_rt(&device, Some("VarianceNode rt_measurement (placeholder)")),
-            log_file: None,
-            last_info: 1.0,
-        }
-    }
-
     fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
         let slots = slots.to_color_input(surface).to_color_output(surface, "VarianceNode");
         self.uniforms.data.resolution = slots.output_size_f32();

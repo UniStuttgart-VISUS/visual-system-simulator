@@ -47,8 +47,8 @@ pub struct Lens {
     targets: ColorTargets,
 }
 
-impl Node for Lens {
-    fn new(surface: &Surface) -> Self {
+impl Lens {
+    pub fn new(surface: &Surface) -> Self {
         let generator = NormalMapGenerator::new(&surface);
         let device = surface.device().borrow_mut();
         let queue = surface.queue().borrow_mut();
@@ -118,6 +118,10 @@ impl Node for Lens {
             targets: ColorTargets::new(&device, "Lens"),
         }
     }
+}
+
+impl Node for Lens {
+   
 
     fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
         let slots = slots.to_color_depth_input(surface).to_color_output(surface, "LensNode");

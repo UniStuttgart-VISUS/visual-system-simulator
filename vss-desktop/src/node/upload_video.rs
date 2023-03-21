@@ -33,6 +33,26 @@ pub struct UploadVideo {
 }
 
 impl UploadVideo {
+    pub fn new(surface: &Surface) -> Self {
+        let mut uploader = UploadRgbBuffer::new(surface);
+        uploader.set_flags(RgbInputFlags::VERTICALLY_FLIPPED);
+        Self {
+            upload_start: None,
+            uploader,
+            next_pts: -1.0,
+            next_buffer: RgbBuffer::default(),
+            #[cfg(feature = "video")]
+            demuxer: None,
+            #[cfg(feature = "video")]
+            video_stream_index: 0,
+            #[cfg(feature = "video")]
+            video_decoder: None,
+            #[cfg(feature = "video")]
+            video_scaler: None,
+        }
+    }
+
+
     pub fn has_video_extension<P>(path: P) -> bool
     where
         P: AsRef<Path>,
@@ -202,25 +222,7 @@ impl UploadVideo {
 }
 
 impl Node for UploadVideo {
-    fn new(surface: &Surface) -> Self {
-        let mut uploader = UploadRgbBuffer::new(surface);
-        uploader.set_flags(RgbInputFlags::VERTICALLY_FLIPPED);
-        Self {
-            upload_start: None,
-            uploader,
-            next_pts: -1.0,
-            next_buffer: RgbBuffer::default(),
-            #[cfg(feature = "video")]
-            demuxer: None,
-            #[cfg(feature = "video")]
-            video_stream_index: 0,
-            #[cfg(feature = "video")]
-            video_decoder: None,
-            #[cfg(feature = "video")]
-            video_scaler: None,
-        }
-    }
-
+   
     fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
         self.validate_data();
         self.uploader.negociate_slots(surface, slots)

@@ -21,8 +21,8 @@ pub struct TestNode {
     targets: Targets,
 }
 
-impl Node for TestNode {
-    fn new(surface: &Surface) -> Self {
+impl TestNode {
+    pub fn new(surface: &Surface) -> Self {
         let device = surface.device().borrow_mut();
         let queue = surface.queue().borrow_mut();
 
@@ -59,6 +59,10 @@ impl Node for TestNode {
             },
         }
     }
+}
+
+impl Node for TestNode {
+   
 
     fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
         let slots = slots.to_color_input(surface).to_color_output(surface, "TestNode");

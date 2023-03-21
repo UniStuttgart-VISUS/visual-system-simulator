@@ -6,6 +6,7 @@ use std::ffi::c_void;
 use std::panic;
 use std::ptr::NonNull;
 use std::sync::{Mutex, MutexGuard};
+use std::sync::mpsc::{self, Receiver, SyncSender};
 
 use log::*;
 
@@ -35,8 +36,58 @@ unsafe impl HasRawDisplayHandle for AndroidHandle {
     }
 }
 
+struct CameraStream {
+    upload: UploadYuvBuffer,
+    frame_receiver: Receiver<YuvBuffer>,
+}
+
+impl CameraStream {
+    fn new(surface: &Surface, frame_receiver: Receiver<YuvBuffer>) -> Self {
+        CameraStream {
+            upload: UploadYuvBuffer::new(&surface),
+            frame_receiver,
+        }
+    }
+}
+
+impl Node for CameraStream {
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
+        self.upload.negociate_slots(&surface, slots)
+    }
+
+    fn update_values(&mut self, surface: &Surface, values: &ValueMap) {
+        self.upload.update_values(&surface, values);
+    }
+
+    fn input(
+        &mut self,
+        perspective: &EyePerspective,
+        vis_param: &VisualizationParameters,
+    ) -> EyePerspective {
+        self.upload.input(&perspective, vis_param)
+    }
+
+    fn render(
+        &mut self,
+        surface: &Surface,
+        encoder: &mut wgpu::CommandEncoder,
+        screen: Option<&RenderTexture>,
+    ) {
+        self.upload.render(&surface, encoder, screen);
+    }
+
+    fn post_render(&mut self, surface: &Surface) {
+        let result = self.frame_receiver.try_recv();
+        if result.is_ok() {
+            self.upload.upload_buffer(result.unwrap());
+        }
+        self.upload.post_render(&surface);
+    }
+}
+
 struct Bridge {
     pub surface: Surface,
+    pub frame_sender: SyncSender<YuvBuffer>
 }
 
 unsafe impl Send for Bridge {}
@@ -101,22 +152,21 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate<'loca
     let surface = vss::Surface::new(size, handle, None, parameters, 1);
     let mut surface = futures::executor::block_on(surface);
 
-    build_flow(&mut surface);
+    let (tx, rx) = mpsc::sync_channel(2);
+    build_flow(&mut surface, rx);
     surface.update_nodes();
 
-    *guard = Some(Bridge { surface });
+    
+    *guard = Some(Bridge { 
+        surface,
+        frame_sender: tx,
+     });
 }
 
-fn build_flow(surface: &mut Surface) {
+fn build_flow(surface: &mut Surface, frame_receiver: Receiver<YuvBuffer>) {
     //TODO: use a proper set of nodes.
 
-    let buffer = RgbBuffer {
-        pixels_rgb: Box::new([64; 128 * 128 * 4]),
-        width: 128,
-        height: 128,
-    };
-    let mut node = UploadRgbBuffer::new(&surface);
-    node.upload_buffer(&buffer);
+    let mut node = CameraStream::new(&surface, frame_receiver);
     surface.add_node(Box::new(node), 0);
 
     let node = Display::new(&surface);
@@ -179,7 +229,10 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostFrame<'l
         height: height as u32,
     };
 
-    //TODO: bridge.post_frame()
+    let res = bridge.frame_sender.try_send(buffer);
+    if res.is_err() {
+        warn!("Send error: {} ", res.err().unwrap());
+    }
 }
 
 #[no_mangle]

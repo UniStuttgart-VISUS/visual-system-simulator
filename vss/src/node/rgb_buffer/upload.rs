@@ -57,6 +57,49 @@ pub struct UploadRgbBuffer {
 }
 
 impl UploadRgbBuffer {
+    pub fn new(surface: &Surface) -> Self {
+        let device = surface.device().borrow_mut();
+        let queue = surface.queue().borrow_mut();
+
+        let uniforms = ShaderUniforms::new(&device, 
+            Uniforms{
+                inv_proj_view: [[0.0; 4]; 4],
+                flags: RgbInputFlags::empty().bits(),
+                _padding: [0; 3],
+            });
+        
+        let source_texture = placeholder_texture(&device, &queue, Some("UploadNode source_texture")).unwrap();
+        let (source_bind_group_layout, source_bind_group) = source_texture.create_bind_group(&device);
+
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("UploadNode Shader"),
+            source: wgpu::ShaderSource::Wgsl(concat!(
+                include_str!("../vert.wgsl"),
+                include_str!("upload.wgsl")).into()),
+        });
+        
+        let pipeline = create_render_pipeline(
+            &device,
+            &[&shader, &shader],
+            &["vs_main", "fs_main"],
+            &[&source_bind_group_layout, &uniforms.bind_group_layout],
+            &all_color_states(),
+            simple_depth_state(DEPTH_FORMAT),
+            Some("UploadNode Render Pipeline"));
+
+        UploadRgbBuffer {
+            buffer_next: RgbBuffer::default(),
+            buffer_upload: false,
+            texture: None,
+            render_resolution: None,
+
+            pipeline,
+            uniforms,
+            source_bind_group,
+            targets: ColorDepthTargets::new(&device, "UploadNode"),
+        }
+    }
+
     pub fn has_image_extension<P>(path: P) -> bool
     where
         P: AsRef<Path>,
@@ -115,48 +158,7 @@ impl UploadRgbBuffer {
 }
 
 impl Node for UploadRgbBuffer {
-    fn new(surface: &Surface) -> Self {
-        let device = surface.device().borrow_mut();
-        let queue = surface.queue().borrow_mut();
-
-        let uniforms = ShaderUniforms::new(&device, 
-            Uniforms{
-                inv_proj_view: [[0.0; 4]; 4],
-                flags: RgbInputFlags::empty().bits(),
-                _padding: [0; 3],
-            });
-        
-        let source_texture = placeholder_texture(&device, &queue, Some("UploadNode source_texture")).unwrap();
-        let (source_bind_group_layout, source_bind_group) = source_texture.create_bind_group(&device);
-
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("UploadNode Shader"),
-            source: wgpu::ShaderSource::Wgsl(concat!(
-                include_str!("../vert.wgsl"),
-                include_str!("upload.wgsl")).into()),
-        });
-        
-        let pipeline = create_render_pipeline(
-            &device,
-            &[&shader, &shader],
-            &["vs_main", "fs_main"],
-            &[&source_bind_group_layout, &uniforms.bind_group_layout],
-            &all_color_states(),
-            simple_depth_state(DEPTH_FORMAT),
-            Some("UploadNode Render Pipeline"));
-
-        UploadRgbBuffer {
-            buffer_next: RgbBuffer::default(),
-            buffer_upload: false,
-            texture: None,
-            render_resolution: None,
-
-            pipeline,
-            uniforms,
-            source_bind_group,
-            targets: ColorDepthTargets::new(&device, "UploadNode"),
-        }
-    }
+   
 
     fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
         if self.buffer_upload {

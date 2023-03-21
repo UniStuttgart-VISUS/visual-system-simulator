@@ -52,9 +52,9 @@ use super::*;
 /// An executable function that implements an aspect of the simulation.
 pub trait Node {
     /// Initializes this node.
-    fn new(surface: &Surface) -> Self
-    where
-        Self: Sized;
+    //fn new(surface: &Surface) -> Self
+    //where
+    //    Self: Sized;
 
     /// Negociates input and output for this node (source texture and render target),
     /// possibly re-using suggested `slots` (for efficiency).

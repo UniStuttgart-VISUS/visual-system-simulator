@@ -34,30 +34,7 @@ pub struct UploadYuvBuffer {
 }
 
 impl UploadYuvBuffer {
-    pub fn is_empty(&self) -> bool {
-        self.buffer_next.is_none()
-    }
-
-    pub fn upload_buffer(&mut self, buffer: YuvBuffer) {
-        // Test if we have to invalidate textures.
-        if let Some(texture_y) = &self.texture_y {
-            if buffer.width != texture_y.width as u32 || buffer.height != texture_y.height as u32 {
-                self.texture_y = None;
-                self.texture_u = None;
-                self.texture_v = None;
-            }
-        }
-
-        self.buffer_next = Some(buffer);
-    }
-
-    pub fn set_format(&mut self, format: YuvFormat) {
-        self.uniforms.data.format = format as i32;
-    }
-}
-
-impl Node for UploadYuvBuffer {
-    fn new(surface: &Surface) -> Self {
+   pub fn new(surface: &Surface) -> Self {
         let device = surface.device().borrow_mut();
         let queue = surface.queue().borrow_mut();
 
@@ -103,6 +80,30 @@ impl Node for UploadYuvBuffer {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.buffer_next.is_none()
+    }
+
+    pub fn upload_buffer(&mut self, buffer: YuvBuffer) {
+        // Test if we have to invalidate textures.
+        if let Some(texture_y) = &self.texture_y {
+            if buffer.width != texture_y.width as u32 || buffer.height != texture_y.height as u32 {
+                self.texture_y = None;
+                self.texture_u = None;
+                self.texture_v = None;
+            }
+        }
+
+        self.buffer_next = Some(buffer);
+    }
+
+    pub fn set_format(&mut self, format: YuvFormat) {
+        self.uniforms.data.format = format as i32;
+    }
+}
+
+impl Node for UploadYuvBuffer {
+   
     fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
         if let Some(buffer) = &self.buffer_next {
             let device = surface.device().borrow_mut();

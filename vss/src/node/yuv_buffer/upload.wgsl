@@ -25,7 +25,10 @@ struct FragmentOutput {
 @fragment
 fn fs_main(in: VertexOutput) -> FragmentOutput {
     var out: FragmentOutput;
-    if (u_format == 0) {
+
+    var v_tex = in.tex_coords;
+
+    if (uniforms.format == 0) {
         // YUV/YCbCr to RGB color space conversion using ITU recommendation [BT.709][1].
         // We assume the following input:
         //   - Y channel has full size, i.e., `width * height`
@@ -60,7 +63,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
             Y - (a * e / b) * Cr - (c * d / b) * Cb,
             Y + d * Cb,
             1.0);
-    } else if (u_format == 1) {
+    } else if (uniforms.format == 1) {
         // YUV_420_888 to RGB color space conversion.
         // The textures are the original android-cam textures, formatted like so:
         // every pixel has a corresponding y value and shares a u and v with its neighbour (only one direction)
@@ -73,7 +76,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
 
         let y = textureSample(in_y_t, in_y_s, v_tex).r;
         let u = textureLoad(in_y_t, v_tex_i, 0).r;
-        let v = textureLoad(in_t_v, v_tex_i, 0).r;
+        let v = textureLoad(in_v_t, v_tex_i, 0).r;
 
         if ((v_tex_i.x) % 2 == 1) {
             let temp = u;

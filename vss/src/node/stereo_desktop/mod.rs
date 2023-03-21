@@ -45,19 +45,6 @@ pub struct StereoDesktop {
 }
 
 impl StereoDesktop {
-    fn new_from_shared(
-        surface: &Surface,
-        shared: Rc<RefCell<SharedStereoDesktopData>>,
-        eye_idx: u32,
-    ) -> Self {
-        let mut proto = StereoDesktop::new(surface);
-        proto.shared = Some(shared);
-        proto.eye_idx = eye_idx;
-        proto
-    }
-}
-
-impl Node for StereoDesktop {
     fn new(surface: &Surface) -> Self {
         let device = surface.device().borrow_mut();
         let queue = surface.queue().borrow_mut();
@@ -113,6 +100,21 @@ impl Node for StereoDesktop {
             shared: None,
         }
     }
+    
+    fn new_from_shared(
+        surface: &Surface,
+        shared: Rc<RefCell<SharedStereoDesktopData>>,
+        eye_idx: u32,
+    ) -> Self {
+        let mut proto = StereoDesktop::new(surface);
+        proto.shared = Some(shared);
+        proto.eye_idx = eye_idx;
+        proto
+    }
+}
+
+impl Node for StereoDesktop {
+  
 
     fn input(
         &mut self,

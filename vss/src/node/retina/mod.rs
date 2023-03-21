@@ -19,8 +19,8 @@ pub struct Retina {
     targets: ColorTargets,
 }
 
-impl Node for Retina {
-    fn new(surface: &Surface) -> Self {
+impl Retina {
+    pub fn new(surface: &Surface) -> Self {
         let device = surface.device().borrow_mut();
         let queue = surface.queue().borrow_mut();
 
@@ -69,7 +69,10 @@ impl Node for Retina {
             targets: ColorTargets::new(&device, "Retina"),
         }
     }
+}
 
+impl Node for Retina {
+   
     fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
         let slots = slots.to_color_input(surface).to_color_output(surface, "RetinaNode");
         self.uniforms.data.resolution = slots.output_size_f32();

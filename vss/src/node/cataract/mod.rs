@@ -15,8 +15,8 @@ pub struct Cataract {
     targets: ColorTargets,
 }
 
-impl Node for Cataract {
-    fn new(surface: &Surface) -> Self {
+impl Cataract {
+    pub fn new(surface: &Surface) -> Self {
         let device = surface.device().borrow_mut();
         let queue = surface.queue().borrow_mut();
 
@@ -55,6 +55,10 @@ impl Node for Cataract {
             targets: ColorTargets::new(&device, "Cataract"),
         }
     }
+}
+
+impl Node for Cataract {
+    
 
     fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
         let slots = slots.to_color_input(surface).to_color_output(surface, "CataractNode");

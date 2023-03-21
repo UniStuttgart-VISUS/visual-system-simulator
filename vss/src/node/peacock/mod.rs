@@ -18,10 +18,8 @@ pub struct PeacockCB {
     targets: ColorTargets,
 }
 
-impl PeacockCB{}
-
-impl Node for PeacockCB {
-    fn new(surface: &Surface) -> Self {
+impl PeacockCB {
+    pub fn new(surface: &Surface) -> Self {
         let device = surface.device().borrow_mut();
         let queue = surface.queue().borrow_mut();
 
@@ -62,6 +60,10 @@ impl Node for PeacockCB {
         }
     }
 
+}
+
+impl Node for PeacockCB {
+   
     fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
         let slots = slots.to_color_input(surface).to_color_output(surface, "PeacockNode");
         let device = surface.device().borrow_mut();
