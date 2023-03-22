@@ -9,13 +9,13 @@ var<uniform> uniforms: Uniforms;
 var in_y_s: sampler;
 @group(1) @binding(1)
 var in_y_t: texture_2d<f32>;
-@group(1) @binding(0)
+@group(1) @binding(2)
 var in_u_s: sampler;
-@group(1) @binding(1)
+@group(1) @binding(3)
 var in_u_t: texture_2d<f32>;
-@group(1) @binding(0)
+@group(1) @binding(4)
 var in_v_s: sampler;
-@group(1) @binding(1)
+@group(1) @binding(5)
 var in_v_t: texture_2d<f32>;
 
 struct FragmentOutput {
@@ -26,7 +26,7 @@ struct FragmentOutput {
 fn fs_main(in: VertexOutput) -> FragmentOutput {
     var out: FragmentOutput;
 
-    var v_tex = in.tex_coords;
+    let v_tex = in.tex_coords;
 
     if (uniforms.format == 0) {
         // YUV/YCbCr to RGB color space conversion using ITU recommendation [BT.709][1].
@@ -75,8 +75,8 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         v_tex_i.y /= 2;
 
         let y = textureSample(in_y_t, in_y_s, v_tex).r;
-        let u = textureLoad(in_y_t, v_tex_i, 0).r;
-        let v = textureLoad(in_v_t, v_tex_i, 0).r;
+        var u = textureLoad(in_y_t, v_tex_i, 0).r;
+        var v = textureLoad(in_v_t, v_tex_i, 0).r;
 
         if ((v_tex_i.x) % 2 == 1) {
             let temp = u;
@@ -86,7 +86,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
 
         let yuva = vec4<f32>(y, (u - 0.5), (v - 0.5), 1.0);
 
-        let rgba = vec4<f32>(0.0);
+        var rgba = vec4<f32>(0.0);
         rgba.r = yuva.x * 1.0 + yuva.y * 0.0 + yuva.z * 1.4;
         rgba.g = yuva.x * 1.0 + yuva.y * -0.343 + yuva.z * -0.711;
         rgba.b = yuva.x * 1.0 + yuva.y * 1.765 + yuva.z * 0.0;
@@ -96,4 +96,6 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     } else {
         out.color = vec4(1.0, 0.0, 1.0, 1.0);
     }
+
+    return out;
 }
