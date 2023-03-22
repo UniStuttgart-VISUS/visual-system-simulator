@@ -2,7 +2,6 @@
 //! This module contains several [Nodes](Node) that can be chained to form a [Flow].
 //!
 #[macro_use]
-//TODO-WGPU mod macros;
 mod cataract;
 mod display;
 mod lens;
@@ -38,14 +37,6 @@ pub use self::vr_compositor::*;
 pub use self::stereo_desktop::*;
 pub use self::variance::*;
 pub use self::peacock::*;
-
-//TODO-WGPU use self::macros::*;
-
-//TODO-WGPU use gfx;
-//TODO-WGPU use gfx::traits::FactoryExt;
-//TODO-WGPU use gfx::Factory;
-//TODO-WGPU use gfx_device_gl;
-//TODO-WGPU use gfx_device_gl::Resources;
 
 use super::*;
 

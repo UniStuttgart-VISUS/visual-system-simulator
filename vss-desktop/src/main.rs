@@ -123,17 +123,16 @@ fn build_flow(surface: &mut Surface, io_generator: &mut IoGenerator, flow_index:
     surface.add_node(Box::new(node), flow_index);
     
     // Measure Uncertainty
-    // let mut node = VarianceMeasure::new(&surface);
-    // TODO-WGPU
-    // if variance_log.is_some(){
-    //     node.log_file = Some(OpenOptions::new()
-    //         .write(true)
-    //         .append(true)
-    //         .create(true)
-    //         .open(variance_log.unwrap())
-    //         .unwrap());
-    // }
-    // add_node(Box::new(node), flow_index);
+    let mut node = VarianceMeasure::new(&surface);
+    if variance_log.is_some(){
+        node.log_file = Some(OpenOptions::new()
+            .write(true)
+            .append(true)
+            .create(true)
+            .open(variance_log.unwrap())
+            .unwrap());
+    }
+    surface.add_node(Box::new(node), flow_index);
 
     // Display node.
     let node = Display::new(&surface);

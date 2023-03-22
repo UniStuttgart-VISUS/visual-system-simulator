@@ -12,220 +12,219 @@ var<uniform> uniforms: Uniforms;
 
 const VAR_SIZE: i32 = 10;
 
-const COLOR_SPACE_RGB: i32 = 0;
-const COLOR_SPACE_LAB: i32 = 1;
-const COLOR_SPACE_ITP: i32 = 2;
+const COLOR_SPACE_RGB: u32 = 0u;
+const COLOR_SPACE_LAB: u32 = 1u;
+const COLOR_SPACE_ITP: u32 = 2u;
 
-const SHOW_VARIANCE_NONE: i32 = 0;
-const SHOW_VARIANCE_PRE: i32 = 1;
-const SHOW_VARIANCE_POST: i32 = 2;
-const SHOW_VARIANCE_DIFF: i32 = 3;
+const SHOW_VARIANCE_NONE: u32 = 0u;
+const SHOW_VARIANCE_PRE:  u32 = 1u;
+const SHOW_VARIANCE_POST: u32 = 2u;
+const SHOW_VARIANCE_DIFF: u32 = 3u;
 
-const VARIANCE_METRIC_FIRST: i32 = 0;
-const VARIANCE_METRIC_AVG: i32 = 1;
-const VARIANCE_METRIC_VAR_AVG: i32 = 2;
-const VARIANCE_METRIC_FIRST_CONTRAST: i32 = 3;
-const VARIANCE_METRIC_DELTA_E: i32 = 4;
-const VARIANCE_METRIC_MICHELSON_CONTRAST: i32 = 5;
-const VARIANCE_METRIC_HISTOGRAM: i32 = 6;
+const VARIANCE_METRIC_FIRST: u32 = 0u;
+const VARIANCE_METRIC_AVG: u32 = 1u;
+const VARIANCE_METRIC_VAR_AVG: u32 = 2u;
+const VARIANCE_METRIC_FIRST_CONTRAST: u32 = 3u;
+const VARIANCE_METRIC_DELTA_E: u32 = 4u;
+const VARIANCE_METRIC_MICHELSON_CONTRAST: u32 = 5u;
+const VARIANCE_METRIC_HISTOGRAM: u32 = 6u;
 
-/*vec3 rgb2xyz(vec3 c){
-	vec3 tmp=vec3(
-		(c.r>.04045)?pow((c.r+.055)/1.055,2.4):c.r/12.92,
-		(c.g>.04045)?pow((c.g+.055)/1.055,2.4):c.g/12.92,
-		(c.b>.04045)?pow((c.b+.055)/1.055,2.4):c.b/12.92
+fn rgb2xyz(c: vec3<f32>) -> vec3<f32>{
+	let tmp=vec3<f32>(
+        mix(c.r / 12.92, pow((c.r + .055) / 1.055, 2.4), f32(c.r > .04045)),
+        mix(c.g / 12.92, pow((c.g + .055) / 1.055, 2.4), f32(c.g > .04045)),
+        mix(c.b / 12.92, pow((c.b + .055) / 1.055, 2.4), f32(c.b > .04045))
 	);
-	mat3 mat=mat3(
-		.4124,.3576,.1805,
-		.2126,.7152,.0722,
-		.0193,.1192,.9505
+	let m = mat3x3<f32>(
+		vec3<f32>(.4124, .3576, .1805),
+		vec3<f32>(.2126, .7152, .0722),
+		vec3<f32>(.0193, .1192, .9505)
 	);
-	return 100.*(tmp*mat);
+	return 100. * (tmp * m);
 }
-vec3 xyz2lab(vec3 c){
-	vec3 n=c/vec3(95.047,100.,108.883),
-	     v=vec3(
-		(n.x>.008856)?pow(n.x,1./3.):(7.787*n.x)+(16./116.),
-		(n.y>.008856)?pow(n.y,1./3.):(7.787*n.y)+(16./116.),
-		(n.z>.008856)?pow(n.z,1./3.):(7.787*n.z)+(16./116.)
+fn xyz2lab(c: vec3<f32>) -> vec3<f32>{
+	let n = c / vec3<f32>(95.047, 100., 108.883);
+	let v = vec3<f32>(
+        mix((7.787 * n.x) + (16. / 116.), pow(n.x, 1. / 3.), f32(n.x > .008856)),
+        mix((7.787 * n.y) + (16. / 116.), pow(n.y, 1. / 3.), f32(n.y > .008856)),
+        mix((7.787 * n.z) + (16. / 116.), pow(n.z, 1. / 3.), f32(n.z > .008856))
 	);
-	return vec3((116.*v.y)-16.,500.*(v.x-v.y),200.*(v.y-v.z));
+	return vec3<f32>((116. * v.y) - 16., 500. * (v.x - v.y), 200. * (v.y - v.z));
 }
-vec3 rgb2lab(vec3 c){
-	vec3 lab=xyz2lab(rgb2xyz(c));
-	return vec3(lab.x/100.,.5+.5*(lab.y/127.),.5+.5*(lab.z/127.));
+fn rgb2lab(c: vec3<f32>) -> vec3<f32>{
+	let lab = xyz2lab(rgb2xyz(c));
+	return vec3<f32>(lab.x / 100., .5 + .5 * (lab.y / 127.), .5 + .5 * (lab.z / 127.));
 }
 
 //E is the signal for each colour component {R, G, B} proportional to scene linear light and scaled by camera exposure, normalized to the range [0:12]
 //https://glenwing.github.io/docs/ITU-R-BT.2100-0.pdf site 5(7 on pdf)
-vec3 oetf(vec3 e){
-    float a = 0.17883277;
-    float b = 0.28466892;
-    float c = 0.55991073;
-    vec3 result = vec3(0.0);
-    if (e.r <= 1.0){result.r = sqrt(e.r)/2.0;} else {result.r = a*log(e.r-b)+c;}
-    if (e.g <= 1.0){result.g = sqrt(e.g)/2.0;} else {result.g = a*log(e.g-b)+c;}
-    if (e.b <= 1.0){result.b = sqrt(e.b)/2.0;} else {result.b = a*log(e.b-b)+c;}
+fn oetf(e: vec3<f32>) -> vec3<f32>{
+    let a = 0.17883277;
+    let b = 0.28466892;
+    let c = 0.55991073;
+    var result = vec3<f32>(0.0);
+    result.r = mix(a * log(e.r - b) + c, sqrt(e.r) / 2.0, f32(e.r <= 1.0));
+    result.g = mix(a * log(e.g - b) + c, sqrt(e.g) / 2.0, f32(e.g <= 1.0));
+    result.b = mix(a * log(e.b - b) + c, sqrt(e.b) / 2.0, f32(e.b <= 1.0));
     return result;
 }
 
 //https://en.wikipedia.org/wiki/ICtCp
 //we assume the rgb value is in https://de.wikipedia.org/wiki/ITU-R-Empfehlung_BT.2020
-vec3 rgb2itp(vec3 c){
-    mat3 lmsMat = mat3(1688., 683., 99., 2146., 2951., 309., 262., 462., 3688.);
-    mat3 ictcpMat = mat3(2048., 3625., 9500., 2048., -7465., -9212., 0., 3840., -288.);
-    vec3 lms = lmsMat * c / 4096.;
+fn rgb2itp(c: vec3<f32>) -> vec3<f32>{
+    let lmsMat = mat3x3<f32>(vec3<f32>(1688., 683., 99.), vec3<f32>(2146., 2951., 309.), vec3<f32>(262., 462., 3688.));
+    let ictcpMat = mat3x3<f32>(vec3<f32>(2048., 3625., 9500.), vec3<f32>(2048., -7465., -9212.), vec3<f32>(0., 3840., -288.));
+    let lms = lmsMat * c / 4096.;
     return ictcpMat * oetf(lms) / 4096.;
 }
 
-vec3 sampleColor(in sampler2D texSampler, in vec2 fragCoord){
-    if(u_color_space == COLOR_SPACE_RGB){
-        return texture(texSampler, fragCoord).rgb;
-    }else if(u_color_space == COLOR_SPACE_LAB){
-        return rgb2lab(texture(texSampler, fragCoord).rgb);
-    }else if(u_color_space == COLOR_SPACE_ITP){
-        return rgb2itp(texture(texSampler, fragCoord).rgb);
+fn sampleColor(color_t: texture_2d<f32>, color_s: sampler, tex_coords: vec2<f32>) -> vec3<f32>{
+    if(uniforms.color_space == COLOR_SPACE_RGB){
+        return textureSample(color_t, color_s, tex_coords).rgb;
+    }else if(uniforms.color_space == COLOR_SPACE_LAB){
+        return rgb2lab(textureSample(color_t, color_s, tex_coords).rgb);
+    }else if(uniforms.color_space == COLOR_SPACE_ITP){
+        return rgb2itp(textureSample(color_t, color_s, tex_coords).rgb);
     }else{
-        return texture(texSampler, fragCoord).rgb;
+        return textureSample(color_t, color_s, tex_coords).rgb;
     }
 }
 
 //first method of measuring variance (only taking into account the difference to main color)
-float varianceMeasure_first(in sampler2D texSampler, in vec2 fragCoord){
-    float result = 0.0;
-    vec3 main_color = sampleColor(texSampler, fragCoord);
+fn varianceMeasure_first(color_t: texture_2d<f32>, color_s: sampler, tex_coords: vec2<f32>) -> f32{
+    var result = 0.0;
+    let main_color = sampleColor(color_t, color_s, tex_coords);
 
-    for (int i = -VAR_SIZE; i <= VAR_SIZE; ++i) {
-        for (int j = -VAR_SIZE; j <= VAR_SIZE; ++j) {
-            vec3 diff = abs(main_color - sampleColor(texSampler, (fragCoord + vec2(float(i), float(j)) / u_resolution)));
-            result += diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
+    for (var i: i32 = -VAR_SIZE; i <= VAR_SIZE; i++) {
+        for (var j: i32 = -VAR_SIZE; j <= VAR_SIZE; j++) {
+            let diff = abs(main_color - sampleColor(color_t, color_s, (tex_coords + vec2<f32>(f32(i), f32(j)) / uniforms.resolution)));
+            result += diff.x * diff.x + diff.y * diff.y + diff.z * diff.z;
         }
     }
-    return result/pow(VAR_SIZE*2+1, 2);
+    return result/pow(f32(VAR_SIZE) * 2. + 1., 2.);
 }
 
 //average difference to main color
-float varianceMeasure_avg(in sampler2D texSampler, in vec2 fragCoord){
-    vec3 avg = vec3(0.0);
-    vec3 main_color = sampleColor(texSampler, fragCoord);
+fn varianceMeasure_avg(color_t: texture_2d<f32>, color_s: sampler, tex_coords: vec2<f32>) -> f32{
+    var avg = vec3<f32>(0.0);
+    let main_color = sampleColor(color_t, color_s, tex_coords);
 
-    for (int i = -VAR_SIZE; i <= VAR_SIZE; ++i) {
-        for (int j = -VAR_SIZE; j <= VAR_SIZE; ++j) {
-            avg += abs(main_color - sampleColor(texSampler, (fragCoord + vec2(float(i), float(j)) / u_resolution)));
+    for (var i: i32 = -VAR_SIZE; i <= VAR_SIZE; i++) {
+        for (var j: i32 = -VAR_SIZE; j <= VAR_SIZE; j++) {
+            avg += abs(main_color - sampleColor(color_t, color_s, (tex_coords + vec2<f32>(f32(i), f32(j)) / uniforms.resolution)));
         }
     }
-    return (avg.r + avg.g + avg.b) / (pow(VAR_SIZE*2+1, 2) * 3.0);
+    return (avg.r + avg.g + avg.b) / (pow(f32(VAR_SIZE) * 2. + 1., 2.) * 3.0);
 }
 
 //second method of measuring variance (taking into account the difference to main color relative to average difference)
-float varianceMeasure_var_avg(in sampler2D texSampler, in vec2 fragCoord){
-    float result = 0.0;
-    vec3 avg = vec3(0.0);
-    vec3 main_color = sampleColor(texSampler, fragCoord);
+fn varianceMeasure_var_avg(color_t: texture_2d<f32>, color_s: sampler, tex_coords: vec2<f32>) -> f32{
+    var result = 0.0;
+    var avg = vec3<f32>(0.0);
+    let main_color = sampleColor(color_t, color_s, tex_coords);
 
-    for (int i = -VAR_SIZE; i <= VAR_SIZE; ++i) {
-        for (int j = -VAR_SIZE; j <= VAR_SIZE; ++j) {
-            avg += abs(main_color - sampleColor(texSampler, (fragCoord + vec2(float(i), float(j)) / u_resolution)));
+    for (var i: i32 = -VAR_SIZE; i <= VAR_SIZE; i++) {
+        for (var j: i32 = -VAR_SIZE; j <= VAR_SIZE; j++) {
+            avg += abs(main_color - sampleColor(color_t, color_s, (tex_coords + vec2<f32>(f32(i), f32(j)) / uniforms.resolution)));
         }
     }
-    avg /= pow(VAR_SIZE*2+1, 2);
+    avg /= pow(f32(VAR_SIZE) * 2. + 1., 2.);
 
     //durchschnittliche varianz
-    for (int i = -VAR_SIZE; i <= VAR_SIZE; ++i) {
-        for (int j = -VAR_SIZE; j <= VAR_SIZE; ++j) {
-            vec3 diff = abs(main_color - sampleColor(texSampler, (fragCoord + vec2(float(i), float(j)) / u_resolution))) - avg;
-            result += diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
+    for (var i: i32 = -VAR_SIZE; i <= VAR_SIZE; i++) {
+        for (var j: i32 = -VAR_SIZE; j <= VAR_SIZE; j++) {
+            let diff = abs(main_color - sampleColor(color_t, color_s, (tex_coords + vec2<f32>(f32(i), f32(j)) / uniforms.resolution))) - avg;
+            result += diff.x * diff.x + diff.y * diff.y + diff.z * diff.z;
         }
     }
-    return result/pow(VAR_SIZE*2+1, 2);
+    return result / pow(f32(VAR_SIZE) * 2. + 1., 2.);
 }
 
-float varianceMeasure_first_contrast(in sampler2D texSampler, in vec2 fragCoord){
-    vec3 avg = vec3(0.0);
-    vec3 std = vec3(0.0);
-    vec3 main_color = sampleColor(texSampler, fragCoord);
+fn varianceMeasure_first_contrast(color_t: texture_2d<f32>, color_s: sampler, tex_coords: vec2<f32>) -> f32{
+    var avg = vec3<f32>(0.0);
+    var st_deviation = vec3<f32>(0.0);
+    let main_color = sampleColor(color_t, color_s, tex_coords);
 
-    for (float i = -VAR_SIZE; i <= VAR_SIZE; ++i) {
-        for (float j = -VAR_SIZE; j <= VAR_SIZE; ++j) {
-            avg += abs(main_color - sampleColor(texSampler, (fragCoord + vec2(float(i), float(j)) / u_resolution)));
+    for (var i: i32 = -VAR_SIZE; i <= VAR_SIZE; i++) {
+        for (var j: i32 = -VAR_SIZE; j <= VAR_SIZE; j++) {
+            avg += abs(main_color - sampleColor(color_t, color_s, (tex_coords + vec2<f32>(f32(i), f32(j)) / uniforms.resolution)));
         }
     }
-    avg /= pow(VAR_SIZE*2.0+1.0, 2.0);
+    avg /= pow(f32(VAR_SIZE) * 2. + 1., 2.);
     
-    for (float i = -VAR_SIZE; i <= VAR_SIZE; ++i) {
-        for (float j = -VAR_SIZE; j <= VAR_SIZE; ++j) {
-            vec3 diff = main_color - sampleColor(texSampler, (fragCoord + vec2(float(i), float(j)) / u_resolution));
-            std += diff*diff;
+    for (var i: i32 = -VAR_SIZE; i <= VAR_SIZE; i++) {
+        for (var j: i32 = -VAR_SIZE; j <= VAR_SIZE; j++) {
+            let diff = main_color - sampleColor(color_t, color_s, (tex_coords + vec2<f32>(f32(i), f32(j)) / uniforms.resolution));
+            st_deviation += diff * diff;
         }
     }
-    return (std/(pow(VAR_SIZE*2.0+1.0, 2.0)-1.0)).x;
+    return (st_deviation / (pow(f32(VAR_SIZE) * 2. + 1., 2.) - 1.0)).x;
 }
 
 //delta E distance measure
-float varianceMeasure_delta_e(in sampler2D texSampler, in vec2 fragCoord){
-    float result = 0.0;
-    vec3 itpWeights = vec3(1.0, 0.5, 1.0);
-    vec3 main_color = sampleColor(texSampler, fragCoord)*itpWeights;
+fn varianceMeasure_delta_e(color_t: texture_2d<f32>, color_s: sampler, tex_coords: vec2<f32>) -> f32{
+    var result = 0.0;
+    let itpWeights = vec3<f32>(1.0, 0.5, 1.0);
+    let main_color = sampleColor(color_t, color_s, tex_coords)*itpWeights;
     
-    for (float i = -VAR_SIZE; i <= VAR_SIZE; ++i) {
-        for (float j = -VAR_SIZE; j <= VAR_SIZE; ++j) {
-            vec3 diff = main_color - sampleColor(texSampler, (fragCoord + vec2(float(i), float(j)) / u_resolution))*itpWeights;
-            //result += 720.0*length(diff);
+    for (var i: i32 = -VAR_SIZE; i <= VAR_SIZE; i++) {
+        for (var j: i32 = -VAR_SIZE; j <= VAR_SIZE; j++) {
+            let diff = main_color - sampleColor(color_t, color_s, (tex_coords + vec2<f32>(f32(i), f32(j)) / uniforms.resolution)) * itpWeights;
             //TODO: find proper scaling for this value
-            result += 720*length(diff);
+            result += 720.0 * length(diff);
         }
     }
-    return result/(pow(VAR_SIZE*2.0+1.0, 2.0)-1.0);
+    return result / (pow(f32(VAR_SIZE) * 2. + 1., 2.) - 1.0);
 }
 
 //Michelson-Kontrast
-float varianceMeasure_michelson_contrast(in sampler2D texSampler, in vec2 fragCoord){
-    vec3 minValues = vec3(1.0, 1.0, 1.0);
-    vec3 maxValues = vec3(0.0, 0.0, 0.0);
+fn varianceMeasure_michelson_contrast(color_t: texture_2d<f32>, color_s: sampler, tex_coords: vec2<f32>) -> f32{
+    var minValues = vec3<f32>(1.0, 1.0, 1.0);
+    var maxValues = vec3<f32>(0.0, 0.0, 0.0);
     
-    for (float i = -VAR_SIZE; i <= VAR_SIZE; ++i) {
-        for (float j = -VAR_SIZE; j <= VAR_SIZE; ++j) {
-            vec3 color = sampleColor(texSampler, (fragCoord + vec2(float(i), float(j)) / u_resolution));
+    for (var i: i32 = -VAR_SIZE; i <= VAR_SIZE; i++) {
+        for (var j: i32 = -VAR_SIZE; j <= VAR_SIZE; j++) {
+            let color = sampleColor(color_t, color_s, (tex_coords + vec2<f32>(f32(i), f32(j)) / uniforms.resolution));
             minValues = min(minValues, color);
             maxValues = max(maxValues, color);
         }
     }
-    vec3 contrast = (maxValues-minValues)/(maxValues+minValues);
+    let contrast = (maxValues-minValues)/(maxValues+minValues);
     //this way of adding up the components only applies to the LAB color format
     return abs(contrast.r) + length(contrast.gb);
 }
 
-float sampleVariance(in sampler2D texSampler, in vec2 fragCoord){
-    if(u_variance_metric == VARIANCE_METRIC_FIRST){
-        return varianceMeasure_first(texSampler, fragCoord);
-    }else if(u_variance_metric == VARIANCE_METRIC_AVG){
-        return varianceMeasure_avg(texSampler, fragCoord);
-    }else if(u_variance_metric == VARIANCE_METRIC_VAR_AVG){
-        return varianceMeasure_var_avg(texSampler, fragCoord);
-    }else if(u_variance_metric == VARIANCE_METRIC_FIRST_CONTRAST){
-        return varianceMeasure_first_contrast(texSampler, fragCoord);
-    }else if(u_variance_metric == VARIANCE_METRIC_DELTA_E){
-        return varianceMeasure_delta_e(texSampler, fragCoord);
-    }else if(u_variance_metric == VARIANCE_METRIC_MICHELSON_CONTRAST){
-        return varianceMeasure_michelson_contrast(texSampler, fragCoord);
+fn sampleVariance(color_t: texture_2d<f32>, color_s: sampler, tex_coords: vec2<f32>) -> f32{
+    if(uniforms.variance_metric == VARIANCE_METRIC_FIRST){
+        return varianceMeasure_first(color_t, color_s, tex_coords);
+    }else if(uniforms.variance_metric == VARIANCE_METRIC_AVG){
+        return varianceMeasure_avg(color_t, color_s, tex_coords);
+    }else if(uniforms.variance_metric == VARIANCE_METRIC_VAR_AVG){
+        return varianceMeasure_var_avg(color_t, color_s, tex_coords);
+    }else if(uniforms.variance_metric == VARIANCE_METRIC_FIRST_CONTRAST){
+        return varianceMeasure_first_contrast(color_t, color_s, tex_coords);
+    }else if(uniforms.variance_metric == VARIANCE_METRIC_DELTA_E){
+        return varianceMeasure_delta_e(color_t, color_s, tex_coords);
+    }else if(uniforms.variance_metric == VARIANCE_METRIC_MICHELSON_CONTRAST){
+        return varianceMeasure_michelson_contrast(color_t, color_s, tex_coords);
     }else{
         return 0.0;
     }
 }
 
-vec3 TurboColormap(in float x) {
-  const vec4 kRedVec4 = vec4(0.13572138, 4.61539260, -42.66032258, 132.13108234);
-  const vec4 kGreenVec4 = vec4(0.09140261, 2.19418839, 4.84296658, -14.18503333);
-  const vec4 kBlueVec4 = vec4(0.10667330, 12.64194608, -60.58204836, 110.36276771);
-  const vec2 kRedVec2 = vec2(-152.94239396, 59.28637943);
-  const vec2 kGreenVec2 = vec2(4.27729857, 2.82956604);
-  const vec2 kBlueVec2 = vec2(-89.90310912, 27.34824973);
-  
-  x = clamp(x, 0.0, 1.0);
+const kRedVec4: vec4<f32> = vec4<f32>(0.13572138, 4.61539260, -42.66032258, 132.13108234);
+const kGreenVec4: vec4<f32> = vec4<f32>(0.09140261, 2.19418839, 4.84296658, -14.18503333);
+const kBlueVec4: vec4<f32> = vec4<f32>(0.10667330, 12.64194608, -60.58204836, 110.36276771);
+const kRedVec2: vec2<f32> = vec2<f32>(-152.94239396, 59.28637943);
+const kGreenVec2: vec2<f32> = vec2<f32>(4.27729857, 2.82956604);
+const kBlueVec2: vec2<f32> = vec2<f32>(-89.90310912, 27.34824973);
 
-  vec4 v4 = vec4( 1.0, x, x * x, x * x * x);
-  vec2 v2 = v4.zw * v4.z;
-  return vec3(
+fn TurboColormap(x_in: f32) -> vec3<f32>{
+  let x = clamp(x_in, 0.0, 1.0);
+
+  let v4 = vec4<f32>( 1.0, x, x * x, x * x * x);
+  let v2 = v4.zw * v4.z;
+  return vec3<f32>(
     dot(v4, kRedVec4)   + dot(v2, kRedVec2),
     dot(v4, kGreenVec4) + dot(v2, kGreenVec2),
     dot(v4, kBlueVec4)  + dot(v2, kBlueVec2)
@@ -233,15 +232,15 @@ vec3 TurboColormap(in float x) {
 }
 
 //taken from https://www.shadertoy.com/view/XtGGzG
-vec3 viridis_quintic( float x ){
-	x = clamp( x, 0.0, 1.0 );
-	vec4 x1 = vec4( 1.0, x, x * x, x * x * x ); // 1 x x2 x3
-	vec4 x2 = x1 * x1.w * x; // x4 x5 x6 x7
-	return vec3(
-		dot( x1.xyzw, vec4( +0.280268003, -0.143510503, +2.225793877, -14.815088879 ) ) + dot( x2.xy, vec2( +25.212752309, -11.772589584 ) ),
-		dot( x1.xyzw, vec4( -0.002117546, +1.617109353, -1.909305070, +2.701152864 ) ) + dot( x2.xy, vec2( -1.685288385, +0.178738871 ) ),
-		dot( x1.xyzw, vec4( +0.300805501, +2.614650302, -12.019139090, +28.933559110 ) ) + dot( x2.xy, vec2( -33.491294770, +13.762053843 ) ) );
-}*/
+fn viridis_quintic(x_in: f32) -> vec3<f32>{
+	let x = clamp( x_in, 0.0, 1.0 );
+	let x1 = vec4<f32>( 1.0, x, x * x, x * x * x ); // 1 x x2 x3
+	let x2 = x1 * x1.w * x; // x4 x5 x6 x7
+	return vec3<f32>(
+		dot( x1.xyzw, vec4<f32>(  0.280268003, -0.143510503,  2.225793877 ,-14.815088879 ) ) + dot( x2.xy, vec2<f32>(  25.212752309, -11.772589584 ) ),
+		dot( x1.xyzw, vec4<f32>( -0.002117546,  1.617109353, -1.909305070 , 2.701152864  ) ) + dot( x2.xy, vec2<f32>( -1.685288385 ,  0.178738871  ) ),
+		dot( x1.xyzw, vec4<f32>(  0.300805501,  2.614650302, -12.019139090, 28.933559110 ) ) + dot( x2.xy, vec2<f32>( -33.491294770,  13.762053843 ) ) );
+}
 
 struct FragmentOutput {
     @location(0) color: vec4<f32>,
@@ -280,44 +279,36 @@ var in_original_s: sampler;
 @fragment
 fn fs_main(in: VertexOutput) -> FragmentOutput {
     var out: FragmentOutput;
-    /*if(u_variance_metric == VARIANCE_METRIC_HISTOGRAM){
-        if(u_show_variance == SHOW_VARIANCE_PRE){
-            rt_measure = vec4(sampleColor(s_original, v_tex), 1.0);
-        }else if(u_show_variance == SHOW_VARIANCE_POST){
-            rt_measure = vec4(sampleColor(s_color, v_tex), 1.0);
-        }else{//SHOW_VARIANCE_NONE & SHOW_VARIANCE_DIFF
-            rt_measure = vec4(0.0);
+    var rt_measure: vec4<f32>; // placeholder for render texture, readd this for WGPU
+    if(uniforms.variance_metric == VARIANCE_METRIC_HISTOGRAM){
+        if(uniforms.show_variance == SHOW_VARIANCE_PRE){
+            rt_measure = vec4<f32>(sampleColor(in_original_t, in_original_s, in.tex_coords), 1.0);
+        }else if(uniforms.show_variance == SHOW_VARIANCE_POST){
+            rt_measure = vec4<f32>(sampleColor(in_color_t, in_color_s, in.tex_coords), 1.0);
+        }else{// SHOW_VARIANCE_NONE & SHOW_VARIANCE_DIFF
+            rt_measure = vec4<f32>(0.0);
         }
-        rt_color = vec4(texture(s_color, v_tex).rgb, 1.0);
+        out.color = vec4<f32>(textureSample(in_color_t, in_color_s, in.tex_coords).rgb, 1.0);
     }else{
-        if(u_show_variance == SHOW_VARIANCE_PRE){
-            float variance_original = sampleVariance(s_original, v_tex);
-            rt_color = vec4(viridis_quintic(variance_original), 1.0);
-            rt_measure = vec4(variance_original);
-        }else if(u_show_variance == SHOW_VARIANCE_POST){
-            float variance_sim = sampleVariance(s_color, v_tex);
-            rt_color = vec4(viridis_quintic(variance_sim), 1.0);
-            rt_measure = vec4(variance_sim);
-        }else if(u_show_variance == SHOW_VARIANCE_DIFF){
-            float variance_original = sampleVariance(s_original, v_tex);
-            float variance_sim = sampleVariance(s_color, v_tex);
-            float loss = variance_original-variance_sim;
-            //loss /= variance_original+0.01
-            //loss = loss/2.0 + 0.5;
-            //loss = clamp(loss, 0.0, 1.0);
-            //loss *= 5.0;
-            //loss = clamp(loss, -1.0, 1.0)*0.5 + 0.5;
-            //loss = abs(clamp(loss, -1.0, 1.0));
-            rt_color = vec4(viridis_quintic(loss), 1.0);
-            rt_measure = vec4(loss);
-        }else{//SHOW_VARIANCE_NONE
-            rt_color = vec4(sampleColor(s_color, v_tex), 1.0);
-            rt_measure = vec4(0.0);
+        if(uniforms.show_variance == SHOW_VARIANCE_PRE){
+            let variance_original = sampleVariance(in_original_t, in_original_s, in.tex_coords);
+            out.color = vec4<f32>(viridis_quintic(variance_original), 1.0);
+            rt_measure = vec4<f32>(variance_original);
+        }else if(uniforms.show_variance == SHOW_VARIANCE_POST){
+            let variance_sim = sampleVariance(in_color_t, in_color_s, in.tex_coords);
+            out.color = vec4<f32>(viridis_quintic(variance_sim), 1.0);
+            rt_measure = vec4<f32>(variance_sim);
+        }else if(uniforms.show_variance == SHOW_VARIANCE_DIFF){
+            let variance_original = sampleVariance(in_original_t, in_original_s, in.tex_coords);
+            let variance_sim = sampleVariance(in_color_t, in_color_s, in.tex_coords);
+            let loss = variance_original-variance_sim;
+            out.color = vec4<f32>(viridis_quintic(loss), 1.0);
+            rt_measure = vec4<f32>(loss);
+        }else{// SHOW_VARIANCE_NONE
+            out.color = vec4<f32>(sampleColor(in_color_t, in_color_s, in.tex_coords), 1.0);
+            rt_measure = vec4<f32>(0.0);
         }
-    }*/
-    out.color = textureSample(in_color_t, in_color_s, in.tex_coords);
-    // rt_color = vec4(sampleColor(s_color, v_tex), 1.0);
-    // rt_measure = vec4(0.0);
+    }
 
     if ( uniforms.track_error == 1 ){
         out.color_change =      textureSample(in_color_change_t, in_color_change_s, in.tex_coords);
