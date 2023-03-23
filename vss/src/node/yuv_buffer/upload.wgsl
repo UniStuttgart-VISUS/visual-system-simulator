@@ -65,17 +65,17 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
             1.0);
     } else if (uniforms.format == 1) {
         // YUV_420_888 to RGB color space conversion.
-        // The textures are the original android-cam textures, formatted like so:
-        // every pixel has a corresponding y value and shares a u and v with its neighbour (only one direction)
+        // The original Android camera textures are formatted like so:
+        // every pixel has a corresponding Y value that shares an U and V with its neighbour, in one direction only
         // name: [ r,  g,  b,  a], [ r,  g,  b,  a] ... (where [] represents a pixel)
         //    y: [y1, y2, y3, y4], [y5, y6, y7, y8] ...
         //    u: [u1, v2, u3, v4], [u5, v6, u7, v8] ...
         //    v: [v1, u2, v3, u4], [v5, u6, v7, u8] ...
-        var v_tex_i = vec2<i32>(0, 0); //XXX ivec2(v_tex * vec2(textureSize(s_u)));
+        var v_tex_i = vec2<i32>(v_tex * vec2<f32>(textureDimensions(in_u_t)));
         v_tex_i.y /= 2;
 
         let y = textureSample(in_y_t, in_y_s, v_tex).r;
-        var u = textureLoad(in_y_t, v_tex_i, 0).r;
+        var u = textureLoad(in_u_t, v_tex_i, 0).r;
         var v = textureLoad(in_v_t, v_tex_i, 0).r;
 
         if ((v_tex_i.x) % 2 == 1) {

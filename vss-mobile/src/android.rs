@@ -43,8 +43,10 @@ struct CameraStream {
 
 impl CameraStream {
     fn new(surface: &Surface, frame_receiver: Receiver<YuvBuffer>) -> Self {
+        let mut upload = UploadYuvBuffer::new(&surface);
+        upload.set_format(YuvFormat::_420888);
         CameraStream {
-            upload: UploadYuvBuffer::new(&surface),
+            upload,
             frame_receiver,
         }
     }

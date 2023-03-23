@@ -1,10 +1,10 @@
 package com.vss.simulator;
 
 import android.content.Context;
+import android.os.Looper;
 import android.util.AttributeSet;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
-import android.webkit.JavascriptInterface;
 
 import androidx.annotation.NonNull;
 
@@ -35,31 +35,37 @@ public class SimulatorSurfaceView extends SurfaceView implements SurfaceHolder.C
 
     @Override
     public void surfaceCreated(@NonNull SurfaceHolder holder) {
+        assert Looper.getMainLooper().isCurrentThread() : "Called from non-UI thread";
         SimulatorBridge.create(holder.getSurface(), getResources().getAssets());
     }
 
     @Override
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+        assert Looper.getMainLooper().isCurrentThread() : "Called from non-UI thread";
         SimulatorBridge.resize(width, height);
     }
 
     @Override
     public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
+        assert Looper.getMainLooper().isCurrentThread() : "Called from non-UI thread";
         SimulatorBridge.destroy();
     }
 
     @Override
     public void surfaceRedrawNeeded(SurfaceHolder holder) {
+        assert Looper.getMainLooper().isCurrentThread() : "Called from non-UI thread";
         SimulatorBridge.draw();
     }
 
     public void postSettings(String jsonString) {
+        assert Looper.getMainLooper().isCurrentThread() : "Called from non-UI thread";
         SimulatorBridge.postSettings(jsonString);
-        postInvalidate();
+        SimulatorBridge.draw();
     }
 
     public void postFrame(int width, int height, byte[] y, byte[] u, byte[] v) {
+        assert Looper.getMainLooper().isCurrentThread() : "Called from non-UI thread";
         SimulatorBridge.postFrame(width, height, y, u, v);
-        postInvalidate();
+        SimulatorBridge.draw();
     }
 }
