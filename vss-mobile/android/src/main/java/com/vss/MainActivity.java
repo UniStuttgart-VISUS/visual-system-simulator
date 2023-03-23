@@ -36,7 +36,6 @@ import java.util.Locale;
  * Main activity.
  */
 public class MainActivity extends AppCompatActivity implements ActivityCompat.OnRequestPermissionsResultCallback {
-
     private static final String LOG_TAG = "MainActivity";
     private static final int CAMERA_REQUEST_CODE = 100;
 

@@ -73,14 +73,14 @@ impl Node for CameraStream {
         encoder: &mut wgpu::CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        self.upload.render(&surface, encoder, screen);
-    }
-
-    fn post_render(&mut self, surface: &Surface) {
         let result = self.frame_receiver.try_recv();
         if result.is_ok() {
             self.upload.upload_buffer(result.unwrap());
         }
+        self.upload.render(&surface, encoder, screen);
+    }
+
+    fn post_render(&mut self, surface: &Surface) {
         self.upload.post_render(&surface);
     }
 }
@@ -166,7 +166,7 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate<'loca
 fn build_flow(surface: &mut Surface, frame_receiver: Receiver<YuvBuffer>) {
     //TODO: use a proper set of nodes.
 
-    let mut node = CameraStream::new(&surface, frame_receiver);
+    let node = CameraStream::new(&surface, frame_receiver);
     surface.add_node(Box::new(node), 0);
 
     let node = Display::new(&surface);
@@ -231,7 +231,7 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostFrame<'l
 
     let res = bridge.frame_sender.try_send(buffer);
     if res.is_err() {
-        warn!("Send error: {} ", res.err().unwrap());
+        warn!("{}, dropping frame", res.err().unwrap());
     }
 }
 
