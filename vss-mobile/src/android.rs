@@ -75,9 +75,10 @@ impl Node for CameraStream {
         encoder: &mut wgpu::CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        let result = self.frame_receiver.try_recv();
-        if result.is_ok() {
-            self.upload.upload_buffer(result.unwrap());
+        let buffer = self.frame_receiver.try_recv();
+        if let Ok(buffer) = buffer {
+            debug!("Uploading... {}x{} {}", buffer.width, buffer.height, buffer.pixels_y[0]);
+            self.upload.upload_buffer(buffer);
         }
         self.upload.render(&surface, encoder, screen);
     }

@@ -1,6 +1,6 @@
 use super::*;
 
-struct Uniforms{
+struct Uniforms {
     format: i32,
 }
 
@@ -34,29 +34,34 @@ pub struct UploadYuvBuffer {
 }
 
 impl UploadYuvBuffer {
-   pub fn new(surface: &Surface) -> Self {
+    pub fn new(surface: &Surface) -> Self {
         let device = surface.device().borrow_mut();
         let queue = surface.queue().borrow_mut();
 
-        let uniforms = ShaderUniforms::new(&device, 
+        let uniforms = ShaderUniforms::new(
+            &device,
             Uniforms {
                 format: YuvFormat::YCbCr as i32,
-            });
+            },
+        );
 
-            let (sources_bind_group_layout, sources_bind_group) = create_textures_bind_group(
-                &device,
-                &[
-                    &placeholder_texture(&device, &queue, Some("UploadYuvBuffer in_y (placeholder)")).unwrap(),
-                    &placeholder_texture(&device, &queue, Some("UploadYuvBuffer in_y (placeholder)")).unwrap(),
-                    &placeholder_texture(&device, &queue, Some("UploadYuvBuffer in_y (placeholder)")).unwrap(),
-                ],
-            );
+        let (sources_bind_group_layout, sources_bind_group) = create_textures_bind_group(
+            &device,
+            &[
+                &placeholder_texture(&device, &queue, Some("UploadYuvBuffer in_y (placeholder)"))
+                    .unwrap(),
+                &placeholder_texture(&device, &queue, Some("UploadYuvBuffer in_u (placeholder)"))
+                    .unwrap(),
+                &placeholder_texture(&device, &queue, Some("UploadYuvBuffer in_v (placeholder)"))
+                    .unwrap(),
+            ],
+        );
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("UploadYuvBuffer Shader"),
-            source: wgpu::ShaderSource::Wgsl(concat!(
-                include_str!("../vert.wgsl"),
-                include_str!("upload.wgsl")).into()),
+            source: wgpu::ShaderSource::Wgsl(
+                concat!(include_str!("../vert.wgsl"), include_str!("upload.wgsl")).into(),
+            ),
         });
 
         let pipeline = create_render_pipeline(
@@ -66,13 +71,14 @@ impl UploadYuvBuffer {
             &[&uniforms.bind_group_layout, &sources_bind_group_layout],
             &all_color_states(),
             None,
-            Some("UploadYuvBuffer Render Pipeline"));
+            Some("UploadYuvBuffer Render Pipeline"),
+        );
 
         UploadYuvBuffer {
             buffer_next: None,
             pipeline,
             uniforms,
-            sources_bind_group, 
+            sources_bind_group,
             targets: ColorTargets::new(&device, "UploadYuvBuffer"),
             texture_y: None,
             texture_u: None,
@@ -103,7 +109,6 @@ impl UploadYuvBuffer {
 }
 
 impl Node for UploadYuvBuffer {
-   
     fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
         if let Some(buffer) = &self.buffer_next {
             let device = surface.device().borrow_mut();
@@ -143,14 +148,8 @@ impl Node for UploadYuvBuffer {
             )
             .unwrap();
 
-            (_, self.sources_bind_group) = create_textures_bind_group(
-                &device,
-                &[
-                    &texture_y,
-                    &texture_u,
-                    &texture_v,
-                ],
-            );
+            (_, self.sources_bind_group) =
+                create_textures_bind_group(&device, &[&texture_y, &texture_u, &texture_v]);
 
             self.texture_y = Some(texture_y);
             self.texture_u = Some(texture_u);
@@ -170,37 +169,25 @@ impl Node for UploadYuvBuffer {
         slots
     }
 
-    fn render(&mut self, surface: &Surface, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
+    fn render(
+        &mut self,
+        surface: &Surface,
+        encoder: &mut CommandEncoder,
+        screen: Option<&RenderTexture>,
+    ) {
         let queue = surface.queue().borrow_mut();
         self.uniforms.update(&queue);
 
-        if let Some(texture_y) = &self.texture_y {
-            if let Some(texture_u) = &self.texture_u {
-                if let Some(texture_v) = &self.texture_v {
-                    if let Some(buffer) = self.buffer_next.take() {
-                        // Update texture pixels.
-                        let size = [buffer.width as u32, buffer.height as u32];
-                        let half_size = [(buffer.width / 2) as u32, (buffer.height / 2) as u32];
-                        update_texture(
-                            &queue,
-                            &texture_y,
-                            size,
-                            &buffer.pixels_y,
-                        );
-                        update_texture(
-                            &queue,
-                            &texture_u,
-                            half_size,
-                            &buffer.pixels_u,
-                        );
-                        update_texture(
-                            &queue,
-                            &texture_v,
-                            half_size,
-                            &buffer.pixels_v,
-                        );
-                    }
-                }
+        if let (Some(texture_y), Some(texture_u), Some(texture_v)) =
+            (&self.texture_y, &self.texture_u, &self.texture_v)
+        {
+            if let Some(buffer) = self.buffer_next.take() {
+                // Update texture pixels.
+                let size = [buffer.width as u32, buffer.height as u32];
+                let half_size = [(buffer.width / 2) as u32, (buffer.height / 2) as u32];
+                update_texture(&queue, &texture_y, size, &buffer.pixels_y);
+                update_texture(&queue, &texture_u, half_size, &buffer.pixels_u);
+                update_texture(&queue, &texture_v, half_size, &buffer.pixels_v);
             }
         }
 
@@ -209,7 +196,7 @@ impl Node for UploadYuvBuffer {
             color_attachments: &self.targets.color_attachments(screen),
             depth_stencil_attachment: None,
         });
-    
+
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, &self.uniforms.bind_group, &[]);
         render_pass.set_bind_group(1, &self.sources_bind_group, &[]);
