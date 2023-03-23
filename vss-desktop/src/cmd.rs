@@ -32,7 +32,6 @@ pub struct Config {
     pub parameters_r: Option<ValueMap>,
     pub parameters_l: Option<ValueMap>,
     pub track_perf: u32,
-    pub variance_log: Option<String>,
 }
 
 impl Default for Config {
@@ -48,7 +47,6 @@ impl Default for Config {
             parameters_r: None,
             parameters_l: None,
             track_perf: 0,
-            variance_log: None,
         }
     }
 }
@@ -207,13 +205,6 @@ pub fn cmd_parse() -> Config {
                 \x20\x20Color(0-2): RGB/LAB/ITP"),
         )
         .arg(
-            Arg::with_name("variance_log")
-                .long("variance_log")
-                .value_name("FILE")
-                .number_of_values(1)
-                .help("Log file for variance data."),
-        )
-        .arg(
             Arg::with_name("rays")
                 .long("rays")
                 .number_of_values(1)
@@ -303,12 +294,6 @@ pub fn cmd_parse() -> Config {
         parameters.insert("measure_variance".to_string(), Value::Number(variance[0]));
         parameters.insert("variance_metric".to_string(), Value::Number(variance[1]));
         parameters.insert("variance_color_space".to_string(), Value::Number(variance[2]));
-    };
-    
-    let variance_log = if let Some(variance_log) = matches.value_of("variance_log") {
-        Some(variance_log.to_string())
-    } else {
-        None
     };
     
     if let Some(rays) = matches.value_of("rays") {
@@ -412,6 +397,5 @@ pub fn cmd_parse() -> Config {
         parameters_r,
         parameters_l,
         track_perf,
-        variance_log,
     }
 }

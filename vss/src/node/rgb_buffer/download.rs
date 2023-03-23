@@ -1,33 +1,9 @@
-use wgpu::{Buffer};
+use wgpu::Buffer;
 
 use super::*;
 use std::{path::Path, mem::size_of};
 
 pub type RgbBufferCb = Box<dyn FnOnce(RgbBuffer) + Send>;
-
-// from https://github.com/gfx-rs/wgpu/blob/6b6bc69ba07675697dfbadcf7ba5b035f5dfe5f7/wgpu/examples/capture/main.rs
-struct BufferDimensions {
-    width: usize,
-    height: usize,
-    unpadded_bytes_per_row: usize,
-    padded_bytes_per_row: usize,
-}
-
-impl BufferDimensions {
-    fn new(width: usize, height: usize) -> Self {
-        let bytes_per_pixel = size_of::<u32>();
-        let unpadded_bytes_per_row = width * bytes_per_pixel;
-        let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize;
-        let padded_bytes_per_row_padding = (align - unpadded_bytes_per_row % align) % align;
-        let padded_bytes_per_row = unpadded_bytes_per_row + padded_bytes_per_row_padding;
-        Self {
-            width,
-            height,
-            unpadded_bytes_per_row,
-            padded_bytes_per_row,
-        }
-    }
-}
 
 enum Message {
     Buffer(RgbBuffer),
@@ -63,7 +39,7 @@ impl DownloadRgbBuffer{
         let device = surface.device().borrow_mut();
         let queue = surface.queue().borrow_mut();
         
-        let buffer_dimensions = BufferDimensions::new(1 as usize, 1 as usize);
+        let buffer_dimensions = BufferDimensions::new(1 as usize, 1 as usize, size_of::<u32>());
 
         let download_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Download Node Placeholder Buffer"),
@@ -112,7 +88,7 @@ impl DownloadRgbBuffer{
 }
 
 impl Node for DownloadRgbBuffer{
-  
+
     fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
         let slots = slots.to_color_input(surface);
         self.res = slots.input_size_f32();
@@ -120,7 +96,7 @@ impl Node for DownloadRgbBuffer{
         
         (self.input, _) = slots.as_color_source(&device);
 
-        let buffer_dimensions = BufferDimensions::new(self.res[0] as usize, self.res[1] as usize);
+        let buffer_dimensions = BufferDimensions::new(self.res[0] as usize, self.res[1] as usize, size_of::<u32>());
         println!("negociate_slots {}, {}", buffer_dimensions.width, buffer_dimensions.height);
         let download_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Download Node Buffer"),
@@ -135,7 +111,7 @@ impl Node for DownloadRgbBuffer{
     }
 
     fn render(&mut self, _surface: &Surface, encoder: &mut CommandEncoder, _screen: Option<&RenderTexture>) {
-        let buffer_dimensions = BufferDimensions::new(self.res[0] as usize, self.res[1] as usize);
+        let buffer_dimensions = BufferDimensions::new(self.res[0] as usize, self.res[1] as usize, size_of::<u32>());
         println!("render {}, {}", buffer_dimensions.width, buffer_dimensions.height);
 
         let texture_extent = wgpu::Extent3d {
@@ -174,7 +150,7 @@ impl Node for DownloadRgbBuffer{
 
         device.poll(wgpu::Maintain::Wait);
 
-        let buffer_dimensions = BufferDimensions::new(self.res[0] as usize, self.res[1] as usize);
+        let buffer_dimensions = BufferDimensions::new(self.res[0] as usize, self.res[1] as usize, size_of::<u32>());
         println!("post_render {}, {}", buffer_dimensions.width, buffer_dimensions.height);
         let padded_buffer = buffer_slice.get_mapped_range();
 

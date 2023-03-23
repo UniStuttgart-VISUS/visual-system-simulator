@@ -55,11 +55,11 @@ impl ColorDepthTargets{
 }
 
 pub struct ColorTargets{
-    rt_color: RenderTexture,
-    rt_deflection: RenderTexture,
-    rt_color_change: RenderTexture,
-    rt_color_uncertainty: RenderTexture,
-    rt_covariances: RenderTexture,
+    pub rt_color: RenderTexture,
+    pub rt_deflection: RenderTexture,
+    pub rt_color_change: RenderTexture,
+    pub rt_color_uncertainty: RenderTexture,
+    pub rt_covariances: RenderTexture,
 }
 
 impl ColorTargets{

@@ -248,6 +248,7 @@ struct FragmentOutput {
     @location(2) color_change: vec4<f32>,
     @location(3) color_uncertainty: vec4<f32>,
     @location(4) covariances: vec4<f32>,
+    @location(5) measurement: vec4<f32>,
 };
 
 @group(1) @binding(0)
@@ -279,34 +280,33 @@ var in_original_s: sampler;
 @fragment
 fn fs_main(in: VertexOutput) -> FragmentOutput {
     var out: FragmentOutput;
-    var rt_measure: vec4<f32>; // placeholder for render texture, readd this for WGPU
     if(uniforms.variance_metric == VARIANCE_METRIC_HISTOGRAM){
         if(uniforms.show_variance == SHOW_VARIANCE_PRE){
-            rt_measure = vec4<f32>(sampleColor(in_original_t, in_original_s, in.tex_coords), 1.0);
+            out.measurement = vec4<f32>(sampleColor(in_original_t, in_original_s, in.tex_coords), 1.0);
         }else if(uniforms.show_variance == SHOW_VARIANCE_POST){
-            rt_measure = vec4<f32>(sampleColor(in_color_t, in_color_s, in.tex_coords), 1.0);
+            out.measurement = vec4<f32>(sampleColor(in_color_t, in_color_s, in.tex_coords), 1.0);
         }else{// SHOW_VARIANCE_NONE & SHOW_VARIANCE_DIFF
-            rt_measure = vec4<f32>(0.0);
+            out.measurement = vec4<f32>(0.0);
         }
         out.color = vec4<f32>(textureSample(in_color_t, in_color_s, in.tex_coords).rgb, 1.0);
     }else{
         if(uniforms.show_variance == SHOW_VARIANCE_PRE){
             let variance_original = sampleVariance(in_original_t, in_original_s, in.tex_coords);
             out.color = vec4<f32>(viridis_quintic(variance_original), 1.0);
-            rt_measure = vec4<f32>(variance_original);
+            out.measurement = vec4<f32>(variance_original);
         }else if(uniforms.show_variance == SHOW_VARIANCE_POST){
             let variance_sim = sampleVariance(in_color_t, in_color_s, in.tex_coords);
             out.color = vec4<f32>(viridis_quintic(variance_sim), 1.0);
-            rt_measure = vec4<f32>(variance_sim);
+            out.measurement = vec4<f32>(variance_sim);
         }else if(uniforms.show_variance == SHOW_VARIANCE_DIFF){
             let variance_original = sampleVariance(in_original_t, in_original_s, in.tex_coords);
             let variance_sim = sampleVariance(in_color_t, in_color_s, in.tex_coords);
             let loss = variance_original-variance_sim;
             out.color = vec4<f32>(viridis_quintic(loss), 1.0);
-            rt_measure = vec4<f32>(loss);
+            out.measurement = vec4<f32>(loss);
         }else{// SHOW_VARIANCE_NONE
             out.color = vec4<f32>(sampleColor(in_color_t, in_color_s, in.tex_coords), 1.0);
-            rt_measure = vec4<f32>(0.0);
+            out.measurement = vec4<f32>(0.0);
         }
     }
 

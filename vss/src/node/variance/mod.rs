@@ -1,31 +1,8 @@
+use wgpu::{Buffer, BufferView};
+
 use super::*;
 
-use std::borrow::BorrowMut;
-use std::collections::HashMap;
-use std::io::Write;
-use std::fs::File;
-
-// gfx_defines! {
-//     pipeline pipe {
-//         u_resolution: gfx::Global<[f32; 2]> = "u_resolution",
-//         s_color: gfx::TextureSampler<[f32; 4]> = "s_color",
-//         s_original: gfx::TextureSampler<[f32; 4]> = "s_original",
-//         rt_color: gfx::RenderTarget<ColorFormat> = "rt_color",
-//         rt_measure: gfx::RenderTarget<HighpFormat> = "rt_measure",
-//         s_deflection: gfx::TextureSampler<[f32; 4]> = "s_deflection",
-//         rt_deflection: gfx::RenderTarget<Rgba32F> = "rt_deflection",
-//         s_color_change: gfx::TextureSampler<[f32; 4]> = "s_color_change",
-//         rt_color_change: gfx::RenderTarget<Rgba32F> = "rt_color_change",
-//         s_color_uncertainty: gfx::TextureSampler<[f32; 4]> = "s_color_uncertainty",
-//         rt_color_uncertainty: gfx::RenderTarget<Rgba32F> = "rt_color_uncertainty",
-//         s_covariances: gfx::TextureSampler<[f32; 4]> = "s_covariances",
-//         rt_covariances: gfx::RenderTarget<Rgba32F> = "rt_covariances",
-//         u_track_error: gfx::Global<i32> = "u_track_error",
-//         u_show_variance: gfx::Global<u32> = "u_show_variance",
-//         u_variance_metric: gfx::Global<u32> = "u_variance_metric",
-//         u_color_space: gfx::Global<u32> = "u_color_space",
-//     }
-// }
+use std::{collections::HashMap, mem::size_of, time::Instant};
 
 struct Uniforms{
     resolution: [f32; 2],
@@ -41,10 +18,11 @@ pub struct VarianceMeasure {
     sources_bind_group: wgpu::BindGroup,
     original_bind_group: wgpu::BindGroup,
     targets: ColorTargets,
-    rt_measurement: RenderTexture,
-
-    pub log_file: Option<File>,
-    last_info: f32,
+    target_measurement: RenderTexture,
+    download_buffer: Buffer,
+    buffer_dimensions: BufferDimensions,
+    last_info: Instant,
+    should_download: bool,
 }
 
 impl VarianceMeasure{
@@ -79,70 +57,67 @@ impl VarianceMeasure{
             &[&shader, &shader],
             &["vs_main", "fs_main"],
             &[&uniforms.bind_group_layout, &sources_bind_group_layout, &original_bind_group_layout],
-            &all_color_states(),
+            &[
+                blended_color_state(COLOR_FORMAT),
+                simple_color_state(HIGHP_FORMAT),
+                simple_color_state(HIGHP_FORMAT),
+                simple_color_state(HIGHP_FORMAT),
+                simple_color_state(HIGHP_FORMAT),
+                simple_color_state(HIGHP_FORMAT),
+            ],
             None,
-            Some("VarianceNode Render Pipeline"));
+            Some("VarianceNode Render Pipeline")
+        );
+        
+        let buffer_dimensions = BufferDimensions::new(1 as usize, 1 as usize, size_of::<[f32; 4]>());
+        let download_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Download Node Placeholder Buffer"),
+            size: (buffer_dimensions.padded_bytes_per_row * buffer_dimensions.height) as u64,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
     
-        // let (_, _, rt_measure) = factory.create_render_target(1, 1).unwrap();
-
         VarianceMeasure {
             pipeline,
             uniforms,
             sources_bind_group,
             original_bind_group,
             targets: ColorTargets::new(&device, "VarianceNode"),
-            rt_measurement: placeholder_highp_rt(&device, Some("VarianceNode rt_measurement (placeholder)")),
-            log_file: None,
-            last_info: 1.0,
+            target_measurement: placeholder_highp_rt(&device, Some("VarianceNode target_measurement (placeholder)")),
+            download_buffer,
+            buffer_dimensions,
+            last_info: Instant::now(),
+            should_download: false,
         }
     }
 
 
-/*  fn measure_variance(&mut self, surface: &Surface) -> (f32, f32){
-        use gfx::format::Formatted;
-        use gfx::memory::Typed;
+    fn measure_variance(&mut self, surface: &Surface) -> (f32, f32){
+        let device = surface.device().borrow_mut();
 
-        let mut encoder = window.encoder().borrow_mut();
-        let factory = &mut window.factory().borrow_mut();
-        let width = self.pso_data.u_resolution[0] as u32;
-        let height = self.pso_data.u_resolution[1] as u32;
+        // Note that we're not calling `.await` here.
+        let buffer_slice = self.download_buffer.slice(..);
+        
+        let (sender, _receiver) = futures_intrusive::channel::shared::oneshot_channel();
+        buffer_slice.map_async(wgpu::MapMode::Read, move |v| {sender.send(v).unwrap();} );
 
-        // Schedule download.
-        let download = factory
-            .create_download_buffer::<[f32; 3]>((width * height) as usize)
-            .unwrap();
-        encoder
-            .copy_texture_to_buffer_raw(
-                self.pso_data.rt_measure.raw().get_texture(),
-                None,
-                gfx::texture::RawImageInfo {
-                    xoffset: 0,
-                    yoffset: 0,
-                    zoffset: 0,
-                    width: width as u16,
-                    height: height as u16,
-                    depth: 0,
-                    format: HighpFormat::get_format(),
-                    mipmap: 0,
-                },
-                download.raw(),
-                0,
-            )
-            .unwrap();
+        device.poll(wgpu::Maintain::Wait);
 
-        // Flush before reading the buffers to prevent panics.
-        window.flush(encoder.borrow_mut());
+        let padded_buffer = buffer_slice.get_mapped_range();
 
-        if self.pso_data.u_variance_metric == 6 {
-            assert!(self.pso_data.u_show_variance < 3, "Histogram can only be calculated with variance Type <Before> or <After>");
-            assert!(self.pso_data.u_color_space == 2, "Histogram can only be calculated with color Type <ITP>");
+        if self.uniforms.data.variance_metric == 6 {
+            assert!(self.uniforms.data.show_variance < 3, "Histogram can only be calculated with variance Type <Before> or <After>");
+            assert!(self.uniforms.data.color_space == 2, "Histogram can only be calculated with color Type <ITP>");
+
             // calculate histogram
             let mut color_map = HashMap::new();
-            let reader = factory.read_mapping(&download).unwrap();
-            for row in reader.chunks(width as usize).rev() {
-                for pixel in row.iter() {
-                    let pixel_key = (((pixel[0] * 255.0) as u32) << 16) | (((pixel[1] * 255.0) as u32) << 8) | ((pixel[2] * 255.0) as u32);
-                    color_map.entry(pixel_key).or_insert([pixel[0], pixel[1], pixel[2], 0.0])[3] += 1.0/(width as f32 * height as f32);
+            let width = self.buffer_dimensions.width;
+            let height = self.buffer_dimensions.height;
+            for chunk in padded_buffer.chunks(self.buffer_dimensions.padded_bytes_per_row) {
+                let pixels: &[f32] = unsafe { std::slice::from_raw_parts(chunk.as_ptr() as *const f32, self.buffer_dimensions.unpadded_bytes_per_row / 4)};
+                for i in (0 .. self.buffer_dimensions.unpadded_bytes_per_row / 4).step_by(4) {
+                    let pixel_key = (((pixels[i+0] * 255.0) as u32) << 16) | (((pixels[i+1] * 255.0) as u32) << 8) | ((pixels[i+2] * 255.0) as u32);
+                    color_map.entry(pixel_key).or_insert([pixels[i+0], pixels[i+1], pixels[i+2], 0.0])[3] += 1.0/(width as f32 * height as f32);
                 }
             }
             let mut histogram_variance = 0.0;
@@ -156,18 +131,18 @@ impl VarianceMeasure{
             }
             (color_map.len() as f32, histogram_variance as f32)
         }else{
-            assert!((self.pso_data.u_variance_metric != 5) || (self.pso_data.u_color_space == 1), "Michelson Contrast can only be calculated with color Type <LAB>");
+            assert!((self.uniforms.data.variance_metric != 5) || (self.uniforms.data.color_space == 1), "Michelson Contrast can only be calculated with color Type <LAB>");
             // sum up variance
             let mut sum_variance = 0.0;
-            let reader = factory.read_mapping(&download).unwrap();
-            for row in reader.chunks(width as usize).rev() {
-                for pixel in row.iter() {
-                    sum_variance += pixel[0] as f32;
+            for chunk in padded_buffer.chunks(self.buffer_dimensions.padded_bytes_per_row) {
+                let pixels: &[f32] = unsafe { std::slice::from_raw_parts(chunk.as_ptr() as *const f32, self.buffer_dimensions.unpadded_bytes_per_row / 4)};
+                for i in (0 .. self.buffer_dimensions.unpadded_bytes_per_row / 4).step_by(4) {
+                    sum_variance += pixels[i] as f32;
                 }
             }
-            (sum_variance, sum_variance/(download.len() as f32))
+            (sum_variance, sum_variance/((self.buffer_dimensions.width * self.buffer_dimensions.height) as f32))
         }
-    }*/
+    }
 }
 
 
@@ -182,14 +157,24 @@ impl Node for VarianceMeasure {
         self.sources_bind_group = slots.as_all_colors_source(&device);
         self.targets = slots.as_all_colors_target();
 
-        self.rt_measurement = create_render_texture(
+        self.target_measurement = create_render_texture(
             &device,
             self.uniforms.data.resolution[0] as u32,
             self.uniforms.data.resolution[1] as u32,
             HIGHP_FORMAT,
             create_sampler_nearest(&device),
-            Some("VarianceNode rt_measurement")
+            Some("VarianceNode target_measurement")
         );
+
+        self.buffer_dimensions = BufferDimensions::new(self.uniforms.data.resolution[0] as usize, self.uniforms.data.resolution[1] as usize, size_of::<[f32; 4]>());
+        let download_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Download Node Buffer"),
+            size: (self.buffer_dimensions.padded_bytes_per_row * self.buffer_dimensions.height) as u64,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        self.download_buffer = download_buffer;
 
         slots
     }
@@ -203,31 +188,19 @@ impl Node for VarianceMeasure {
     }
 
     fn render(&mut self, surface: &surface::Surface, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
-        if self.log_file.is_some(){
-            /*self.pso_data.u_show_variance =  2;
-            self.pso_data.u_variance_metric =  4;
-            self.pso_data.u_color_space =  2;
-            window.encoder().borrow_mut().draw(&gfx::Slice::from_vertex_count(6), &self.pso, &self.pso_data);
-            let (sum, avg) = self.measure_variance(window);
-            write!(self.log_file.as_ref().unwrap(), "{:?}, {:?}, ", sum, avg).unwrap();
+        self.uniforms.update(&surface.queue().borrow_mut());
 
-            self.pso_data.u_variance_metric =  5;
-            self.pso_data.u_color_space =  1;
-            window.encoder().borrow_mut().draw(&gfx::Slice::from_vertex_count(6), &self.pso, &self.pso_data);
-            let (sum, avg) = self.measure_variance(window);
-            write!(self.log_file.as_ref().unwrap(), "{:?}, {:?}, ", sum, avg).unwrap();
-
-            self.pso_data.u_variance_metric =  6;
-            self.pso_data.u_color_space =  2;
-            window.encoder().borrow_mut().draw(&gfx::Slice::from_vertex_count(6), &self.pso, &self.pso_data);
-            let (sum, avg) = self.measure_variance(window);
-            write!(self.log_file.as_ref().unwrap(), "{:?}, {:?}\n", sum, avg).unwrap();*/
-        }else{
-            self.uniforms.update(&surface.queue().borrow_mut());
-
+        {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Variance render_pass"),
-                color_attachments: &self.targets.color_attachments(screen),
+                color_attachments: &[
+                    screen.unwrap_or(&self.targets.rt_color).to_color_attachment(),
+                    self.targets.rt_deflection.to_color_attachment(),
+                    self.targets.rt_color_change.to_color_attachment(),
+                    self.targets.rt_color_uncertainty.to_color_attachment(),
+                    self.targets.rt_covariances.to_color_attachment(),
+                    self.target_measurement.to_color_attachment(),
+                ],
                 depth_stencil_attachment: None,
             });
         
@@ -236,17 +209,45 @@ impl Node for VarianceMeasure {
             render_pass.set_bind_group(1, &self.sources_bind_group, &[]);
             render_pass.set_bind_group(2, &self.original_bind_group, &[]);
             render_pass.draw(0..6, 0..1);
-            /* self.last_info += window.delta_t()/1000000.0;
-            if self.last_info >= 1.0 && self.pso_data.u_show_variance > 0 {
-                self.last_info = 0.0;
+        }
 
-                let (sum, avg) = self.measure_variance(window);
-                if self.pso_data.u_variance_metric == 6 {
-                    println!("Total amount of colors: {:?}\t Avg histogram variance: {:?}", sum, avg);
-                }else{
-                    println!("Variance sum: {:?}\t Avg variance per pixel: {:?}", sum, avg);
-                }
-            }*/
+        if Instant::now().duration_since(self.last_info).as_secs_f32() >= 1.0 && self.uniforms.data.show_variance > 0 {
+            self.last_info = Instant::now();
+
+            // Schedule download.
+            encoder.copy_texture_to_buffer(
+                self.target_measurement.as_texture().texture.as_image_copy(),
+                wgpu::ImageCopyBuffer {
+                    buffer: &self.download_buffer,
+                    layout: wgpu::ImageDataLayout {
+                        offset: 0,
+                        bytes_per_row: Some(
+                            std::num::NonZeroU32::new(self.buffer_dimensions.padded_bytes_per_row as u32)
+                                .unwrap(),
+                        ),
+                        rows_per_image: None,
+                    },
+                },
+                wgpu::Extent3d {
+                    width: self.buffer_dimensions.width as u32,
+                    height: self.buffer_dimensions.height as u32,
+                    depth_or_array_layers: 1,
+                },
+            );
+            self.should_download = true;
+        }
+    }
+
+    fn post_render(&mut self, surface: &Surface) {
+        if(self.should_download){
+            let (sum, avg) = self.measure_variance(&surface);
+            self.download_buffer.unmap();
+            self.should_download = false;
+            if self.uniforms.data.variance_metric == 6 {
+                println!("Total amount of colors: {:?}\t Avg histogram variance: {:?}", sum, avg);
+            }else{
+                println!("Variance sum: {:?}\t Avg variance per pixel: {:?}", sum, avg);
+            }
         }
     }
 }

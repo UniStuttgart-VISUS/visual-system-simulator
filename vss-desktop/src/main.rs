@@ -106,7 +106,7 @@ impl IoGenerator {
     }
 }
 
-fn build_flow(surface: &mut Surface, io_generator: &mut IoGenerator, flow_index: usize, render_resolution: Option<[u32; 2]>, variance_log: Option<String>){
+fn build_flow(surface: &mut Surface, io_generator: &mut IoGenerator, flow_index: usize, render_resolution: Option<[u32; 2]>){
     let (input_node, output_node) = io_generator.current(&surface, render_resolution, flow_index).unwrap();
 
     // Add input node.
@@ -123,15 +123,7 @@ fn build_flow(surface: &mut Surface, io_generator: &mut IoGenerator, flow_index:
     surface.add_node(Box::new(node), flow_index);
     
     // Measure Uncertainty
-    let mut node = VarianceMeasure::new(&surface);
-    if variance_log.is_some(){
-        node.log_file = Some(OpenOptions::new()
-            .write(true)
-            .append(true)
-            .create(true)
-            .open(variance_log.unwrap())
-            .unwrap());
-    }
+    let node = VarianceMeasure::new(&surface);
     surface.add_node(Box::new(node), flow_index);
 
     // Display node.
@@ -200,7 +192,7 @@ pub fn main() {
             config.name.clone(),
             config.output.clone(),
         );
-        build_flow(&mut window.surface, &mut io_generator, index, config.resolution, config.variance_log.clone());
+        build_flow(&mut window.surface, &mut io_generator, index, config.resolution);
 
         if flow_count > 1 {
             let node = desktop.get_stereo_desktop_node(&window.surface);
@@ -436,7 +428,7 @@ pub fn main() {
 
     for index in 0 .. flow_count {
         let viewport = &varjo_viewports[index];
-        build_flow(&mut window.surface, &mut io_generator, index, Some([viewport.width, viewport.height]), None);
+        build_flow(&mut window.surface, &mut io_generator, index, Some([viewport.width, viewport.height]));
         let mut node = VRCompositor::new(&window.surface);
         node.set_viewport(viewport.x as f32, viewport.y as f32, viewport.width as f32, viewport.height as f32);
         window.surface.add_node(Box::new(node), index);
