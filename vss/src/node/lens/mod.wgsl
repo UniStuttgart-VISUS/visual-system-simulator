@@ -466,6 +466,5 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         }
     }
 
-    // out.color = abs(textureSample(in_normal_t, in_normal_s, in.tex_coords));
     return out;
 }

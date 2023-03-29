@@ -1,4 +1,4 @@
-use wgpu::{Buffer, BufferView};
+use wgpu::Buffer;
 
 use super::*;
 
@@ -239,7 +239,7 @@ impl Node for VarianceMeasure {
     }
 
     fn post_render(&mut self, surface: &Surface) {
-        if(self.should_download){
+        if self.should_download {
             let (sum, avg) = self.measure_variance(&surface);
             self.download_buffer.unmap();
             self.should_download = false;

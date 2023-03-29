@@ -145,39 +145,6 @@ fn deg_to_dist(deg: f32) -> f32{
                                  └─────┘
                4                  nose                    4
 */
-// fn meridians_from_pos(pos: vec2<f32>) -> vec2<i32>{
-//     var p = pos;
-//     // flip the x axis if we are in the left eye
-//     if( uniforms.flow_idx > 0 ){
-//         p.x *= -1.0;
-//     }
-
-//     // temporal, superior: 1, 2
-//     if(p.x >= 0. && p.y >= 0.){ 
-//         return vec2<i32>(0,1);
-//     }
-//     // nasal, superior: 2, 3
-//     else if(p.x <= 0. && p.y >= 0.){
-//         return vec2<i32>(2,1);
-//     }
-//     // nasal, inferior: 3, 4
-//     else if(p.x <= 0. && p.y <= 0.){
-//         return vec2<i32>(2,3);
-//     }
-//     // temporal, inferior: 1, 4
-//     else{ // equal to if(p.x >= 0 && p.y <= 0){
-//         return vec2<i32>(0,3);
-//     }
-// }
-
-// dont get tricked by columds vs rows
-// let watsons_params =
-//   mat4x4<f32>(//a     //r_2   //r_e   // filler
-//     vec4<f32>(0.9851, 1.058,  22.14,  0.0),
-//     vec4<f32>(0.9935, 1.035,  16.35,  0.0),
-//     vec4<f32>(0.9729, 1.084,  7.633,  0.0),
-//     vec4<f32>(0.996,  0.9932, 12.13,  0.0)
-// );
 
 fn watsons_params_x(x: f32) -> vec3<f32>{
     var x = x;
@@ -224,9 +191,8 @@ fn spacing(pos: vec2<f32>) -> f32{
     let r_xy = dist_to_deg(sqrt(pos.x * pos.x + pos.y * pos.y));
     
     // lookup the parameters for the enclosing meridians
-    // let meridians = meridians_from_pos(pos);
-    let m_x_params = watsons_params_x(pos.x);//watsons_params[meridians.x].xyz;
-    let m_y_params = watsons_params_y(pos.y);//watsons_params[meridians.y].xyz;
+    let m_x_params = watsons_params_x(pos.x);
+    let m_y_params = watsons_params_y(pos.y);
     let x = dist_to_deg(pos.x);
     let y = dist_to_deg(pos.y);
 
