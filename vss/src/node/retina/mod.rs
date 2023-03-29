@@ -123,10 +123,14 @@ impl Node for Retina {
             let projection = values.get("proj_matrix").unwrap_or(&proj_val).as_matrix().unwrap();
             let res_x = (self.uniforms.data.resolution[0] * 2.0 * projection[0][0]) as f32;
             let res_y = (self.uniforms.data.resolution[1] * 2.0 * projection[1][1]) as f32;
-            let resolution = (res_x.max(res_y) + 1.0) as u32;
-            let cubemap_resolution = (
-                resolution,
-                resolution,
+            let mut resolution = res_x.max(res_y);
+            if let Some(Value::Number(cubemap_scale)) = values.get("cubemap_scale") {
+                resolution *= *cubemap_scale as f32;
+            }
+            let clamped_res = resolution.max(1.0) as u32;
+            let cubemap_resolution = (  
+                clamped_res,
+                clamped_res,
             );
 
             //orientations directly taken from https://www.khronos.org/opengl/wiki/Cubemap_Texture

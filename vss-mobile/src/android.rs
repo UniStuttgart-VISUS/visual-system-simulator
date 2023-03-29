@@ -148,7 +148,17 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate<'loca
         );
     };
 
-    let value_map = ValueMap::new();
+    let mut value_map = ValueMap::new();
+
+    //TODO for testing purposes only
+    // value_map.insert("peacock_cb_onoff".into(), Value::Bool(true));
+    // value_map.insert("peacock_cb_strength".into(), Value::Number(1.0 as f64));
+    // value_map.insert("peacock_cb_type".into(), Value::Number(0.0 as f64));
+    value_map.insert("colorblindness_onoff".into(), Value::Bool(true));
+    value_map.insert("colorblindness_type".into(), Value::Number(0.0 as f64));
+    value_map.insert("colorblindness_int".into(), Value::Number(100.0 as f64));
+    value_map.insert("cubemap_scale".into(), Value::Number(0.1 as f64));
+
     let parameters: Vec<RefCell<ValueMap>> = vec![RefCell::new(value_map)];
     let mut window_handle = AndroidNdkWindowHandle::empty();
     window_handle.a_native_window = window.ptr().as_ptr() as *mut c_void;
@@ -173,9 +183,21 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate<'loca
 fn build_flow(surface: &mut Surface, frame_receiver: Receiver<YuvBuffer>) {
     //TODO: use a proper set of nodes.
 
+    // Add input node.
     let node = CameraStream::new(&surface, frame_receiver);
     surface.add_node(Box::new(node), 0);
 
+    // Visual system passes.
+    // let node = Lens::new(&surface);
+    // surface.add_node(Box::new(node), 0);
+    // let node = Cataract::new(&surface);
+    // surface.add_node(Box::new(node), 0);
+    let node = Retina::new(&surface);
+    surface.add_node(Box::new(node), 0);
+    // let node = PeacockCB::new(&surface);
+    // surface.add_node(Box::new(node), 0);
+
+    // Display node.
     let node = Display::new(&surface);
     surface.add_node(Box::new(node), 0);
 }
