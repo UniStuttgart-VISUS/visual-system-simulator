@@ -222,8 +222,9 @@ impl Node for UploadRgbBuffer {
                         self.buffer_next.width,
                         self.buffer_next.height,
                     ],
-                    // [0, 0],
+                    None,
                     &*self.buffer_next.pixels_rgb,
+                    0,
                 );
                 self.buffer_upload = false;
             }

@@ -66,6 +66,11 @@ impl Node for CameraStream {
         perspective: &EyePerspective,
         vis_param: &VisualizationParameters,
     ) -> EyePerspective {
+        let buffer = self.frame_receiver.try_recv();
+        if let Ok(buffer) = buffer {
+            debug!("Uploading... {}x{} {}", buffer.width, buffer.height, buffer.pixels_y[0]);
+            self.upload.upload_buffer(buffer);
+        }
         self.upload.input(&perspective, vis_param)
     }
 
@@ -75,11 +80,6 @@ impl Node for CameraStream {
         encoder: &mut wgpu::CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        let buffer = self.frame_receiver.try_recv();
-        if let Ok(buffer) = buffer {
-            debug!("Uploading... {}x{} {}", buffer.width, buffer.height, buffer.pixels_y[0]);
-            self.upload.upload_buffer(buffer);
-        }
         self.upload.render(&surface, encoder, screen);
     }
 
@@ -90,7 +90,9 @@ impl Node for CameraStream {
 
 struct Bridge {
     pub surface: Surface,
-    pub frame_sender: SyncSender<YuvBuffer>
+    pub frame_sender: SyncSender<YuvBuffer>,
+    pub current_size: [i32; 2],
+    pub new_size: [i32; 2],
 }
 
 unsafe impl Send for Bridge {}
@@ -163,6 +165,8 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate<'loca
     *guard = Some(Bridge { 
         surface,
         frame_sender: tx,
+        current_size: [1, 1],
+        new_size: [1, 1],
      });
 }
 
@@ -204,6 +208,16 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDraw<'local>
 ) {
     let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
     let bridge = (*guard).as_mut().expect("Bridge should be created");
+    for f in bridge.surface.flow.iter(){
+        f.input(&bridge.surface.vis_param.borrow());
+    }
+    //TODO replace this with some better way of triggering a node update
+    //(it is neccessary to refresh node resolutions but for this we need the upload node to have a buffer available to get the new resolution from)
+    if (bridge.new_size[0] != bridge.current_size[0]) || (bridge.new_size[1] != bridge.current_size[1]) {
+        debug!("Buffer sizes do not match, old({}, {}), new({}, {})", bridge.current_size[0], bridge.current_size[1], bridge.new_size[0], bridge.new_size[1]);
+        bridge.surface.update_nodes();
+        bridge.current_size = bridge.new_size;
+    }
     bridge.surface.draw();
 }
 
@@ -235,6 +249,8 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostFrame<'l
     let res = bridge.frame_sender.try_send(buffer);
     if res.is_err() {
         warn!("{}, dropping frame", res.err().unwrap());
+    }else{
+        bridge.new_size = [width, height];
     }
 }
 

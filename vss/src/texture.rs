@@ -1,3 +1,5 @@
+use wgpu::Origin3d;
+
 use crate::*;
 use std::io::Cursor;
 use core::num::NonZeroU32;
@@ -285,8 +287,9 @@ pub fn update_texture(
     queue: &wgpu::Queue,
     texture: &Texture,
     size: [u32; 2],
-    // offset: [u16; 2],
+    offset: Option<Origin3d>,
     raw_data: &[u8],
+    data_offset: u64,
 ) {
     let texture_size = wgpu::Extent3d {
         width: size[0],
@@ -299,12 +302,12 @@ pub fn update_texture(
             aspect: wgpu::TextureAspect::All,
             texture: texture.texture.as_ref(),
             mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
+            origin: offset.unwrap_or(wgpu::Origin3d::ZERO),
         },
         raw_data,
         wgpu::ImageDataLayout {
-            offset: 0,
-            bytes_per_row: NonZeroU32::new(4 * size[0]),
+            offset: data_offset,
+            bytes_per_row: NonZeroU32::new(texture.texture.format().describe().block_size as u32 * size[0]),
             rows_per_image: NonZeroU32::new(size[1]),
         },
         texture_size,
@@ -385,7 +388,7 @@ pub fn load_texture_from_bytes(
         data,
         wgpu::ImageDataLayout {
             offset: 0,
-            bytes_per_row: NonZeroU32::new(4 * width),
+            bytes_per_row: NonZeroU32::new(format.describe().block_size as u32 * width),
             rows_per_image: NonZeroU32::new(height),
         },
         size,
@@ -465,6 +468,21 @@ pub fn placeholder_highp_texture(
         1, 1,
         sampler,
         HIGHP_FORMAT,
+        label)
+}
+
+pub fn placeholder_single_channel_texture(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    label: Option<&str>,
+) -> Result<Texture, String> {
+    let sampler = create_sampler_linear(device);
+    load_texture_from_bytes(
+        device, queue,
+        &[0; 16],
+        1, 1,
+        sampler,
+        wgpu::TextureFormat::R8Unorm,
         label)
 }
 

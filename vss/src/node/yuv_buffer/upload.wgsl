@@ -64,6 +64,10 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
             Y + d * Cb,
             1.0);
     } else if (uniforms.format == 1) {
+        /* >>>>>>> THE INFORMATION BELOW IS CURRENTLY NOT ACCURATE DUE TO FOLLOWING REASON:
+                   the current method assumes NV21 layout instead of the old one (probably either NV12 or Y12)
+                   it might be neccessary to include both and make it configurable
+                   https://stackoverflow.com/questions/51399908/yuv-420-888-byte-format <<<<<< */
         // YUV_420_888 to RGB color space conversion.
         // The original Android camera textures are formatted like so:
         // every pixel has a corresponding Y value that shares an U and V with its neighbour, in one direction only
@@ -72,17 +76,18 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         //    u: [u1, v2, u3, v4], [u5, v6, u7, v8] ...
         //    v: [v1, u2, v3, u4], [v5, u6, v7, u8] ...
         var v_tex_i = vec2<i32>(v_tex * vec2<f32>(textureDimensions(in_u_t)));
-        v_tex_i.y /= 2;
+        v_tex_i.x /= 2;
 
         let y = textureSample(in_y_t, in_y_s, v_tex).r;
-        var u = textureLoad(in_u_t, v_tex_i, 0).r;
-        var v = textureLoad(in_v_t, v_tex_i, 0).r;
+        var u = textureLoad(in_u_t, vec2<i32>(v_tex_i.x*2, v_tex_i.y), 0).r;
+        var v = textureLoad(in_u_t, vec2<i32>(v_tex_i.x*2+1, v_tex_i.y), 0).r;
+        // var v = textureLoad(in_v_t, v_tex_i, 0).r;
 
-        if ((v_tex_i.x) % 2 == 1) {
-            let temp = u;
-            u = v;
-            v = temp;
-        }
+        // if ((v_tex_i.x) % 2 == 1) {
+        //     let temp = u;
+        //     u = v;
+        //     v = temp;
+        // }
 
         let yuva = vec4<f32>(y, (u - 0.5), (v - 0.5), 1.0);
 
