@@ -63,7 +63,7 @@ impl UploadYuvBuffer {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("UploadYuvBuffer Shader"),
             source: wgpu::ShaderSource::Wgsl(
-                concat!(include_str!("../vert.wgsl"), include_str!("upload.wgsl")).into(),
+                include_str!("upload.wgsl").into(),
             ),
         });
 
@@ -176,7 +176,7 @@ impl Node for UploadYuvBuffer {
             height = texture_y.height as u32;
         }
 
-        let slots = slots.emplace_color_output(surface, width, height, "UploadYuvBuffer");
+        let slots = slots.emplace_color_output(surface, height, width, "UploadYuvBuffer");
         self.targets = slots.as_all_colors_target();
 
         slots
@@ -204,16 +204,32 @@ impl Node for UploadYuvBuffer {
                         update_texture(&queue, &texture_v, size_v, None, &buffer.pixels_v, 0);
                     },
                     YuvFormat::_420888 => {
-                        update_texture(&queue, &texture_y, size_y, None, &buffer.pixels_y, 0);
-                        update_texture(&queue, &texture_u, [size_u[0], size_u[1]/2], None, &buffer.pixels_u, 0);
+                        update_texture(
+                            &queue,
+                            &texture_y,
+                            size_y,
+                            None,
+                            &buffer.pixels_y,
+                            0
+                        );
+                        update_texture(
+                            &queue,
+                            &texture_u,
+                            [size_u[0],
+                            size_u[1]/2],
+                            None,
+                            &buffer.pixels_u,
+                            0
+                        );
                         update_texture(
                             &queue,
                             &texture_u,
                             [size_u[0],
                             size_u[1]/2],
                             Some(Origin3d{x:0, y:size_u[1]/2, z:0}),
-                            &buffer.pixels_u,
-                            (size_u[0] * size_u[1]/2 - 2) as u64);
+                            &buffer.pixels_v,
+                            (size_u[0] * size_u[1]/2 - 1) as u64
+                        );
                     },
                 }
             }

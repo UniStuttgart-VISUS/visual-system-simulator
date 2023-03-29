@@ -1,3 +1,27 @@
+struct VertexOutput {
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) tex_coords: vec2<f32>,
+};
+
+@vertex
+fn vs_main(
+    @builtin(vertex_index) in_vertex_index: u32,
+) -> VertexOutput {
+    var out: VertexOutput;
+    // create two triangles with edges (0,0),(1,0),(1,1) and (1,1),(0,1),(0,0)
+    var x = f32((i32(in_vertex_index) % 3) > 0);
+    var y = f32((i32(in_vertex_index) % 3) > 1);
+    if((i32(in_vertex_index) / 3) > 0){
+        x = 1.0-x;
+        y = 1.0-y;
+    }
+    let pos = vec2<f32>(x, y);
+    out.tex_coords = vec2<f32>(pos.x, pos.y);
+    let rot = mat2x2<f32>(vec2<f32>(0.0, 1.0), vec2<f32>(-1.0, 0.0)); // 90° clockwise rotation
+    out.clip_position = vec4<f32>(rot * (pos * 2.0 - 1.0), 0.0, 1.0);
+    return out;
+}
+
 struct Uniforms {
     format: i32
 }
@@ -76,7 +100,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         //    u: [u1, v2, u3, v4], [u5, v6, u7, v8] ...
         //    v: [v1, u2, v3, u4], [v5, u6, v7, u8] ...
         var v_tex_i = vec2<i32>(v_tex * vec2<f32>(textureDimensions(in_u_t)));
-        v_tex_i.x /= 2;
+        v_tex_i.x /= 2; 
 
         let y = textureSample(in_y_t, in_y_s, v_tex).r;
         var u = textureLoad(in_u_t, vec2<i32>(v_tex_i.x*2, v_tex_i.y), 0).r;
