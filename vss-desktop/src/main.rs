@@ -178,13 +178,6 @@ pub fn main() {
 
     let mut window = pollster::block_on(Window::new(config.visible, None, parameters, flow_count));
 
-     
-
-    // let viewports = vec![
-    //     (0, 0, 640, 360),
-    //     (640, 0, 640, 360)
-    // ];
-
     let mut desktop = SharedStereoDesktop::new();
 
     for index in 0..flow_count {
@@ -200,7 +193,6 @@ pub fn main() {
             window.surface.add_node(Box::new(node), index);
         }
     }
-    
 
     let mut done = false;
     // window.update_last_node(); // TODO-WGPU

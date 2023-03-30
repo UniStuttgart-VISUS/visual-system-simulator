@@ -5,6 +5,7 @@ struct Uniforms {
     resolution_in: [f32; 2],
     resolution_out: [f32; 2],
     flow_idx: i32,
+    _padding: u32,
 }
 pub struct SharedStereoDesktop {
     idx_ctr: u32,
@@ -55,6 +56,7 @@ impl StereoDesktop {
                 resolution_in: [1.0, 1.0],
                 resolution_out: [1.0, 1.0],
                 flow_idx: 0,
+                _padding: 0,
             },
         );
 

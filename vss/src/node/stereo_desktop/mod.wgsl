@@ -3,6 +3,7 @@ struct Uniforms{
     resolution_in: vec2<f32>,
     resolution_out: vec2<f32>,
     flow_idx: i32,
+    _padding: u32,
 }
 
 struct VertexOutput {
