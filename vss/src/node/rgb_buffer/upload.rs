@@ -46,7 +46,6 @@ pub struct UploadRgbBuffer {
     buffer_next: RgbBuffer,
     buffer_upload: bool,
     texture: Option<Texture>,//Option<gfx::handle::Texture<Resources, gfx::format::R8_G8_B8_A8>>,
-    render_resolution: Option<[u32; 2]>,
 
     pipeline: wgpu::RenderPipeline,
     uniforms: ShaderUniforms<Uniforms>,
@@ -91,7 +90,6 @@ impl UploadRgbBuffer {
             buffer_next: RgbBuffer::default(),
             buffer_upload: false,
             texture: None,
-            render_resolution: None,
 
             pipeline,
             uniforms,
@@ -148,10 +146,6 @@ impl UploadRgbBuffer {
         self.buffer_upload = true;
     }
 
-    pub fn set_render_resolution(&mut self, render_resolution: Option<[u32; 2]>) {
-        self.render_resolution = render_resolution;
-    }
-
     pub fn set_flags(&mut self, flags: RgbInputFlags) {
         self.uniforms.data.flags = flags.bits();
     }
@@ -160,7 +154,7 @@ impl UploadRgbBuffer {
 impl Node for UploadRgbBuffer {
    
 
-    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, resolution: Option<[u32;2]>, original_image: &mut Option<Texture>) -> NodeSlots {
         if self.buffer_upload {
             let device = surface.device().borrow_mut();
             let queue = surface.queue().borrow_mut();
@@ -182,7 +176,7 @@ impl Node for UploadRgbBuffer {
 
         let mut width = 1;
         let mut height = 1;
-        if let Some(resolution) = &self.render_resolution {
+        if let Some(resolution) = resolution {
             width = resolution[0];
             height = resolution[1];
         }else{
@@ -199,6 +193,9 @@ impl Node for UploadRgbBuffer {
 
         let slots = slots.emplace_color_depth_output(surface, width, height, "UploadNode");
         self.targets = slots.as_all_target();
+
+        let (color_out, _) = slots.as_color_depth_target();
+        original_image.replace(color_out.as_texture());
 
         slots
     }

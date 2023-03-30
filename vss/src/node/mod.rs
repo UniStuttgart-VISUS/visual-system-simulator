@@ -47,12 +47,7 @@ pub trait Node {
 
     /// Negociates input and output for this node (source texture and render target),
     /// possibly re-using suggested `slots` (for efficiency).
-    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots;
-
-    //TODO: merge with negociate_slots?
-    fn negociate_slots_wk(&mut self, surface: &Surface, slots: NodeSlots, _well_known: &WellKnownSlots) -> NodeSlots{
-        self.negociate_slots(surface, slots)
-    }
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, resolution: Option<[u32;2]>, original_image: &mut Option<Texture>) -> NodeSlots;
 
     /// Set new parameters for this effect
     #[allow(unused_variables)]

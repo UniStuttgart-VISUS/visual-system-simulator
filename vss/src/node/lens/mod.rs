@@ -123,7 +123,7 @@ impl Lens {
 impl Node for Lens {
    
 
-    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, _resolution: Option<[u32;2]>, _original_image: &mut Option<Texture>) -> NodeSlots {
         let slots = slots.to_color_depth_input(surface).to_color_output(surface, "LensNode");
         let device = surface.device().borrow_mut();
         let queue = surface.queue().borrow_mut();

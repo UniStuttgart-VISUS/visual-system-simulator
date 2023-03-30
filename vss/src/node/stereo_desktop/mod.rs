@@ -125,7 +125,7 @@ impl Node for StereoDesktop {
         perspective.clone()
     }
 
-    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, _resolution: Option<[u32;2]>, _original_image: &mut Option<Texture>) -> NodeSlots {
         let slots = slots.to_color_input(surface).to_color_output(surface, "StereoNode");
         let device = surface.device().borrow_mut();
 

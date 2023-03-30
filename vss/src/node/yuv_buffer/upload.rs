@@ -121,7 +121,7 @@ impl UploadYuvBuffer {
 }
 
 impl Node for UploadYuvBuffer {
-    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, _resolution: Option<[u32;2]>, original_image: &mut Option<Texture>) -> NodeSlots {
         if let Some(buffer) = &self.buffer_next {
             let device = surface.device().borrow_mut();
             let queue = surface.queue().borrow_mut();
@@ -178,6 +178,8 @@ impl Node for UploadYuvBuffer {
 
         let slots = slots.emplace_color_output(surface, height, width, "UploadYuvBuffer");
         self.targets = slots.as_all_colors_target();
+
+        original_image.replace(slots.as_color_target().as_texture());
 
         slots
     }

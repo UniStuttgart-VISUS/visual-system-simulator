@@ -20,7 +20,7 @@ pub struct Flow {
     nodes: RefCell<Vec<Box<dyn Node>>>,
     last_slot: RefCell<Option<NodeSlots>>,
     pub last_perspective: RefCell<EyePerspective>,
-    well_known: WellKnownSlots,
+    resolution: Option<[u32;2]>,
     configured_view: RefCell<Matrix4<f32>>,
 }
 
@@ -35,13 +35,17 @@ impl Flow {
                 proj: cgmath::perspective(cgmath::Deg(70.0), 1.0, 0.05, 1000.0),
                 gaze: Vector3::new(0.0, 0.0, 1.0),
             }),
-            well_known: WellKnownSlots::new(),
+            resolution: None,
             configured_view:  RefCell::new(Matrix4::from_scale(1.0)),
         }
     }
 
     pub fn add_node(&mut self, node: Box<dyn Node>) {
         self.nodes.borrow_mut().push(node);
+    }
+
+    pub fn set_resolution(&mut self, resolution: Option<[u32;2]>){
+        self.resolution = resolution;
     }
 
     pub fn replace_node(&mut self, index: usize, node: Box<dyn Node>) {
@@ -87,7 +91,7 @@ impl Flow {
     //                 },
     //             );
     //         // Negociate and swap.
-    //         let new_last_slot = self.nodes.borrow_mut().last_mut().unwrap().negociate_slots_wk(window, suggested_slot, &self.well_known);
+    //         let new_last_slot = self.nodes.borrow_mut().last_mut().unwrap().negociate_slots(window, suggested_slot, self.resolution, None);
     //         self.last_slot.replace(Some(new_last_slot));
     //     }else{
     //         self.negociate_slots(window);
@@ -97,6 +101,7 @@ impl Flow {
     pub fn negociate_slots(&self, surface: &Surface) {
         let mut slot_a = NodeSlots::new();
         let mut slot_b = NodeSlots::new();
+        let mut original_image: Option<Texture> = None;
         let nodes_len = self.nodes.borrow().len();
         for (idx, node) in self.nodes.borrow_mut().iter_mut().enumerate() {
 
@@ -137,7 +142,7 @@ impl Flow {
                 NodeSlots::new_io(slot_b.take_output(), slot_a.take_output())
             };
             // Negociate and swap.
-            slot_a = node.negociate_slots_wk(surface, suggested_slot, &self.well_known);
+            slot_a = node.negociate_slots(surface, suggested_slot, self.resolution, &mut original_image);
             std::mem::swap(&mut slot_a, &mut slot_b);
         }
         self.last_slot.replace(Some(slot_b));

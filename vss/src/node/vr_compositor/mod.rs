@@ -58,7 +58,7 @@ impl VRCompositor{
 
 impl Node for VRCompositor {
   
-    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, _resolution: Option<[u32;2]>, _original_image: &mut Option<Texture>) -> NodeSlots {
         let slots = slots.to_color_input(surface).to_color_output(surface, "VR Compositor Node");
 
         self.uniforms.data.resolution_out = slots.output_size_f32();

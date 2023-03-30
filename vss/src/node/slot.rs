@@ -1,7 +1,6 @@
 use wgpu::{BindGroup, RenderPassColorAttachment, RenderPassDepthStencilAttachment};
 
 use super::*;
-use std::cell::RefCell;
 
 //TODO: we might need to select this at runtime.
 #[cfg(target_os = "android")]
@@ -92,7 +91,7 @@ impl ColorTargets{
 
 pub enum Slot {
     Empty,
-    Rgb {
+    Rgb { // TODO remove, but all shaders need to be adjusted to deal with depth appropriately
         color_source: Texture,
         color_target: RenderTexture,
         deflection_source: Texture,
@@ -118,7 +117,6 @@ pub enum Slot {
         covariances_source: Texture,
         covariances_target: RenderTexture,
     },
-    // XXX: Stereo
 }
 impl Default for Slot {
     fn default() -> Self {
@@ -656,36 +654,4 @@ impl NodeSlots {
         [target.width as f32, target.height as f32]
     }
 
-}
-
-pub struct WellKnownSlots{
-    original_image: RefCell<Option<Texture>>
-} 
-
-impl WellKnownSlots{
-    pub fn new() -> Self{
-        WellKnownSlots{
-            original_image: RefCell::new(None)
-        }
-    }
-
-    pub fn get_original(
-        &self,
-    ) -> Option<Texture>
-     {
-        let guard =  RefCell::borrow(&self.original_image);
-        match *guard{
-            Some(ref original_image) => {
-                Some(original_image.clone())
-            },
-            None => None
-        }
-    }
-    pub fn set_original(
-        &self,
-        view: Texture
-    ) {       
-        let mut guard = RefCell::borrow_mut(&self.original_image);
-        *guard =  Some(view.clone());
-    }
 }

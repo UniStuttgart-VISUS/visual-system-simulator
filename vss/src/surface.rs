@@ -83,6 +83,9 @@ impl Surface {
         let mut flow = Vec::new();
         flow.resize_with(flow_count, Flow::new);
 
+        for f in flow.iter_mut(){
+            f.set_resolution(Some(surface_size));
+        }
         //TODO set perspective from values here ?
 
         let mut vis_param = VisualizationParameters::default();
@@ -197,6 +200,10 @@ impl Surface {
     pub fn set_value(&self, key: String, value: Value, flow_index: usize) {
         self.values[flow_index].borrow_mut().insert(key, value);
         self.flow[flow_index].update_values(&self, &self.values[flow_index].borrow());
+    }
+
+    pub fn set_flow_resolution(&mut self, resolution: Option<[u32; 2]>, flow_index: usize){
+        self.flow[flow_index].set_resolution(resolution);
     }
     
     // pub fn set_perspective(&self, new_perspective: EyePerspective, flow_index: usize) {

@@ -40,12 +40,13 @@ impl IoGenerator {
         *self.input_processed.read().unwrap()
     }
 
-    fn _next(&mut self, surface: &Surface, render_resolution: Option<[u32; 2]>) -> Option<IoNodePair> {
+    //TODO if this methid is still relevant, render_resolution should be set outside of this method using surface.set_flow_resolution
+    fn _next(&mut self, surface: &Surface, _render_resolution: Option<[u32; 2]>) -> Option<IoNodePair> {
         self.input_idx += 1;
-        self.current(&surface, render_resolution,0)
+        self.current(&surface, 0)
     }
 
-    fn current(&mut self, surface: &Surface, render_resolution: Option<[u32; 2]>, flow_index: usize) -> Option<IoNodePair> {
+    fn current(&mut self, surface: &Surface, flow_index: usize) -> Option<IoNodePair> {
         if self.input_idx >= self.inputs.len() {
             None
         } else {
@@ -55,7 +56,6 @@ impl IoGenerator {
                 let mut input_node = UploadRgbBuffer::new(&surface);
                 input_node.upload_image(load(input_path));
                 input_node.set_flags(RgbInputFlags::from_extension(&input));
-                input_node.set_render_resolution(render_resolution);
                 let output_node = if let Some(output) = &self.output {
                     let mut output_node = DownloadRgbBuffer::new(&surface);
                     let output_info = OutputInfo {
@@ -107,7 +107,8 @@ impl IoGenerator {
 }
 
 fn build_flow(surface: &mut Surface, io_generator: &mut IoGenerator, flow_index: usize, render_resolution: Option<[u32; 2]>){
-    let (input_node, output_node) = io_generator.current(&surface, render_resolution, flow_index).unwrap();
+    let (input_node, output_node) = io_generator.current(&surface, flow_index).unwrap();
+    surface.set_flow_resolution(render_resolution, flow_index);
 
     // Add input node.
     surface.add_node(input_node, flow_index);

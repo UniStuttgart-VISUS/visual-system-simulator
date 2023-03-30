@@ -89,7 +89,7 @@ impl DownloadRgbBuffer{
 
 impl Node for DownloadRgbBuffer{
 
-    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, _resolution: Option<[u32;2]>, _original_image: &mut Option<Texture>) -> NodeSlots {
         let slots = slots.to_color_input(surface);
         self.res = slots.input_size_f32();
         let device = surface.device().borrow_mut();

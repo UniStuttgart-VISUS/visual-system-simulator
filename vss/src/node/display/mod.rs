@@ -1,3 +1,5 @@
+use std::borrow::BorrowMut;
+
 use super::*;
 use cgmath::Matrix4;
 use cgmath::Rad;
@@ -150,7 +152,7 @@ impl Display {
 impl Node for Display {
    
 
-    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots) -> NodeSlots {
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, _resolution: Option<[u32;2]>, original_image: &mut Option<Texture>) -> NodeSlots {
         let slots = slots.to_color_input(surface).to_color_output(surface, "DisplayNode");
         let device = surface.device().borrow_mut();
 
@@ -159,21 +161,12 @@ impl Node for Display {
 
         self.sources_bind_group = slots.as_all_colors_source(&device);
         self.render_target = slots.as_color_target();
+        if let Some(tex) = original_image.borrow_mut() {
+            (_, self.original_bind_group) = tex.create_bind_group(&device);
+        }
 
         slots
     }
-
-    fn negociate_slots_wk(&mut self, surface: &Surface, slots: NodeSlots, well_known: &WellKnownSlots) -> NodeSlots{
-        match well_known.get_original() {
-            Some(o) => {
-                let device = surface.device().borrow_mut();
-                self.original_bind_group = o.create_bind_group(&device).1
-            },
-            None => {},
-        };
-        self.negociate_slots(surface, slots)
-    }
-
 
     fn update_values(&mut self, _surface: &Surface, values: &ValueMap) {
         self.uniforms.data.stereo = if values
