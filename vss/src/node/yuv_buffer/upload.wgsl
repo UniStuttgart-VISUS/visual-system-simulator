@@ -16,7 +16,7 @@ fn vs_main(
         y = 1.0-y;
     }
     let pos = vec2<f32>(x, y);
-    out.tex_coords = vec2<f32>(pos.x, pos.y);
+    out.tex_coords = vec2<f32>(1.0 - pos.x, pos.y);
     let rot = mat2x2<f32>(vec2<f32>(0.0, 1.0), vec2<f32>(-1.0, 0.0)); // 90° clockwise rotation
     out.clip_position = vec4<f32>(rot * (pos * 2.0 - 1.0), 0.0, 1.0);
     return out;

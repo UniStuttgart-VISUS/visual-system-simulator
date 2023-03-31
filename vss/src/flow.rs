@@ -20,7 +20,6 @@ pub struct Flow {
     nodes: RefCell<Vec<Box<dyn Node>>>,
     last_slot: RefCell<Option<NodeSlots>>,
     pub last_perspective: RefCell<EyePerspective>,
-    resolution: Option<[u32;2]>,
     configured_view: RefCell<Matrix4<f32>>,
 }
 
@@ -35,17 +34,12 @@ impl Flow {
                 proj: cgmath::perspective(cgmath::Deg(70.0), 1.0, 0.05, 1000.0),
                 gaze: Vector3::new(0.0, 0.0, 1.0),
             }),
-            resolution: None,
             configured_view:  RefCell::new(Matrix4::from_scale(1.0)),
         }
     }
 
     pub fn add_node(&mut self, node: Box<dyn Node>) {
         self.nodes.borrow_mut().push(node);
-    }
-
-    pub fn set_resolution(&mut self, resolution: Option<[u32;2]>){
-        self.resolution = resolution;
     }
 
     pub fn replace_node(&mut self, index: usize, node: Box<dyn Node>) {
@@ -142,7 +136,7 @@ impl Flow {
                 NodeSlots::new_io(slot_b.take_output(), slot_a.take_output())
             };
             // Negociate and swap.
-            slot_a = node.negociate_slots(surface, suggested_slot, self.resolution, &mut original_image);
+            slot_a = node.negociate_slots(surface, suggested_slot, &mut original_image);
             std::mem::swap(&mut slot_a, &mut slot_b);
         }
         self.last_slot.replace(Some(slot_b));

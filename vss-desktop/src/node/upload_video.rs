@@ -223,9 +223,9 @@ impl UploadVideo {
 
 impl Node for UploadVideo {
    
-    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, resolution: Option<[u32;2]>, original_image: &mut Option<Texture>) -> NodeSlots {
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, original_image: &mut Option<Texture>) -> NodeSlots {
         self.validate_data();
-        self.uploader.negociate_slots(surface, slots, resolution, original_image)
+        self.uploader.negociate_slots(surface, slots, original_image)
     }
 
     fn update_values(&mut self, surface: &Surface, values: &ValueMap) {

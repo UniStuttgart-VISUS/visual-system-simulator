@@ -2,11 +2,21 @@ use super::*;
 use wgpu::CommandEncoder;
 
 struct Uniforms{
+    viewport: [f32; 4],
     resolution_in: [f32; 2],
     resolution_out: [f32; 2],
 
-    stereo: i32,
-    flow_idx: i32,
+    output_scale: u32,
+    absolute_viewport: u32,
+    _padding1: u32,
+    _padding2: u32,
+}
+
+#[derive(Copy, Clone)]
+pub enum OutputScale{
+    Fit = 0,
+    Fill = 1,
+    Stretch = 2,
 }
 
 pub struct Display {
@@ -23,10 +33,13 @@ impl Display {
 
         let uniforms = ShaderUniforms::new(&device, 
             Uniforms{
-                stereo: 0,
+                viewport: [0.0, 0.0, 1.0, 1.0],
                 resolution_in: [1.0, 1.0],
                 resolution_out: [1.0, 1.0],
-                flow_idx: 0,
+                output_scale: OutputScale::Fit as u32,
+                absolute_viewport: 0,
+                _padding1: 0,
+                _padding2: 0,
             }
         );
         
@@ -55,11 +68,20 @@ impl Display {
             render_target,
         }
     }
+
+    pub fn set_viewport(&mut self, x: f32, y: f32, width: f32, height: f32, absolute_viewport: bool){
+        self.uniforms.data.viewport = [x, y, width, height];
+        self.uniforms.data.absolute_viewport = absolute_viewport as u32;
+    }
+
+    pub fn set_output_scale(&mut self, output_scale: OutputScale){
+        self.uniforms.data.output_scale = output_scale as u32;
+    }
 }
 
 impl Node for Display {
    
-    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, _resolution: Option<[u32;2]>, _original_image: &mut Option<Texture>) -> NodeSlots {
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, _original_image: &mut Option<Texture>) -> NodeSlots {
         let slots = slots.to_color_input(surface).to_color_output(surface, "DisplayNode");
         let device = surface.device().borrow_mut();
 
@@ -70,27 +92,6 @@ impl Node for Display {
         self.render_target = slots.as_color_target();
 
         slots
-    }
-
-    fn update_values(&mut self, _surface: &Surface, values: &ValueMap) {
-        self.uniforms.data.stereo = if values
-            .get("split_screen_switch")
-            .unwrap_or(&Value::Bool(false))
-            .as_bool()
-            .unwrap_or(false)
-        {
-            1
-        } else {
-            0
-        };
-
-        self.uniforms.data.flow_idx = values.get("flow_id").unwrap_or(&Value::Number(0.0)).as_f64().unwrap_or(0.0) as i32;
-    }
-
-    fn input(&mut self, perspective: &EyePerspective, vis_param: &VisualizationParameters) -> EyePerspective {
-        self.uniforms.data.flow_idx = vis_param.eye_idx as i32;
-
-        perspective.clone()
     }
 
     fn render(&mut self, surface: &Surface, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
@@ -105,10 +106,6 @@ impl Node for Display {
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, &self.uniforms.bind_group, &[]);
         render_pass.set_bind_group(1, &self.source_bind_group, &[]);
-        if self.uniforms.data.stereo == 0 {
-            render_pass.draw(0..6, 0..1);
-        }else{
-            render_pass.draw(0..12, 0..1);
-        }
+        render_pass.draw(0..6, 0..1);
     }
 }

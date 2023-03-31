@@ -121,7 +121,7 @@ impl UploadYuvBuffer {
 }
 
 impl Node for UploadYuvBuffer {
-    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, _resolution: Option<[u32;2]>, original_image: &mut Option<Texture>) -> NodeSlots {
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, original_image: &mut Option<Texture>) -> NodeSlots {
         if let Some(buffer) = &self.buffer_next {
             let device = surface.device().borrow_mut();
             let queue = surface.queue().borrow_mut();

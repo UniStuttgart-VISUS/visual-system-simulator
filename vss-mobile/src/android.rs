@@ -53,8 +53,8 @@ impl CameraStream {
 }
 
 impl Node for CameraStream {
-    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, resolution: Option<[u32;2]>, original_image: &mut Option<Texture>) -> NodeSlots {
-        self.upload.negociate_slots(&surface, slots, resolution, original_image)
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, original_image: &mut Option<Texture>) -> NodeSlots {
+        self.upload.negociate_slots(&surface, slots, original_image)
     }
 
     fn update_values(&mut self, surface: &Surface, values: &ValueMap) {
@@ -198,7 +198,8 @@ fn build_flow(surface: &mut Surface, frame_receiver: Receiver<YuvBuffer>) {
     // surface.add_node(Box::new(node), 0);
 
     // Display node.
-    let node = Display::new(&surface);
+    let mut node = Display::new(&surface);
+    node.set_output_scale(OutputScale::Fill);
     surface.add_node(Box::new(node), 0);
 }
 

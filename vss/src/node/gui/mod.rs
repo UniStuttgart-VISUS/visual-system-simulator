@@ -112,7 +112,7 @@ impl GUI {
 impl Node for Display {
    
 
-    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, _resolution: Option<[u32;2]>, original_image: &mut Option<Texture>) -> NodeSlots {
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, original_image: &mut Option<Texture>) -> NodeSlots {
         let slots = slots.to_color_input(surface).to_color_output(surface, "DisplayNode");
         let device = surface.device().borrow_mut();
 

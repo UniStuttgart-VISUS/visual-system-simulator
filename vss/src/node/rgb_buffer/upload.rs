@@ -10,6 +10,19 @@ struct Uniforms{
     _padding: [i32; 3],
 }
 
+pub enum RenderResolution{
+    Screen{
+        output_scale: OutputScale,
+        input_scale: f32,
+    },
+    Buffer{
+        input_scale: f32,
+    },
+    Custom{
+        res: [u32; 2],
+    }
+}
+
 bitflags! {
     pub struct RgbInputFlags : u32 {
         const EQUIRECTANGULAR = 1;
@@ -45,14 +58,13 @@ impl RgbInputFlags {
 pub struct UploadRgbBuffer {
     buffer_next: RgbBuffer,
     buffer_upload: bool,
-    texture: Option<Texture>,//Option<gfx::handle::Texture<Resources, gfx::format::R8_G8_B8_A8>>,
+    texture: Option<Texture>,
+    render_resolution: RenderResolution,
 
     pipeline: wgpu::RenderPipeline,
     uniforms: ShaderUniforms<Uniforms>,
     source_bind_group: wgpu::BindGroup,
     targets: ColorDepthTargets,
-    // pso: gfx::PipelineState<Resources, pipe::Meta>,
-    // pso_data: pipe::Data<Resources>,
 }
 
 impl UploadRgbBuffer {
@@ -90,6 +102,7 @@ impl UploadRgbBuffer {
             buffer_next: RgbBuffer::default(),
             buffer_upload: false,
             texture: None,
+            render_resolution: RenderResolution::Buffer{input_scale: 1.0},
 
             pipeline,
             uniforms,
@@ -146,6 +159,10 @@ impl UploadRgbBuffer {
         self.buffer_upload = true;
     }
 
+    pub fn set_render_resolution(&mut self, render_resolution: RenderResolution) {
+        self.render_resolution = render_resolution;
+    }
+
     pub fn set_flags(&mut self, flags: RgbInputFlags) {
         self.uniforms.data.flags = flags.bits();
     }
@@ -154,7 +171,7 @@ impl UploadRgbBuffer {
 impl Node for UploadRgbBuffer {
    
 
-    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, resolution: Option<[u32;2]>, original_image: &mut Option<Texture>) -> NodeSlots {
+    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, original_image: &mut Option<Texture>) -> NodeSlots {
         if self.buffer_upload {
             let device = surface.device().borrow_mut();
             let queue = surface.queue().borrow_mut();
@@ -174,22 +191,48 @@ impl Node for UploadRgbBuffer {
             self.texture = Some(texture);
         }
 
-        let mut width = 1;
-        let mut height = 1;
-        if let Some(resolution) = resolution {
-            width = resolution[0];
-            height = resolution[1];
-        }else{
-            if let Some(texture) = &self.texture {
-                width = texture.width;
-                height = texture.height;
-            }
-    
+        let (width, height) = if let Some(texture) = &self.texture {
+            let tex_w = texture.width as f32;
+            let mut tex_h = texture.height as f32;
             let flags = RgbInputFlags::from_bits(self.uniforms.data.flags).unwrap();
             if flags.contains(RgbInputFlags::RGBD_HORIZONTAL) {
-                height /= 2;
+                tex_h /= 2.0;
             }
-        }
+            match self.render_resolution {
+                RenderResolution::Screen {output_scale, input_scale} => {
+                    let mut screen_w = surface.width() as f32;
+                    let mut screen_h = surface.height() as f32;
+                    let tex_aspect_ratio = tex_w / tex_h;
+                    let screen_aspect_ratio = screen_w / screen_h;
+                    match output_scale {
+                        OutputScale::Fit => {
+                            if tex_aspect_ratio > screen_aspect_ratio{ // scale down the larger side
+                                screen_h *= screen_aspect_ratio / tex_aspect_ratio;
+                            }else{
+                                screen_w *= tex_aspect_ratio / screen_aspect_ratio;
+                            }
+                        },
+                        OutputScale::Fill => {
+                            if tex_aspect_ratio > screen_aspect_ratio{ // scale up the smaller side
+                                screen_w *= tex_aspect_ratio / screen_aspect_ratio;
+                            }else{
+                                screen_h *= screen_aspect_ratio / tex_aspect_ratio;
+                            }
+                        },
+                        OutputScale::Stretch => {}, // no adjustment needed
+                    }
+                    ((screen_w * input_scale) as u32, (screen_h * input_scale) as u32)
+                },
+                RenderResolution::Buffer {input_scale} => {
+                    ((tex_w * input_scale) as u32, (tex_h * input_scale) as u32)
+                },
+                RenderResolution::Custom { res } => {
+                    (res[0], res[1])
+                },
+            }
+        }else{
+            (1, 1)
+        };
 
         let slots = slots.emplace_color_depth_output(surface, width, height, "UploadNode");
         self.targets = slots.as_all_target();
