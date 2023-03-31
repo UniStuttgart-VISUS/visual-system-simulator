@@ -142,7 +142,7 @@ impl Node for ErrorVis {
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("ErrorVisNode render_pass"),
-            color_attachments: &[screen.unwrap_or(&self.render_target).to_color_attachment()],
+            color_attachments: &[screen.unwrap_or(&self.render_target).to_color_attachment(Some(CLEAR_COLOR))],
             depth_stencil_attachment: None,
         });
     

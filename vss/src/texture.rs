@@ -79,27 +79,30 @@ impl RenderTexture{
         }
     }
 
-    pub fn to_color_attachment(&self) -> Option<wgpu::RenderPassColorAttachment>{
+    pub fn to_color_attachment(&self, clear: Option<wgpu::Color>) -> Option<wgpu::RenderPassColorAttachment>{
         Some(wgpu::RenderPassColorAttachment {
             view: self.view.as_ref(),
             resolve_target: None,
             ops: wgpu::Operations {
-                load: wgpu::LoadOp::Clear(wgpu::Color {
-                    r: 0.5,
-                    g: 0.5,
-                    b: 0.5,
-                    a: 1.0,
-                }),
+                load: if let Some(clear_color) = clear{
+                    wgpu::LoadOp::Clear(clear_color)
+                } else {
+                    wgpu::LoadOp::Load
+                },
                 store: true,
             },
         })
     }
 
-    pub fn to_depth_attachment(&self) -> Option<wgpu::RenderPassDepthStencilAttachment>{
+    pub fn to_depth_attachment(&self, clear: Option<f32>) -> Option<wgpu::RenderPassDepthStencilAttachment>{
         Some(wgpu::RenderPassDepthStencilAttachment {
             view: self.view.as_ref(),
             depth_ops: Some(wgpu::Operations {
-                load: wgpu::LoadOp::Clear(1.0),
+                load: if let Some(clear_depth) = clear{
+                    wgpu::LoadOp::Clear(clear_depth)
+                } else {
+                    wgpu::LoadOp::Load
+                },
                 store: true,
             }),
             stencil_ops: None,

@@ -45,7 +45,7 @@ impl NormalMapGenerator {
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Generator render_pass"),
-                color_attachments: &[self.texture.to_color_attachment()],
+                color_attachments: &[self.texture.to_color_attachment(Some(CLEAR_COLOR))],
                 depth_stencil_attachment: None,
             });
             render_pass.set_pipeline(&self.pipeline);

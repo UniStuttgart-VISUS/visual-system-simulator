@@ -110,13 +110,13 @@ impl IoGenerator {
     }
 }
 
-fn build_flow(surface: &mut Surface, io_generator: &mut IoGenerator, flow_index: usize, render_resolution: Option<[u32; 2]>){
+fn build_flow(surface: &mut Surface, io_generator: &mut IoGenerator, flow_index: usize, render_resolution: Option<[u32; 2]>, view_port: ViewPort, output_scale: OutputScale){
     let render_res = if let Some(res) = render_resolution {
         RenderResolution::Custom { res: res }
     }else{
         RenderResolution::Screen {
             input_scale: 1.0, //TODO add input scaling
-            output_scale: OutputScale::Fit //TODO add output scaling
+            output_scale
         }
     };
     let (input_node, output_node) = io_generator.current(&surface, render_res, flow_index).unwrap();
@@ -141,7 +141,9 @@ fn build_flow(surface: &mut Surface, io_generator: &mut IoGenerator, flow_index:
     surface.add_node(Box::new(node), flow_index);
 
     // Display node.
-    let node = Display::new(&surface);
+    let mut node = Display::new(&surface);
+    node.set_viewport(view_port);
+    node.set_output_scale(output_scale);
     surface.add_node(Box::new(node), flow_index);
 
     // Add output node, if present.
@@ -191,7 +193,34 @@ pub fn main() {
 
     let mut window = pollster::block_on(Window::new(config.visible, None, parameters, flow_count));
 
-    let mut desktop = SharedStereoDesktop::new();
+    let view_ports = match flow_count {
+        1 => {
+            vec![ViewPort{
+                x: 0.0,
+                y: 0.0,
+                width: 1.0,
+                height: 1.0,
+                absolute_viewport: false,
+            }]
+        },
+        2 => {
+            vec![ViewPort{
+                x: 0.0,
+                y: 0.0,
+                width: 0.5,
+                height: 1.0,
+                absolute_viewport: false,
+            },
+            ViewPort{
+                x: 0.5,
+                y: 0.0,
+                width: 0.5,
+                height: 1.0,
+                absolute_viewport: false,
+            }]
+        }
+        _ => {panic!("can't create view ports for more than two flow counts")}
+    };
 
     for index in 0..flow_count {
         let mut io_generator = IoGenerator::new(
@@ -199,12 +228,7 @@ pub fn main() {
             config.name.clone(),
             config.output.clone(),
         );
-        build_flow(&mut window.surface, &mut io_generator, index, config.resolution);
-
-        if flow_count > 1 {
-            let node = desktop.get_stereo_desktop_node(&window.surface);
-            window.surface.add_node(Box::new(node), index);
-        }
+        build_flow(&mut window.surface, &mut io_generator, index, config.resolution, view_ports[index], config.output_scale);
     }
 
     let mut done = false;
@@ -346,8 +370,6 @@ pub fn main() {
 
 
 
-    let mut desktop = SharedStereoDesktop::new();
-
     for index in 0..flow_count {
         let mut io_generator = IoGenerator::new(
             config.inputs.clone(),
@@ -356,9 +378,6 @@ pub fn main() {
         );
 
         build_flow(&mut window.surface, &mut io_generator, index, config.resolution);
-        let mut node = desktop.get_stereo_desktop_node(&window);
-
-        window.add_node(Box::new(node), index);
     }
 
 

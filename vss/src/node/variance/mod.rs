@@ -194,12 +194,12 @@ impl Node for VarianceMeasure {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Variance render_pass"),
                 color_attachments: &[
-                    screen.unwrap_or(&self.targets.rt_color).to_color_attachment(),
-                    self.targets.rt_deflection.to_color_attachment(),
-                    self.targets.rt_color_change.to_color_attachment(),
-                    self.targets.rt_color_uncertainty.to_color_attachment(),
-                    self.targets.rt_covariances.to_color_attachment(),
-                    self.target_measurement.to_color_attachment(),
+                    screen.unwrap_or(&self.targets.rt_color).to_color_attachment(Some(CLEAR_COLOR)),
+                    self.targets.rt_deflection.to_color_attachment(Some(CLEAR_COLOR)),
+                    self.targets.rt_color_change.to_color_attachment(Some(CLEAR_COLOR)),
+                    self.targets.rt_color_uncertainty.to_color_attachment(Some(CLEAR_COLOR)),
+                    self.targets.rt_covariances.to_color_attachment(Some(CLEAR_COLOR)),
+                    self.target_measurement.to_color_attachment(Some(CLEAR_COLOR)),
                 ],
                 depth_stencil_attachment: None,
             });

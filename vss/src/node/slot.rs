@@ -10,6 +10,8 @@ pub static COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8Unorm;
 pub static HIGHP_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
 pub static DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
+pub static CLEAR_COLOR: wgpu::Color = wgpu::Color{ r: 0.5, g: 0.5, b: 0.5, a: 1.0 };
+
 pub struct ColorDepthTargets{
     rt_color: RenderTexture,
     rt_depth: RenderTexture,
@@ -40,16 +42,16 @@ impl ColorDepthTargets{
 
     pub fn color_attachments<'a>(&'a self, screen: Option<&'a RenderTexture>) -> [Option<RenderPassColorAttachment>; 5]{
         [
-            screen.unwrap_or(&self.rt_color).to_color_attachment(),
-            self.rt_deflection.to_color_attachment(),
-            self.rt_color_change.to_color_attachment(),
-            self.rt_color_uncertainty.to_color_attachment(),
-            self.rt_covariances.to_color_attachment(),
+            screen.unwrap_or(&self.rt_color).to_color_attachment(Some(CLEAR_COLOR)),
+            self.rt_deflection.to_color_attachment(Some(CLEAR_COLOR)),
+            self.rt_color_change.to_color_attachment(Some(CLEAR_COLOR)),
+            self.rt_color_uncertainty.to_color_attachment(Some(CLEAR_COLOR)),
+            self.rt_covariances.to_color_attachment(Some(CLEAR_COLOR)),
         ]
     }
 
     pub fn depth_attachment(&self) -> Option<RenderPassDepthStencilAttachment>{
-        self.rt_depth.to_depth_attachment()
+        self.rt_depth.to_depth_attachment(Some(1.0))
     }
 }
 
@@ -80,11 +82,11 @@ impl ColorTargets{
     
     pub fn color_attachments<'a>(&'a self, screen: Option<&'a RenderTexture>) -> [Option<RenderPassColorAttachment>; 5]{
         [
-            screen.unwrap_or(&self.rt_color).to_color_attachment(),
-            self.rt_deflection.to_color_attachment(),
-            self.rt_color_change.to_color_attachment(),
-            self.rt_color_uncertainty.to_color_attachment(),
-            self.rt_covariances.to_color_attachment(),
+            screen.unwrap_or(&self.rt_color).to_color_attachment(Some(CLEAR_COLOR)),
+            self.rt_deflection.to_color_attachment(Some(CLEAR_COLOR)),
+            self.rt_color_change.to_color_attachment(Some(CLEAR_COLOR)),
+            self.rt_color_uncertainty.to_color_attachment(Some(CLEAR_COLOR)),
+            self.rt_covariances.to_color_attachment(Some(CLEAR_COLOR)),
         ]
     }
 }

@@ -32,6 +32,7 @@ pub struct Config {
     pub parameters_r: Option<ValueMap>,
     pub parameters_l: Option<ValueMap>,
     pub track_perf: u32,
+    pub output_scale: OutputScale,
 }
 
 impl Default for Config {
@@ -47,6 +48,7 @@ impl Default for Config {
             parameters_r: None,
             parameters_l: None,
             track_perf: 0,
+            output_scale: OutputScale::default(),
         }
     }
 }
@@ -189,6 +191,13 @@ pub fn cmd_parse() -> Config {
                 .help("The factor to scale the colormap by before output"),
         )
         .arg(
+            Arg::with_name("output_scale")
+                .long("output_scale")
+                .number_of_values(1)
+                .help("Which Scaling should be used for the Display Node\n\
+                \x20\x20available are: \"fit\", \"fill\" and \"stretch\""),
+        )
+        .arg(
             Arg::with_name("perf")
                 .long("perf")
                 .number_of_values(1)
@@ -280,6 +289,12 @@ pub fn cmd_parse() -> Config {
         let cf = cf.parse::<u16>().expect("Invalid cf") as f64;
         parameters.insert("file_cf".to_string(), Value::Number(cf));
     }
+
+    let output_scale = if let Some(str) = matches.value_of("output_scale"){
+        OutputScale::from_string(str)
+    } else {
+        OutputScale::default()
+    };
 
     let track_perf = matches
         .value_of("perf")
@@ -397,5 +412,6 @@ pub fn cmd_parse() -> Config {
         parameters_r,
         parameters_l,
         track_perf,
+        output_scale,
     }
 }

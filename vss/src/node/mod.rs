@@ -11,9 +11,7 @@ mod passthrough;
 mod retina;
 mod rgb_buffer;
 mod slot;
-mod vr_compositor;
 mod yuv_buffer;
-mod stereo_desktop;
 mod variance;
 mod peacock;
 
@@ -35,8 +33,6 @@ pub use self::retina::*;
 pub use self::rgb_buffer::*;
 pub use self::slot::*;
 pub use self::yuv_buffer::*;
-pub use self::vr_compositor::*;
-pub use self::stereo_desktop::*;
 pub use self::variance::*;
 pub use self::peacock::*;
 

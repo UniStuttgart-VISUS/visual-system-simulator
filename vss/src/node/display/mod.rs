@@ -12,11 +12,38 @@ struct Uniforms{
     _padding2: u32,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum OutputScale{
     Fit = 0,
     Fill = 1,
     Stretch = 2,
+}
+
+impl OutputScale{
+    pub fn from_string(s: &str) -> OutputScale{
+        match s.to_lowercase().as_str() {
+            "fit" => OutputScale::Fit,
+            "fill" => OutputScale::Fill,
+            "stretch" => OutputScale::Stretch,
+            _ => {
+                println!("Unknown OutputScale string, default value will be used");
+                OutputScale::default()
+            }
+        }
+    }
+}
+
+impl Default for OutputScale {
+    fn default() -> Self { OutputScale::Fit }
+}
+
+#[derive(Copy, Clone)]
+pub struct ViewPort{
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+    pub absolute_viewport: bool,
 }
 
 pub struct Display {
@@ -36,7 +63,7 @@ impl Display {
                 viewport: [0.0, 0.0, 1.0, 1.0],
                 resolution_in: [1.0, 1.0],
                 resolution_out: [1.0, 1.0],
-                output_scale: OutputScale::Fit as u32,
+                output_scale: OutputScale::default() as u32,
                 absolute_viewport: 0,
                 _padding1: 0,
                 _padding2: 0,
@@ -69,9 +96,9 @@ impl Display {
         }
     }
 
-    pub fn set_viewport(&mut self, x: f32, y: f32, width: f32, height: f32, absolute_viewport: bool){
-        self.uniforms.data.viewport = [x, y, width, height];
-        self.uniforms.data.absolute_viewport = absolute_viewport as u32;
+    pub fn set_viewport(&mut self, view_port: ViewPort){
+        self.uniforms.data.viewport = [view_port.x, view_port.y, view_port.width, view_port.height];
+        self.uniforms.data.absolute_viewport = view_port.absolute_viewport as u32;
     }
 
     pub fn set_output_scale(&mut self, output_scale: OutputScale){
@@ -99,7 +126,7 @@ impl Node for Display {
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("DisplayNode render_pass"),
-            color_attachments: &[screen.unwrap_or(&self.render_target).to_color_attachment()],
+            color_attachments: &[screen.unwrap_or(&self.render_target).to_color_attachment(None)],
             depth_stencil_attachment: None,
         });
     
