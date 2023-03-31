@@ -255,99 +255,70 @@ impl NodeSlots {
         }
     }
 
-    // pub fn to_color_depth_output(self, surface: &Surface) -> Self {
-    //     match self.output {
-    //         Slot::Empty => {
-    //             // Guess output, based on input.
-    //             let (width, height, ..) = match &self.input {
-    //                 Slot::Empty => {
-    //                     panic!("Input expected");
-    //                 }
-    //                 Slot::Rgb { color, .. } => color.get_dimensions(),
-    //                 Slot::RgbDepth { color, .. } => color.get_dimensions(),
-    //             };
-    //             let mut factory = window.factory().borrow_mut();
-    //             let (color, color_view) = create_texture_render_target::<ColorFormat>(
-    //                 &mut factory,
-    //                 width as u32,
-    //                 height as u32,
-    //             );
-    //             let (depth, depth_view) = create_texture_render_target::<DepthFormat>(
-    //                 &mut factory,
-    //                 width as u32,
-    //                 height as u32,
-    //             );
-    //             let (deflection, deflection_view) = create_texture_render_target::<Rgba32F>(
-    //                 &mut factory,
-    //                 width as u32,
-    //                 height as u32,
-    //             );
-    //             let (color_change_source, color_change_target) = create_texture_render_target::<Rgba32F>(
-    //                 &mut factory,
-    //                 width as u32,
-    //                 height as u32,
-    //             );
-    //             let (color_uncertainty_source, color_uncertainty_target) = create_texture_render_target::<Rgba32F>(
-    //                 &mut factory,
-    //                 width as u32,
-    //                 height as u32,
-    //             );
-    //             let (covariances_source, covariances_target) = create_texture_render_target::<Rgba32F>(
-    //                 &mut factory,
-    //                 width as u32,
-    //                 height as u32,
-    //             );
+    pub fn to_color_depth_output(self, surface: &Surface, node_name: &str) -> Self {
+        match self.output {
+            Slot::Empty => {
+                // Guess output size, based on input.
+                let (width, height) = match &self.input {
+                    Slot::Empty => {
+                        panic!("Input expected");
+                    }
+                    Slot::Rgb { color_target, .. } => (color_target.width, color_target.height),
+                    Slot::RgbDepth { color_target, .. } => (color_target.width, color_target.height),
+                };
+                let device = surface.device().borrow_mut();
+                let color_target = create_color_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_depth_output color").as_str()));
+                let depth_target = create_depth_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_depth_output depth").as_str()));
+                let deflection_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_depth_output deflection").as_str()));
+                let color_change_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_depth_output color_change").as_str()));
+                let color_uncertainty_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_depth_output color_uncertainty").as_str()));
+                let covariances_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_depth_output covariances").as_str()));
 
-    //             Self {
-    //                 input: self.input,
-    //                 output: Slot::RgbDepth {
-    //                     color,
-    //                     color_view: color_view,
-    //                     depth,
-    //                     depth_view,
-    //                     deflection,
-    //                     deflection_view,
-    //                     color_change_source, 
-    //                     color_change_target, 
-    //                     color_uncertainty_source, 
-    //                     color_uncertainty_target,                    
-    //                     covariances_source,
-    //                     covariances_target
-    //                 },
-    //             }
-    //         }
-    //         Slot::Rgb {                 
-    //             color, color_view, deflection, deflection_view, color_change_source, color_change_target, color_uncertainty_source, color_uncertainty_target, covariances_source, covariances_target, ..
-    //         } => {
-    //             // Guess missing depth, based on color.
-    //             let mut factory = window.factory().borrow_mut();
-    //             let (width, height, ..) = color.get_dimensions();
-    //             let (depth, depth_view) = create_texture_render_target::<DepthFormat>(
-    //                 &mut factory,
-    //                 width as u32,
-    //                 height as u32,
-    //             );
-    //             Self {
-    //                 input: self.input,
-    //                 output: Slot::RgbDepth {
-    //                     color,
-    //                     color_view: color_view.expect("Shader resource expected"),
-    //                     depth,
-    //                     depth_view,
-    //                     deflection,
-    //                     deflection_view,
-    //                     color_change_source, 
-    //                     color_change_target, 
-    //                     color_uncertainty_source, 
-    //                     color_uncertainty_target,
-    //                     covariances_source,
-    //                     covariances_target
-    //                 },
-    //             }
-    //         }
-    //         Slot::RgbDepth { .. } => self,
-    //     }
-    // }
+                Self {
+                    input: self.input,
+                    output: Slot::RgbDepth {
+                        color_source: color_target.as_texture(),
+                        color_target,
+                        depth_source: depth_target.as_texture(),
+                        depth_target,
+                        deflection_source: deflection_target.as_texture(),
+                        deflection_target,
+                        color_change_source: color_change_target.as_texture(), 
+                        color_change_target, 
+                        color_uncertainty_source: color_uncertainty_target.as_texture(),
+                        color_uncertainty_target,
+                        covariances_source: covariances_target.as_texture(),
+                        covariances_target,
+                    },
+                }
+            }
+            Slot::Rgb {
+                color_source, color_target, deflection_source, deflection_target, color_change_source, color_change_target, color_uncertainty_source, color_uncertainty_target, covariances_source, covariances_target, ..
+            } => {
+                // Guess missing depth, based on color.
+                let device = surface.device().borrow_mut();
+                let depth_target = create_depth_rt(&device, color_target.width, color_target.height, Some(format!("{}{}", node_name, " to_color_depth_output depth").as_str()));
+                Self {
+                    input: self.input,
+                    output: Slot::RgbDepth {
+                        color_source,
+                        color_target,
+                        depth_source: depth_target.as_texture(),
+                        depth_target,
+                        deflection_source,
+                        deflection_target,
+                        color_change_source, 
+                        color_change_target, 
+                        color_uncertainty_source,
+                        color_uncertainty_target,
+                        covariances_source,
+                        covariances_target,
+                    },
+                }
+            }
+            Slot::RgbDepth { .. } => self,
+        }
+    }
 
     pub fn emplace_color_output(self, surface: &Surface, width: u32, height: u32, node_name: &str) -> Self {
         let device = surface.device().borrow_mut();

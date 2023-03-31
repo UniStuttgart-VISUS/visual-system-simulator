@@ -178,10 +178,6 @@ impl Surface {
         self.flow[0].nodes_len()
     }
 
-    // pub fn update_last_node(&mut self) {
-    //     self.flow.iter().for_each(|f| f.update_last_slot(&self));
-    // }
-
     pub fn update_nodes(&mut self) {
         for (i, f) in self.flow.iter().enumerate(){
             f.negociate_slots(&self);
@@ -199,9 +195,9 @@ impl Surface {
         self.flow[flow_index].update_values(&self, &self.values[flow_index].borrow());
     }
     
-    // pub fn set_perspective(&self, new_perspective: EyePerspective, flow_index: usize) {
-    //     self.flow[flow_index].last_perspective.replace(new_perspective);
-    // }
+    pub fn set_perspective(&self, new_perspective: EyePerspective, flow_index: usize) {
+        self.flow[flow_index].last_perspective.replace(new_perspective);
+    }
 
     pub fn device(&self) -> & RefCell<wgpu::Device> {
         &self.device
@@ -260,21 +256,4 @@ impl Surface {
         self.flow.iter().for_each(|f| f.post_render(&self));
         self.last_render_instant.replace(Instant::now());
     }
-
-    // pub fn flush(&self, encoder: &mut DeviceEncoder) {
-    //     use std::ops::DerefMut;
-    //     let mut device = self.device.borrow_mut();
-    //     encoder.flush(device.deref_mut());
-    // }
-
-    // pub fn target(&self) -> & RefCell<TextureView> {
-    //     &self.render_target
-    //     //self.render_target.borrow().clone()
-    // }
-
-    // pub fn replace_targets(&self, target_color: RenderTargetColor, target_depth: RenderTargetDepth) {
-    //     self.render_target.replace(target_color);
-    //     self.main_depth.replace(target_depth);
-    // }
-
 }

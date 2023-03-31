@@ -125,9 +125,9 @@ fn build_flow(surface: &mut Surface, io_generator: &mut IoGenerator, flow_index:
     surface.add_node(input_node, flow_index);
 
     // Visual system passes.
-    let node = Lens::new(&surface);
-    surface.add_node(Box::new(node), flow_index);
     let node = Cataract::new(&surface);
+    surface.add_node(Box::new(node), flow_index);
+    let node = Lens::new(&surface);
     surface.add_node(Box::new(node), flow_index);
     let node = Retina::new(&surface);
     surface.add_node(Box::new(node), flow_index);
@@ -232,7 +232,6 @@ pub fn main() {
     }
 
     let mut done = false;
-    // window.update_last_node(); // TODO-WGPU
     window.surface.update_nodes();
 
     let mut frame_counter = 0u128; // you know, for the simulations than run longer than the universe exists
@@ -382,7 +381,6 @@ pub fn main() {
 
 
     let mut done = false;
-    window.update_last_node();
 
     oxr.create_session(&window);
     oxr.create_render_targets(&window);
@@ -468,8 +466,6 @@ pub fn main() {
         if varjo_should_render {
             set_varjo_data(&mut window, &mut varjo_fov, &mut varjo);
         }
-        
-        // window.update_last_node(); // TODO-readd
         
         done = window.poll_events();
 

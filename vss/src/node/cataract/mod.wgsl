@@ -45,6 +45,7 @@ fn lowerContrastBy(color: vec4<f32>, S: ptr<function, mat3x3<f32>>, value: f32) 
 // Fragment shader
 
 struct FragmentOutput {
+    @builtin(frag_depth) depth: f32,
     @location(0) color: vec4<f32>,
     @location(1) deflection: vec4<f32>,
     @location(2) color_change: vec4<f32>,
@@ -57,20 +58,24 @@ var in_color_s: sampler;
 @group(1) @binding(1)
 var in_color_t: texture_2d<f32>;
 @group(1) @binding(2)
-var in_deflection_s: sampler;
+var in_depth_s: sampler;
 @group(1) @binding(3)
-var in_deflection_t: texture_2d<f32>;
+var in_depth_t: texture_2d<f32>;
 @group(1) @binding(4)
-var in_color_change_s: sampler;
+var in_deflection_s: sampler;
 @group(1) @binding(5)
-var in_color_change_t: texture_2d<f32>;
+var in_deflection_t: texture_2d<f32>;
 @group(1) @binding(6)
-var in_color_uncertainty_s: sampler;
+var in_color_change_s: sampler;
 @group(1) @binding(7)
-var in_color_uncertainty_t: texture_2d<f32>;
+var in_color_change_t: texture_2d<f32>;
 @group(1) @binding(8)
-var in_covariances_s: sampler;
+var in_color_uncertainty_s: sampler;
 @group(1) @binding(9)
+var in_color_uncertainty_t: texture_2d<f32>;
+@group(1) @binding(10)
+var in_covariances_s: sampler;
+@group(1) @binding(11)
 var in_covariances_t: texture_2d<f32>;
 
 @fragment
@@ -126,5 +131,6 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
             out.covariances =       textureSample(in_covariances_t, in_covariances_s, in.tex_coords);
         }
     }
+    out.depth = textureSample(in_depth_t, in_depth_s, in.tex_coords).r;
     return out;
 }

@@ -12,7 +12,7 @@ pub struct Cataract {
     pipeline: wgpu::RenderPipeline,
     uniforms: ShaderUniforms<Uniforms>,
     sources_bind_group: wgpu::BindGroup,
-    targets: ColorTargets,
+    targets: ColorDepthTargets,
 }
 
 impl Cataract {
@@ -29,7 +29,7 @@ impl Cataract {
                 track_error: 0,
             });
 
-        let (sources_bind_group_layout, sources_bind_group) = create_color_sources_bind_group(&device, &queue, "Cataract");
+        let (sources_bind_group_layout, sources_bind_group) = create_color_depth_sources_bind_group(&device, &queue, "Cataract");
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Cataract Shader"),
@@ -45,14 +45,14 @@ impl Cataract {
             &["vs_main", "fs_main"],
             &[&uniforms.bind_group_layout, &sources_bind_group_layout],
             &all_color_states(),
-            None,
+            simple_depth_state(DEPTH_FORMAT),
             Some("Cataract Render Pipeline"));
 
         Cataract {
             pipeline,
             uniforms,
             sources_bind_group,
-            targets: ColorTargets::new(&device, "Cataract"),
+            targets: ColorDepthTargets::new(&device, "Cataract"),
         }
     }
 }
@@ -61,13 +61,13 @@ impl Node for Cataract {
     
 
     fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, _original_image: &mut Option<Texture>) -> NodeSlots {
-        let slots = slots.to_color_input(surface).to_color_output(surface, "CataractNode");
+        let slots = slots.to_color_depth_input(surface).to_color_depth_output(surface, "CataractNode");
         self.uniforms.data.resolution = slots.output_size_f32();
 
         let device = surface.device().borrow_mut();
 
-        self.sources_bind_group = slots.as_all_colors_source(&device);
-        self.targets = slots.as_all_colors_target();
+        self.sources_bind_group = slots.as_all_source(&device);
+        self.targets = slots.as_all_target();
 
         slots
     }
@@ -101,7 +101,7 @@ impl Node for Cataract {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Cataract render_pass"),
             color_attachments: &self.targets.color_attachments(screen),
-            depth_stencil_attachment: None,
+            depth_stencil_attachment: self.targets.depth_attachment(),
         });
     
         render_pass.set_pipeline(&self.pipeline);
