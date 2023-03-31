@@ -174,6 +174,7 @@ fn create_texture_bind_group(device: &wgpu::Device, texture: &Texture)
     (layout, bind_group)
 }
 
+//TODO switch sampler and texture order to keep the bind group order the same when using a single texture or multiple
 pub fn create_textures_bind_group(device: &wgpu::Device, textures: &[&Texture]) 
     -> (wgpu::BindGroupLayout, wgpu::BindGroup)
     {

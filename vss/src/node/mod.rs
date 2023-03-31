@@ -4,6 +4,8 @@
 #[macro_use]
 mod cataract;
 mod display;
+mod error_vis;
+// mod gui;
 mod lens;
 mod passthrough;
 mod retina;
@@ -25,6 +27,8 @@ use wgpu::util::DeviceExt;
 
 pub use self::cataract::*;
 pub use self::display::*;
+pub use self::error_vis::*;
+// pub use self::gui::*;
 pub use self::lens::*;
 pub use self::passthrough::*;
 pub use self::retina::*;

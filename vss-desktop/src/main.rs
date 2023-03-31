@@ -9,7 +9,6 @@ mod openxr;
 use std::cell::RefCell;
 use std::time::Instant;
 use std::fs;
-use std::fs::OpenOptions;
 use vss::*;
 
 use crate::cmd::*;
@@ -55,7 +54,7 @@ impl IoGenerator {
                 let input_path = std::path::Path::new(input);
                 let mut input_node = UploadRgbBuffer::new(&surface);
                 input_node.upload_image(load(input_path));
-                input_node.set_flags(RgbInputFlags::from_extension(&input));
+                input_node.set_flags(RgbInputFlags::from_extension(&input) | RgbInputFlags::VERTICALLY_FLIPPED);
                 let output_node = if let Some(output) = &self.output {
                     let mut output_node = DownloadRgbBuffer::new(&surface);
                     let output_info = OutputInfo {
@@ -123,8 +122,10 @@ fn build_flow(surface: &mut Surface, io_generator: &mut IoGenerator, flow_index:
     let node = PeacockCB::new(&surface);
     surface.add_node(Box::new(node), flow_index);
     
-    // Measure Uncertainty
+    // Measurement Nodes for variance and error
     let node = VarianceMeasure::new(&surface);
+    surface.add_node(Box::new(node), flow_index);
+    let node = ErrorVis::new(&surface);
     surface.add_node(Box::new(node), flow_index);
 
     // Display node.

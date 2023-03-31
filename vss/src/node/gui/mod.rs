@@ -7,6 +7,11 @@ use cgmath::Matrix4;
 use cgmath::Rad;
 use wgpu::CommandEncoder;
 
+struct Uniforms{
+    resolution_in: [f32; 2],
+    resolution_out: [f32; 2],
+}
+
 // gfx_defines! {
 //     vertex Vertex {
 //         pos: [f32; 2] = "a_pos",
@@ -17,8 +22,6 @@ use wgpu::CommandEncoder;
 //     pipeline gui_pipe {
 //         vbuf: gfx::VertexBuffer<Vertex> = (),
 //         u_texture: gfx::TextureSampler<[f32; 4]> = "u_tex",
-//         u_resolution_in: gfx::Global<[f32; 2]> = "u_resolution_in",
-//         u_resolution_out: gfx::Global<[f32; 2]> = "u_resolution_out",
 //         rt_color: gfx::BlendTarget<ColorFormat> = ("rt_color", gfx::state::ColorMask::all(), gfx::preset::blend::ALPHA),
 //     }
 // }
@@ -34,10 +37,11 @@ pub struct GUI {
     uniforms: ShaderUniforms<Uniforms>,
     sources_bind_group: wgpu::BindGroup,
     render_target: RenderTexture,
-    // gui_context: eframe::egui::CtxRef,
-    // gui_texture_version: u64,
-    // gui_meshes: Vec<eframe::egui::ClippedMesh>,
-    // gui_active: bool,
+
+    gui_context: eframe::egui::CtxRef,
+    gui_texture_version: u64,
+    gui_meshes: Vec<eframe::egui::ClippedMesh>,
+    gui_active: bool,
 }
 
 impl GUI {

@@ -30,23 +30,15 @@ var in_color_s: sampler;
 fn fs_main(in: VertexOutput) -> FragmentOutput {
     var out: FragmentOutput;
 
-    // out.color = textureSample(in_color_t, in_color_s, in.tex_coords);
-    // out.deflection = vec4<f32>(in.tex_coords, 0.0f, 1.0f);
-
     var depth = 0.5;
     var tex = in.tex_coords;
          
     if ((uniforms.flags & 1u) == 1u) {
         // Equirectangular 360° projection.
-            let ndc = vec4<f32>(tex * 2.0 - 1.0, 0.9, 1.0);
-            var world_dir = uniforms.inv_proj_view * ndc;
-            world_dir = vec4<f32>(normalize(world_dir.xyz)/world_dir.w, world_dir.w);
-            tex = vec2<f32>(atan2(world_dir.z, world_dir.x) + PI, acos(-world_dir.y)) / vec2<f32>(2.0 * PI, PI);
-            //old method of projection
-            /*vec2 ndc = tex * 2.0 - 1.0;
-            vec4 cam_dir = vec4(normalize(vec3(ndc * vec2(tan(0.5 * uniforms.fov.x), tan(0.5 * uniforms.fov.y)), 1.0)), 1.0);
-            vec4 rd = uniforms.head * cam_dir;
-            tex = vec2(atan(rd.z, rd.x) + PI, acos(-rd.y)) / vec2(2.0 * PI, PI);*/
+        let ndc = vec4<f32>(tex * 2.0 - 1.0, 0.9, 1.0);
+        var world_dir = uniforms.inv_proj_view * ndc;
+        world_dir = vec4<f32>(normalize(world_dir.xyz)/world_dir.w, world_dir.w);
+        tex = vec2<f32>(atan2(world_dir.z, world_dir.x) + PI, acos(-world_dir.y)) / vec2<f32>(2.0 * PI, PI);
     }
 
     if ((uniforms.flags & 2u) == 2u) {

@@ -56,7 +56,7 @@ impl Surface {
 
         // Query surface capablities, preferably with sRGB support.
         let swapchain_capabilities = surface.get_capabilities(&adapter);
-        let mut view_formats = vec![];
+        let view_formats = vec![];
         // #[cfg(target_os = "android")]
         // {
         //     let srgb_format = swapchain_capabilities.formats[0].add_srgb_suffix();

@@ -7,18 +7,6 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder, platform::run_return::EventLoopExtRunReturn,
 };
-// use glutin::{ElementState, MouseButton, dpi::{LogicalPosition}};
-
-/// A factory to create device objects.
-//TODO-WGPU pub type DeviceFactory = gfx_device_gl::Factory;
-
-/// An encoder to manipulate a device command queue.
-//TODO-WGPU pub type DeviceEncoder = gfx::Encoder<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer>;
-
-/// Render Target Types of this Window.
-//TODO-WGPU pub type RenderTargetColor = gfx::handle::RenderTargetView<gfx_device_gl::Resources, ColorFormat>;
-//TODO-WGPU pub type RenderTargetDepthFormat = (gfx::format::D24_S8, gfx::format::Unorm);
-//TODO-WGPU pub type RenderTargetDepth = gfx::handle::DepthStencilView<gfx_device_gl::Resources, RenderTargetDepthFormat>;
 
 /// Represents a window along with its associated rendering context and [Flow].
 pub struct Window {
