@@ -34,6 +34,8 @@ public class SimulatorBridge {
 
     private static native void nativePostSettings(String jsonString);
 
+    private static native String nativeQuerySettings();
+
     public static boolean hasLoadedLibrary() {
         return LIBRARY_LOADED;
     }
@@ -72,5 +74,11 @@ public class SimulatorBridge {
         assert LIBRARY_LOADED : "Native library not loaded";
         Log.v(LOG_TAG, "Posting simulator settings: " + jsonString);
         nativePostSettings(jsonString);
+    }
+
+    public static String querySettings() {
+        assert LIBRARY_LOADED : "Native library not loaded";
+        Log.v(LOG_TAG, "Querying simulator settings");
+        return nativeQuerySettings();
     }
 }

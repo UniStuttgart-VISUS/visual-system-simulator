@@ -2,6 +2,7 @@ package com.vss;
 
 import android.Manifest;
 import android.app.AlertDialog;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.hardware.camera2.CameraDevice;
 import android.net.Uri;
@@ -145,8 +146,6 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         inspectorView.getSettings().setJavaScriptEnabled(true);
         inspectorView.addJavascriptInterface(this, "Activity");
 
-        //TODO: add event listener for "config changed/loaded" or something like that?
-
         // Load welcome page.
         loadPage("index.html");
     }
@@ -178,13 +177,18 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     }
 
     @JavascriptInterface
-    public void postSettings(String jsonString) {
+    public void setJSONSettings(String jsonString) {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
                 simulatorView.postSettings(jsonString);
             }
         });
+    }
+
+    @JavascriptInterface
+    public String getJSONSettings(String jsonString) {
+        return simulatorView.querySettings();
     }
 
     //endregion
@@ -222,16 +226,13 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
             }
         });
 
-        // Setup simulator.
-        //this.simulatorView.postSettings(jsonString);
-        //this.simulatorView.start()
-
-        // Enter immersive mode and prevent screen from turning off.
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        // Enter immersive mode.
         WindowInsetsControllerCompat windowInsetsController =
                 WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
         windowInsetsController.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_BARS_BY_TOUCH);
         windowInsetsController.hide(WindowInsetsCompat.Type.systemBars());
+        // Prevent screen from turning off.
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         // Switch to simulation state.
         this.inspectorSimulatorPane.open();
@@ -244,10 +245,11 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         this.cameraAccess.close();
         this.cameraAccess = null;
 
-        // Leave immersive mode and allow turning off the screen.
+        // Leave immersive mode.
         WindowInsetsControllerCompat windowInsetsController =
                 WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
         windowInsetsController.show(WindowInsetsCompat.Type.systemBars());
+        // Allow turning off the screen.
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         // Switch to inspection state.
@@ -295,29 +297,14 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
      * @param id settings-id
      */
     private void loadSimulatorSettings(int id) {
-        Log.d(LOG_TAG, "Load simulator settings ...");
+        Log.d(LOG_TAG, "Loading simulator settings...");
 
-        //try to load simulator settings
-        //   try {
-
-        //load simulator settings from id
-        // this.edSettingsController.loadSimulatorSettings(id);
+        //TODO: load simulator settings from id
 
         //print message
         Toast.makeText(this, R.string.eyediseases_settings_load_successful, Toast.LENGTH_SHORT).show();
 
-        Log.d(LOG_TAG, "Load simulator settings successful!");
-        // }
-
-        //loading failed
-        // catch (IOException | IndexOutOfBoundsException e) {
-
-        //print message
-        //    Toast.makeText(this, R.string.eyediseases_settings_load_failed, Toast.LENGTH_SHORT)
-        //    .show();
-
-        //   Log.d("MainMenu", "Load simulator settings failed!", e);
-        //}
+        Log.d(LOG_TAG, "Loading simulator settings successful!");
     }
 
     /**
@@ -326,72 +313,31 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
      * @param name name of simulator settings
      */
     private void saveSimulatorSettings(String name) {
-        Log.d(LOG_TAG, "Store simulator settings ...");
+        Log.d(LOG_TAG, "Saving simulator settings ...");
 
-        //try to store simulator settings
-        //  try {
+        //TODO: store simulator settings with name
 
-        //store simulator settings with name
-        //   edSettingsController.storeSimulatorSettings(name);
-
-        //print message
         Toast.makeText(this, R.string.eyediseases_settings_store_successful, Toast.LENGTH_SHORT).show();
 
-        Log.d(LOG_TAG, "Store simulator settings successful!");
-        //  }
-
-        //storing failed
-        //  catch (IOException e) {
-
-        //print message
-        //     Toast.makeText(this, R.string.eyediseases_settings_store_failed, Toast
-        //     .LENGTH_SHORT).show();
-
-        //     Log.d("MainMenu", "Store simulator settings failed", e);
-        //  }
+        Log.d(LOG_TAG, "Saving simulator settings successful!");
     }
 
     /**
      * Resets the simulator settings
      */
     private void resetSimulatorSettings() {
-        Log.d(LOG_TAG, "Reset simulator settings ...");
+        Log.d(LOG_TAG, "Resetting simulator settings...");
 
-        //try to reset simulator settings
-        //  try {
+        //TODO: load default settings
 
-        //load default simulator settings
-        //    edSettingsController.loadDefaultSimulatorSettings();
-
-        //print message
         Toast.makeText(this, R.string.eyediseases_settings_reset_successful, Toast.LENGTH_SHORT).show();
 
-        Log.d(LOG_TAG, "Reset simulator settings successful!");
-        // }
-
-        //reset failed
-        //  catch (IOException e) {
-
-        //print message
-        //    Toast.makeText(this, R.string.eyediseases_settings_reset_failed, Toast
-        //    .LENGTH_SHORT).show();
-
-        //     Log.d("MainMenu", "Reset simulator settings failed!", e);
-        //  }
+        Log.d(LOG_TAG, "Resetting simulator settings successful!");
     }
+
+    //endregion
 
     private enum ActivityState {
         Welcome, Simulating, Inspecting,
     }
-
-    /*
-      // Copy planes to buffers.
-                image.getPlanes()[0].getBuffer().get(y);
-                image.getPlanes()[1].getBuffer().get(u);
-                image.getPlanes()[2].getBuffer().get(v);
-
-                //TODO: simulatorView.postFrame(width, height, y, u, v);
-     */
-
-    //endregion
 }

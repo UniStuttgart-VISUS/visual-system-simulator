@@ -292,3 +292,16 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostSettings
 
     //TODO: bridge.post_settings()
 }
+
+#[no_mangle]
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeQuerySettings<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass
+) -> JString<'local> {
+    let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
+    let bridge = (*guard).as_mut().expect("Bridge should be created");
+
+    //TODO: bridge.query_settings()
+
+    return env.new_string("{}").unwrap();
+}

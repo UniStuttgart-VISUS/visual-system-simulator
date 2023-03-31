@@ -6,6 +6,7 @@ import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.ImageFormat;
+import android.graphics.Point;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
@@ -17,14 +18,14 @@ import android.media.Image;
 import android.media.ImageReader;
 import android.util.Log;
 import android.util.Size;
+import android.view.Display;
+import android.view.WindowManager;
 
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 
 import java.nio.BufferUnderflowException;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -55,6 +56,39 @@ public class CameraAccess {
         }
     }
 
+    @NonNull
+    private Size getScreenSize() {
+        WindowManager windowManager =
+                (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
+        Display display = windowManager.getDefaultDisplay();
+        Point size = new Point();
+        display.getSize(size);
+        return new Size(size.x, size.y);
+    }
+
+    /**
+     * This function selects the camera resolution that matches the screen size best.
+     *
+     * @param cameraSizes possible camera resolutions
+     * @param screenSize  the screen size.
+     * @return best matching camera resolution.
+     */
+    private Size getBestResolution(List<Size> cameraSizes, Size screenSize) {
+        final int minScreen = Math.min(screenSize.getWidth(), screenSize.getHeight());
+        final int maxScreen = Math.max(screenSize.getWidth(), screenSize.getHeight());
+        Size bestSize = null;
+        int bestDiff = Integer.MAX_VALUE;
+        for (Size size : cameraSizes) {
+            final int diffA = Math.abs(Math.min(size.getWidth(), size.getHeight()) - minScreen);
+            final int diffB = Math.abs(Math.max(size.getWidth(), size.getHeight()) - maxScreen);
+            if ((diffA < bestDiff || diffB < bestDiff)) {
+                bestDiff = Math.min(diffA, diffB);
+                bestSize = size;
+            }
+        }
+        return bestSize;
+    }
+
     private void setupCamera() {
         if (!checkCameraPermission()) {
             return;
@@ -72,7 +106,8 @@ public class CameraAccess {
                 }
 
                 // We need a stream configuration.
-                StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+                StreamConfigurationMap map =
+                        characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
                 if (map == null) {
                     continue;
                 }
@@ -81,29 +116,28 @@ public class CameraAccess {
                 final int imageFormat = ImageFormat.YUV_420_888;
                 final List<Size> outputSizes = Arrays.asList(map.getOutputSizes(imageFormat));
 
-                // Log some useful information.
+                // Log useful information and selection.
                 Log.i("Camera", map.toString());
                 for (Size size : outputSizes) {
                     Log.i("Camera", size.toString());
                 }
 
-                // Use the largest available size for the given format.
-                final Size largestSize = Collections.max(outputSizes, new Comparator<Size>() {
-                    @Override
-                    public int compare(Size lhs, Size rhs) {
-                        // We cast here to ensure the multiplications won't overflow
-                        return Long.signum((long) lhs.getWidth() * lhs.getHeight() - (long) rhs.getWidth() * rhs.getHeight());
-                    }
-                });
 
-                //TODO: use multi-camera API (camera2) or FEATURE_CAMERA_CONCURRENT (camera2) for front/back camera
+                // Select camera resolution.
+                Size screenSize = getScreenSize();
+                final Size bestSize = getBestResolution(outputSizes, screenSize);
+                Log.i("Camera",
+                        "Using camera resolution " + bestSize + " (screen resolution is " + screenSize + ")");
+
+                //TODO: use multi-camera API (camera2) or FEATURE_CAMERA_CONCURRENT (camera2) for
+                // front/back camera
 
                 manager.openCamera(cameraId, new CameraDevice.StateCallback() {
                     @Override
                     public void onOpened(CameraDevice cameraDevice) {
                         Log.i("Camera", "Device opened");
                         delegate.onCameraOpen(cameraDevice);
-                        setupCameraSession(cameraDevice, imageFormat, largestSize);
+                        setupCameraSession(cameraDevice, imageFormat, bestSize);
                     }
 
                     @Override
@@ -143,7 +177,7 @@ public class CameraAccess {
             private boolean logUnexpected = true;
 
             public void onImageAvailable(ImageReader reader) {
-                Image image = reader.acquireLatestImage();
+                final Image image = reader.acquireLatestImage();
                 if (image == null) {
                     return;
                 }
@@ -175,14 +209,17 @@ public class CameraAccess {
                 @Override
                 public void onConfigured(@NonNull CameraCaptureSession captureSession) {
                     try {
-                        CaptureRequest.Builder requestBuilder = cameraDevice.createCaptureRequest(TEMPLATE_PREVIEW);
+                        CaptureRequest.Builder requestBuilder =
+                                cameraDevice.createCaptureRequest(TEMPLATE_PREVIEW);
                         requestBuilder.addTarget(imageReader.getSurface());
 
                         // Set continuous auto focus.
-                        requestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+                        requestBuilder.set(CaptureRequest.CONTROL_AF_MODE,
+                                CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
 
                         // Finally, start requesting frames.
-                        captureSession.setRepeatingRequest(requestBuilder.build(), new CameraCaptureSession.CaptureCallback() {
+                        captureSession.setRepeatingRequest(requestBuilder.build(),
+                                new CameraCaptureSession.CaptureCallback() {
                         }, null);
                     } catch (CameraAccessException e) {
                         Log.e("CameraSession", "Configure failed", e);

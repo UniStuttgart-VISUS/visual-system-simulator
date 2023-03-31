@@ -57,15 +57,20 @@ public class SimulatorSurfaceView extends SurfaceView implements SurfaceHolder.C
         SimulatorBridge.draw();
     }
 
+    public void postFrame(int width, int height, byte[] y, byte[] u, byte[] v) {
+        assert Looper.getMainLooper().isCurrentThread() : "Called from non-UI thread";
+        SimulatorBridge.postFrame(width, height, y, u, v);
+        SimulatorBridge.draw();
+    }
+
     public void postSettings(String jsonString) {
         assert Looper.getMainLooper().isCurrentThread() : "Called from non-UI thread";
         SimulatorBridge.postSettings(jsonString);
         SimulatorBridge.draw();
     }
 
-    public void postFrame(int width, int height, byte[] y, byte[] u, byte[] v) {
+    public String querySettings() {
         assert Looper.getMainLooper().isCurrentThread() : "Called from non-UI thread";
-        SimulatorBridge.postFrame(width, height, y, u, v);
-        SimulatorBridge.draw();
+        return SimulatorBridge.querySettings();
     }
 }
