@@ -1,6 +1,7 @@
 use glob::glob;
 use mustache;
 use serde::Serialize;
+use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
@@ -20,77 +21,167 @@ pub struct OutputInfo {
     pub extension: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+pub struct FlowConfig {
+    pub name: String,
+    pub values: HashMap<String, serde_json::value::Value>,
+    pub static_gaze: Option<(f32, f32)>,
+    pub static_view: Option<(f32, f32)>,
+}
+
+#[derive(Debug, Clone)]
 pub struct Config {
     pub port: Option<u16>,
     pub visible: bool,
-    pub resolution: Option<[u32; 2]>,
+    pub resolution: Option<(u32, u32)>,
+    pub measure_frames: u128,
+    pub flow_configs: Vec<FlowConfig>,
     pub output: Option<mustache::Template>,
-    pub inputs: Vec<String>,
-    pub name: String,
-    pub parameters: ValueMap,
-    pub parameters_r: Option<ValueMap>,
-    pub parameters_l: Option<ValueMap>,
-    pub track_perf: u32,
     pub output_scale: OutputScale,
+    pub inputs: Vec<String>,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Config {
-            port: Some(9009),
+            port: None,
             visible: false,
             resolution: None,
             output: None,
             inputs: Vec::new(),
-            name: "default".to_string(),
-            parameters: std::collections::HashMap::new(),
-            parameters_r: None,
-            parameters_l: None,
-            track_perf: 0,
+            flow_configs: vec![FlowConfig {
+                name: "Default".to_string(),
+                values: HashMap::new(),
+                static_gaze: None,
+                static_view: None,
+            }],
+            measure_frames: 0,
             output_scale: OutputScale::default(),
         }
     }
 }
 
-fn parse_config(arg: &str) -> Result<(ValueMap, String), Box<dyn Error>> {
-    // Parse from string or as file.
-    let (value, name): (serde_json::Value, String) = if let Ok(json) = serde_json::from_str(&arg) {
-        (json, "custom".to_string())
-    } else {
-        let mut data = String::new();
-        let mut file = File::open(arg)?;
-        file.read_to_string(&mut data)?;
-        (
-            serde_json::from_str(&data)?,
-            std::path::Path::new(arg)
-                .file_stem()
-                .unwrap()
-                .to_os_string()
-                .into_string()
-                .unwrap(),
-        )
-    };
-    let object = value.as_object().unwrap();
+pub struct ConfigInspector<'a> {
+    config: &'a Config,
+    flow_index: usize,
+}
 
-    let mut map = ValueMap::new();
-    for (key, value) in object.iter() {
-        match value {
-            serde_json::value::Value::Null => {}
-            serde_json::value::Value::Bool(b) => {
-                map.insert(key.to_string(), Value::Bool(*b));
-            }
-            serde_json::value::Value::Number(n) => {
-                map.insert(key.to_string(), Value::Number(n.as_f64().unwrap()));
-            }
-            serde_json::value::Value::String(ref s) => {
-                map.insert(key.to_string(), Value::Image(s.to_string()));
-            }
-            serde_json::value::Value::Array(_) => {}
-            serde_json::value::Value::Object(_) => {}
+impl<'a> ConfigInspector<'a> {
+    pub fn new(config: &'a Config) -> Self {
+        ConfigInspector {
+            config,
+            flow_index: 0,
         }
     }
-    Ok((map, name))
+}
+
+impl Inspector for ConfigInspector<'_> {
+    fn begin_flow(&mut self, index: usize) {
+        dbg!(index);
+        self.flow_index = index;
+    }
+
+    fn end_flow(&mut self) {
+        self.flow_index = 0;
+    }
+
+    fn begin_node(&mut self, name: &'static str) {
+        dbg!(name);
+    }
+
+    fn end_node(&mut self) {}
+
+    fn mut_bool(&mut self, name: &'static str, value: &mut bool) -> bool {
+        let config_values = &self.config.flow_configs[self.flow_index].values;
+        if let Some(serde_json::value::Value::Bool(config_value)) = config_values.get(name) {
+            *value = *config_value;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn mut_f64(&mut self, name: &'static str, value: &mut f64) -> bool {
+        let config_values = &self.config.flow_configs[self.flow_index].values;
+        if let Some(serde_json::value::Value::Number(config_value)) = config_values.get(name) {
+            *value =  config_value.as_f64().unwrap();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn mut_f32(&mut self, name: &'static str, value: &mut f32) -> bool {
+        let config_values = &self.config.flow_configs[self.flow_index].values;
+        if let Some(serde_json::value::Value::Number(config_value)) = config_values.get(name) {
+            *value =  config_value.as_f64().unwrap() as f32;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn mut_i32(&mut self, name: &'static str, value: &mut i32) -> bool {
+        let config_values = &self.config.flow_configs[self.flow_index].values;
+        if let Some(serde_json::value::Value::Number(config_value)) = config_values.get(name) {
+            *value =  config_value.as_f64().unwrap() as i32;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn mut_u32(&mut self, name: &'static str, value: &mut u32) -> bool {
+        let config_values = &self.config.flow_configs[self.flow_index].values;
+        if let Some(serde_json::value::Value::Number(config_value)) = config_values.get(name) {
+            *value =  config_value.as_f64().unwrap() as u32;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn mut_img(&mut self, name: &'static str, value: &mut String) -> bool {
+        let config_values = &self.config.flow_configs[self.flow_index].values;
+        if let Some(serde_json::value::Value::String(config_value)) = config_values.get(name) {
+            *value =  config_value.to_string() ;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn mut_matrix(&mut self, name: &'static str, value: &mut cgmath::Matrix4<f32>) -> bool {
+    false //TODO: do this properly
+    }
+}
+
+fn parse_flow_config(json_or_path: &str) -> Result<FlowConfig, Box<dyn Error>> {
+    // Parse from string or as file.
+    let (root, name): (serde_json::Value, String) =
+        if let Ok(json) = serde_json::from_str(&json_or_path) {
+            (json, "custom string".to_string())
+        } else {
+            let mut data = String::new();
+            let mut file = File::open(json_or_path)?;
+            file.read_to_string(&mut data)?;
+            (
+                serde_json::from_str(&data)?,
+                std::path::Path::new(json_or_path)
+                    .file_stem()
+                    .unwrap()
+                    .to_os_string()
+                    .into_string()
+                    .unwrap(),
+            )
+        };
+    let values = root.as_object().unwrap().clone().into_iter().collect();
+    Ok(FlowConfig {
+        name,
+        values,
+        static_gaze: None,
+        static_view: None,
+    })
 }
 
 pub fn cmd_parse() -> Config {
@@ -108,28 +199,33 @@ pub fn cmd_parse() -> Config {
                 .help("Specifies the port on which the server listens for connections"),
         )
         .arg(
-            Arg::with_name("config")
-                .long("config")
+            Arg::with_name("show")
+                .long("show")
+                .short("s")
+                .takes_value(false)
+                .help("Forces window visibility"),
+        )
+        .arg(
+            Arg::with_name("res")
+                .long("res")
+                .value_names(&["W", "H"])
+                .number_of_values(2)
+                .help("Sets the internal render resolution"),
+        )
+        .arg(
+            Arg::with_name("measure_frames")
+                .long("measure_frames")
+                .number_of_values(1)
+                .help("Tracks performance metrics for N frames"),
+        )
+        .arg(
+            Arg::with_name("flow_configs")
+                .long("flow_configs")
                 .short("c")
                 .value_name("FILE|JSON")
                 .number_of_values(1)
-                .help("Sets the configuration parameters for simulation"),
-        )
-        .arg(
-            Arg::with_name("config_right")
-                .long("config_right")
-                .value_name("FILE|JSON")
-                .number_of_values(1)
-                .conflicts_with("config")
-                .help("Sets the configuration parameters for the right eye"),
-        )
-        .arg(
-            Arg::with_name("config_left")
-                .long("config_left")
-                .value_name("FILE|JSON")
-                .number_of_values(1)
-                .conflicts_with("config")
-                .help("Sets the configuration parameters for the left eye"),
+                .multiple(true)
+                .help("Sets the configuration for a simulation flow"),
         )
         .arg(
             Arg::with_name("gaze")
@@ -147,79 +243,6 @@ pub fn cmd_parse() -> Config {
                 .help("Sets the fallback view position"),
         )
         .arg(
-            Arg::with_name("res")
-                .long("res")
-                .value_names(&["X", "Y"])
-                .number_of_values(2)
-                .help("Sets the internal render resolution"),
-        )
-        .arg(
-            Arg::with_name("show")
-                .long("show")
-                .short("s")
-                .takes_value(false)
-                .help("Forces window visibility"),
-        )
-        .arg(
-            Arg::with_name("base_image")
-                .long("base_image")
-                .number_of_values(1)
-                .help("The type of base imageto use"),
-        )
-        .arg(
-            Arg::with_name("mix_type")
-                .long("mix_type")
-                .number_of_values(1)
-                .help("The type mix function to use"),
-        )
-        .arg(
-            Arg::with_name("cm_type")
-                .long("cm_type")
-                .number_of_values(1)
-                .help("The type of color map to use"),
-        )
-        .arg(
-            Arg::with_name("cf")
-                .long("cf")
-                .number_of_values(1)
-                .help("The type of combination function to use"),
-        )
-        .arg(
-            Arg::with_name("cm_scale")
-                .long("cm_scale")
-                .number_of_values(1)
-                .help("The factor to scale the colormap by before output"),
-        )
-        .arg(
-            Arg::with_name("output_scale")
-                .long("output_scale")
-                .number_of_values(1)
-                .help("Which Scaling should be used for the Display Node\n\
-                \x20\x20available are: \"fit\", \"fill\" and \"stretch\""),
-        )
-        .arg(
-            Arg::with_name("perf")
-                .long("perf")
-                .number_of_values(1)
-                .help("Tracks performance metrics"),
-        )
-        .arg(
-            Arg::with_name("variance")
-                .long("variance")
-                .value_names(&["Type", "Metric", "Color"])
-                .number_of_values(3)
-                .help("Enables variance metrics. Needs three values:\n\
-                \x20\x20Type(0-3): Off/Before/After/Diff\n\
-                \x20\x20Metric(0-6): First/Avg/Var_Avg/First_Contrast/Delta_E/Michelson_Contrast/Histogram\n\
-                \x20\x20Color(0-2): RGB/LAB/ITP"),
-        )
-        .arg(
-            Arg::with_name("rays")
-                .long("rays")
-                .number_of_values(1)
-                .help("Set of rays to use"),
-        )
-        .arg(
             Arg::with_name("output")
                 .long("output")
                 .short("o")
@@ -230,6 +253,15 @@ pub fn cmd_parse() -> Config {
                     "Enables output with optional mustache-style pattern, e.g.:\n\
                     \x20\x20\"{{dirname}}/{{stem}}_{{configname}}.{{extension}}\"  (default)\n\
                     \x20\x20\"{{dirname}}/{{configname}}_{{basename}}\"",
+                ),
+        )
+        .arg(
+            Arg::with_name("output_scale")
+                .long("output_scale")
+                .number_of_values(1)
+                .help(
+                    "Which Scaling should be used for the Display Node\n\
+                \x20\x20available are: \"fit\", \"fill\" and \"stretch\"",
                 ),
         )
         .arg(
@@ -248,146 +280,71 @@ pub fn cmd_parse() -> Config {
         .setting(AppSettings::UnifiedHelpMessage)
         .get_matches();
 
-    let default = Config::default();
+    let mut config = Config::default();
 
-    let port = if let Some(port_str) = matches.value_of("port") {
-        Some(port_str.parse::<u16>().expect("Invalid port"))
-    } else {
-        default.port
-    };
-
-    let (mut parameters, config_name) = if let Some(config_str) = matches.value_of("config") {
-        parse_config(config_str).expect("Invalid config")
-    } else {
-        (default.parameters, "Default".to_string())
-    };
-
-    let mut parameters_r = if let Some(config_right_str) = matches.value_of("config_right") {
-        Some(parse_config(config_right_str).expect("Invalid config").0)
-    } else {
-        None
-    };
-    let mut parameters_l = if let Some(config_left_str) = matches.value_of("config_left") {
-        Some(parse_config(config_left_str).expect("Invalid config").0)
-    } else {
-        None
-    };
-
-    if let Some(base_image) = matches.value_of("base_image") {
-        let base_image = base_image.parse::<u16>().expect("Invalid base_image") as f64;
-        parameters.insert("file_base_image".to_string(), Value::Number(base_image));
-    }
-    if let Some(mix_type) = matches.value_of("mix_type") {
-        let mix_type = mix_type.parse::<u16>().expect("Invalid mix_type") as f64;
-        parameters.insert("file_mix_type".to_string(), Value::Number(mix_type));
-    }
-    if let Some(cm_type) = matches.value_of("cm_type") {
-        let cm_type = cm_type.parse::<u16>().expect("Invalid cm_type") as f64;
-        parameters.insert("file_cm_type".to_string(), Value::Number(cm_type));
-    }
-    if let Some(cf) = matches.value_of("cf") {
-        let cf = cf.parse::<u16>().expect("Invalid cf") as f64;
-        parameters.insert("file_cf".to_string(), Value::Number(cf));
+    if let Some(port_str) = matches.value_of("port") {
+        config.port = Some(port_str.parse::<u16>().expect("Invalid port"))
     }
 
-    let output_scale = if let Some(str) = matches.value_of("output_scale"){
-        OutputScale::from_string(str)
-    } else {
-        OutputScale::default()
-    };
-
-    let track_perf = matches
-        .value_of("perf")
-        .map(|v| v.parse::<u32>())
-        .unwrap_or(Ok(0u32))
-        .unwrap_or(0);
-
-    if let Some(variance) = matches.values_of("variance") {
-        let variance = variance
-            .map(|t| t.trim().parse::<f64>().unwrap())
-            .collect::<Vec<f64>>();
-        parameters.insert("measure_variance".to_string(), Value::Number(variance[0]));
-        parameters.insert("variance_metric".to_string(), Value::Number(variance[1]));
-        parameters.insert("variance_color_space".to_string(), Value::Number(variance[2]));
-    };
-    
-    if let Some(rays) = matches.value_of("rays") {
-        let rays = rays.parse::<f64>().expect("Invalid rays");
-        parameters.insert("rays".to_string(), Value::Number(rays));
+    if matches.is_present("show") {
+        config.visible = true;
     }
 
-    if let Some(cm_scale) = matches.value_of("cm_scale") {
-        let cm_scale = cm_scale.parse::<f64>().expect("Invalid cm_scale");
-        parameters.insert("cm_scale".to_string(), Value::Number(cm_scale));
-    }
-    if let Some(vis_type) = matches.value_of("vis_type") {
-        let vis_type = vis_type.parse::<u16>().expect("Invalid vis_type") as f64;
-        parameters.insert("file_vis_type".to_string(), Value::Number(vis_type));
-        // if let Some(parameters_r) = &mut parameters_r{
-        //     parameters_r.insert("file_vis_type".to_string(), Value::Number(vis_type));
-        // }
-        // if let Some(parameters_l) = &mut parameters_l{
-        //     parameters_l.insert("file_vis_type".to_string(), Value::Number(vis_type));
-        // }
+    if let Some(res) = matches.values_of("res") {
+        let res = res
+            .map(|t| t.trim().parse::<u32>().unwrap())
+            .collect::<Vec<u32>>();
+        config.resolution = Some((res[0], res[1]));
+    };
+
+    config.measure_frames = matches
+        .value_of("measure_frames")
+        .map(|v| v.parse::<u128>())
+        .unwrap_or(Ok(0u128))
+        .unwrap_or(config.measure_frames);
+
+    if let Some(configs) = matches.values_of("flow_configs") {
+        config.flow_configs = configs
+            .map(|config_str| parse_flow_config(config_str).expect("Invalid flow config"))
+            .collect()
     }
 
     if let Some(gaze) = matches.values_of("gaze") {
         let gaze = gaze
-            .map(|t| t.trim().parse::<f64>().unwrap())
-            .collect::<Vec<f64>>();
-        parameters.insert("gaze_x".to_string(), Value::Number(gaze[0]));
-        parameters.insert("gaze_y".to_string(), Value::Number(gaze[1]));
-    };
+            .map(|t| t.trim().parse::<f32>().unwrap())
+            .collect::<Vec<f32>>();
+        for flow_config in &mut config.flow_configs {
+            flow_config.static_gaze = Some((gaze[0], gaze[1]));
+        }
+    }
 
     if let Some(view) = matches.values_of("view") {
         let view = view
-            .map(|t| t.trim().parse::<f64>().unwrap())
-            .collect::<Vec<f64>>();
-        parameters.insert("view_x".to_string(), Value::Number(view[0]));
-        parameters.insert("view_y".to_string(), Value::Number(view[1]));
-    };
-
-    let (merged_parameters_r, merged_parameters_l) =
-        match (parameters_r.clone(), parameters_l.clone()) {
-            (Some(mut parameters_r), Some(mut parameters_l)) => {
-                for (key, val) in parameters.iter() {
-                    parameters_l.insert(key.clone(), val.clone());
-                    parameters_r.insert(key.clone(), val.clone());
-                }
-                (Some(parameters_r), Some(parameters_l))
-            }
-            _ => (None, None),
-        };
-    // this is ugly as hell but rust currently dies not allow destructuring assignments
-    parameters_r = merged_parameters_r;
-    parameters_l = merged_parameters_l;
-
-    let mut resolution = default.resolution;
-    if let Some(res) = matches.values_of("res") {
-        let res = res
-            .map(|t| t.trim().parse::<f64>().unwrap())
-            .collect::<Vec<f64>>();
-        resolution = Some([res[0] as u32, res[1] as u32]);
-    };
-
-    let mut visible = default.visible;
-    if matches.is_present("show") {
-        visible = true;
+            .map(|t| t.trim().parse::<f32>().unwrap())
+            .collect::<Vec<f32>>();
+        for flow_config in &mut config.flow_configs {
+            flow_config.static_view = Some((view[0], view[1]));
+        }
     }
 
-    let output = if matches.is_present("output") {
+    if matches.is_present("output") {
         let output = if let Some(output) = matches.value_of("output") {
             output
         } else {
             "{{dirname}}/{{stem}}_{{configname}}.{{extension}}"
         };
-        Some(mustache::compile_str(output).unwrap())
+        config.output = Some(mustache::compile_str(output).unwrap());
     } else {
-        visible = true;
-        default.output
+        config.visible = true;
+    }
+
+    config.output_scale = if let Some(str) = matches.value_of("output_scale") {
+        OutputScale::from_string(str)
+    } else {
+        OutputScale::default()
     };
 
-    let inputs = matches
+    config.inputs = matches
         .values_of("input")
         .unwrap()
         .flat_map(|pattern| {
@@ -401,17 +358,5 @@ pub fn cmd_parse() -> Config {
         })
         .collect();
 
-    Config {
-        port,
-        visible,
-        resolution,
-        output,
-        inputs,
-        name: config_name,
-        parameters,
-        parameters_r,
-        parameters_l,
-        track_perf,
-        output_scale,
-    }
+    config
 }

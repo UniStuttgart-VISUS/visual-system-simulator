@@ -7,7 +7,6 @@ mod remote;
 mod surface;
 mod texture;
 mod utils;
-mod value;
 mod window;
 mod vis_param;
 
@@ -17,6 +16,5 @@ pub use self::remote::*;
 pub use self::texture::*;
 pub use self::surface::*;
 pub use self::utils::*;
-pub use self::value::*;
 pub use self::window::*;
 pub use self::vis_param::*;

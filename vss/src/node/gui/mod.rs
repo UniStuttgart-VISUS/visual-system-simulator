@@ -128,7 +128,7 @@ impl Node for Display {
         slots
     }
 
-    fn update_values(&mut self, _surface: &Surface, _values: &ValueMap) {
+    fn update_values(&mut self, _surface: &Surface, _inspector: &mut dyn NodeInspector) {
 
     }
 

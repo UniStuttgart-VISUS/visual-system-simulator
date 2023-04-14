@@ -228,8 +228,8 @@ impl Node for UploadVideo {
         self.uploader.negociate_slots(surface, slots, original_image)
     }
 
-    fn update_values(&mut self, surface: &Surface, values: &ValueMap) {
-        self.uploader.update_values(surface, values);
+    fn inspect(&mut self, surface: &Surface, inspector: &mut dyn Inspector) {
+        self.uploader.inspect(surface, inspector);
     }
 
     fn input(&mut self, perspective: &EyePerspective, vis_param: &VisualizationParameters) -> EyePerspective {

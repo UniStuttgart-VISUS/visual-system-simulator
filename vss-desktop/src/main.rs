@@ -7,8 +7,8 @@ mod varjo;
 mod openxr;
 
 use std::cell::RefCell;
-use std::time::Instant;
 use std::fs;
+use std::time::Instant;
 use vss::*;
 
 use crate::cmd::*;
@@ -39,17 +39,26 @@ impl IoGenerator {
         *self.input_processed.read().unwrap()
     }
 
-    fn _next(&mut self, surface: &Surface, render_resolution: Option<[u32; 2]>) -> Option<IoNodePair> {
+    fn _next(
+        &mut self,
+        surface: &Surface,
+        render_resolution: Option<[u32; 2]>,
+    ) -> Option<IoNodePair> {
         self.input_idx += 1;
         let render_res = if let Some(res) = render_resolution {
             RenderResolution::Custom { res: res }
-        }else{
-            RenderResolution::Buffer { input_scale: 1.0} //TODO add input scaling
+        } else {
+            RenderResolution::Buffer { input_scale: 1.0 } //TODO add input scaling
         };
         self.current(&surface, render_res, 0)
     }
 
-    fn current(&mut self, surface: &Surface, render_resolution: RenderResolution, flow_index: usize) -> Option<IoNodePair> {
+    fn current(
+        &mut self,
+        surface: &Surface,
+        render_resolution: RenderResolution,
+        flow_index: usize,
+    ) -> Option<IoNodePair> {
         if self.input_idx >= self.inputs.len() {
             None
         } else {
@@ -58,7 +67,9 @@ impl IoGenerator {
                 let input_path = std::path::Path::new(input);
                 let mut input_node = UploadRgbBuffer::new(&surface);
                 input_node.upload_image(load(input_path));
-                input_node.set_flags(RgbInputFlags::from_extension(&input) | RgbInputFlags::VERTICALLY_FLIPPED);
+                input_node.set_flags(
+                    RgbInputFlags::from_extension(&input) | RgbInputFlags::VERTICALLY_FLIPPED,
+                );
                 input_node.set_render_resolution(render_resolution);
                 let output_node = if let Some(output) = &self.output {
                     let mut output_node = DownloadRgbBuffer::new(&surface);
@@ -82,7 +93,7 @@ impl IoGenerator {
                             .unwrap()
                             .to_os_string()
                             .into_string()
-                            .unwrap() 
+                            .unwrap()
                             + &format!("_{}", flow_index),
                         extension: input_path
                             .extension()
@@ -110,16 +121,27 @@ impl IoGenerator {
     }
 }
 
-fn build_flow(surface: &mut Surface, io_generator: &mut IoGenerator, flow_index: usize, render_resolution: Option<[u32; 2]>, view_port: ViewPort, output_scale: OutputScale){
+fn build_flow(
+    surface: &mut Surface,
+    io_generator: &mut IoGenerator,
+    flow_index: usize,
+    render_resolution: Option<(u32, u32)>,
+    view_port: ViewPort,
+    output_scale: OutputScale,
+) {
     let render_res = if let Some(res) = render_resolution {
-        RenderResolution::Custom { res: res }
-    }else{
+        RenderResolution::Custom {
+            res: [res.0, res.1],
+        }
+    } else {
         RenderResolution::Screen {
             input_scale: 1.0, //TODO add input scaling
-            output_scale
+            output_scale,
         }
     };
-    let (input_node, output_node) = io_generator.current(&surface, render_res, flow_index).unwrap();
+    let (input_node, output_node) = io_generator
+        .current(&surface, render_res, flow_index)
+        .unwrap();
 
     // Add input node.
     surface.add_node(input_node, flow_index);
@@ -133,7 +155,7 @@ fn build_flow(surface: &mut Surface, io_generator: &mut IoGenerator, flow_index:
     surface.add_node(Box::new(node), flow_index);
     let node = PeacockCB::new(&surface);
     surface.add_node(Box::new(node), flow_index);
-    
+
     // Measurement Nodes for variance and error
     let node = VarianceMeasure::new(&surface);
     surface.add_node(Box::new(node), flow_index);
@@ -157,98 +179,80 @@ fn build_flow(surface: &mut Surface, io_generator: &mut IoGenerator, flow_index:
 pub fn main() {
     let config = cmd_parse();
 
-    // let remote = if let Some(port) = config.port {
-    //     Some(Remote::new(port))
-    // } else {
-    //     None
-    // };
-    
-    let flow_count = match (config.parameters_r.clone(), config.parameters_l.clone()) {
-        (Some(_), Some(_)) => 2 , 
-        _ => 1
+    let remote = if let Some(port) = config.port {
+        Some(Remote::new(port))
+    } else {
+        None
     };
 
-    let mut parameters = Vec::new();
-    for idx in 0 .. flow_count {
-        let mut value_map = ValueMap::new();
-        let iter = match (config.parameters_r.clone(), config.parameters_l.clone()) {
-            (Some(param_r), Some(param_l)) =>{
-                if idx == 0 {
-                    param_r.into_iter()
-                }
-                else{
-                    param_l.into_iter()
-                }
-            }
-            _ => {
-                config.parameters.clone().into_iter()
-            }
-        };
-        for (key, val) in iter {
-            value_map.insert((key).clone(), (val).clone());
-        }  
-        value_map.insert("flow_id".into(),Value::Number(idx as f64));
-        parameters.push(RefCell::new(value_map));
-    }
+    let flow_count = config.flow_configs.len();
 
-    let mut window = pollster::block_on(Window::new(config.visible, None, parameters, flow_count));
+    let mut window = pollster::block_on(Window::new(
+        config.visible,
+        flow_count,
+        remote,
+        config.flow_configs[0].static_gaze,
+    ));
 
     let view_ports = match flow_count {
         1 => {
-            vec![ViewPort{
+            vec![ViewPort {
                 x: 0.0,
                 y: 0.0,
                 width: 1.0,
                 height: 1.0,
                 absolute_viewport: false,
             }]
-        },
-        2 => {
-            vec![ViewPort{
-                x: 0.0,
-                y: 0.0,
-                width: 0.5,
-                height: 1.0,
-                absolute_viewport: false,
-            },
-            ViewPort{
-                x: 0.5,
-                y: 0.0,
-                width: 0.5,
-                height: 1.0,
-                absolute_viewport: false,
-            }]
         }
-        _ => {panic!("can't create view ports for more than two flow counts")}
+        2 => {
+            vec![
+                ViewPort {
+                    x: 0.0,
+                    y: 0.0,
+                    width: 0.5,
+                    height: 1.0,
+                    absolute_viewport: false,
+                },
+                ViewPort {
+                    x: 0.5,
+                    y: 0.0,
+                    width: 0.5,
+                    height: 1.0,
+                    absolute_viewport: false,
+                },
+            ]
+        }
+        _ => {
+            panic!("Cannot create viewports for more than two flows")
+        }
     };
 
     for index in 0..flow_count {
         let mut io_generator = IoGenerator::new(
             config.inputs.clone(),
-            config.name.clone(),
+            config.flow_configs[index].name.clone(),
             config.output.clone(),
         );
-        build_flow(&mut window.surface, &mut io_generator, index, config.resolution, view_ports[index], config.output_scale);
+        build_flow(
+            &mut window.surface,
+            &mut io_generator,
+            index,
+            config.resolution,
+            view_ports[index],
+            config.output_scale,
+        );
     }
 
     let mut done = false;
-    window.surface.update_nodes();
+    window.surface.inspect(&mut ConfigInspector::new(&config));
 
-    let mut frame_counter = 0u128; // you know, for the simulations than run longer than the universe exists
-
-    let mut frame_times: Vec<(u128,u128,(u32,u32),u32,u32)> = vec![];
+    let mut frame_counter = 0;
+    let mut frame_perfs: Vec<(u128, u128)> = vec![];
     let mut previous_frame = Instant::now();
     let print_spacing = 60;
-    let rays = if let Some(Value::Number(rays)) = config.parameters.get("rays") {
-        *rays as u32
-    }else{0};
-
-    let mix_type = if let Some(Value::Number(mix_type)) = config.parameters.get("file_mix_type") {
-        *mix_type as u32
-    }else{0};
 
     while !done {
-        frame_counter+=1;
+        frame_counter += 1;
 
         done = window.poll_events();
 
@@ -258,25 +262,28 @@ pub fn main() {
             done = true;
         }
 
-        if config.track_perf >0 {
+        if config.measure_frames > 0 {
             let time_diff = previous_frame.elapsed().as_micros();
-            let perf_info = (frame_counter,time_diff, (config.resolution.unwrap()[0],config.resolution.unwrap()[1]), rays, mix_type);
-            frame_times.push(perf_info);
+            let frame_perf = (frame_counter, time_diff);
+            frame_perfs.push(frame_perf);
 
-            if frame_counter>0 && frame_counter % print_spacing == 0 {
-                let avg_fps: i32 = frame_times[(frame_counter-print_spacing) as usize .. frame_counter as usize]
-                .iter()
-                .map(|t| t.1 as i32)
-                .sum::<i32>() / (print_spacing as i32);
+            if frame_counter > 0 && frame_counter % print_spacing == 0 {
+                let avg_fps: i32 = frame_perfs
+                    [(frame_counter - print_spacing) as usize..frame_counter as usize]
+                    .iter()
+                    .map(|t| t.1 as i32)
+                    .sum::<i32>()
+                    / (print_spacing as i32);
 
-                println!("{:?} ≙ {}fps", perf_info, 1_000_000/(avg_fps));
+                println!("{:?} ≙ {}fps", frame_perf, 1_000_000 / (avg_fps));
             }
-            previous_frame =  Instant::now();
-            if frame_counter > config.track_perf as u128 {
+            previous_frame = Instant::now();
+            if frame_counter > config.measure_frames {
                 break;
             }
         }
-        /*  
+
+        /*
             The above hack works only with still images
             The original solution below has several problems:
             - it is only used for video
@@ -285,7 +292,7 @@ pub fn main() {
             - if one generator is ready, to we already trigger the render step or do we wait for both?
         */
 
-        // if io_generator.is_ready() {            
+        // if io_generator.is_ready() {
         //     if let Some((input_node, output_node)) = io_generator.next(&window, None) {
         //         window.replace_node(0, input_node, 0);
         //         let output_node = if let Some(output_node) = output_node {
@@ -301,25 +308,23 @@ pub fn main() {
         // }
     }
 
+    if config.measure_frames > 0 {
+        match fs::write(
+            "vss_perf_data.csv",
+            frame_perfs
+                .iter()
+                .map(|t| format!("{},{}\n", t.0, t.1))
+                .collect::<Vec<String>>()
+                .join(""),
+        ) {
+            Err(e) => println!("dump_perf_data error {:?}", e),
+            _ => (),
+        }
+    }
+
     // writing the image to file might not be done yet, so we wait a second
     // this async behaviour stems from the callback used in the download buffer
-    if config.track_perf > 0 {
-        dump_perf_data(frame_times);
-    }
-    use std::{thread, time};
-    let a_second = time::Duration::from_secs(1);
-    thread::sleep(a_second);
-}
-
-fn dump_perf_data(frame_times: Vec<(u128,u128,(u32,u32),u32,u32)>){
-    match fs::write("vss_perf_data.csv", 
-        frame_times.iter()
-            .map(|t| format!("{},{},{},{},{}\n", t.0, t.1, t.2.0*t.2.1, t.3, t.4))
-            .collect::<Vec<String>>()
-            .join("")){
-                Err(e) => println!("dump_perf_data error {:?}", e),
-                _ => ()
-    }
+    std::thread::sleep(std::time::Duration::from_secs(1));
 }
 
 //TODO: this one is super unfinished.
@@ -333,41 +338,34 @@ pub fn main() {
     } else {
         None
     };
-    
+
     let flow_count = 2;
 
     let mut parameters = Vec::new();
-    for idx in 0 .. flow_count {
+    for idx in 0..flow_count {
         let mut value_map = ValueMap::new();
         let iter = match (config.parameters_r.clone(), config.parameters_l.clone()) {
-            (Some(param_r), Some(param_l)) =>{
+            (Some(param_r), Some(param_l)) => {
                 if idx == 0 {
                     param_r.into_iter()
-                }
-                else{
+                } else {
                     param_l.into_iter()
                 }
             }
-            _ => {
-                config.parameters.clone().into_iter()
-            }
+            _ => config.parameters.clone().into_iter(),
         };
         for (key, val) in iter {
             value_map.insert((key).clone(), (val).clone());
-        }  
-        value_map.insert("flow_id".into(),Value::Number(idx as f64));
+        }
+        value_map.insert("flow_id".into(), Value::Number(idx as f64));
         parameters.push(RefCell::new(value_map));
     }
 
     let mut window = Window::new(config.visible, remote, parameters, flow_count);
 
-    
     dbg!("Pre init");
     oxr.initialize();
     dbg!("Post init");
-
-
-
 
     for index in 0..flow_count {
         let mut io_generator = IoGenerator::new(
@@ -376,15 +374,18 @@ pub fn main() {
             config.output.clone(),
         );
 
-        build_flow(&mut window.surface, &mut io_generator, index, config.resolution);
+        build_flow(
+            &mut window.surface,
+            &mut io_generator,
+            index,
+            config.resolution,
+        );
     }
-
 
     let mut done = false;
 
     oxr.create_session(&window);
     oxr.create_render_targets(&window);
-
 
     while !done {
         done = window.poll_events();
@@ -392,7 +393,11 @@ pub fn main() {
 }
 
 #[cfg(feature = "varjo")]
-pub fn set_varjo_data(window: &mut Window, last_fov: &mut Vec<(f32, f32)>, varjo: &mut varjo::Varjo){
+pub fn set_varjo_data(
+    window: &mut Window,
+    last_fov: &mut Vec<(f32, f32)>,
+    varjo: &mut varjo::Varjo,
+) {
     let (varjo_target_color, varjo_target_depth) = varjo.get_current_render_target();
     // window.replace_targets(varjo_target_color, varjo_target_depth, false); // TODO-readd
 
@@ -401,22 +406,30 @@ pub fn set_varjo_data(window: &mut Window, last_fov: &mut Vec<(f32, f32)>, varjo
     let head_position = 0.5 * (view_matrices[0].w.truncate() + view_matrices[1].w.truncate());
     let (left_gaze, right_gaze, _focus_distance) = varjo.get_current_gaze();
 
-    for index in 0 .. 4 {
-        let fov_x = 2.0*(1.0/proj_matrices[index][0][0]).atan();// * 180.0 / 3.1415926535;
-        let fov_y = 2.0*(1.0/proj_matrices[index][1][1]).atan();// * 180.0 / 3.1415926535;
+    for index in 0..4 {
+        let fov_x = 2.0 * (1.0 / proj_matrices[index][0][0]).atan(); // * 180.0 / 3.1415926535;
+        let fov_y = 2.0 * (1.0 / proj_matrices[index][1][1]).atan(); // * 180.0 / 3.1415926535;
         if last_fov[index].0 != fov_x || last_fov[index].1 != fov_y {
-            window.surface.set_value("fov_x".to_string(), Value::Number(fov_x as f64), index);
-            window.surface.set_value("fov_y".to_string(), Value::Number(fov_y as f64), index);
-            window.surface.set_value("proj_matrix".to_string(), Value::Matrix(proj_matrices[index%2]), index);
+            window
+                .surface
+                .set_value("fov_x".to_string(), Value::Number(fov_x as f64), index);
+            window
+                .surface
+                .set_value("fov_y".to_string(), Value::Number(fov_y as f64), index);
+            window.surface.set_value(
+                "proj_matrix".to_string(),
+                Value::Matrix(proj_matrices[index % 2]),
+                index,
+            );
             last_fov[index].0 = fov_x;
             last_fov[index].1 = fov_y;
         }
-        // window.set_perspective(EyePerspective{
+        // window.surface.flow[index].set_perspective(EyePerspective{
         //     position: head_position,
         //     view: view_matrices[index],
         //     proj: proj_matrices[index],
         //     gaze: if index%2 == 0 {left_gaze} else {right_gaze},
-        // },index); // TODO-readd
+        // }); // TODO-readd
     }
 }
 
@@ -432,7 +445,7 @@ pub fn main() {
 
     let flow_count = 4; //TODO take this number from the varjo api instead ? (for example the size of the viewports vector)
     let mut parameters = Vec::new();
-    for _ in 0 .. flow_count {
+    for _ in 0..flow_count {
         let mut value_map = ValueMap::new();
         for (key, val) in config.parameters.iter() {
             value_map.insert((*key).clone(), (*val).clone());
@@ -449,11 +462,21 @@ pub fn main() {
 
     let mut io_generator = IoGenerator::new(config.inputs, config.name.clone(), config.output);
 
-    for index in 0 .. flow_count {
+    for index in 0..flow_count {
         let viewport = &varjo_viewports[index];
-        build_flow(&mut window.surface, &mut io_generator, index, Some([viewport.width, viewport.height]));
+        build_flow(
+            &mut window.surface,
+            &mut io_generator,
+            index,
+            Some([viewport.width, viewport.height]),
+        );
         let mut node = VRCompositor::new(&window.surface);
-        node.set_viewport(viewport.x as f32, viewport.y as f32, viewport.width as f32, viewport.height as f32);
+        node.set_viewport(
+            viewport.x as f32,
+            viewport.y as f32,
+            viewport.width as f32,
+            viewport.height as f32,
+        );
         window.surface.add_node(Box::new(node), index);
     }
 
@@ -466,12 +489,12 @@ pub fn main() {
         if varjo_should_render {
             set_varjo_data(&mut window, &mut varjo_fov, &mut varjo);
         }
-        
+
         done = window.poll_events();
 
         if varjo_should_render {
             varjo.end_frame();
-            log_counter = (log_counter+1) % 10;
+            log_counter = (log_counter + 1) % 10;
         }
     }
 }

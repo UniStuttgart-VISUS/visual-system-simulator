@@ -23,6 +23,8 @@ use wgpu::RenderPipeline;
 use wgpu::ShaderModule;
 use wgpu::util::DeviceExt;
 
+use cgmath::Matrix4;
+
 pub use self::cataract::*;
 pub use self::display::*;
 pub use self::error_vis::*;
@@ -51,7 +53,7 @@ pub trait Node {
 
     /// Set new parameters for this effect
     #[allow(unused_variables)]
-    fn update_values(&mut self, surface: &Surface, values: &ValueMap) {}
+    fn inspect(&mut self, surface: &Surface, inspector: &mut dyn Inspector) {}
 
     /// Handle input.
     #[allow(unused_variables)]
@@ -65,6 +67,23 @@ pub trait Node {
     /// Invoked after all rendering commands have completed. (TODO: rename to on_frame_complete)
     #[allow(unused_variables)]
     fn post_render(&mut self, surface: &Surface){}
+}
+
+pub trait Inspector {
+    fn begin_flow(&mut self, index: usize);
+    fn end_flow(&mut self);
+
+    fn begin_node(&mut self, name: &'static str);
+    fn end_node(&mut self);
+
+    // Returns true if value was changed.
+    fn mut_bool(&mut self, name: &'static str, value: &mut bool) -> bool;
+    fn mut_f64(&mut self, name: &'static str, value: &mut f64) -> bool;
+    fn mut_f32(&mut self, name: &'static str, value: &mut f32) -> bool;
+    fn mut_i32(&mut self, name: &'static str, value: &mut i32) -> bool;
+    fn mut_u32(&mut self, name: &'static str, value: &mut u32) -> bool;
+    fn mut_img(&mut self, name: &'static str, value: &mut String) -> bool;
+    fn mut_matrix(&mut self, name: &'static str, value: &mut Matrix4<f32>) -> bool;
 }
 
 pub struct ShaderUniforms<T>{

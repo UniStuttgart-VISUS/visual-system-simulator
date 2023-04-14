@@ -15,24 +15,16 @@ pub struct Window {
     pub surface: surface::Surface,
 
     active: RefCell<bool>,
-    cursor_pos: RefCell<[f64;2]>,
+    cursor_pos: RefCell<(f32, f32)>,
+    static_pos: Option<(f32,f32)>,
 
     override_gaze: RefCell<bool>,
     override_view: RefCell<bool>,
-    forced_view: Option<(f32,f32)>
 }
 
 impl Window {
-    pub async fn new(visible: bool, remote: Option<Remote>, values: Vec<RefCell<ValueMap>>, flow_count: usize) -> Self {
-        let mut override_view = false;
-
-        let mut forced_view = None;
-        if let (Some(Value::Number(view_x)), Some(Value::Number(view_y)) ) = (values[0].borrow().get("view_x"),(values[0].borrow().get("view_y"))) {
-            forced_view = Some((*view_x as f32,*view_y as f32));
-            override_view = true;
-        }
-        let override_view =  RefCell::new(override_view);
-
+    pub async fn new(visible: bool, flow_count: usize, remote: Option<Remote>, static_pos: Option<(f32,f32)>) -> Self {
+      
         // Create a window and context.
         let events_loop = EventLoop::new();
 
@@ -58,7 +50,7 @@ impl Window {
  
         let surface = surface::Surface::new(
             [window_size.width, window_size.height],
-             &wgpu_window, remote, values, flow_count)
+             &wgpu_window, flow_count, remote)
             .await;
     
         Window {
@@ -66,10 +58,10 @@ impl Window {
             events_loop: RefCell::new(events_loop),
             surface,
             active: RefCell::new(false),
-            cursor_pos: RefCell::new([0.0, 0.0]),
-            override_view,
+            cursor_pos: RefCell::new((0.0, 0.0)),
+            static_pos,
+            override_view: RefCell::new(static_pos.is_some()),
             override_gaze: RefCell::new(false),
-            forced_view,
         }
     }
  
@@ -320,7 +312,7 @@ impl Window {
                         }
                         WindowEvent::CursorMoved { position, .. } => {
                             if *self.active.borrow() {
-                                self.cursor_pos.replace([position.x, position.y]);
+                                self.cursor_pos.replace((position.x as f32, position.y as f32));
                                 let mut vp = self.surface.vis_param.borrow_mut();
                                 vp.mouse_input.position = (position.x as f32, position.y as f32);
                                 match vp.edit_eye_position {
@@ -399,7 +391,7 @@ impl Window {
             }
         });
 
-        if let Some(_) = self.forced_view {
+        if let Some(_) = self.static_pos {
             // Update pipline IO.
             let new_size = PhysicalSize::new(1920 as u32, 1080 as u32);
             //self.wgpu_window.resize(size);
@@ -443,28 +435,22 @@ impl Window {
         // Update input.
         for f in self.surface.flow.iter(){
             if *self.override_view.borrow() || *self.override_gaze.borrow() {
-                let cursor_pos = self.cursor_pos.borrow();
+                let cursor_pos = self.cursor_pos.borrow().clone();
                 //println!("{} {}",cursor_pos.x as f32 ,cursor_pos.y as f32);
-                let view_input = match self.forced_view {
-                    Some(pos) =>{
-                        pos
-                    }
-                    None =>{
-                        (cursor_pos[0] as f32 ,cursor_pos[1] as f32)
-                    }
-                };
+                let view_pos =  self.static_pos.unwrap_or(cursor_pos);
+                     
 
-                self.surface.vis_param.borrow_mut().highlight_position = (cursor_pos[0]/self.surface.width() as f64, cursor_pos[1]/self.surface.height() as f64);
-                let yaw = view_input.0 as f32 / self.surface.width() as f32
+                self.surface.vis_param.borrow_mut().highlight_position = (cursor_pos.0/(self.surface.width() as f32), cursor_pos.1/(self.surface.height() as f32));
+                let yaw = view_pos.0 / (self.surface.width() as f32)
                     * std::f32::consts::PI
                     * 2.0
                     - 0.5;
-                let pitch = view_input.1 as f32 / self.surface.height() as f32
+                let pitch = view_pos.1 / (self.surface.height() as f32)
                     * std::f32::consts::PI
                     - 0.5;//50 mm lens
                 let view = Matrix4::from_angle_x(cgmath::Rad(pitch)) * Matrix4::from_angle_y(cgmath::Rad(yaw));
 
-                let mut perspective = f.last_perspective.borrow_mut();
+                let mut perspective = f.mut_perspective();
 
                 if *self.override_view.borrow() {
                     if !*self.override_gaze.borrow(){
@@ -475,7 +461,8 @@ impl Window {
                 if *self.override_gaze.borrow() {
                     perspective.gaze = (perspective.view * view.invert().unwrap() * Vector4::unit_z()).truncate();
                 }
-            }            
+
+            }
             f.input(&self.surface.vis_param.borrow());
         }
         // println!("Rendered with: {:?}", self.surface.vis_param.borrow_mut());

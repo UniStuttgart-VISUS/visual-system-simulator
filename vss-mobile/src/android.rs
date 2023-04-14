@@ -57,8 +57,8 @@ impl Node for CameraStream {
         self.upload.negociate_slots(&surface, slots, original_image)
     }
 
-    fn update_values(&mut self, surface: &Surface, values: &ValueMap) {
-        self.upload.update_values(&surface, values);
+    fn inspect(&mut self, surface: &Surface, inspector: &mut dyn Inspector) {
+        self.upload.inspect(&surface, inspector);
     }
 
     fn input(
@@ -148,28 +148,28 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate<'loca
         );
     };
 
-    let mut value_map = ValueMap::new();
+    // let mut value_map = ValueMap::new();
 
     //TODO for testing purposes only
     // value_map.insert("peacock_cb_onoff".into(), Value::Bool(true));
     // value_map.insert("peacock_cb_strength".into(), Value::Number(1.0 as f64));
     // value_map.insert("peacock_cb_type".into(), Value::Number(0.0 as f64));
-    value_map.insert("colorblindness_onoff".into(), Value::Bool(true));
-    value_map.insert("colorblindness_type".into(), Value::Number(0.0 as f64));
-    value_map.insert("colorblindness_int".into(), Value::Number(100.0 as f64));
-    value_map.insert("cubemap_scale".into(), Value::Number(0.1 as f64));
+    // value_map.insert("colorblindness_onoff".into(), Value::Bool(true));
+    // value_map.insert("colorblindness_type".into(), Value::Number(0.0 as f64));
+    // value_map.insert("colorblindness_int".into(), Value::Number(100.0 as f64));
+    // value_map.insert("cubemap_scale".into(), Value::Number(0.1 as f64));
 
-    let parameters: Vec<RefCell<ValueMap>> = vec![RefCell::new(value_map)];
+    // let parameters: Vec<RefCell<ValueMap>> = vec![RefCell::new(value_map)];
     let mut window_handle = AndroidNdkWindowHandle::empty();
     window_handle.a_native_window = window.ptr().as_ptr() as *mut c_void;
     let handle = AndroidHandle(RawWindowHandle::AndroidNdk(window_handle));
     let size = [window.width() as u32, window.height() as u32];
-    let surface = vss::Surface::new(size, handle, None, parameters, 1);
+    let surface = vss::Surface::new(size, handle, 1, None);
     let mut surface = futures::executor::block_on(surface);
 
     let (tx, rx) = mpsc::sync_channel(2);
     build_flow(&mut surface, rx);
-    surface.update_nodes();
+    //TODO: surface.inspect();
 
     
     *guard = Some(Bridge { 
@@ -238,7 +238,7 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDraw<'local>
     //(it is neccessary to refresh node resolutions but for this we need the upload node to have a buffer available to get the new resolution from)
     if (bridge.new_size[0] != bridge.current_size[0]) || (bridge.new_size[1] != bridge.current_size[1]) {
         debug!("Buffer sizes do not match, old({}, {}), new({}, {})", bridge.current_size[0], bridge.current_size[1], bridge.new_size[0], bridge.new_size[1]);
-        bridge.surface.update_nodes();
+        //TODO: bridge.surface.inspect();
         bridge.current_size = bridge.new_size;
     }
     bridge.surface.draw();

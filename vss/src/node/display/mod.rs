@@ -1,7 +1,7 @@
 use super::*;
 use wgpu::CommandEncoder;
 
-struct Uniforms{
+struct Uniforms {
     viewport: [f32; 4],
     resolution_in: [f32; 2],
     resolution_out: [f32; 2],
@@ -13,14 +13,14 @@ struct Uniforms{
 }
 
 #[derive(Copy, Clone, Debug)]
-pub enum OutputScale{
+pub enum OutputScale {
     Fit = 0,
     Fill = 1,
     Stretch = 2,
 }
 
-impl OutputScale{
-    pub fn from_string(s: &str) -> OutputScale{
+impl OutputScale {
+    pub fn from_string(s: &str) -> OutputScale {
         match s.to_lowercase().as_str() {
             "fit" => OutputScale::Fit,
             "fill" => OutputScale::Fill,
@@ -34,11 +34,13 @@ impl OutputScale{
 }
 
 impl Default for OutputScale {
-    fn default() -> Self { OutputScale::Fit }
+    fn default() -> Self {
+        OutputScale::Fit
+    }
 }
 
 #[derive(Copy, Clone)]
-pub struct ViewPort{
+pub struct ViewPort {
     pub x: f32,
     pub y: f32,
     pub width: f32,
@@ -58,8 +60,9 @@ impl Display {
         let device = surface.device().borrow_mut();
         let queue = surface.queue().borrow_mut();
 
-        let uniforms = ShaderUniforms::new(&device, 
-            Uniforms{
+        let uniforms = ShaderUniforms::new(
+            &device,
+            Uniforms {
                 viewport: [0.0, 0.0, 1.0, 1.0],
                 resolution_in: [1.0, 1.0],
                 resolution_out: [1.0, 1.0],
@@ -67,10 +70,13 @@ impl Display {
                 absolute_viewport: 0,
                 _padding1: 0,
                 _padding2: 0,
-            }
+            },
         );
-        
-        let (source_bind_group_layout, source_bind_group) = placeholder_texture(&device, &queue, Some("DisplayNode s_color (placeholder)")).unwrap().create_bind_group(&device);
+
+        let (source_bind_group_layout, source_bind_group) =
+            placeholder_texture(&device, &queue, Some("DisplayNode s_color (placeholder)"))
+                .unwrap()
+                .create_bind_group(&device);
         let render_target = placeholder_color_rt(&device, Some("DisplayNode render_target"));
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -85,7 +91,7 @@ impl Display {
             &[&uniforms.bind_group_layout, &source_bind_group_layout],
             &[blended_color_state(COLOR_FORMAT)],
             None,
-            Some("DisplayNode Render Pipeline")
+            Some("DisplayNode Render Pipeline"),
         );
 
         Display {
@@ -96,20 +102,26 @@ impl Display {
         }
     }
 
-    pub fn set_viewport(&mut self, view_port: ViewPort){
+    pub fn set_viewport(&mut self, view_port: ViewPort) {
         self.uniforms.data.viewport = [view_port.x, view_port.y, view_port.width, view_port.height];
         self.uniforms.data.absolute_viewport = view_port.absolute_viewport as u32;
     }
 
-    pub fn set_output_scale(&mut self, output_scale: OutputScale){
+    pub fn set_output_scale(&mut self, output_scale: OutputScale) {
         self.uniforms.data.output_scale = output_scale as u32;
     }
 }
 
 impl Node for Display {
-   
-    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, _original_image: &mut Option<Texture>) -> NodeSlots {
-        let slots = slots.to_color_input(surface).to_color_output(surface, "DisplayNode");
+    fn negociate_slots(
+        &mut self,
+        surface: &Surface,
+        slots: NodeSlots,
+        _original_image: &mut Option<Texture>,
+    ) -> NodeSlots {
+        let slots = slots
+            .to_color_input(surface)
+            .to_color_output(surface, "DisplayNode");
         let device = surface.device().borrow_mut();
 
         self.uniforms.data.resolution_in = slots.input_size_f32();
@@ -121,15 +133,22 @@ impl Node for Display {
         slots
     }
 
-    fn render(&mut self, surface: &Surface, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
+    fn render(
+        &mut self,
+        surface: &Surface,
+        encoder: &mut CommandEncoder,
+        screen: Option<&RenderTexture>,
+    ) {
         self.uniforms.update(&surface.queue().borrow_mut());
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("DisplayNode render_pass"),
-            color_attachments: &[screen.unwrap_or(&self.render_target).to_color_attachment(None)],
+            color_attachments: &[screen
+                .unwrap_or(&self.render_target)
+                .to_color_attachment(None)],
             depth_stencil_attachment: None,
         });
-    
+
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, &self.uniforms.bind_group, &[]);
         render_pass.set_bind_group(1, &self.source_bind_group, &[]);
