@@ -23,8 +23,8 @@ log = "0.4.11"
 simple-logging = "2.0.2"
 cgmath = "0.18"
 wgpu = "0.15.1"
-wgpu-hal = "0.15.3"
-ash = "0.37.2"
+wgpu-hal = { version = "0.15.3", optional = true }
+ash = { version = "0.37.2", optional = true }
 pollster = "0.2"
 
 [build-dependencies]
@@ -33,5 +33,5 @@ cc = "^1.0.61"
 [features]
 default = []
 video = ["ac_ffmpeg"]
-varjo = []
+varjo = ["wgpu-hal", "ash"]
 openxr = []

@@ -105,7 +105,7 @@ impl Node for Cataract {
 
         // ct_contrast_factor is between 0 and 100
         let mut contrast_factor = (self.uniforms.data.contrast_factor * 100.0) as f64;
-        if inspector.mut_f64("ct_contrast_factor", &mut blur_factor) {
+        if inspector.mut_f64("ct_contrast_factor", &mut contrast_factor) {
             self.uniforms.data.contrast_factor = (contrast_factor as f32) / 100.0;
         }
 

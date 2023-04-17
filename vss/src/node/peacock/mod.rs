@@ -92,10 +92,10 @@ impl Node for PeacockCB {
     fn inspect(&mut self, inspector: &mut dyn Inspector) {
         inspector.begin_node("Peacock");
 
-        const v_cpu: [f32; 3] = [0.753, 1.140, 0.171];
-        const v_cpv: [f32; 3] = [0.265, -0.140, -0.003];
-        const v_am: [f32; 3] = [1.273463, 0.968437, 0.062921];
-        const v_ayi: [f32; 3] = [-0.073894, 0.003331, 0.292119];
+        const V_CPU: [f32; 3] = [0.753, 1.140, 0.171];
+        const V_CPV: [f32; 3] = [0.265, -0.140, -0.003];
+        const V_AM: [f32; 3] = [1.273463, 0.968437, 0.062921];
+        const V_AYI: [f32; 3] = [-0.073894, 0.003331, 0.292119];
 
         inspector.mut_bool("peacock_cb_onoff", &mut self.peacock_cb_onoff);
 
@@ -105,10 +105,10 @@ impl Node for PeacockCB {
         if self.peacock_cb_onoff {
             let cb_type = self.peacock_cb_type as usize;
             if cb_type < 3 {
-                self.uniforms.data.cb_cpu = v_cpu[cb_type];
-                self.uniforms.data.cb_cpv = v_cpv[cb_type];
-                self.uniforms.data.cb_am = v_am[cb_type];
-                self.uniforms.data.cb_ayi = v_ayi[cb_type];
+                self.uniforms.data.cb_cpu = V_CPU[cb_type];
+                self.uniforms.data.cb_cpv = V_CPV[cb_type];
+                self.uniforms.data.cb_am = V_AM[cb_type];
+                self.uniforms.data.cb_ayi = V_AYI[cb_type];
                 self.uniforms.data.cb_monochrome = 0;
             } else {
                 self.uniforms.data.cb_monochrome = 1;

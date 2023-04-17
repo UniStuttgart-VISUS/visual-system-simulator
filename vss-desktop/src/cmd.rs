@@ -31,7 +31,6 @@ pub struct FlowConfig {
 
 #[derive(Debug, Clone)]
 pub struct Config {
-    pub port: Option<u16>,
     pub visible: bool,
     pub resolution: Option<(u32, u32)>,
     pub measure_frames: u128,
@@ -44,7 +43,6 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
-            port: None,
             visible: false,
             resolution: None,
             output: None,
@@ -151,7 +149,7 @@ impl Inspector for ConfigInspector<'_> {
         }
     }
 
-    fn mut_matrix(&mut self, name: &'static str, value: &mut cgmath::Matrix4<f32>) -> bool {
+    fn mut_matrix(&mut self, _name: &'static str, _value: &mut cgmath::Matrix4<f32>) -> bool {
     false //TODO: do this properly
     }
 }
@@ -191,13 +189,6 @@ pub fn cmd_parse() -> Config {
         .version("1.1.0")
         .author("The Visual System Simulator Developers")
         .about("Simulates various aspects of the human visual system")
-        .arg(
-            Arg::with_name("port")
-                .long("port")
-                .short("p")
-                .value_name("PORT")
-                .help("Specifies the port on which the server listens for connections"),
-        )
         .arg(
             Arg::with_name("show")
                 .long("show")
@@ -281,10 +272,6 @@ pub fn cmd_parse() -> Config {
         .get_matches();
 
     let mut config = Config::default();
-
-    if let Some(port_str) = matches.value_of("port") {
-        config.port = Some(port_str.parse::<u16>().expect("Invalid port"))
-    }
 
     if matches.is_present("show") {
         config.visible = true;

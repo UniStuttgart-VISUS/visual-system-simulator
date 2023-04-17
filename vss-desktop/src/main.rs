@@ -6,7 +6,6 @@ mod varjo;
 #[cfg(feature = "openxr")]
 mod openxr;
 
-use std::cell::RefCell;
 use std::fs;
 use std::time::Instant;
 use vss::*;
@@ -179,18 +178,11 @@ fn build_flow(
 pub fn main() {
     let config = cmd_parse();
 
-    let remote = if let Some(port) = config.port {
-        Some(Remote::new(port))
-    } else {
-        None
-    };
-
     let flow_count = config.flow_configs.len();
 
     let mut window = pollster::block_on(Window::new(
         config.visible,
         flow_count,
-        remote,
         config.flow_configs[0].static_gaze,
     ));
 

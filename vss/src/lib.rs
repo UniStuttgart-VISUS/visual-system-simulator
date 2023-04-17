@@ -3,7 +3,6 @@ extern crate bitflags;
 
 mod flow;
 mod node;
-mod remote;
 mod surface;
 mod texture;
 mod utils;
@@ -12,7 +11,6 @@ mod vis_param;
 
 pub use self::flow::*;
 pub use self::node::*;
-pub use self::remote::*;
 pub use self::texture::*;
 pub use self::surface::*;
 pub use self::utils::*;

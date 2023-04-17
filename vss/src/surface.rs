@@ -13,7 +13,6 @@ pub struct Surface {
     device: RefCell<wgpu::Device>,
     queue: RefCell<wgpu::Queue>,
 
-    pub remote: Option<Remote>,
     pub flow: Vec<Flow>,
     pub vis_param: RefCell<VisualizationParameters>,
     last_render_instant: RefCell<Instant>,
@@ -24,7 +23,6 @@ impl Surface {
         surface_size: [u32; 2],
         window_handle: W,
         flow_count: usize,
-        remote: Option<Remote>,
     ) -> Self
     where
         W: raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle,
@@ -104,7 +102,6 @@ impl Surface {
             device: RefCell::new(device),
             queue: RefCell::new(queue),
             flow,
-            remote,
             vis_param: RefCell::new(VisualizationParameters::default()),
             last_render_instant: RefCell::new(Instant::now()),
         }

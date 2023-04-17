@@ -23,7 +23,7 @@ pub struct Window {
 }
 
 impl Window {
-    pub async fn new(visible: bool, flow_count: usize, remote: Option<Remote>, static_pos: Option<(f32,f32)>) -> Self {
+    pub async fn new(visible: bool, flow_count: usize, static_pos: Option<(f32,f32)>) -> Self {
       
         // Create a window and context.
         let events_loop = EventLoop::new();
@@ -50,7 +50,7 @@ impl Window {
  
         let surface = surface::Surface::new(
             [window_size.width, window_size.height],
-             &wgpu_window, flow_count, remote)
+             &wgpu_window, flow_count)
             .await;
     
         Window {
@@ -469,10 +469,6 @@ impl Window {
 
         if redraw_requested {
             self.surface.draw();
-        }
-
-        if let Some(remote) = &self.surface.remote {
-            remote.send_frame();
         }
 
         return done;

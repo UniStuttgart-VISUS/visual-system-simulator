@@ -7,17 +7,11 @@ license = "Apache-2.0"
 resolver = "2"
 
 [dependencies]
-serde_json = "1"
 eframe = "0.21.3"
 winit = "0.27.5"
-env_logger = "0.9"
-log = "0.4"
 wgpu = "0.15.1"
-ws = "0.9"
 image = "0.23"
 cgmath = "0.18"
 bitflags = "1.2"
-# only needed for testing (in main.rs)
-pollster = "0.2"
 futures-intrusive = "0.5.0"
 raw-window-handle = "0.5.0"

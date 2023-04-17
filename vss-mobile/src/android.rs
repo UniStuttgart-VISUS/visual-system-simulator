@@ -163,7 +163,7 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate<'loca
     window_handle.a_native_window = window.ptr().as_ptr() as *mut c_void;
     let handle = AndroidHandle(RawWindowHandle::AndroidNdk(window_handle));
     let size = [window.width() as u32, window.height() as u32];
-    let surface = vss::Surface::new(size, handle, 1, None);
+    let surface = vss::Surface::new(size, handle, 1);
     let mut surface = futures::executor::block_on(surface);
 
     let (tx, rx) = mpsc::sync_channel(2);
