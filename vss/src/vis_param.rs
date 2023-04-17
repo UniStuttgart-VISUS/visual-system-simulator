@@ -100,8 +100,6 @@ impl Default for VisualizationParameters {
             variance_color_space: 0,
             heat_scale: 1.0,
             dir_calc_scale: 0.0,
-            // test_depth_min: 100.0,
-            // test_depth_max: 300.0,
             test_depth_min: 200.0,
             test_depth_max: 5000.0,
             astigmatism_strength: 0.0,

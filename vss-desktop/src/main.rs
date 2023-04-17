@@ -159,7 +159,7 @@ fn build_flow(
     // Measurement Nodes for variance and error
     let node = VarianceMeasure::new(&surface);
     surface.add_node(Box::new(node), flow_index);
-    let node = ErrorVis::new(&surface);
+    let node = VisOverlay::new(&surface);
     surface.add_node(Box::new(node), flow_index);
 
     // Display node.

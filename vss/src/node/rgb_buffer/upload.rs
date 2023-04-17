@@ -244,7 +244,6 @@ impl Node for UploadRgbBuffer {
     }
 
     fn input(&mut self, perspective: &EyePerspective, _vis_param: &VisualizationParameters) -> EyePerspective {
-        use cgmath::Matrix4;
         self.uniforms.data.inv_proj_view = (perspective.proj * (Matrix4::from_translation(-perspective.position) * perspective.view)).invert().unwrap().into();
         perspective.clone()
     }

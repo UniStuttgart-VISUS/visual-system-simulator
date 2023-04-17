@@ -23,7 +23,7 @@ struct Uniforms {
     colormap_type: i32,
 }
 
-pub struct ErrorVis {
+pub struct VisOverlay {
     hive_rot: Matrix4<f32>,
     pipeline: wgpu::RenderPipeline,
     uniforms: ShaderUniforms<Uniforms>,
@@ -32,7 +32,7 @@ pub struct ErrorVis {
     render_target: RenderTexture,
 }
 
-impl ErrorVis {
+impl VisOverlay {
     pub fn new(surface: &Surface) -> Self {
         let device = surface.device().borrow_mut();
         let queue = surface.queue().borrow_mut();
@@ -58,17 +58,17 @@ impl ErrorVis {
         );
 
         let (sources_bind_group_layout, sources_bind_group) =
-            create_color_sources_bind_group(&device, &queue, "ErrorVisNode");
+            create_color_sources_bind_group(&device, &queue, "VisOverlayNode");
 
         let original_tex =
-            placeholder_texture(&device, &queue, Some("ErrorVisNode s_original")).unwrap();
+            placeholder_texture(&device, &queue, Some("VisOverlayNode s_original")).unwrap();
         let (original_bind_group_layout, original_bind_group) =
             original_tex.create_bind_group(&device);
 
-        let render_target = placeholder_color_rt(&device, Some("ErrorVisNode render_target"));
+        let render_target = placeholder_color_rt(&device, Some("VisOverlayNode render_target"));
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("ErrorVisNode Shader"),
+            label: Some("VisOverlayNode Shader"),
             source: wgpu::ShaderSource::Wgsl(
                 concat!(
                     include_str!("../common.wgsl"),
@@ -90,10 +90,10 @@ impl ErrorVis {
             ],
             &[blended_color_state(COLOR_FORMAT)],
             None,
-            Some("ErrorVisNode Render Pipeline"),
+            Some("VisOverlayNode Render Pipeline"),
         );
 
-        ErrorVis {
+        VisOverlay {
             hive_rot: Matrix4::from_angle_x(Rad(0.0)),
             pipeline,
             uniforms,
@@ -104,7 +104,7 @@ impl ErrorVis {
     }
 }
 
-impl Node for ErrorVis {
+impl Node for VisOverlay {
     fn negociate_slots(
         &mut self,
         surface: &Surface,
@@ -113,7 +113,7 @@ impl Node for ErrorVis {
     ) -> NodeSlots {
         let slots = slots
             .to_color_input(surface)
-            .to_color_output(surface, "ErrorVisNode");
+            .to_color_output(surface, "VisOverlayNode");
         let device = surface.device().borrow_mut();
 
         self.uniforms.data.resolution_in = slots.input_size_f32();
@@ -128,7 +128,7 @@ impl Node for ErrorVis {
     }
 
     fn inspect(&mut self, inspector: &mut dyn Inspector) {
-        inspector.begin_node("ErrorVis");
+        inspector.begin_node("VisOverlay");
         inspector.mut_i32("flow_id", &mut self.uniforms.data.flow_idx);
         inspector.end_node();
     }
@@ -173,7 +173,7 @@ impl Node for ErrorVis {
         self.uniforms.update(&surface.queue().borrow_mut());
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("ErrorVisNode render_pass"),
+            label: Some("VisOverlayNode render_pass"),
             color_attachments: &[screen
                 .unwrap_or(&self.render_target)
                 .to_color_attachment(Some(CLEAR_COLOR))],

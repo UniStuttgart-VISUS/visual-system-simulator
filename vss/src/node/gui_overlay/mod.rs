@@ -32,7 +32,7 @@ struct Uniforms{
 //     Vertex { pos: [  0.0,  0.5 ], uv: [ 0.0, 0.0 ], color: [0.0, 0.0, 1.0, 1.0] }
 // ];
 
-pub struct GUI {
+pub struct GuiOverlay {
     pipeline: wgpu::RenderPipeline,
     uniforms: ShaderUniforms<Uniforms>,
     sources_bind_group: wgpu::BindGroup,
@@ -44,7 +44,7 @@ pub struct GUI {
     gui_active: bool,
 }
 
-impl GUI {
+impl GuiOverlay {
     pub fn new(surface: &Surface) -> Self {
         let device = surface.device().borrow_mut();
         let queue = surface.queue().borrow_mut();
@@ -126,10 +126,6 @@ impl Node for Display {
         }
 
         slots
-    }
-
-    fn update_values(&mut self, _surface: &Surface, _inspector: &mut dyn NodeInspector) {
-
     }
 
     fn input(&mut self, perspective: &EyePerspective, vis_param: &VisualizationParameters) -> EyePerspective {
