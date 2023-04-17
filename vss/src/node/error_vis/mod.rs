@@ -127,7 +127,7 @@ impl Node for ErrorVis {
         slots
     }
 
-    fn inspect(&mut self, _surface: &Surface, inspector: &mut dyn Inspector) {
+    fn inspect(&mut self, inspector: &mut dyn Inspector) {
         inspector.begin_node("ErrorVis");
         inspector.mut_i32("flow_id", &mut self.uniforms.data.flow_idx);
         inspector.end_node();

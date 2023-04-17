@@ -168,7 +168,7 @@ impl Flow {
         self.last_slot.replace(Some(slot_b));
     }
 
-    pub fn inspect(&self, surface: &Surface, inspector: &mut dyn Inspector) {
+    pub fn inspect(&self, inspector: &mut dyn Inspector) {
         let mut perspective = self.perspective.borrow_mut();
         let mut configured_view = Matrix4::from_scale(1.0);
 
@@ -191,7 +191,7 @@ impl Flow {
 
         // Propagate to nodes.
         for node in self.nodes.borrow_mut().iter_mut() {
-            node.inspect(surface, inspector);
+            node.inspect(inspector);
         }
     }
 

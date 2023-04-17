@@ -2,7 +2,7 @@ mod retina_map;
 
 use self::retina_map::*;
 use super::*;
-use cgmath::{Matrix, Matrix4, Point3, SquareMatrix, Vector3};
+use cgmath::{Matrix4, Point3, SquareMatrix, Vector3};
 
 struct Uniforms {
     proj: [[f32; 4]; 4],
@@ -18,6 +18,7 @@ pub struct Retina {
     retina_bind_group: wgpu::BindGroup,
     targets: ColorTargets,
 
+    map_valid: bool,
     retina_map_pos_x_path: String,
     retina_map_neg_x_path: String,
     retina_map_pos_y_path: String,
@@ -93,6 +94,7 @@ impl Retina {
             retina_bind_group,
             targets: ColorTargets::new(&device, "Retina"),
 
+            map_valid: false,
             retina_map_pos_x_path: String::new(),
             retina_map_neg_x_path: String::new(),
             retina_map_pos_y_path: String::new(),
@@ -104,67 +106,34 @@ impl Retina {
             retina_map_builder: RetinaMapBuilder::new(),
         }
     }
-}
 
-impl Node for Retina {
-    fn negociate_slots(
-        &mut self,
-        surface: &Surface,
-        slots: NodeSlots,
-        _original_image: &mut Option<Texture>,
-    ) -> NodeSlots {
-        let slots = slots
-            .to_color_input(surface)
-            .to_color_output(surface, "RetinaNode");
-        self.uniforms.data.resolution = slots.output_size_f32();
-
-        let device = surface.device().borrow_mut();
-
-        self.sources_bind_group = slots.as_all_colors_source(&device);
-        self.targets = slots.as_all_colors_target();
-        slots
-    }
-
-    fn inspect(&mut self, surface: &Surface, inspector: &mut dyn Inspector) {
-        inspector.begin_node("Retina");
+    fn validate_map(&mut self, surface: &Surface) {
+        if self.map_valid {
+            return;
+        }
 
         let device = surface.device().borrow_mut();
         let queue = surface.queue().borrow_mut();
 
         let mut image_data = Vec::new();
-        inspector.mut_img("retina_map_pos_x_path", &mut self.retina_map_pos_x_path);
         if !self.retina_map_pos_x_path.is_empty() {
             image_data.push(load(&self.retina_map_pos_x_path));
         }
-        inspector.mut_img("retina_map_neg_x_path", &mut self.retina_map_neg_x_path);
         if !self.retina_map_neg_x_path.is_empty() {
             image_data.push(load(&self.retina_map_neg_x_path));
         }
-        inspector.mut_img("retina_map_pos_y_path", &mut self.retina_map_pos_y_path);
         if !self.retina_map_pos_y_path.is_empty() {
             image_data.push(load(&self.retina_map_pos_y_path));
         }
-        inspector.mut_img("retina_map_neg_y_path", &mut self.retina_map_neg_y_path);
         if !self.retina_map_neg_y_path.is_empty() {
             image_data.push(load(&self.retina_map_neg_y_path));
         }
-        inspector.mut_img("retina_map_pos_z_path", &mut self.retina_map_pos_z_path);
         if !self.retina_map_pos_z_path.is_empty() {
             image_data.push(load(&self.retina_map_pos_z_path));
         }
-        inspector.mut_img("retina_map_neg_z_path", &mut self.retina_map_neg_z_path);
         if !self.retina_map_neg_z_path.is_empty() {
             image_data.push(load(&self.retina_map_neg_z_path));
         }
-        inspector.mut_f32(
-            "achromatopsia_blur_factor",
-            &mut self.uniforms.data.achromatopsia_blur_factor,
-        );
-
-        inspector.mut_matrix("proj_matrix", &mut self.proj_matrix);
-        inspector.mut_f64("cubemap_scale", &mut self.cubemap_scale);
-
-        self.retina_map_builder.inspect(inspector);
 
         if image_data.len() == 6 {
             (_, self.retina_bind_group) = load_cubemap(
@@ -241,6 +210,60 @@ impl Node for Retina {
             .create_bind_group(&device);
         };
 
+        self.map_valid = true;
+    }
+}
+
+impl Node for Retina {
+    fn negociate_slots(
+        &mut self,
+        surface: &Surface,
+        slots: NodeSlots,
+        _original_image: &mut Option<Texture>,
+    ) -> NodeSlots {
+        let slots = slots
+            .to_color_input(surface)
+            .to_color_output(surface, "RetinaNode");
+        self.uniforms.data.resolution = slots.output_size_f32();
+
+        let device = surface.device().borrow_mut();
+
+        self.sources_bind_group = slots.as_all_colors_source(&device);
+        self.targets = slots.as_all_colors_target();
+        slots
+    }
+
+    fn inspect(&mut self, inspector: &mut dyn Inspector) {
+        inspector.begin_node("Retina");
+
+        if inspector.mut_img("retina_map_pos_x_path", &mut self.retina_map_pos_x_path) {
+            self.map_valid = false;
+        }
+        if inspector.mut_img("retina_map_neg_x_path", &mut self.retina_map_neg_x_path) {
+            self.map_valid = false;
+        }
+        if inspector.mut_img("retina_map_pos_y_path", &mut self.retina_map_pos_y_path) {
+            self.map_valid = false;
+        }
+        if inspector.mut_img("retina_map_neg_y_path", &mut self.retina_map_neg_y_path) {
+            self.map_valid = false;
+        }
+        if inspector.mut_img("retina_map_pos_z_path", &mut self.retina_map_pos_z_path) {
+            self.map_valid = false;
+        }
+        if inspector.mut_img("retina_map_neg_z_path", &mut self.retina_map_neg_z_path) {
+            self.map_valid = false;
+        }
+        inspector.mut_f32(
+            "achromatopsia_blur_factor",
+            &mut self.uniforms.data.achromatopsia_blur_factor,
+        );
+
+        inspector.mut_matrix("proj_matrix", &mut self.proj_matrix);
+        inspector.mut_f64("cubemap_scale", &mut self.cubemap_scale);
+
+        self.retina_map_builder.inspect(inspector);
+
         inspector.end_node();
     }
 
@@ -268,6 +291,7 @@ impl Node for Retina {
         screen: Option<&RenderTexture>,
     ) {
         self.uniforms.update(&surface.queue().borrow_mut());
+        self.validate_map(surface);
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Retina render_pass"),

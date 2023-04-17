@@ -167,7 +167,7 @@ impl Node for Lens {
         slots
     }
 
-    fn inspect(&mut self, _surface: &Surface, inspector: &mut dyn Inspector) {
+    fn inspect(&mut self, inspector: &mut dyn Inspector) {
         inspector.begin_node("Lens");
 
         // default values

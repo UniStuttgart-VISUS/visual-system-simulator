@@ -53,7 +53,7 @@ pub trait Node {
 
     /// Set new parameters for this effect
     #[allow(unused_variables)]
-    fn inspect(&mut self, surface: &Surface, inspector: &mut dyn Inspector) {}
+    fn inspect(&mut self, inspector: &mut dyn Inspector) {}
 
     /// Handle input.
     #[allow(unused_variables)]

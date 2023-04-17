@@ -89,7 +89,7 @@ impl Node for PeacockCB {
         slots
     }
 
-    fn inspect(&mut self, _surface: &Surface, inspector: &mut dyn Inspector) {
+    fn inspect(&mut self, inspector: &mut dyn Inspector) {
         inspector.begin_node("Peacock");
 
         const v_cpu: [f32; 3] = [0.753, 1.140, 0.171];

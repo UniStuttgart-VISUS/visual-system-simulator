@@ -1,7 +1,6 @@
 #![allow(non_snake_case)]
 #![cfg(target_os = "android")]
 
-use std::cell::RefCell;
 use std::ffi::c_void;
 use std::panic;
 use std::ptr::NonNull;
@@ -57,8 +56,8 @@ impl Node for CameraStream {
         self.upload.negociate_slots(&surface, slots, original_image)
     }
 
-    fn inspect(&mut self, surface: &Surface, inspector: &mut dyn Inspector) {
-        self.upload.inspect(&surface, inspector);
+    fn inspect(&mut self, inspector: &mut dyn Inspector) {
+        self.upload.inspect(inspector);
     }
 
     fn input(

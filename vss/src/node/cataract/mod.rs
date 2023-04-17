@@ -85,7 +85,7 @@ impl Node for Cataract {
         slots
     }
 
-    fn inspect(&mut self, _surface: &Surface, inspector: &mut dyn Inspector) {
+    fn inspect(&mut self, inspector: &mut dyn Inspector) {
         inspector.begin_node("cataract");
 
         let mut active = (self.uniforms.data.active == 0);

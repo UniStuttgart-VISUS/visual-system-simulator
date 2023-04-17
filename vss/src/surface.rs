@@ -145,14 +145,14 @@ impl Surface {
         for (i, flow) in self.flow.iter().enumerate() {
             flow.negociate_slots(self);
             inspector.begin_flow(i);
-            flow.inspect(self, inspector);
+            flow.inspect(inspector);
             inspector.end_flow();
         }
     }
 
     pub fn inspect_flow(&self, inspector: &mut dyn Inspector, flow_index: usize) {
         inspector.begin_flow(flow_index);
-        self.flow[flow_index].inspect(&self, inspector);
+        self.flow[flow_index].inspect(inspector);
         inspector.end_flow();
     }
 
