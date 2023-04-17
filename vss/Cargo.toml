@@ -8,6 +8,7 @@ resolver = "2"
 
 [dependencies]
 eframe = "0.21.3"
+egui-wgpu = "0.21.0"
 winit = "0.27.5"
 wgpu = "0.15.1"
 image = "0.23"

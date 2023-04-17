@@ -167,6 +167,9 @@ fn build_flow(
     node.set_output_scale(output_scale);
     surface.add_node(Box::new(node), flow_index);
 
+    let node = GuiOverlay::new(&surface);
+    surface.add_node(Box::new(node), flow_index);
+
     // Add output node, if present.
     if let Some(output_node) = output_node {
         surface.add_node(output_node, flow_index);

@@ -5,7 +5,7 @@
 mod cataract;
 mod display;
 mod vis_overlay;
-// mod gui_overlay;
+mod gui_overlay;
 mod lens;
 mod passthrough;
 mod retina;
@@ -28,7 +28,7 @@ use cgmath::Matrix4;
 pub use self::cataract::*;
 pub use self::display::*;
 pub use self::vis_overlay::*;
-// pub use self::gui_overlay::*;
+pub use self::gui_overlay::*;
 pub use self::lens::*;
 pub use self::passthrough::*;
 pub use self::retina::*;
