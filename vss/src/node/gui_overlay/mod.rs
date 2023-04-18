@@ -1,5 +1,4 @@
 use super::*;
-use eframe::epaint::Primitive;
 use wgpu::CommandEncoder;
 
 use egui_wgpu;
@@ -15,10 +14,11 @@ pub struct GuiOverlay {
     source_bind_group: wgpu::BindGroup,
     render_target: RenderTexture,
 
-    gui_context: eframe::egui::Context,
+    gui_context: egui::Context,
     screen_descriptor: egui_wgpu::renderer::ScreenDescriptor,
-    egui_input: Option<eframe::egui::RawInput>,
+    egui_input: Option<egui::RawInput>,
     egui_renderer: egui_wgpu::Renderer,
+    egui_ui_func: fn(&egui::Context),
 }
 
 impl GuiOverlay {
@@ -61,7 +61,7 @@ impl GuiOverlay {
             Some("GuiOverlay Render Pipeline")
         );
         
-        let gui_context = eframe::egui::Context::default();
+        let gui_context = egui::Context::default();
         let screen_descriptor = egui_wgpu::renderer::ScreenDescriptor{
             size_in_pixels: [1, 1],
             pixels_per_point: 0.0,
@@ -78,7 +78,12 @@ impl GuiOverlay {
             screen_descriptor,
             egui_input: None,
             egui_renderer,
+            egui_ui_func: |_| {},
         }
+    }
+
+    pub fn set_ui_function(&mut self, ui_fn: fn(&egui::Context)){
+        self.egui_ui_func = ui_fn;
     }
 }
 
@@ -99,7 +104,7 @@ impl Node for GuiOverlay {
 
         self.screen_descriptor = egui_wgpu::renderer::ScreenDescriptor{
             size_in_pixels: [output_size[0] as u32, output_size[1] as u32],
-            pixels_per_point: 0.0,
+            pixels_per_point: 1.0,
         };
 
         (_, self.source_bind_group) = slots.as_color_source(&device);
@@ -113,12 +118,12 @@ impl Node for GuiOverlay {
         perspective: &EyePerspective,
         vis_param: &VisualizationParameters,
     ) -> EyePerspective {
-        let mut egui_input = eframe::egui::RawInput::default();
-        egui_input.events.push(eframe::egui::Event::PointerButton{
-            pos: eframe::egui::pos2(vis_param.mouse_input.position.0, vis_param.mouse_input.position.1),
-            button: eframe::egui::PointerButton::Primary,
+        let mut egui_input = egui::RawInput::default();
+        egui_input.events.push(egui::Event::PointerButton{
+            pos: egui::pos2(vis_param.mouse_input.position.0, vis_param.mouse_input.position.1),
+            button: egui::PointerButton::Primary,
             pressed: vis_param.mouse_input.left_button,
-            modifiers: eframe::egui::Modifiers::default(),
+            modifiers: egui::Modifiers::default(),
         });
 
         self.egui_input = Some(egui_input);
@@ -137,16 +142,13 @@ impl Node for GuiOverlay {
 
         self.uniforms.update(&queue);
 
-        self.gui_context.begin_frame(self.egui_input.take().unwrap_or_default());
+        let full_output = self.gui_context.run(
+            self.egui_input.take().unwrap_or_default(),
+            self.egui_ui_func
+        );
 
-        eframe::egui::Window::new("Window").show(&self.gui_context, |ui| {
-            if ui.button("Click me").clicked() {
-                println!("Click");
-            }
-        });
-
-        let full_output = self.gui_context.end_frame();
         let paint_jobs = self.gui_context.tessellate(full_output.shapes);
+
         for texture_delta_set in full_output.textures_delta.set.iter(){
             self.egui_renderer.update_texture(&device, &queue, texture_delta_set.0, &texture_delta_set.1);
         };
@@ -165,18 +167,8 @@ impl Node for GuiOverlay {
             render_pass.set_bind_group(0, &self.uniforms.bind_group, &[]);
             render_pass.set_bind_group(1, &self.source_bind_group, &[]);
             render_pass.draw(0..6, 0..1);
-        }
-
-        {//TODO: this render pass could be potentially combined with the previous one
-            let mut egui_render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("GuiOverlay GUI render_pass"),
-                color_attachments: &[screen
-                    .unwrap_or(&self.render_target)
-                    .to_color_attachment(None)],
-                depth_stencil_attachment: None,
-            });
     
-            self.egui_renderer.render(&mut egui_render_pass, &paint_jobs, &self.screen_descriptor);
+            self.egui_renderer.render(&mut render_pass, &paint_jobs, &self.screen_descriptor);
         }
 
         for texture_delta_free in full_output.textures_delta.free.iter(){
