@@ -168,16 +168,16 @@ fn build_flow(
     surface.add_node(Box::new(node), flow_index);
 
     //TODO add proper ui elements
-    // let mut node = GuiOverlay::new(&surface);
-    // node.set_ui_function(|ctx| {
-    //     egui::Window::new("Window").show(&ctx, |ui| {
-    //         ui.label("Hello world!");
-    //         if ui.button("Click me").clicked() {
-    //             println!("Click");
-    //         }
-    //     });
-    // });
-    // surface.add_node(Box::new(node), flow_index);
+    let mut node = GuiOverlay::new(&surface);
+    node.set_ui_function(|ctx| {
+        egui::Window::new("Window").show(&ctx, |ui| {
+            ui.label("Hello world!");
+            if ui.button("Click me").clicked() {
+                println!("Click");
+            }
+        });
+    });
+    surface.add_node(Box::new(node), flow_index);
 
     // Add output node, if present.
     if let Some(output_node) = output_node {
