@@ -4,16 +4,17 @@
 #[macro_use]
 mod cataract;
 mod display;
-mod vis_overlay;
+mod eye_control;
 mod gui_overlay;
 mod lens;
 mod passthrough;
 mod retina;
 mod rgb_buffer;
-mod slot;
-mod yuv_buffer;
-mod variance;
 mod peacock;
+mod slot;
+mod variance;
+mod vis_overlay;
+mod yuv_buffer;
 
 use wgpu::BindGroupLayout;
 use wgpu::ColorTargetState;
@@ -27,16 +28,17 @@ use cgmath::Matrix4;
 
 pub use self::cataract::*;
 pub use self::display::*;
-pub use self::vis_overlay::*;
+pub use self::eye_control::*;
 pub use self::gui_overlay::*;
 pub use self::lens::*;
 pub use self::passthrough::*;
 pub use self::retina::*;
 pub use self::rgb_buffer::*;
-pub use self::slot::*;
-pub use self::yuv_buffer::*;
-pub use self::variance::*;
 pub use self::peacock::*;
+pub use self::slot::*;
+pub use self::variance::*;
+pub use self::vis_overlay::*;
+pub use self::yuv_buffer::*;
 
 use super::*;
 

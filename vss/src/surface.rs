@@ -14,7 +14,7 @@ pub struct Surface {
     queue: RefCell<wgpu::Queue>,
 
     pub flow: Vec<Flow>,
-    pub vis_param: RefCell<VisualizationParameters>,
+    vis_param: RefCell<VisualizationParameters>,
     last_render_instant: RefCell<Instant>,
 }
 
@@ -211,5 +211,9 @@ impl Surface {
         output.present();
         self.flow.iter().for_each(|f| f.post_render(&self));
         self.last_render_instant.replace(Instant::now());
+    }
+
+    pub fn input(&self, flow:&Flow) {
+       flow.input( &self.vis_param.borrow());
     }
 }
