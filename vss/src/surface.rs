@@ -13,17 +13,13 @@ pub struct Surface {
     device: RefCell<wgpu::Device>,
     queue: RefCell<wgpu::Queue>,
 
-    pub flow: Vec<Flow>,
+    pub flows: Vec<Flow>,
     vis_param: RefCell<VisualizationParameters>,
     last_render_instant: RefCell<Instant>,
 }
 
 impl Surface {
-    pub async fn new<W>(
-        surface_size: [u32; 2],
-        window_handle: W,
-        flow_count: usize,
-    ) -> Self
+    pub async fn new<W>(surface_size: [u32; 2], window_handle: W, flow_count: usize) -> Self
     where
         W: raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle,
     {
@@ -90,8 +86,8 @@ impl Surface {
         surface.configure(&device, &surface_config);
 
         // Create flows.
-        let mut flow = Vec::new();
-        flow.resize_with(flow_count, Flow::new);
+        let mut flows = Vec::new();
+        flows.resize_with(flow_count, Flow::new);
 
         //TODO set perspective from values here ?
 
@@ -101,18 +97,18 @@ impl Surface {
             surface_config: RefCell::new(surface_config),
             device: RefCell::new(device),
             queue: RefCell::new(queue),
-            flow,
+            flows,
             vis_param: RefCell::new(VisualizationParameters::default()),
             last_render_instant: RefCell::new(Instant::now()),
         }
     }
 
     pub fn add_node(&mut self, node: Box<dyn Node>, flow_index: usize) {
-        self.flow[flow_index].add_node(node);
+        self.flows[flow_index].add_node(node);
     }
 
     pub fn replace_node(&mut self, index: usize, node: Box<dyn Node>, flow_index: usize) {
-        self.flow[flow_index].replace_node(index, node);
+        self.flows[flow_index].replace_node(index, node);
     }
 
     pub fn resize(&mut self, new_size: [u32; 2]) {
@@ -131,16 +127,20 @@ impl Surface {
         return 0.0;
     }
 
-    pub fn nodes_len(&self) -> usize {
-        //TODO: return vector of lengths
-        self.flow[0].nodes_len()
+    pub fn nodes_lens(&self) -> Vec<usize> {
+        self.flows.iter().map(|flow| flow.nodes_len()).collect()
+    }
+
+    pub fn negociate_slots(&self) {
+        for flow in self.flows.iter() {
+            flow.negociate_slots(self);
+        }
     }
 
     pub fn inspect(&self, inspector: &mut dyn Inspector) {
         self.vis_param.borrow_mut().inspect(inspector);
 
-        for (i, flow) in self.flow.iter().enumerate() {
-            flow.negociate_slots(self);
+        for (i, flow) in self.flows.iter().enumerate() {
             inspector.begin_flow(i);
             flow.inspect(inspector);
             inspector.end_flow();
@@ -149,7 +149,7 @@ impl Surface {
 
     pub fn inspect_flow(&self, inspector: &mut dyn Inspector, flow_index: usize) {
         inspector.begin_flow(flow_index);
-        self.flow[flow_index].inspect(inspector);
+        self.flows[flow_index].inspect(inspector);
         inspector.end_flow();
     }
 
@@ -203,17 +203,17 @@ impl Surface {
             label: "surface render texture".to_string(),
         };
 
-        self.flow
+        self.flows
             .iter()
             .for_each(|f| f.render(&self, &mut encoder, &render_texture));
 
         self.queue.borrow_mut().submit(iter::once(encoder.finish()));
         output.present();
-        self.flow.iter().for_each(|f| f.post_render(&self));
+        self.flows.iter().for_each(|f| f.post_render(&self));
         self.last_render_instant.replace(Instant::now());
     }
 
-    pub fn input(&self, flow:&Flow) {
-       flow.input( &self.vis_param.borrow());
+    pub fn input(&self, flow: &Flow) {
+        flow.input(&self.vis_param.borrow());
     }
 }

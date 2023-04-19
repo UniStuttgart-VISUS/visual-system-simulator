@@ -183,6 +183,8 @@ fn build_flow(
     if let Some(output_node) = output_node {
         surface.add_node(output_node, flow_index);
     }
+
+    surface.negociate_slots();
 }
 
 // "Default" main

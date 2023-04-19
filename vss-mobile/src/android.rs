@@ -200,6 +200,8 @@ fn build_flow(surface: &mut Surface, frame_receiver: Receiver<YuvBuffer>) {
     let mut node = Display::new(&surface);
     node.set_output_scale(OutputScale::Fill);
     surface.add_node(Box::new(node), 0);
+
+    surface.negociate_slots();
 }
 
 #[no_mangle]
@@ -230,9 +232,9 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDraw<'local>
 ) {
     let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
     let bridge = (*guard).as_mut().expect("Bridge should be created");
-    for f in bridge.surface.flow.iter(){
-        f.input(&bridge.surface.vis_param.borrow());
-    }
+    //for f in bridge.surface.flows.iter(){
+    //    f.input(&bridge.surface.vis_param.borrow());
+    //}
     //TODO replace this with some better way of triggering a node update
     //(it is neccessary to refresh node resolutions but for this we need the upload node to have a buffer available to get the new resolution from)
     if (bridge.new_size[0] != bridge.current_size[0]) || (bridge.new_size[1] != bridge.current_size[1]) {

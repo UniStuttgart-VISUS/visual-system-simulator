@@ -187,7 +187,7 @@ impl Window {
         }
 
         // Update input.
-        for f in self.surface.flow.iter() {
+        for f in self.surface.flows.iter() {
             if *self.override_view.borrow() || *self.override_gaze.borrow() {
                 let cursor_pos = self.cursor_pos.borrow().clone();
                 //println!("{} {}",cursor_pos.x as f32 ,cursor_pos.y as f32);
