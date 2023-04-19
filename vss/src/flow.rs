@@ -106,33 +106,31 @@ impl Flow {
                 let height = surface.height();
 
                 let color_target =
-                    create_color_rt(&device, width, height, Some("flow_negociate_slots color"));
+                    create_color_rt(device, width, height, Some("flow_negociate_slots color"));
                 let deflection_target = create_highp_rt(
-                    &device,
+                    device,
                     width,
                     height,
                     Some("flow_negociate_slots deflection"),
                 );
                 let color_change_target = create_highp_rt(
-                    &device,
+                    device,
                     width,
                     height,
                     Some("flow_negociate_slots color_change"),
                 );
                 let color_uncertainty_target = create_highp_rt(
-                    &device,
+                    device,
                     width,
                     height,
                     Some("flow_negociate_slots color_uncertainty"),
                 );
                 let covariances_target = create_highp_rt(
-                    &device,
+                    device,
                     width,
                     height,
                     Some("flow_negociate_slots covariances"),
                 );
-
-                drop(device);
 
                 let output_slot = Slot::Rgb {
                     color_source: color_target.as_texture(),

@@ -39,7 +39,7 @@ impl DownloadRgbBuffer{
         let device = surface.device();
         let queue = surface.queue();
         
-        let buffer_dimensions = BufferDimensions::new(1 as usize, 1 as usize, size_of::<u32>());
+        let buffer_dimensions = BufferDimensions::new(1, 1, size_of::<u32>());
 
         let download_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Download Node Placeholder Buffer"),
@@ -48,7 +48,7 @@ impl DownloadRgbBuffer{
             mapped_at_creation: false,
         });
 
-        let texture = placeholder_texture(&device, &queue, Some("Download texture placeholder")).unwrap();
+        let texture = placeholder_texture(device, queue, Some("Download texture placeholder")).unwrap();
 
         DownloadRgbBuffer{
             tx,
@@ -72,8 +72,8 @@ impl DownloadRgbBuffer{
             image::save_buffer(
                 &path,
                 &rgb_buffer.pixels_rgb,
-                rgb_buffer.width as u32,
-                rgb_buffer.height as u32,
+                rgb_buffer.width,
+                rgb_buffer.height,
                 image::ColorType::Rgb8,
             )
             .expect("Unable to create file");
@@ -94,7 +94,7 @@ impl Node for DownloadRgbBuffer{
         self.res = slots.input_size_f32();
         let device = surface.device();
         
-        (self.input, _) = slots.as_color_source(&device);
+        (self.input, _) = slots.as_color_source(device);
 
         let buffer_dimensions = BufferDimensions::new(self.res[0] as usize, self.res[1] as usize, size_of::<u32>());
         println!("negociate_slots {}, {}", buffer_dimensions.width, buffer_dimensions.height);

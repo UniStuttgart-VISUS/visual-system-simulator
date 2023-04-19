@@ -12,8 +12,9 @@ struct Uniforms {
     _padding2: u32,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub enum OutputScale {
+    #[default]
     Fit = 0,
     Fill = 1,
     Stretch = 2,
@@ -33,11 +34,7 @@ impl OutputScale {
     }
 }
 
-impl Default for OutputScale {
-    fn default() -> Self {
-        OutputScale::Fit
-    }
-}
+
 
 #[derive(Copy, Clone)]
 pub struct ViewPort {
@@ -61,7 +58,7 @@ impl Display {
         let queue = surface.queue();
 
         let uniforms = ShaderUniforms::new(
-            &device,
+            device,
             Uniforms {
                 viewport: [0.0, 0.0, 1.0, 1.0],
                 resolution_in: [1.0, 1.0],
@@ -74,10 +71,10 @@ impl Display {
         );
 
         let (source_bind_group_layout, source_bind_group) =
-            placeholder_texture(&device, &queue, Some("DisplayNode s_color (placeholder)"))
+            placeholder_texture(device, queue, Some("DisplayNode s_color (placeholder)"))
                 .unwrap()
-                .create_bind_group(&device);
-        let render_target = placeholder_color_rt(&device, Some("DisplayNode render_target"));
+                .create_bind_group(device);
+        let render_target = placeholder_color_rt(device, Some("DisplayNode render_target"));
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("DisplayNode Shader"),
@@ -85,7 +82,7 @@ impl Display {
         });
 
         let pipeline = create_render_pipeline(
-            &device,
+            device,
             &[&shader, &shader],
             &["vs_main", "fs_main"],
             &[&uniforms.bind_group_layout, &source_bind_group_layout],
@@ -127,7 +124,7 @@ impl Node for Display {
         self.uniforms.data.resolution_in = slots.input_size_f32();
         self.uniforms.data.resolution_out = slots.output_size_f32();
 
-        (_, self.source_bind_group) = slots.as_color_source(&device);
+        (_, self.source_bind_group) = slots.as_color_source(device);
         self.render_target = slots.as_color_target();
 
         slots
@@ -139,7 +136,7 @@ impl Node for Display {
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        self.uniforms.upload(&surface.queue());
+        self.uniforms.upload(surface.queue());
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("DisplayNode render_pass"),

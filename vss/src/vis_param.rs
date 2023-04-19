@@ -1,15 +1,17 @@
 use crate::Inspector;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub enum BaseImage {
+    #[default]
     Output,
     Original,
     Ganglion,
     Variance,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub enum CombinationFunction {
+    #[default]
     AbsoluteErrorRGBVectorLength,
     AbsoluteErrorXYVectorLength,
     AbsoluteErrorRGBXYVectorLength,
@@ -19,40 +21,20 @@ pub enum CombinationFunction {
     UncertaintyGenVar,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Default)]
 pub enum MixType {
+    #[default]
     BaseImageOnly,
     ColorMapOnly,
     OverlayThreshold,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub enum ColorMapType {
+    #[default]
     Viridis,
     Turbo,
     Grayscale,
-}
-
-impl Default for BaseImage {
-    fn default() -> Self {
-        BaseImage::Output
-    }
-}
-impl Default for ColorMapType {
-    fn default() -> Self {
-        ColorMapType::Viridis
-    }
-}
-impl Default for MixType {
-    fn default() -> Self {
-        MixType::BaseImageOnly
-    }
-}
-
-impl Default for CombinationFunction {
-    fn default() -> Self {
-        CombinationFunction::AbsoluteErrorRGBVectorLength
-    }
 }
 
 #[derive(Copy, Clone, Debug, Default)]

@@ -45,11 +45,11 @@ impl IoGenerator {
     ) -> Option<IoNodePair> {
         self.input_idx += 1;
         let render_res = if let Some(res) = render_resolution {
-            RenderResolution::Custom { res: res }
+            RenderResolution::Custom { res }
         } else {
             RenderResolution::Buffer { input_scale: 1.0 } //TODO add input scaling
         };
-        self.current(&surface, render_res, 0)
+        self.current(surface, render_res, 0)
     }
 
     fn current(
@@ -62,16 +62,16 @@ impl IoGenerator {
             None
         } else {
             let input = &self.inputs[self.input_idx];
-            if UploadRgbBuffer::has_image_extension(&input) {
+            if UploadRgbBuffer::has_image_extension(input) {
                 let input_path = std::path::Path::new(input);
-                let mut input_node = UploadRgbBuffer::new(&surface);
+                let mut input_node = UploadRgbBuffer::new(surface);
                 input_node.upload_image(load(input_path));
                 input_node.set_flags(
-                    RgbInputFlags::from_extension(&input) | RgbInputFlags::VERTICALLY_FLIPPED,
+                    RgbInputFlags::from_extension(input) | RgbInputFlags::VERTICALLY_FLIPPED,
                 );
                 input_node.set_render_resolution(render_resolution);
                 let output_node = if let Some(output) = &self.output {
-                    let mut output_node = DownloadRgbBuffer::new(&surface);
+                    let mut output_node = DownloadRgbBuffer::new(surface);
                     let output_info = OutputInfo {
                         configname: self.config_name.clone(),
                         dirname: input_path
@@ -108,9 +108,9 @@ impl IoGenerator {
                     None
                 };
                 Some((Box::new(input_node), output_node))
-            } else if UploadVideo::has_video_extension(&input) {
-                let mut input_node = UploadVideo::new(&surface);
-                input_node.set_flags(RgbInputFlags::from_extension(&input));
+            } else if UploadVideo::has_video_extension(input) {
+                let mut input_node = UploadVideo::new(surface);
+                input_node.set_flags(RgbInputFlags::from_extension(input));
                 input_node.open(input).unwrap();
                 Some((Box::new(input_node), None))
             } else {
@@ -139,38 +139,38 @@ fn build_flow(
         }
     };
     let (input_node, output_node) = io_generator
-        .current(&surface, render_res, flow_index)
+        .current(surface, render_res, flow_index)
         .unwrap();
 
     // Add input node.
     surface.add_node(input_node, flow_index);
 
     // Visual system passes.
-    let node = Cataract::new(&surface);
+    let node = Cataract::new(surface);
     surface.add_node(Box::new(node), flow_index);
-    let node = Lens::new(&surface);
+    let node = Lens::new(surface);
     surface.add_node(Box::new(node), flow_index);
-    let node = Retina::new(&surface);
+    let node = Retina::new(surface);
     surface.add_node(Box::new(node), flow_index);
-    let node = PeacockCB::new(&surface);
+    let node = PeacockCB::new(surface);
     surface.add_node(Box::new(node), flow_index);
 
     // Measurement Nodes for variance and error
-    let node = VarianceMeasure::new(&surface);
+    let node = VarianceMeasure::new(surface);
     surface.add_node(Box::new(node), flow_index);
-    let node = VisOverlay::new(&surface);
+    let node = VisOverlay::new(surface);
     surface.add_node(Box::new(node), flow_index);
 
     // Display node.
-    let mut node = Display::new(&surface);
+    let mut node = Display::new(surface);
     node.set_viewport(view_port);
     node.set_output_scale(output_scale);
     surface.add_node(Box::new(node), flow_index);
 
     //TODO add proper ui elements
-    let mut node = GuiOverlay::new(&surface);
+    let mut node = GuiOverlay::new(surface);
     node.set_ui_function(|ctx| {
-        egui::Window::new("Window").show(&ctx, |ui| {
+        egui::Window::new("Window").show(ctx, |ui| {
             ui.label("Hello world!");
             if ui.button("Click me").clicked() {
                 println!("Click");
@@ -233,10 +233,10 @@ pub fn main() {
         }
     };
 
-    for index in 0..flow_count {
+    for (index, flow_config) in config.flow_configs.iter().enumerate() {
         let mut io_generator = IoGenerator::new(
             config.inputs.clone(),
-            config.flow_configs[index].name.clone(),
+            flow_config.name.clone(),
             config.output.clone(),
         );
         build_flow(
@@ -315,7 +315,7 @@ pub fn main() {
     }
 
     if config.measure_frames > 0 {
-        match fs::write(
+        if let Err(e) = fs::write(
             "vss_perf_data.csv",
             frame_perfs
                 .iter()
@@ -323,8 +323,7 @@ pub fn main() {
                 .collect::<Vec<String>>()
                 .join(""),
         ) {
-            Err(e) => println!("dump_perf_data error {:?}", e),
-            _ => (),
+            println!("dump_perf_data error {:?}", e);
         }
     }
 

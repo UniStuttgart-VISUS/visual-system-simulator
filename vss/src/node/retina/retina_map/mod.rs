@@ -171,7 +171,7 @@ impl RetinaMapBuilder {
         // generate white retina map as starting point
         let mut merged = image::ImageBuffer::new(resolution.0, resolution.1);
         for (_, _, pixel) in merged.enumerate_pixels_mut() {
-            *pixel = image::Rgba([255 as u8, 255 as u8, 255 as u8, 255 as u8]);
+            *pixel = image::Rgba([255_u8, 255_u8, 255_u8, 255_u8]);
         }
 
         // for each pixel and each channel, take the minimum of all maps at this pixel and channel
@@ -182,7 +182,7 @@ impl RetinaMapBuilder {
                 let g = new_pixel[1].min(pixel[1]);
                 let b = new_pixel[2].min(pixel[2]);
                 let a = new_pixel[3].min(pixel[3]);
-                *pixel = image::Rgba([r as u8, g as u8, b as u8, a as u8]);
+                *pixel = image::Rgba([r, g, b, a]);
             }
         }
 

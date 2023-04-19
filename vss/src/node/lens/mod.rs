@@ -4,7 +4,7 @@ pub use generator::*;
 
 use super::*;
 
-const DIOPTRES_SCALING: f32 = 0.332_763_369_417_523 as f32;
+const DIOPTRES_SCALING: f64 = 0.332_763_369_417_523;
 
 struct Uniforms {
     lens_position: [f32; 2],
@@ -53,12 +53,12 @@ pub struct Lens {
 
 impl Lens {
     pub fn new(surface: &Surface) -> Self {
-        let generator = NormalMapGenerator::new(&surface);
+        let generator = NormalMapGenerator::new(surface);
         let device = surface.device();
         let queue = surface.queue();
 
         let uniforms = ShaderUniforms::new(
-            &device,
+            device,
             Uniforms {
                 lens_position: [0.0, 0.0],
                 active: 0,
@@ -93,28 +93,28 @@ impl Lens {
         });
 
         let (normal_layout, normal_bind_group) =
-            placeholder_highp_texture(&device, &queue, Some("Lens-Normal Texture placeholder"))
+            placeholder_highp_texture(device, queue, Some("Lens-Normal Texture placeholder"))
                 .unwrap()
-                .create_bind_group(&device);
+                .create_bind_group(device);
 
         let (cornea_layout, cornea_bind_group) = load_texture_from_bytes(
-            &device,
-            &queue,
+            device,
+            queue,
             &[127, 127, 0, 0],
             1,
             1,
-            create_sampler_linear(&device),
+            create_sampler_linear(device),
             wgpu::TextureFormat::Rgba8Unorm,
             Some("Lens-Cornea Texture placeholder"),
         )
         .unwrap()
-        .create_bind_group(&device);
+        .create_bind_group(device);
 
         let (sources_bind_group_layout, sources_bind_group) =
-            create_color_depth_sources_bind_group(&device, &queue, "Cataract");
+            create_color_depth_sources_bind_group(device, queue, "Cataract");
 
         let pipeline = create_render_pipeline(
-            &device,
+            device,
             &[&shader, &shader],
             &["vs_main", "fs_main"],
             &[
@@ -135,7 +135,7 @@ impl Lens {
             sources_bind_group,
             normal_bind_group,
             cornea_bind_group,
-            targets: ColorTargets::new(&device, "Lens"),
+            targets: ColorTargets::new(device, "Lens"),
             presbyopia_onoff: false,
             myopiahyperopia_onoff: false,
             myopiahyperopia_mnh: 0.0,
@@ -156,13 +156,13 @@ impl Node for Lens {
         let device = surface.device();
         let queue = surface.queue();
 
-        self.sources_bind_group = slots.as_all_source(&device);
+        self.sources_bind_group = slots.as_all_source(device);
         self.targets = slots.as_all_colors_target();
 
         let size = slots.output_size_f32();
         self.generator
-            .generate(&device, &queue, size[0] as u32, size[1] as u32);
-        (_, self.normal_bind_group) = self.generator.texture.create_bind_group(&device);
+            .generate(device, queue, size[0] as u32, size[1] as u32);
+        (_, self.normal_bind_group) = self.generator.texture.create_bind_group(device);
 
         slots
     }
@@ -208,23 +208,23 @@ impl Node for Lens {
                     .data
                     .near_point
                     .min(self.uniforms.data.far_point);
-                let vision_factor = 1.0 - dioptres * DIOPTRES_SCALING;
+                let vision_factor = 1.0 - dioptres * DIOPTRES_SCALING as f32;
                 self.uniforms.data.far_vision_factor = self
                     .uniforms
                     .data
                     .far_vision_factor
-                    .max(vision_factor as f32);
+                    .max(vision_factor);
             } else if dioptres > 0.0 {
                 // hyperopia
                 let hyperopia_near_point = 1000.0 / (4.4 - dioptres);
                 self.uniforms.data.near_point =
                     self.uniforms.data.near_point.max(hyperopia_near_point);
-                let vision_factor = 1.0 + dioptres * DIOPTRES_SCALING;
+                let vision_factor = 1.0 + dioptres * DIOPTRES_SCALING as f32;
                 self.uniforms.data.near_vision_factor = self
                     .uniforms
                     .data
                     .near_vision_factor
-                    .max(vision_factor as f32);
+                    .max(vision_factor);
             }
         }
 
@@ -269,7 +269,7 @@ impl Node for Lens {
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        self.uniforms.upload(&surface.queue());
+        self.uniforms.upload(surface.queue());
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Lens render_pass"),

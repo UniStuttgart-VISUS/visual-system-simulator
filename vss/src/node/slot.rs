@@ -23,12 +23,12 @@ pub struct ColorDepthTargets{
 
 impl ColorDepthTargets{
     pub fn new(device: &wgpu::Device, node_name: &str) -> Self{
-        let rt_color = placeholder_color_rt(&device, Some(format!("{}{}", node_name, " rt_color (placeholder)").as_str()));
-        let rt_depth = placeholder_depth_rt(&device, Some(format!("{}{}", node_name, " rt_depth (placeholder)").as_str()));
-        let rt_deflection = placeholder_highp_rt(&device, Some(format!("{}{}", node_name, " rt_deflection (placeholder)").as_str()));
-        let rt_color_change = placeholder_highp_rt(&device, Some(format!("{}{}", node_name, " rt_color_change (placeholder)").as_str()));
-        let rt_color_uncertainty = placeholder_highp_rt(&device, Some(format!("{}{}", node_name, " rt_color_uncertainty (placeholder)").as_str()));
-        let rt_covariances = placeholder_highp_rt(&device, Some(format!("{}{}", node_name, " rt_covariances (placeholder)").as_str()));
+        let rt_color = placeholder_color_rt(device, Some(format!("{}{}", node_name, " rt_color (placeholder)").as_str()));
+        let rt_depth = placeholder_depth_rt(device, Some(format!("{}{}", node_name, " rt_depth (placeholder)").as_str()));
+        let rt_deflection = placeholder_highp_rt(device, Some(format!("{}{}", node_name, " rt_deflection (placeholder)").as_str()));
+        let rt_color_change = placeholder_highp_rt(device, Some(format!("{}{}", node_name, " rt_color_change (placeholder)").as_str()));
+        let rt_color_uncertainty = placeholder_highp_rt(device, Some(format!("{}{}", node_name, " rt_color_uncertainty (placeholder)").as_str()));
+        let rt_covariances = placeholder_highp_rt(device, Some(format!("{}{}", node_name, " rt_covariances (placeholder)").as_str()));
 
         Self{
             rt_color,
@@ -65,11 +65,11 @@ pub struct ColorTargets{
 
 impl ColorTargets{
     pub fn new(device: &wgpu::Device, node_name: &str) -> Self{
-        let rt_color = placeholder_color_rt(&device, Some(format!("{}{}", node_name, " rt_color (placeholder)").as_str()));
-        let rt_deflection = placeholder_highp_rt(&device, Some(format!("{}{}", node_name, " rt_deflection (placeholder)").as_str()));
-        let rt_color_change = placeholder_highp_rt(&device, Some(format!("{}{}", node_name, " rt_color_change (placeholder)").as_str()));
-        let rt_color_uncertainty = placeholder_highp_rt(&device, Some(format!("{}{}", node_name, " rt_color_uncertainty (placeholder)").as_str()));
-        let rt_covariances = placeholder_highp_rt(&device, Some(format!("{}{}", node_name, " rt_covariances (placeholder)").as_str()));
+        let rt_color = placeholder_color_rt(device, Some(format!("{}{}", node_name, " rt_color (placeholder)").as_str()));
+        let rt_deflection = placeholder_highp_rt(device, Some(format!("{}{}", node_name, " rt_deflection (placeholder)").as_str()));
+        let rt_color_change = placeholder_highp_rt(device, Some(format!("{}{}", node_name, " rt_color_change (placeholder)").as_str()));
+        let rt_color_uncertainty = placeholder_highp_rt(device, Some(format!("{}{}", node_name, " rt_color_uncertainty (placeholder)").as_str()));
+        let rt_covariances = placeholder_highp_rt(device, Some(format!("{}{}", node_name, " rt_covariances (placeholder)").as_str()));
 
         Self{
             rt_color,
@@ -91,7 +91,9 @@ impl ColorTargets{
     }
 }
 
+#[derive(Default)]
 pub enum Slot {
+    #[default]
     Empty,
     Rgb { // TODO remove, but all shaders need to be adjusted to deal with depth appropriately
         color_source: Texture,
@@ -120,11 +122,7 @@ pub enum Slot {
         covariances_target: RenderTexture,
     },
 }
-impl Default for Slot {
-    fn default() -> Self {
-        Slot::Empty
-    }
-}
+
 
 pub struct NodeSlots {
     input: Slot,
@@ -211,11 +209,11 @@ impl NodeSlots {
                     Slot::RgbDepth { color_target, .. } => (color_target.width, color_target.height),
                 };
                 let device = surface.device();
-                let color_target = create_color_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_output color").as_str()));
-                let deflection_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_output deflection").as_str()));
-                let color_change_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_output color_change").as_str()));
-                let color_uncertainty_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_output color_uncertainty").as_str()));
-                let covariances_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_output covariances").as_str()));
+                let color_target = create_color_rt(device, width, height, Some(format!("{}{}", node_name, " to_color_output color").as_str()));
+                let deflection_target = create_highp_rt(device, width, height, Some(format!("{}{}", node_name, " to_color_output deflection").as_str()));
+                let color_change_target = create_highp_rt(device, width, height, Some(format!("{}{}", node_name, " to_color_output color_change").as_str()));
+                let color_uncertainty_target = create_highp_rt(device, width, height, Some(format!("{}{}", node_name, " to_color_output color_uncertainty").as_str()));
+                let covariances_target = create_highp_rt(device, width, height, Some(format!("{}{}", node_name, " to_color_output covariances").as_str()));
 
                 Self {
                     input: self.input,
@@ -267,12 +265,12 @@ impl NodeSlots {
                     Slot::RgbDepth { color_target, .. } => (color_target.width, color_target.height),
                 };
                 let device = surface.device();
-                let color_target = create_color_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_depth_output color").as_str()));
-                let depth_target = create_depth_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_depth_output depth").as_str()));
-                let deflection_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_depth_output deflection").as_str()));
-                let color_change_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_depth_output color_change").as_str()));
-                let color_uncertainty_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_depth_output color_uncertainty").as_str()));
-                let covariances_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_depth_output covariances").as_str()));
+                let color_target = create_color_rt(device, width, height, Some(format!("{}{}", node_name, " to_color_depth_output color").as_str()));
+                let depth_target = create_depth_rt(device, width, height, Some(format!("{}{}", node_name, " to_color_depth_output depth").as_str()));
+                let deflection_target = create_highp_rt(device, width, height, Some(format!("{}{}", node_name, " to_color_depth_output deflection").as_str()));
+                let color_change_target = create_highp_rt(device, width, height, Some(format!("{}{}", node_name, " to_color_depth_output color_change").as_str()));
+                let color_uncertainty_target = create_highp_rt(device, width, height, Some(format!("{}{}", node_name, " to_color_depth_output color_uncertainty").as_str()));
+                let covariances_target = create_highp_rt(device, width, height, Some(format!("{}{}", node_name, " to_color_depth_output covariances").as_str()));
 
                 Self {
                     input: self.input,
@@ -297,7 +295,7 @@ impl NodeSlots {
             } => {
                 // Guess missing depth, based on color.
                 let device = surface.device();
-                let depth_target = create_depth_rt(&device, color_target.width, color_target.height, Some(format!("{}{}", node_name, " to_color_depth_output depth").as_str()));
+                let depth_target = create_depth_rt(device, color_target.width, color_target.height, Some(format!("{}{}", node_name, " to_color_depth_output depth").as_str()));
                 Self {
                     input: self.input,
                     output: Slot::RgbDepth {
@@ -322,11 +320,11 @@ impl NodeSlots {
 
     pub fn emplace_color_output(self, surface: &Surface, width: u32, height: u32, node_name: &str) -> Self {
         let device = surface.device();
-        let color_target = create_color_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_output color").as_str()));
-        let deflection_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_output deflection").as_str()));
-        let color_change_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_output color_change").as_str()));
-        let color_uncertainty_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_output color_uncertainty").as_str()));
-        let covariances_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_output covariances").as_str()));
+        let color_target = create_color_rt(device, width, height, Some(format!("{}{}", node_name, " emplace_color_output color").as_str()));
+        let deflection_target = create_highp_rt(device, width, height, Some(format!("{}{}", node_name, " emplace_color_output deflection").as_str()));
+        let color_change_target = create_highp_rt(device, width, height, Some(format!("{}{}", node_name, " emplace_color_output color_change").as_str()));
+        let color_uncertainty_target = create_highp_rt(device, width, height, Some(format!("{}{}", node_name, " emplace_color_output color_uncertainty").as_str()));
+        let covariances_target = create_highp_rt(device, width, height, Some(format!("{}{}", node_name, " emplace_color_output covariances").as_str()));
 
         Self {
             input: self.input,
@@ -347,12 +345,12 @@ impl NodeSlots {
 
     pub fn emplace_color_depth_output(self, surface: &Surface, width: u32, height: u32, node_name: &str) -> Self {
         let device = surface.device();
-        let color_target = create_color_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_depth_output color").as_str()));
-        let depth_target = create_depth_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_depth_output depth").as_str()));
-        let deflection_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_depth_output deflection").as_str()));
-        let color_change_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_depth_output color_change").as_str()));
-        let color_uncertainty_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_depth_output color_uncertainty").as_str()));
-        let covariances_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_depth_output covariances").as_str()));
+        let color_target = create_color_rt(device, width, height, Some(format!("{}{}", node_name, " emplace_color_depth_output color").as_str()));
+        let depth_target = create_depth_rt(device, width, height, Some(format!("{}{}", node_name, " emplace_color_depth_output depth").as_str()));
+        let deflection_target = create_highp_rt(device, width, height, Some(format!("{}{}", node_name, " emplace_color_depth_output deflection").as_str()));
+        let color_change_target = create_highp_rt(device, width, height, Some(format!("{}{}", node_name, " emplace_color_depth_output color_change").as_str()));
+        let color_uncertainty_target = create_highp_rt(device, width, height, Some(format!("{}{}", node_name, " emplace_color_depth_output color_uncertainty").as_str()));
+        let covariances_target = create_highp_rt(device, width, height, Some(format!("{}{}", node_name, " emplace_color_depth_output covariances").as_str()));
 
         Self {
             input: self.input,

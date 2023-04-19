@@ -18,10 +18,10 @@ impl NormalMapGenerator {
                 include_str!("generator.wgsl")).into()),
         });
 
-        let texture = placeholder_highp_rt(&device, Some("Generator RenderTexture placeholder"));
+        let texture = placeholder_highp_rt(device, Some("Generator RenderTexture placeholder"));
 
         let pipeline = create_render_pipeline(
-            &device,
+            device,
             &[&shader, &shader],
             &["vs_main", "fs_main"],
             &[],
@@ -36,7 +36,7 @@ impl NormalMapGenerator {
     }
 
     pub fn generate(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, width: u32, height: u32){
-        self.texture = create_highp_rt(&device, width, height, Some("Generator RenderTexture"));
+        self.texture = create_highp_rt(device, width, height, Some("Generator RenderTexture"));
 
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Generator Encoder"),

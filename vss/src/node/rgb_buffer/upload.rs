@@ -72,15 +72,15 @@ impl UploadRgbBuffer {
         let device = surface.device();
         let queue = surface.queue();
 
-        let uniforms = ShaderUniforms::new(&device, 
+        let uniforms = ShaderUniforms::new(device, 
             Uniforms{
                 inv_proj_view: [[0.0; 4]; 4],
                 flags: RgbInputFlags::empty().bits(),
                 _padding: [0; 3],
             });
         
-        let source_texture = placeholder_texture(&device, &queue, Some("UploadNode source_texture")).unwrap();
-        let (source_bind_group_layout, source_bind_group) = source_texture.create_bind_group(&device);
+        let source_texture = placeholder_texture(device, queue, Some("UploadNode source_texture")).unwrap();
+        let (source_bind_group_layout, source_bind_group) = source_texture.create_bind_group(device);
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("UploadNode Shader"),
@@ -90,7 +90,7 @@ impl UploadRgbBuffer {
         });
         
         let pipeline = create_render_pipeline(
-            &device,
+            device,
             &[&shader, &shader],
             &["vs_main", "fs_main"],
             &[&source_bind_group_layout, &uniforms.bind_group_layout],
@@ -107,7 +107,7 @@ impl UploadRgbBuffer {
             pipeline,
             uniforms,
             source_bind_group,
-            targets: ColorDepthTargets::new(&device, "UploadNode"),
+            targets: ColorDepthTargets::new(device, "UploadNode"),
         }
     }
 
@@ -175,19 +175,19 @@ impl Node for UploadRgbBuffer {
         if self.buffer_upload {
             let device = surface.device();
             let queue = surface.queue();
-            let sampler = create_sampler_linear(&device);
+            let sampler = create_sampler_linear(device);
             let texture = load_texture_from_bytes(
-                &device,
-                &queue,
+                device,
+                queue,
                 &self.buffer_next.pixels_rgb,
-                self.buffer_next.width as u32,
-                self.buffer_next.height as u32,
+                self.buffer_next.width,
+                self.buffer_next.height,
                 sampler,
                 wgpu::TextureFormat::Rgba8Unorm,
                 Some("UploadNode s_rgb"),
             )
             .unwrap();
-            (_, self.source_bind_group) = texture.create_bind_group(&device);
+            (_, self.source_bind_group) = texture.create_bind_group(device);
             self.texture = Some(texture);
         }
 
@@ -250,19 +250,19 @@ impl Node for UploadRgbBuffer {
 
     fn render(&mut self, surface: &Surface, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
         let queue = surface.queue();
-        self.uniforms.upload(&queue);
+        self.uniforms.upload(queue);
 
         if let Some(texture) = &self.texture {
             if self.buffer_upload {
                 update_texture(
-                    &queue,
-                    &texture,
+                    queue,
+                    texture,
                     [
                         self.buffer_next.width,
                         self.buffer_next.height,
                     ],
                     None,
-                    &*self.buffer_next.pixels_rgb,
+                    &self.buffer_next.pixels_rgb,
                     0,
                 );
                 self.buffer_upload = false;

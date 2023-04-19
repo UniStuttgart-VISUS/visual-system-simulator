@@ -1,5 +1,4 @@
 use glob::glob;
-use mustache;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::error::Error;
@@ -157,7 +156,7 @@ impl Inspector for ConfigInspector<'_> {
 fn parse_flow_config(json_or_path: &str) -> Result<FlowConfig, Box<dyn Error>> {
     // Parse from string or as file.
     let (root, name): (serde_json::Value, String) =
-        if let Ok(json) = serde_json::from_str(&json_or_path) {
+        if let Ok(json) = serde_json::from_str(json_or_path) {
             (json, "custom string".to_string())
         } else {
             let mut data = String::new();

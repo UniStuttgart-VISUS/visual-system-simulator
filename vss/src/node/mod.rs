@@ -142,7 +142,7 @@ impl<T> ShaderUniforms<T> {
 
 pub fn simple_color_state(format: wgpu::TextureFormat) -> Option<ColorTargetState>{
     Some(ColorTargetState {
-        format: format,
+        format,
         blend: None,
         write_mask: wgpu::ColorWrites::ALL,
     })
@@ -150,7 +150,7 @@ pub fn simple_color_state(format: wgpu::TextureFormat) -> Option<ColorTargetStat
 
 pub fn blended_color_state(format: wgpu::TextureFormat) -> Option<ColorTargetState>{
     Some(ColorTargetState {
-        format: format,
+        format,
         blend: Some(wgpu::BlendState {
             color: wgpu::BlendComponent::REPLACE,
             alpha: wgpu::BlendComponent::REPLACE,
@@ -171,7 +171,7 @@ pub fn all_color_states() -> [Option<ColorTargetState>; 5]{
 
 pub fn simple_depth_state(format: wgpu::TextureFormat) -> Option<DepthStencilState>{
     Some(DepthStencilState {
-        format: format,
+        format,
         depth_write_enabled: true,
         depth_compare: wgpu::CompareFunction::Less,
         stencil: wgpu::StencilState::default(),

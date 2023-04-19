@@ -38,7 +38,7 @@ impl VisOverlay {
         let queue = surface.queue();
 
         let uniforms = ShaderUniforms::new(
-            &device,
+            device,
             Uniforms {
                 resolution_in: [1.0, 1.0],
                 flow_idx: 0,
@@ -58,14 +58,14 @@ impl VisOverlay {
         );
 
         let (sources_bind_group_layout, sources_bind_group) =
-            create_color_sources_bind_group(&device, &queue, "VisOverlayNode");
+            create_color_sources_bind_group(device, queue, "VisOverlayNode");
 
         let original_tex =
-            placeholder_texture(&device, &queue, Some("VisOverlayNode s_original")).unwrap();
+            placeholder_texture(device, queue, Some("VisOverlayNode s_original")).unwrap();
         let (original_bind_group_layout, original_bind_group) =
-            original_tex.create_bind_group(&device);
+            original_tex.create_bind_group(device);
 
-        let render_target = placeholder_color_rt(&device, Some("VisOverlayNode render_target"));
+        let render_target = placeholder_color_rt(device, Some("VisOverlayNode render_target"));
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("VisOverlayNode Shader"),
@@ -80,7 +80,7 @@ impl VisOverlay {
         });
 
         let pipeline = create_render_pipeline(
-            &device,
+            device,
             &[&shader, &shader],
             &["vs_main", "fs_main"],
             &[
@@ -118,10 +118,10 @@ impl Node for VisOverlay {
 
         self.uniforms.data.resolution_in = slots.input_size_f32();
 
-        self.sources_bind_group = slots.as_all_colors_source(&device);
+        self.sources_bind_group = slots.as_all_colors_source(device);
         self.render_target = slots.as_color_target();
         if let Some(tex) = original_image.borrow_mut() {
-            (_, self.original_bind_group) = tex.create_bind_group(&device);
+            (_, self.original_bind_group) = tex.create_bind_group(device);
         }
 
         slots
@@ -141,8 +141,8 @@ impl Node for VisOverlay {
         self.uniforms.data.heat_scale = vis_param.heat_scale;
         self.uniforms.data.dir_calc_scale = vis_param.dir_calc_scale;
         self.uniforms.data.flow_idx = vis_param.eye_idx as i32;
-        self.uniforms.data.hive_position[0] = vis_param.highlight_position.0 as f32;
-        self.uniforms.data.hive_position[1] = vis_param.highlight_position.1 as f32;
+        self.uniforms.data.hive_position[0] = vis_param.highlight_position.0;
+        self.uniforms.data.hive_position[1] = vis_param.highlight_position.1;
         self.uniforms.data.hive_visible = vis_param.bees_visible as i32;
 
         self.uniforms.data.base_image = vis_param.vis_type.base_image as i32;
@@ -170,7 +170,7 @@ impl Node for VisOverlay {
 
         self.uniforms.data.hive_rotation = self.hive_rot.into();
 
-        self.uniforms.upload(&surface.queue());
+        self.uniforms.upload(surface.queue());
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("VisOverlayNode render_pass"),

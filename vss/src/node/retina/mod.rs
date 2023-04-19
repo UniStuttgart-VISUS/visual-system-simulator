@@ -37,7 +37,7 @@ impl Retina {
         let queue = surface.queue();
 
         let uniforms = ShaderUniforms::new(
-            &device,
+            device,
             Uniforms {
                 proj: [[0.0; 4]; 4],
                 resolution: [0.0; 2],
@@ -59,22 +59,22 @@ impl Retina {
         });
 
         let (retina_layout, retina_bind_group) = load_cubemap_from_bytes(
-            &device,
-            &queue,
+            device,
+            queue,
             &[0; 4 * 6],
             1,
-            create_sampler_linear(&device),
+            create_sampler_linear(device),
             wgpu::TextureFormat::Rgba8Unorm,
             Some("Retina Texture placeholder"),
         )
         .unwrap()
-        .create_bind_group(&device);
+        .create_bind_group(device);
 
         let (sources_bind_group_layout, sources_bind_group) =
-            create_color_sources_bind_group(&device, &queue, "Cataract");
+            create_color_sources_bind_group(device, queue, "Cataract");
 
         let pipeline = create_render_pipeline(
-            &device,
+            device,
             &[&shader, &shader],
             &["vs_main", "fs_main"],
             &[
@@ -92,7 +92,7 @@ impl Retina {
             uniforms,
             sources_bind_group,
             retina_bind_group,
-            targets: ColorTargets::new(&device, "Retina"),
+            targets: ColorTargets::new(device, "Retina"),
 
             map_valid: false,
             retina_map_pos_x_path: String::new(),
@@ -137,19 +137,19 @@ impl Retina {
 
         if image_data.len() == 6 {
             (_, self.retina_bind_group) = load_cubemap(
-                &device,
-                &queue,
+                device,
+                queue,
                 image_data,
-                create_sampler_linear(&device),
+                create_sampler_linear(device),
                 wgpu::TextureFormat::Rgba8Unorm,
                 Some("Retina Texture from Images"),
             )
             .unwrap()
-            .create_bind_group(&device);
+            .create_bind_group(device);
         } else {
             let projection = self.proj_matrix;
-            let res_x = (self.uniforms.data.resolution[0] * 2.0 * projection[0][0]) as f32;
-            let res_y = (self.uniforms.data.resolution[1] * 2.0 * projection[1][1]) as f32;
+            let res_x = self.uniforms.data.resolution[0] * 2.0 * projection[0][0];
+            let res_y = self.uniforms.data.resolution[1] * 2.0 * projection[1][1];
             let mut resolution = res_x.max(res_y);
             if self.cubemap_scale > 0.0 {
                 resolution *= self.cubemap_scale as f32;
@@ -190,8 +190,8 @@ impl Retina {
             //let _ = image::save_buffer(&Path::new("last.retina_pos_z.png"), &retina_map_pos_z, cubemap_resolution.0, cubemap_resolution.1, image::ColorType::Rgba8);
             //let _ = image::save_buffer(&Path::new("last.retina_neg_z.png"), &retina_map_neg_z, cubemap_resolution.0, cubemap_resolution.1, image::ColorType::Rgba8);
             (_, self.retina_bind_group) = load_cubemap_from_bytes(
-                &device,
-                &queue,
+                device,
+                queue,
                 &([
                     retina_map_pos_x,
                     retina_map_neg_x,
@@ -202,12 +202,12 @@ impl Retina {
                 ]
                 .concat()),
                 cubemap_resolution.0,
-                create_sampler_linear(&device),
+                create_sampler_linear(device),
                 wgpu::TextureFormat::Rgba8Unorm,
                 Some("Retina Texture from bytes"),
             )
             .unwrap()
-            .create_bind_group(&device);
+            .create_bind_group(device);
         };
 
         self.map_valid = true;
@@ -228,7 +228,7 @@ impl Node for Retina {
 
         let device = surface.device();
 
-        self.sources_bind_group = slots.as_all_colors_source(&device);
+        self.sources_bind_group = slots.as_all_colors_source(device);
         self.targets = slots.as_all_colors_target();
         slots
     }
@@ -290,7 +290,7 @@ impl Node for Retina {
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        self.uniforms.upload(&surface.queue());
+        self.uniforms.upload(surface.queue());
         self.validate_map(surface);
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

@@ -1,7 +1,7 @@
 use super::*;
 use wgpu::CommandEncoder;
 
-use egui_wgpu;
+
 
 struct Uniforms {
     resolution_in: [f32; 2],
@@ -27,7 +27,7 @@ impl GuiOverlay {
         let queue = surface.queue();
 
         let uniforms = ShaderUniforms::new(
-            &device,
+            device,
             Uniforms {
                 resolution_in: [1.0, 1.0],
                 resolution_out: [1.0, 1.0],
@@ -35,10 +35,10 @@ impl GuiOverlay {
         );
 
         let (source_bind_group_layout, source_bind_group) =
-            placeholder_texture(&device, &queue, Some("GuiOverlay s_color (placeholder)"))
+            placeholder_texture(device, queue, Some("GuiOverlay s_color (placeholder)"))
                 .unwrap()
-                .create_bind_group(&device);
-        let render_target = placeholder_color_rt(&device, Some("DisplayNode render_target"));
+                .create_bind_group(device);
+        let render_target = placeholder_color_rt(device, Some("DisplayNode render_target"));
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("GuiOverlay Shader"),
@@ -48,7 +48,7 @@ impl GuiOverlay {
         });
 
         let pipeline = create_render_pipeline(
-            &device,
+            device,
             &[&shader, &shader],
             &["vs_main", "fs_main"],
             &[&uniforms.bind_group_layout, &source_bind_group_layout],
@@ -62,7 +62,7 @@ impl GuiOverlay {
             size_in_pixels: [1, 1],
             pixels_per_point: 0.0,
         };
-        let egui_renderer = egui_wgpu::Renderer::new(&device, COLOR_FORMAT, None, 1);
+        let egui_renderer = egui_wgpu::Renderer::new(device, COLOR_FORMAT, None, 1);
 
         GuiOverlay {
             pipeline,
@@ -104,7 +104,7 @@ impl Node for GuiOverlay {
             pixels_per_point: 1.0,
         };
 
-        (_, self.source_bind_group) = slots.as_color_source(&device);
+        (_, self.source_bind_group) = slots.as_color_source(device);
         self.render_target = slots.as_color_target();
 
         slots
@@ -140,14 +140,14 @@ impl Node for GuiOverlay {
         let device = surface.device();
         let queue = surface.queue();
 
-        self.uniforms.upload(&queue);
+        self.uniforms.upload(queue);
 
         let full_output = self
             .gui_context
             .run(self.egui_input.take().unwrap_or_default(), |ctx| {
                 (self.egui_ui_func)(ctx);
 
-                egui::Window::new("Inspector").show(ctx, |ui| {
+                egui::Window::new("Inspector").show(ctx, |_ui| {
                     //TODO: triggers BorrowError. Need to think about that one.
                     //surface.inspect(&mut UiInspector { ui });
                 });
@@ -157,15 +157,15 @@ impl Node for GuiOverlay {
 
         for texture_delta_set in full_output.textures_delta.set.iter() {
             self.egui_renderer.update_texture(
-                &device,
-                &queue,
+                device,
+                queue,
                 texture_delta_set.0,
                 &texture_delta_set.1,
             );
         }
         self.egui_renderer.update_buffers(
-            &device,
-            &queue,
+            device,
+            queue,
             encoder,
             &paint_jobs,
             &self.screen_descriptor,
@@ -216,27 +216,27 @@ impl<'open> Inspector for UiInspector<'open> {
         self.ui.checkbox(value, name).changed()
     }
 
-    fn mut_f64(&mut self, name: &'static str, value: &mut f64) -> bool {
+    fn mut_f64(&mut self, _name: &'static str, _value: &mut f64) -> bool {
         false
     }
 
-    fn mut_f32(&mut self, name: &'static str, value: &mut f32) -> bool {
+    fn mut_f32(&mut self, _name: &'static str, _value: &mut f32) -> bool {
         false
     }
 
-    fn mut_i32(&mut self, name: &'static str, value: &mut i32) -> bool {
+    fn mut_i32(&mut self, _name: &'static str, _value: &mut i32) -> bool {
         false
     }
 
-    fn mut_u32(&mut self, name: &'static str, value: &mut u32) -> bool {
+    fn mut_u32(&mut self, _name: &'static str, _value: &mut u32) -> bool {
         false
     }
 
-    fn mut_img(&mut self, name: &'static str, value: &mut String) -> bool {
+    fn mut_img(&mut self, _name: &'static str, _value: &mut String) -> bool {
         false
     }
 
-    fn mut_matrix(&mut self, name: &'static str, value: &mut Matrix4<f32>) -> bool {
+    fn mut_matrix(&mut self, _name: &'static str, _value: &mut Matrix4<f32>) -> bool {
         false
     }
 }

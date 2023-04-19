@@ -130,7 +130,7 @@ fn main() {
             build.flag("-EHsc");
         }
         build
-            .includes(include_dirs.clone())
+            .includes(include_dirs)
             .file("src/openxr.cpp")
             .compile("vss-desktop-cc");
 

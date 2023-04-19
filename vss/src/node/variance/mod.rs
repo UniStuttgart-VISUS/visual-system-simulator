@@ -30,7 +30,7 @@ impl VarianceMeasure{
         let device = surface.device();
         let queue = surface.queue();
 
-        let uniforms = ShaderUniforms::new(&device, 
+        let uniforms = ShaderUniforms::new(device, 
             Uniforms{
                 resolution: [1.0, 1.0],
                 track_error: 0,
@@ -40,10 +40,10 @@ impl VarianceMeasure{
             }
         );
 
-        let (sources_bind_group_layout, sources_bind_group) = create_color_sources_bind_group(&device, &queue, "Variance");
+        let (sources_bind_group_layout, sources_bind_group) = create_color_sources_bind_group(device, queue, "Variance");
 
-        let original_tex = placeholder_texture(&device, &queue, Some("VarianceNode s_original")).unwrap();
-        let(original_bind_group_layout, original_bind_group) = original_tex.create_bind_group(&device);
+        let original_tex = placeholder_texture(device, queue, Some("VarianceNode s_original")).unwrap();
+        let(original_bind_group_layout, original_bind_group) = original_tex.create_bind_group(device);
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("VarianceNode Shader"),
@@ -53,7 +53,7 @@ impl VarianceMeasure{
         });
 
         let pipeline = create_render_pipeline(
-            &device,
+            device,
             &[&shader, &shader],
             &["vs_main", "fs_main"],
             &[&uniforms.bind_group_layout, &sources_bind_group_layout, &original_bind_group_layout],
@@ -69,7 +69,7 @@ impl VarianceMeasure{
             Some("VarianceNode Render Pipeline")
         );
         
-        let buffer_dimensions = BufferDimensions::new(1 as usize, 1 as usize, size_of::<[f32; 4]>());
+        let buffer_dimensions = BufferDimensions::new(1_usize, 1_usize, size_of::<[f32; 4]>());
         let download_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Download Node Placeholder Buffer"),
             size: (buffer_dimensions.padded_bytes_per_row * buffer_dimensions.height) as u64,
@@ -82,8 +82,8 @@ impl VarianceMeasure{
             uniforms,
             sources_bind_group,
             original_bind_group,
-            targets: ColorTargets::new(&device, "VarianceNode"),
-            target_measurement: placeholder_highp_rt(&device, Some("VarianceNode target_measurement (placeholder)")),
+            targets: ColorTargets::new(device, "VarianceNode"),
+            target_measurement: placeholder_highp_rt(device, Some("VarianceNode target_measurement (placeholder)")),
             download_buffer,
             buffer_dimensions,
             last_info: Instant::now(),
@@ -116,8 +116,8 @@ impl VarianceMeasure{
             for chunk in padded_buffer.chunks(self.buffer_dimensions.padded_bytes_per_row) {
                 let pixels: &[f32] = unsafe { std::slice::from_raw_parts(chunk.as_ptr() as *const f32, self.buffer_dimensions.unpadded_bytes_per_row / 4)};
                 for i in (0 .. self.buffer_dimensions.unpadded_bytes_per_row / 4).step_by(4) {
-                    let pixel_key = (((pixels[i+0] * 255.0) as u32) << 16) | (((pixels[i+1] * 255.0) as u32) << 8) | ((pixels[i+2] * 255.0) as u32);
-                    color_map.entry(pixel_key).or_insert([pixels[i+0], pixels[i+1], pixels[i+2], 0.0])[3] += 1.0/(width as f32 * height as f32);
+                    let pixel_key = (((pixels[i] * 255.0) as u32) << 16) | (((pixels[i+1] * 255.0) as u32) << 8) | ((pixels[i+2] * 255.0) as u32);
+                    color_map.entry(pixel_key).or_insert([pixels[i], pixels[i+1], pixels[i+2], 0.0])[3] += 1.0/(width as f32 * height as f32);
                 }
             }
             let mut histogram_variance = 0.0;
@@ -137,7 +137,7 @@ impl VarianceMeasure{
             for chunk in padded_buffer.chunks(self.buffer_dimensions.padded_bytes_per_row) {
                 let pixels: &[f32] = unsafe { std::slice::from_raw_parts(chunk.as_ptr() as *const f32, self.buffer_dimensions.unpadded_bytes_per_row / 4)};
                 for i in (0 .. self.buffer_dimensions.unpadded_bytes_per_row / 4).step_by(4) {
-                    sum_variance += pixels[i] as f32;
+                    sum_variance += pixels[i];
                 }
             }
             (sum_variance, sum_variance/((self.buffer_dimensions.width * self.buffer_dimensions.height) as f32))
@@ -154,15 +154,15 @@ impl Node for VarianceMeasure {
 
         let device = surface.device();
 
-        self.sources_bind_group = slots.as_all_colors_source(&device);
+        self.sources_bind_group = slots.as_all_colors_source(device);
         self.targets = slots.as_all_colors_target();
 
         self.target_measurement = create_render_texture(
-            &device,
+            device,
             self.uniforms.data.resolution[0] as u32,
             self.uniforms.data.resolution[1] as u32,
             HIGHP_FORMAT,
-            create_sampler_nearest(&device),
+            create_sampler_nearest(device),
             Some("VarianceNode target_measurement")
         );
 
@@ -188,7 +188,7 @@ impl Node for VarianceMeasure {
     }
 
     fn render(&mut self, surface: &surface::Surface, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
-        self.uniforms.upload(&surface.queue());
+        self.uniforms.upload(surface.queue());
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -240,7 +240,7 @@ impl Node for VarianceMeasure {
 
     fn post_render(&mut self, surface: &Surface) {
         if self.should_download {
-            let (sum, avg) = self.measure_variance(&surface);
+            let (sum, avg) = self.measure_variance(surface);
             self.download_buffer.unmap();
             self.should_download = false;
             if self.uniforms.data.variance_metric == 6 {

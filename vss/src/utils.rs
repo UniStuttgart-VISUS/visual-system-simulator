@@ -16,7 +16,7 @@ pub fn load<P: AsRef<Path>>(path: P) -> Cursor<Vec<u8>> {
 
     let mut buf = Vec::new();
     let full_path = &Path::new("").join(&path);
-    let mut file = match File::open(&full_path) {
+    let mut file = match File::open(full_path) {
         Ok(file) => file,
         Err(err) => {
             panic!("Can`t open file '{}' ({})", full_path.display(), err);

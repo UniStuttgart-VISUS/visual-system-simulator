@@ -27,7 +27,7 @@ impl PeacockCB {
         let queue = surface.queue();
 
         let uniforms = ShaderUniforms::new(
-            &device,
+            device,
             Uniforms {
                 cb_cpu: 0.0,
                 cb_cpv: 0.0,
@@ -40,7 +40,7 @@ impl PeacockCB {
         );
 
         let (sources_bind_group_layout, sources_bind_group) =
-            create_color_sources_bind_group(&device, &queue, "Peacock");
+            create_color_sources_bind_group(device, queue, "Peacock");
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Peacock Shader"),
@@ -50,7 +50,7 @@ impl PeacockCB {
         });
 
         let pipeline = create_render_pipeline(
-            &device,
+            device,
             &[&shader, &shader],
             &["vs_main", "fs_main"],
             &[&uniforms.bind_group_layout, &sources_bind_group_layout],
@@ -63,7 +63,7 @@ impl PeacockCB {
             pipeline,
             uniforms,
             sources_bind_group,
-            targets: ColorTargets::new(&device, "Peacock"),
+            targets: ColorTargets::new(device, "Peacock"),
 
             peacock_cb_onoff: false,
             peacock_cb_type: 0,
@@ -83,7 +83,7 @@ impl Node for PeacockCB {
             .to_color_output(surface, "PeacockNode");
         let device = surface.device();
 
-        self.sources_bind_group = slots.as_all_colors_source(&device);
+        self.sources_bind_group = slots.as_all_colors_source(device);
         self.targets = slots.as_all_colors_target();
 
         slots
@@ -135,7 +135,7 @@ impl Node for PeacockCB {
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        self.uniforms.upload(&surface.queue());
+        self.uniforms.upload(surface.queue());
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Peacock render_pass"),

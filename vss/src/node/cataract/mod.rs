@@ -21,7 +21,7 @@ impl Cataract {
         let queue = surface.queue();
 
         let uniforms = ShaderUniforms::new(
-            &device,
+            device,
             Uniforms {
                 resolution: [1.0, 1.0],
                 blur_factor: 0.0,
@@ -32,7 +32,7 @@ impl Cataract {
         );
 
         let (sources_bind_group_layout, sources_bind_group) =
-            create_color_depth_sources_bind_group(&device, &queue, "Cataract");
+            create_color_depth_sources_bind_group(device, queue, "Cataract");
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Cataract Shader"),
@@ -47,7 +47,7 @@ impl Cataract {
         });
 
         let pipeline = create_render_pipeline(
-            &device,
+            device,
             &[&shader, &shader],
             &["vs_main", "fs_main"],
             &[&uniforms.bind_group_layout, &sources_bind_group_layout],
@@ -60,7 +60,7 @@ impl Cataract {
             pipeline,
             uniforms,
             sources_bind_group,
-            targets: ColorDepthTargets::new(&device, "Cataract"),
+            targets: ColorDepthTargets::new(device, "Cataract"),
         }
     }
 }
@@ -79,7 +79,7 @@ impl Node for Cataract {
 
         let device = surface.device();
 
-        self.sources_bind_group = slots.as_all_source(&device);
+        self.sources_bind_group = slots.as_all_source(device);
         self.targets = slots.as_all_target();
 
         slots
@@ -127,7 +127,7 @@ impl Node for Cataract {
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        self.uniforms.upload(&surface.queue());
+        self.uniforms.upload(surface.queue());
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Cataract render_pass"),

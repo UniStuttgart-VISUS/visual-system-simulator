@@ -119,9 +119,10 @@ impl Surface {
 
     pub fn delta_t(&self) -> f32 {
         if self.vis_param.borrow().bees_flying {
-            return self.last_render_instant.borrow().elapsed().as_micros() as f32;
+            self.last_render_instant.borrow().elapsed().as_micros() as f32
+        } else {
+            0.0
         }
-        return 0.0;
     }
 
     pub fn nodes_lens(&self) -> Vec<usize> {
@@ -159,15 +160,15 @@ impl Surface {
     }
 
     pub fn width(&self) -> u32 {
-        return self.surface_size[0];
+        self.surface_size[0]
     }
 
     pub fn height(&self) -> u32 {
-        return self.surface_size[1];
+        self.surface_size[1]
     }
 
     pub fn get_current_texture(&self) -> Result<SurfaceTexture, SurfaceError> {
-        return self.surface.get_current_texture();
+        self.surface.get_current_texture()
     }
 
     pub fn draw(&self) {
@@ -197,11 +198,11 @@ impl Surface {
 
         self.flows
             .iter()
-            .for_each(|f| f.render(&self, &mut encoder, &render_texture));
+            .for_each(|f| f.render(self, &mut encoder, &render_texture));
 
         self.queue.submit(iter::once(encoder.finish()));
         output.present();
-        self.flows.iter().for_each(|f| f.post_render(&self));
+        self.flows.iter().for_each(|f| f.post_render(self));
         self.last_render_instant.replace(Instant::now());
     }
 

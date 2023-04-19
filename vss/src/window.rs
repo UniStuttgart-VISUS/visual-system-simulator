@@ -138,9 +138,9 @@ impl Window {
             }
         });
 
-        if let Some(_) = self.static_pos {
+        if self.static_pos.is_some() {
             // Update flow IO.
-            let new_size = PhysicalSize::new(1920 as u32, 1080 as u32);
+            let new_size = PhysicalSize::new(1920, 1080);
             self.surface.resize([new_size.width, new_size.height]);
             // TODO-WGPU
             // for (i, f) in self.flow.iter().enumerate(){
@@ -166,7 +166,7 @@ impl Window {
         // Update input.
         for (idx, f) in self.surface.flows.iter().enumerate() {
             if self.override_view || self.override_gaze {
-                let cursor_pos = self.cursor_pos.clone();
+                let cursor_pos = self.cursor_pos;
                 let view_pos = self.static_pos.unwrap_or(cursor_pos);
 
                 let yaw =
@@ -199,6 +199,6 @@ impl Window {
             self.surface.draw();
         }
 
-        return done;
+        done
     }
 }
