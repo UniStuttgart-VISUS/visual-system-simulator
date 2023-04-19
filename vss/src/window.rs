@@ -164,7 +164,7 @@ impl Window {
         }
 
         // Update input.
-        for (idx, f) in self.surface.flows.iter().enumerate() {
+        for f in self.surface.flows.iter() {
             if self.override_view || self.override_gaze {
                 let cursor_pos = self.cursor_pos;
                 let view_pos = self.static_pos.unwrap_or(cursor_pos);
@@ -192,7 +192,7 @@ impl Window {
                         (perspective.view * view.invert().unwrap() * Vector4::unit_z()).truncate();
                 }
             }
-            self.surface.input(idx);
+            self.surface.input(f);
         }
 
         if redraw_requested {

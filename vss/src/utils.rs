@@ -32,10 +32,8 @@ pub fn load<P: AsRef<Path>>(path: P) -> Cursor<Vec<u8>> {
 
 #[cfg(target_os = "android")]
 pub fn load<P: AsRef<Path>>(path: P) -> Cursor<Vec<u8>> {
-    //use android_glue;
-
     let filename = path.as_ref().to_str().expect("Can`t convert Path to &str");
-    panic!("TODO/NYI: load asset");
+    todo!("load() using asset manager");
     //match android_glue::load_asset(filename) {
     //    Ok(buf) => Cursor::new(buf),
     //    Err(_) => panic!("Can`t load asset '{}'", filename),

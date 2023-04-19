@@ -1,5 +1,5 @@
 use crate::*;
-use std::cell::RefCell;
+use std::cell::{RefCell, Cell};
 use std::iter;
 use std::rc::Rc;
 use std::time::Instant;
@@ -15,7 +15,7 @@ pub struct Surface {
 
     pub flows: Vec<Flow>,
     vis_param: RefCell<VisualizationParameters>,
-    last_render_instant: RefCell<Instant>,
+    last_render_instant: Cell<Instant>,
 }
 
 impl Surface {
@@ -97,7 +97,7 @@ impl Surface {
             queue,
             flows,
             vis_param: RefCell::new(VisualizationParameters::default()),
-            last_render_instant: RefCell::new(Instant::now()),
+            last_render_instant: Cell::new(Instant::now()),
         }
     }
 
@@ -119,7 +119,7 @@ impl Surface {
 
     pub fn delta_t(&self) -> f32 {
         if self.vis_param.borrow().bees_flying {
-            self.last_render_instant.borrow().elapsed().as_micros() as f32
+            self.last_render_instant.get().elapsed().as_micros() as f32
         } else {
             0.0
         }
@@ -143,12 +143,6 @@ impl Surface {
             flow.inspect(inspector);
             inspector.end_flow();
         }
-    }
-
-    pub fn inspect_flow(&self, inspector: &mut dyn Inspector, flow_index: usize) {
-        inspector.begin_flow(flow_index);
-        self.flows[flow_index].inspect(inspector);
-        inspector.end_flow();
     }
 
     pub fn device(&self) -> &wgpu::Device {
@@ -206,7 +200,7 @@ impl Surface {
         self.last_render_instant.replace(Instant::now());
     }
 
-    pub fn input(&self, flow_index: usize) {
-        self.flows[flow_index].input(&self.vis_param.borrow());
+    pub fn input(&self, f: &Flow) {
+        f.input(&self.vis_param.borrow());
     }
 }

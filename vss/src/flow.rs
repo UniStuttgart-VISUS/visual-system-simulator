@@ -16,7 +16,6 @@ pub struct EyePerspective {
 /// A flow encapsulates simulation nodes, i.e., all simulation and rendering.
 pub struct Flow {
     nodes: RefCell<Vec<Box<dyn Node>>>,
-    last_slot: RefCell<Option<NodeSlots>>,
     perspective: RefCell<EyePerspective>,
 }
 
@@ -24,7 +23,6 @@ impl Flow {
     pub fn new() -> Self {
         Flow {
             nodes: RefCell::new(Vec::new()),
-            last_slot: RefCell::new(None),
             perspective: RefCell::new(EyePerspective {
                 position: Vector3::new(0.0, 0.0, 0.0),
                 view: Matrix4::from_scale(1.0),
@@ -49,48 +47,6 @@ impl Flow {
     pub fn nodes_len(&self) -> usize {
         self.nodes.borrow().len()
     }
-
-    // pub fn update_last_slot(&self, surface: &Surface) {
-    //     if self.last_slot.borrow().is_some() {
-    //         let output = self.last_slot.borrow_mut().as_mut().unwrap().take_output();
-    //         let suggested_slot =
-    //             NodeSlots::new_io(
-    //                 window,
-    //                 self.last_slot.borrow_mut().as_mut().unwrap().take_input(),
-    //                 match output {
-    //                     Slot::Rgb{
-    //                         color: _,
-    //                         color_view,
-    //                         deflection,
-    //                         deflection_view,
-    //                         color_change,
-    //                         color_change_view,
-    //                         color_uncertainty,
-    //                         color_uncertainty_view,
-    //                         covariances,
-    //                         covariances_view
-    //                     } => Slot::Rgb {
-    //                         color: window.target(),
-    //                         color_view,
-    //                         deflection,
-    //                         deflection_view,
-    //                         color_change,
-    //                         color_change_view,
-    //                         color_uncertainty,
-    //                         color_uncertainty_view,
-    //                         covariances,
-    //                         covariances_view
-    //                     },
-    //                     _ => Slot::Empty,
-    //                 },
-    //             );
-    //         // Negociate and swap.
-    //         let new_last_slot = self.nodes.borrow_mut().last_mut().unwrap().negociate_slots(window, suggested_slot, self.resolution, None);
-    //         self.last_slot.replace(Some(new_last_slot));
-    //     }else{
-    //         self.negociate_slots(window);
-    //     }
-    // }
 
     pub fn negociate_slots(&self, surface: &Surface) {
         let mut slot_a = NodeSlots::new();
@@ -154,7 +110,6 @@ impl Flow {
             slot_a = node.negociate_slots(surface, suggested_slot, &mut original_image);
             std::mem::swap(&mut slot_a, &mut slot_b);
         }
-        self.last_slot.replace(Some(slot_b));
     }
 
     pub fn inspect(&self, inspector: &mut dyn Inspector) {
@@ -165,9 +120,8 @@ impl Flow {
     }
 
     pub fn input(&self, vis_param: &VisualizationParameters) {
-        let mut perspective = self.perspective.borrow().clone();
-
         // Propagate to nodes.
+        let mut perspective = self.perspective.borrow().clone();
         for node in self.nodes.borrow_mut().iter_mut().rev() {
             perspective = node.input(&perspective, vis_param);
         }
