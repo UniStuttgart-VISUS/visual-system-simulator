@@ -135,7 +135,7 @@ impl<T> ShaderUniforms<T> {
         }
     }
 
-    pub fn update(&mut self, queue: &wgpu::Queue){
+    pub fn upload(&self, queue: &wgpu::Queue){
         queue.write_buffer(&self.buffer, 0, unsafe { any_as_u8_slice(&self.data) });
     }
 }

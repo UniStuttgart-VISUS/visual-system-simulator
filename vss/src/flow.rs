@@ -34,7 +34,7 @@ impl Flow {
         }
     }
 
-    pub fn mut_perspective(&self) -> RefMut<EyePerspective> {
+    pub fn perspective_mut(&self) -> RefMut<EyePerspective> {
         self.perspective.borrow_mut()
     }
 
@@ -100,7 +100,7 @@ impl Flow {
         for (idx, node) in self.nodes.borrow_mut().iter_mut().enumerate() {
             let suggested_slot = if idx + 1 == nodes_len {
                 // Suggest window as final output.
-                let device = surface.device().borrow_mut();
+                let device = surface.device();
 
                 let width = surface.width();
                 let height = surface.height();

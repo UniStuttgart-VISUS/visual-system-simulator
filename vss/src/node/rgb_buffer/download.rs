@@ -36,8 +36,8 @@ impl DownloadRgbBuffer{
             }
         });
 
-        let device = surface.device().borrow_mut();
-        let queue = surface.queue().borrow_mut();
+        let device = surface.device();
+        let queue = surface.queue();
         
         let buffer_dimensions = BufferDimensions::new(1 as usize, 1 as usize, size_of::<u32>());
 
@@ -92,7 +92,7 @@ impl Node for DownloadRgbBuffer{
     fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, _original_image: &mut Option<Texture>) -> NodeSlots {
         let slots = slots.to_color_input(surface);
         self.res = slots.input_size_f32();
-        let device = surface.device().borrow_mut();
+        let device = surface.device();
         
         (self.input, _) = slots.as_color_source(&device);
 
@@ -140,7 +140,7 @@ impl Node for DownloadRgbBuffer{
 
     fn post_render(&mut self, surface: &Surface) {
         println!("download post_render");
-        let device = surface.device().borrow_mut();
+        let device = surface.device();
 
         // Note that we're not calling `.await` here.
         let buffer_slice = self.buffer.slice(..);

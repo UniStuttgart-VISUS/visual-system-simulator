@@ -17,8 +17,8 @@ pub struct Cataract {
 
 impl Cataract {
     pub fn new(surface: &Surface) -> Self {
-        let device = surface.device().borrow_mut();
-        let queue = surface.queue().borrow_mut();
+        let device = surface.device();
+        let queue = surface.queue();
 
         let uniforms = ShaderUniforms::new(
             &device,
@@ -77,7 +77,7 @@ impl Node for Cataract {
             .to_color_depth_output(surface, "CataractNode");
         self.uniforms.data.resolution = slots.output_size_f32();
 
-        let device = surface.device().borrow_mut();
+        let device = surface.device();
 
         self.sources_bind_group = slots.as_all_source(&device);
         self.targets = slots.as_all_target();
@@ -127,7 +127,7 @@ impl Node for Cataract {
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        self.uniforms.update(&surface.queue().borrow_mut());
+        self.uniforms.upload(&surface.queue());
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Cataract render_pass"),

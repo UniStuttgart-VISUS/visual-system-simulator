@@ -107,7 +107,7 @@ impl Varjo {
         simple_logging::log_to_file("vss_latest.log", LevelFilter::Info).unwrap();
 
         let mut vulkan_data = unsafe{
-            surface.device().borrow_mut().as_hal::<wgpu_hal::vulkan::Api, _, _>(
+            surface.device().as_hal::<wgpu_hal::vulkan::Api, _, _>(
                 |vk_device: Option<&wgpu_hal::vulkan::Device>| -> VulkanData{
                     let dev = vk_device.unwrap();
                     VulkanData{
@@ -145,7 +145,7 @@ impl Varjo {
 
         //let mut textures = Vec::new();
         //let mut depth_textures = Vec::new();
-        let mut device = surface.device().borrow_mut();
+        let mut device = surface.device();
         for render_target in render_targets {
             let size = wgpu::Extent3d {
                 width: render_target.width,

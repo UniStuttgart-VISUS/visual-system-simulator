@@ -23,8 +23,8 @@ pub struct PeacockCB {
 
 impl PeacockCB {
     pub fn new(surface: &Surface) -> Self {
-        let device = surface.device().borrow_mut();
-        let queue = surface.queue().borrow_mut();
+        let device = surface.device();
+        let queue = surface.queue();
 
         let uniforms = ShaderUniforms::new(
             &device,
@@ -81,7 +81,7 @@ impl Node for PeacockCB {
         let slots = slots
             .to_color_input(surface)
             .to_color_output(surface, "PeacockNode");
-        let device = surface.device().borrow_mut();
+        let device = surface.device();
 
         self.sources_bind_group = slots.as_all_colors_source(&device);
         self.targets = slots.as_all_colors_target();
@@ -135,7 +135,7 @@ impl Node for PeacockCB {
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        self.uniforms.update(&surface.queue().borrow_mut());
+        self.uniforms.upload(&surface.queue());
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Peacock render_pass"),

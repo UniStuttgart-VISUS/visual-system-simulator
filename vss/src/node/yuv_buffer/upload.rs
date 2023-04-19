@@ -38,8 +38,8 @@ pub struct UploadYuvBuffer {
 
 impl UploadYuvBuffer {
     pub fn new(surface: &Surface) -> Self {
-        let device = surface.device().borrow_mut();
-        let queue = surface.queue().borrow_mut();
+        let device = surface.device();
+        let queue = surface.queue();
 
         let uniforms = ShaderUniforms::new(
             &device,
@@ -123,8 +123,8 @@ impl UploadYuvBuffer {
 impl Node for UploadYuvBuffer {
     fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, original_image: &mut Option<Texture>) -> NodeSlots {
         if let Some(buffer) = &self.buffer_next {
-            let device = surface.device().borrow_mut();
-            let queue = surface.queue().borrow_mut();
+            let device = surface.device();
+            let queue = surface.queue();
             let (size_y, size_u, size_v) = UploadYuvBuffer::get_formatted_sizes(self.format, buffer.width as u32, buffer.height as u32);
 
             let texture_y = load_texture_from_bytes(
@@ -190,8 +190,8 @@ impl Node for UploadYuvBuffer {
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        let queue = surface.queue().borrow_mut();
-        self.uniforms.update(&queue);
+        let queue = surface.queue();
+        self.uniforms.upload(&queue);
 
         if let (Some(texture_y), Some(texture_u), Some(texture_v)) =
             (&self.texture_y, &self.texture_u, &self.texture_v)

@@ -69,8 +69,8 @@ pub struct UploadRgbBuffer {
 
 impl UploadRgbBuffer {
     pub fn new(surface: &Surface) -> Self {
-        let device = surface.device().borrow_mut();
-        let queue = surface.queue().borrow_mut();
+        let device = surface.device();
+        let queue = surface.queue();
 
         let uniforms = ShaderUniforms::new(&device, 
             Uniforms{
@@ -173,8 +173,8 @@ impl Node for UploadRgbBuffer {
 
     fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, original_image: &mut Option<Texture>) -> NodeSlots {
         if self.buffer_upload {
-            let device = surface.device().borrow_mut();
-            let queue = surface.queue().borrow_mut();
+            let device = surface.device();
+            let queue = surface.queue();
             let sampler = create_sampler_linear(&device);
             let texture = load_texture_from_bytes(
                 &device,
@@ -249,8 +249,8 @@ impl Node for UploadRgbBuffer {
     }
 
     fn render(&mut self, surface: &Surface, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
-        let queue = surface.queue().borrow_mut();
-        self.uniforms.update(&queue);
+        let queue = surface.queue();
+        self.uniforms.upload(&queue);
 
         if let Some(texture) = &self.texture {
             if self.buffer_upload {

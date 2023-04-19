@@ -1,5 +1,4 @@
 use super::*;
-use egui::Response;
 use wgpu::CommandEncoder;
 
 use egui_wgpu;
@@ -24,8 +23,8 @@ pub struct GuiOverlay {
 
 impl GuiOverlay {
     pub fn new(surface: &Surface) -> Self {
-        let device = surface.device().borrow_mut();
-        let queue = surface.queue().borrow_mut();
+        let device = surface.device();
+        let queue = surface.queue();
 
         let uniforms = ShaderUniforms::new(
             &device,
@@ -94,7 +93,7 @@ impl Node for GuiOverlay {
         let slots = slots
             .to_color_input(surface)
             .to_color_output(surface, "GuiOverlay");
-        let device = surface.device().borrow_mut();
+        let device = surface.device();
 
         let output_size = slots.output_size_f32();
         self.uniforms.data.resolution_in = slots.input_size_f32();
@@ -138,10 +137,10 @@ impl Node for GuiOverlay {
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        let device = surface.device().borrow_mut();
-        let queue = surface.queue().borrow_mut();
+        let device = surface.device();
+        let queue = surface.queue();
 
-        self.uniforms.update(&queue);
+        self.uniforms.upload(&queue);
 
         let full_output = self
             .gui_context

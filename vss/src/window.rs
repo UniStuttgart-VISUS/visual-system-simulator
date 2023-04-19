@@ -176,7 +176,7 @@ impl Window {
                 let view = Matrix4::from_angle_x(cgmath::Rad(pitch))
                     * Matrix4::from_angle_y(cgmath::Rad(yaw));
 
-                let mut perspective = f.mut_perspective();
+                let mut perspective = f.perspective_mut();
 
                 if self.override_view {
                     if !self.override_gaze {

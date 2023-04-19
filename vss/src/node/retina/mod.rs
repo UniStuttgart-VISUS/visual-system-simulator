@@ -33,8 +33,8 @@ pub struct Retina {
 
 impl Retina {
     pub fn new(surface: &Surface) -> Self {
-        let device = surface.device().borrow_mut();
-        let queue = surface.queue().borrow_mut();
+        let device = surface.device();
+        let queue = surface.queue();
 
         let uniforms = ShaderUniforms::new(
             &device,
@@ -112,8 +112,8 @@ impl Retina {
             return;
         }
 
-        let device = surface.device().borrow_mut();
-        let queue = surface.queue().borrow_mut();
+        let device = surface.device();
+        let queue = surface.queue();
 
         let mut image_data = Vec::new();
         if !self.retina_map_pos_x_path.is_empty() {
@@ -226,7 +226,7 @@ impl Node for Retina {
             .to_color_output(surface, "RetinaNode");
         self.uniforms.data.resolution = slots.output_size_f32();
 
-        let device = surface.device().borrow_mut();
+        let device = surface.device();
 
         self.sources_bind_group = slots.as_all_colors_source(&device);
         self.targets = slots.as_all_colors_target();
@@ -290,7 +290,7 @@ impl Node for Retina {
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        self.uniforms.update(&surface.queue().borrow_mut());
+        self.uniforms.upload(&surface.queue());
         self.validate_map(surface);
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

@@ -57,8 +57,8 @@ pub struct Display {
 
 impl Display {
     pub fn new(surface: &Surface) -> Self {
-        let device = surface.device().borrow_mut();
-        let queue = surface.queue().borrow_mut();
+        let device = surface.device();
+        let queue = surface.queue();
 
         let uniforms = ShaderUniforms::new(
             &device,
@@ -122,7 +122,7 @@ impl Node for Display {
         let slots = slots
             .to_color_input(surface)
             .to_color_output(surface, "DisplayNode");
-        let device = surface.device().borrow_mut();
+        let device = surface.device();
 
         self.uniforms.data.resolution_in = slots.input_size_f32();
         self.uniforms.data.resolution_out = slots.output_size_f32();
@@ -139,7 +139,7 @@ impl Node for Display {
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        self.uniforms.update(&surface.queue().borrow_mut());
+        self.uniforms.upload(&surface.queue());
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("DisplayNode render_pass"),

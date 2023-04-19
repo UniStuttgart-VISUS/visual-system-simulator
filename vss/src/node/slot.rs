@@ -210,7 +210,7 @@ impl NodeSlots {
                     Slot::Rgb { color_target, .. } => (color_target.width, color_target.height),
                     Slot::RgbDepth { color_target, .. } => (color_target.width, color_target.height),
                 };
-                let device = surface.device().borrow_mut();
+                let device = surface.device();
                 let color_target = create_color_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_output color").as_str()));
                 let deflection_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_output deflection").as_str()));
                 let color_change_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_output color_change").as_str()));
@@ -266,7 +266,7 @@ impl NodeSlots {
                     Slot::Rgb { color_target, .. } => (color_target.width, color_target.height),
                     Slot::RgbDepth { color_target, .. } => (color_target.width, color_target.height),
                 };
-                let device = surface.device().borrow_mut();
+                let device = surface.device();
                 let color_target = create_color_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_depth_output color").as_str()));
                 let depth_target = create_depth_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_depth_output depth").as_str()));
                 let deflection_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " to_color_depth_output deflection").as_str()));
@@ -296,7 +296,7 @@ impl NodeSlots {
                 color_source, color_target, deflection_source, deflection_target, color_change_source, color_change_target, color_uncertainty_source, color_uncertainty_target, covariances_source, covariances_target, ..
             } => {
                 // Guess missing depth, based on color.
-                let device = surface.device().borrow_mut();
+                let device = surface.device();
                 let depth_target = create_depth_rt(&device, color_target.width, color_target.height, Some(format!("{}{}", node_name, " to_color_depth_output depth").as_str()));
                 Self {
                     input: self.input,
@@ -321,7 +321,7 @@ impl NodeSlots {
     }
 
     pub fn emplace_color_output(self, surface: &Surface, width: u32, height: u32, node_name: &str) -> Self {
-        let device = surface.device().borrow_mut();
+        let device = surface.device();
         let color_target = create_color_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_output color").as_str()));
         let deflection_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_output deflection").as_str()));
         let color_change_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_output color_change").as_str()));
@@ -346,7 +346,7 @@ impl NodeSlots {
     }
 
     pub fn emplace_color_depth_output(self, surface: &Surface, width: u32, height: u32, node_name: &str) -> Self {
-        let device = surface.device().borrow_mut();
+        let device = surface.device();
         let color_target = create_color_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_depth_output color").as_str()));
         let depth_target = create_depth_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_depth_output depth").as_str()));
         let deflection_target = create_highp_rt(&device, width, height, Some(format!("{}{}", node_name, " emplace_color_depth_output deflection").as_str()));

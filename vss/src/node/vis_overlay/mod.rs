@@ -34,8 +34,8 @@ pub struct VisOverlay {
 
 impl VisOverlay {
     pub fn new(surface: &Surface) -> Self {
-        let device = surface.device().borrow_mut();
-        let queue = surface.queue().borrow_mut();
+        let device = surface.device();
+        let queue = surface.queue();
 
         let uniforms = ShaderUniforms::new(
             &device,
@@ -114,7 +114,7 @@ impl Node for VisOverlay {
         let slots = slots
             .to_color_input(surface)
             .to_color_output(surface, "VisOverlayNode");
-        let device = surface.device().borrow_mut();
+        let device = surface.device();
 
         self.uniforms.data.resolution_in = slots.input_size_f32();
 
@@ -170,7 +170,7 @@ impl Node for VisOverlay {
 
         self.uniforms.data.hive_rotation = self.hive_rot.into();
 
-        self.uniforms.update(&surface.queue().borrow_mut());
+        self.uniforms.upload(&surface.queue());
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("VisOverlayNode render_pass"),

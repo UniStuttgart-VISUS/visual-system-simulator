@@ -9,9 +9,9 @@ use wgpu::{self, SurfaceError, SurfaceTexture};
 pub struct Surface {
     surface: wgpu::Surface,
     surface_size: [u32; 2],
-    surface_config: RefCell<wgpu::SurfaceConfiguration>,
-    device: RefCell<wgpu::Device>,
-    queue: RefCell<wgpu::Queue>,
+    surface_config: wgpu::SurfaceConfiguration,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
 
     pub flows: Vec<Flow>,
     vis_param: RefCell<VisualizationParameters>,
@@ -92,9 +92,9 @@ impl Surface {
         Surface {
             surface,
             surface_size,
-            surface_config: RefCell::new(surface_config),
-            device: RefCell::new(device),
-            queue: RefCell::new(queue),
+            surface_config,
+            device,
+            queue,
             flows,
             vis_param: RefCell::new(VisualizationParameters::default()),
             last_render_instant: RefCell::new(Instant::now()),
@@ -112,10 +112,9 @@ impl Surface {
     pub fn resize(&mut self, new_size: [u32; 2]) {
         assert!(new_size[0] > 0 && new_size[1] > 0, "Non-positive size");
         self.surface_size = [new_size[0], new_size[1]];
-        self.surface_config.borrow_mut().width = new_size[0];
-        self.surface_config.borrow_mut().height = new_size[1];
-        self.surface
-            .configure(&self.device.borrow_mut(), &self.surface_config.borrow());
+        self.surface_config.width = new_size[0];
+        self.surface_config.height = new_size[1];
+        self.surface.configure(&self.device, &self.surface_config);
     }
 
     pub fn delta_t(&self) -> f32 {
@@ -151,16 +150,12 @@ impl Surface {
         inspector.end_flow();
     }
 
-    pub fn device(&self) -> &RefCell<wgpu::Device> {
+    pub fn device(&self) -> &wgpu::Device {
         &self.device
     }
 
-    pub fn queue(&self) -> &RefCell<wgpu::Queue> {
+    pub fn queue(&self) -> &wgpu::Queue {
         &self.queue
-    }
-
-    pub fn surface_config(&self) -> &RefCell<wgpu::SurfaceConfiguration> {
-        &self.surface_config
     }
 
     pub fn width(&self) -> u32 {
@@ -182,14 +177,13 @@ impl Surface {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        let sampler = create_sampler_linear(&(self.device.borrow_mut()));
+        let sampler = create_sampler_linear(&(self.device));
 
-        let mut encoder =
-            self.device
-                .borrow_mut()
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("Render Encoder"),
-                });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Render Encoder"),
+            });
 
         let render_texture = RenderTexture {
             texture: None,
@@ -205,7 +199,7 @@ impl Surface {
             .iter()
             .for_each(|f| f.render(&self, &mut encoder, &render_texture));
 
-        self.queue.borrow_mut().submit(iter::once(encoder.finish()));
+        self.queue.submit(iter::once(encoder.finish()));
         output.present();
         self.flows.iter().for_each(|f| f.post_render(&self));
         self.last_render_instant.replace(Instant::now());
