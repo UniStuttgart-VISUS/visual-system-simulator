@@ -1,23 +1,22 @@
 use super::*;
 
-use std::cell::RefCell;
-use std::ops::Mul;
 use cgmath::Rad;
+use std::ops::Mul;
 
 /// A node that implements eye control.
 pub struct EyeControl {
-    configured_view: RefCell<Matrix4<f32>>,
+    configured_view: Matrix4<f32>,
 
-    eye_axis_rot_x: RefCell<f64>,
-    eye_axis_rot_y: RefCell<f64>,
+    eye_axis_rot_x: f64,
+    eye_axis_rot_y: f64,
 }
 
 impl EyeControl {
     pub fn new(_surface: &Surface) -> Self {
         EyeControl {
-            configured_view: RefCell::new(Matrix4::from_scale(1.0)),
-            eye_axis_rot_x: RefCell::new(0.0),
-            eye_axis_rot_y: RefCell::new(0.0),
+            configured_view: Matrix4::from_scale(1.0),
+            eye_axis_rot_x: 0.0,
+            eye_axis_rot_y: 0.0,
         }
     }
 }
@@ -38,20 +37,24 @@ impl Node for EyeControl {
         let mut configured_view = Matrix4::from_scale(1.0);
 
         // if the eye has strabism, it needs some angle offset
-        let mut eye_axis_rot_x = self.eye_axis_rot_x.borrow_mut();
-        let mut eye_axis_rot_y = self.eye_axis_rot_y.borrow_mut();
-        inspector.mut_f64("eye_axis_rot_x", &mut eye_axis_rot_x);
-        configured_view = configured_view.mul(Matrix4::from_angle_x(Rad(*eye_axis_rot_x as f32)));
+        inspector.mut_f64("eye_axis_rot_x", &mut self.eye_axis_rot_x);
+        configured_view =
+            configured_view.mul(Matrix4::from_angle_x(Rad(self.eye_axis_rot_x as f32)));
 
-        inspector.mut_f64("eye_axis_rot_y", &mut eye_axis_rot_y);
-        configured_view = configured_view.mul(Matrix4::from_angle_y(Rad(*eye_axis_rot_y as f32)));
+        inspector.mut_f64("eye_axis_rot_y", &mut self.eye_axis_rot_y);
+        configured_view =
+            configured_view.mul(Matrix4::from_angle_y(Rad(self.eye_axis_rot_y as f32)));
 
-        self.configured_view.replace(configured_view);
+        self.configured_view = configured_view;
 
         inspector.end_node();
     }
 
-    fn input(&mut self, perspective: &EyePerspective, _vis_param: &VisualizationParameters) -> EyePerspective {
+    fn input(
+        &mut self,
+        perspective: &EyePerspective,
+        _vis_param: &VisualizationParameters,
+    ) -> EyePerspective {
         // let mut vp = self.surface.vis_param.borrow_mut();
         // vp.mouse_input.position = (position.x as f32, position.y as f32);
         // match vp.edit_eye_position {
@@ -67,8 +70,8 @@ impl Node for EyeControl {
         //     _ => {}
         // }
 
-        let mut perspective =   perspective.clone();
-        perspective.view = self.configured_view.borrow().mul(perspective.view);
+        let mut perspective = perspective.clone();
+        perspective.view = self.configured_view.mul(perspective.view);
         perspective
     }
 

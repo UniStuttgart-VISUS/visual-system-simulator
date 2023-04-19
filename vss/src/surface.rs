@@ -89,8 +89,6 @@ impl Surface {
         let mut flows = Vec::new();
         flows.resize_with(flow_count, Flow::new);
 
-        //TODO set perspective from values here ?
-
         Surface {
             surface,
             surface_size,
@@ -213,7 +211,7 @@ impl Surface {
         self.last_render_instant.replace(Instant::now());
     }
 
-    pub fn input(&self, flow: &Flow) {
-        flow.input(&self.vis_param.borrow());
+    pub fn input(&self, flow_index: usize) {
+        self.flows[flow_index].input(&self.vis_param.borrow());
     }
 }

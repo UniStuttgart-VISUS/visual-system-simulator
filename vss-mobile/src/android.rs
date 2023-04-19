@@ -158,7 +158,6 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate<'loca
     // value_map.insert("colorblindness_int".into(), Value::Number(100.0 as f64));
     // value_map.insert("cubemap_scale".into(), Value::Number(0.1 as f64));
 
-    // let parameters: Vec<RefCell<ValueMap>> = vec![RefCell::new(value_map)];
     let mut window_handle = AndroidNdkWindowHandle::empty();
     window_handle.a_native_window = window.ptr().as_ptr() as *mut c_void;
     let handle = AndroidHandle(RawWindowHandle::AndroidNdk(window_handle));

@@ -1,6 +1,5 @@
 use crate::*;
 use cgmath::{Matrix4, SquareMatrix, Vector4};
-use std::cell::RefCell;
 use winit::{
     dpi::*,
     event::*,
@@ -12,15 +11,15 @@ use winit::{
 /// Represents a window along with its associated rendering context and [Flow].
 pub struct Window {
     wgpu_window: winit::window::Window,
-    events_loop: RefCell<EventLoop<()>>,
+    events_loop: EventLoop<()>,
     pub surface: surface::Surface,
 
-    active: RefCell<bool>,
-    cursor_pos: RefCell<(f32, f32)>,
+    active: bool,
+    cursor_pos: (f32, f32),
     static_pos: Option<(f32, f32)>,
 
-    override_gaze: RefCell<bool>,
-    override_view: RefCell<bool>,
+    override_gaze: bool,
+    override_view: bool,
 }
 
 impl Window {
@@ -57,13 +56,13 @@ impl Window {
 
         Window {
             wgpu_window,
-            events_loop: RefCell::new(events_loop),
+            events_loop,
             surface,
-            active: RefCell::new(false),
-            cursor_pos: RefCell::new((0.0, 0.0)),
+            active: false,
+            cursor_pos: (0.0, 0.0),
             static_pos,
-            override_view: RefCell::new(static_pos.is_some()),
-            override_gaze: RefCell::new(false),
+            override_view: static_pos.is_some(),
+            override_gaze: false,
         }
     }
 
@@ -74,123 +73,100 @@ impl Window {
 
         // Poll for window events.
         // TODO-WGPU use .run() instead of .run_return() as it is highly discouraged and incompatible with some platforms
-        self.events_loop
-            .borrow_mut()
-            .run_return(|event, _, control_flow| {
-                match event {
-                    Event::WindowEvent {
-                        window_id,
-                        ref event,
-                    } if window_id == self.wgpu_window.id() => {
-                        match event {
-                            WindowEvent::KeyboardInput {
-                                input:
-                                    KeyboardInput {
-                                        virtual_keycode: Some(VirtualKeyCode::Escape),
-                                        ..
-                                    },
-                                ..
-                            }
-                            | WindowEvent::CloseRequested
-                            | WindowEvent::Destroyed => {
-                                done = true;
-                            }
-                            WindowEvent::Focused(active) => {
-                                self.active.replace(*active);
-                            }
-                            WindowEvent::Resized(size) => {
-                                deferred_size = Some(*size);
-                            }
-                            WindowEvent::CursorMoved { position, .. } => {
-                                if *self.active.borrow() {
-                                    let position = (position.x as f32, position.y as f32);
-                                    self.cursor_pos.replace(position);
-                                }
-                            }
-                            WindowEvent::CursorLeft { .. } => {
-                                if *self.active.borrow() {
-                                    self.override_view.replace(false);
-                                    self.override_gaze.replace(false);
-                                    //reset gaze ?
-                                }
-                            }
-                            WindowEvent::MouseInput { state, button, .. } => {
-                                if *self.active.borrow() {
-                                    match button {
-                                        MouseButton::Left => {
-                                            self.override_view
-                                                .replace(*state == ElementState::Pressed);
-                                            
-                                        }
-                                        MouseButton::Right => {
-                                            self.override_gaze
-                                                .replace(*state == ElementState::Pressed);
-                                      
-                                        }
-                                        _ => {}
-                                    }
-                                }
-                            }
-                            _ => (),
+        self.events_loop.run_return(|event, _, control_flow| {
+            match event {
+                Event::WindowEvent {
+                    window_id,
+                    ref event,
+                } if window_id == self.wgpu_window.id() => {
+                    match event {
+                        WindowEvent::KeyboardInput {
+                            input:
+                                KeyboardInput {
+                                    virtual_keycode: Some(VirtualKeyCode::Escape),
+                                    ..
+                                },
+                            ..
                         }
+                        | WindowEvent::CloseRequested
+                        | WindowEvent::Destroyed => {
+                            done = true;
+                        }
+                        WindowEvent::Focused(active) => {
+                            self.active = *active;
+                        }
+                        WindowEvent::Resized(size) => {
+                            deferred_size = Some(*size);
+                        }
+                        WindowEvent::CursorMoved { position, .. } => {
+                            if self.active {
+                                let position = (position.x as f32, position.y as f32);
+                                self.cursor_pos = position;
+                            }
+                        }
+                        WindowEvent::CursorLeft { .. } => {
+                            if self.active {
+                                self.override_view = false;
+                                self.override_gaze = false;
+                                //XXX: reset gaze?
+                            }
+                        }
+                        WindowEvent::MouseInput { state, button, .. } => {
+                            if self.active {
+                                match button {
+                                    MouseButton::Left => {
+                                        self.override_view = *state == ElementState::Pressed;
+                                    }
+                                    MouseButton::Right => {
+                                        self.override_gaze = *state == ElementState::Pressed;
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        _ => (),
                     }
-                    Event::RedrawRequested(window_id) if window_id == self.wgpu_window.id() => {
-                        redraw_requested = true;
-                    }
-                    Event::RedrawEventsCleared => {
-                        *control_flow = ControlFlow::Exit;
-                        self.wgpu_window.request_redraw();
-                    }
-                    _ => {}
                 }
-            });
+                Event::RedrawRequested(window_id) if window_id == self.wgpu_window.id() => {
+                    redraw_requested = true;
+                }
+                Event::RedrawEventsCleared => {
+                    *control_flow = ControlFlow::Exit;
+                    self.wgpu_window.request_redraw();
+                }
+                _ => {}
+            }
+        });
 
         if let Some(_) = self.static_pos {
-            // Update pipline IO.
+            // Update flow IO.
             let new_size = PhysicalSize::new(1920 as u32, 1080 as u32);
-            //self.wgpu_window.resize(size);
             self.surface.resize([new_size.width, new_size.height]);
-            // TODO-WGPU
-            // gfx_window_glutin::update_views(
-            //     &self.wgpu_window,
-            //     &mut self.render_target.borrow_mut(),
-            //     &mut self.main_depth.borrow_mut(),
-            // );
             // TODO-WGPU
             // for (i, f) in self.flow.iter().enumerate(){
             //     f.negociate_slots(&self);
-            //     f.update_values(&self, &self.values[i].borrow());
             //     f.last_perspective.borrow_mut().proj = cgmath::perspective(
             //         cgmath::Deg(70.0), (size.width/size.height) as f32, 0.05, 1000.0);
             // }
         }
 
         if let Some(new_size) = deferred_size {
-            // Update pipline IO.
+            // Update flow IO.
             // let dpi_factor = self.wgpu_window.scale_factor();
             // let size = size.to_physical(dpi_factor);
             self.surface.resize([new_size.width, new_size.height]);
-            // self.wgpu_window.resize(size);
-            // TODO-WGPU
-            // gfx_window_glutin::update_views(
-            //     &self.wgpu_window,
-            //     &mut self.render_target.borrow_mut(),
-            //     &mut self.main_depth.borrow_mut(),
-            // );
             // TODO-WGPU
             // for (i, f) in self.flow.iter().enumerate(){
             //     f.negociate_slots(&self);
-            //     f.update_values(&self, &self.values[i].borrow());
             //     f.last_perspective.borrow_mut().proj = cgmath::perspective(
             //         cgmath::Deg(70.0), (size.width/size.height) as f32, 0.05, 1000.0);
             // }
         }
 
         // Update input.
-        for f in self.surface.flows.iter() {
-            if *self.override_view.borrow() || *self.override_gaze.borrow() {
-                let cursor_pos = self.cursor_pos.borrow().clone();
-                //println!("{} {}",cursor_pos.x as f32 ,cursor_pos.y as f32);
+        for (idx, f) in self.surface.flows.iter().enumerate() {
+            if self.override_view || self.override_gaze {
+                let cursor_pos = self.cursor_pos.clone();
                 let view_pos = self.static_pos.unwrap_or(cursor_pos);
 
                 let yaw =
@@ -202,8 +178,8 @@ impl Window {
 
                 let mut perspective = f.mut_perspective();
 
-                if *self.override_view.borrow() {
-                    if !*self.override_gaze.borrow() {
+                if self.override_view {
+                    if !self.override_gaze {
                         perspective.gaze = (view
                             * perspective.view.invert().unwrap()
                             * perspective.gaze.extend(1.0))
@@ -211,14 +187,13 @@ impl Window {
                     }
                     perspective.view = view;
                 }
-                if *self.override_gaze.borrow() {
+                if self.override_gaze {
                     perspective.gaze =
                         (perspective.view * view.invert().unwrap() * Vector4::unit_z()).truncate();
                 }
             }
-            self.surface.input(&f);
+            self.surface.input(idx);
         }
-        // println!("Rendered with: {:?}", self.surface.vis_param.borrow_mut());
 
         if redraw_requested {
             self.surface.draw();
