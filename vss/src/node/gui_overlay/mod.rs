@@ -1,8 +1,6 @@
 use super::*;
 use wgpu::CommandEncoder;
 
-
-
 struct Uniforms {
     resolution_in: [f32; 2],
     resolution_out: [f32; 2],
@@ -17,8 +15,8 @@ pub struct GuiOverlay {
     gui_context: egui::Context,
     screen_descriptor: egui_wgpu::renderer::ScreenDescriptor,
     egui_input: Option<egui::RawInput>,
+    egui_full_output: Option<egui::FullOutput>,
     egui_renderer: egui_wgpu::Renderer,
-    egui_ui_func: fn(&egui::Context),
 }
 
 impl GuiOverlay {
@@ -73,13 +71,20 @@ impl GuiOverlay {
             gui_context,
             screen_descriptor,
             egui_input: None,
+            egui_full_output: None,
             egui_renderer,
-            egui_ui_func: |_| {},
         }
     }
 
-    pub fn set_ui_function(&mut self, ui_fn: fn(&egui::Context)) {
-        self.egui_ui_func = ui_fn;
+    pub fn begin_run(&mut self) -> (egui::Context, egui::RawInput) {
+        (
+            self.gui_context.clone(),
+            self.egui_input.take().unwrap_or_default(),
+        )
+    }
+
+    pub fn end_run(&mut self, full_output: egui::FullOutput) {
+        self.egui_full_output = Some(full_output);
     }
 }
 
@@ -137,21 +142,14 @@ impl Node for GuiOverlay {
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
+        let full_output = self
+            .egui_full_output
+            .take()
+            .expect("Run begin_run/end_run before render");
         let device = surface.device();
         let queue = surface.queue();
 
         self.uniforms.upload(queue);
-
-        let full_output = self
-            .gui_context
-            .run(self.egui_input.take().unwrap_or_default(), |ctx| {
-                (self.egui_ui_func)(ctx);
-
-                egui::Window::new("Inspector").show(ctx, |_ui| {
-                    //TODO: triggers BorrowError. Need to think about that one.
-                    //surface.inspect(&mut UiInspector { ui });
-                });
-            });
 
         let paint_jobs = self.gui_context.tessellate(full_output.shapes);
 
@@ -193,10 +191,20 @@ impl Node for GuiOverlay {
             self.egui_renderer.free_texture(texture_delta_free);
         }
     }
+
+    fn as_ui_mut(&mut self) -> Option<&'_ mut GuiOverlay> {
+        Some(self)
+    }
 }
 
-struct UiInspector<'open> {
+pub struct UiInspector<'open> {
     ui: &'open mut egui::Ui,
+}
+
+impl<'open> UiInspector<'open> {
+    pub fn new(ui: &'open mut egui::Ui) -> Self {
+        Self { ui }
+    }
 }
 
 impl<'open> Inspector for UiInspector<'open> {
@@ -216,24 +224,49 @@ impl<'open> Inspector for UiInspector<'open> {
         self.ui.checkbox(value, name).changed()
     }
 
-    fn mut_f64(&mut self, _name: &'static str, _value: &mut f64) -> bool {
-        false
+    fn mut_f64(&mut self, name: &'static str, value: &mut f64) -> bool {
+        self.ui
+            .horizontal(|ui| {
+                ui.label(name);
+                ui.add(egui::DragValue::new(value)).changed()
+            })
+            .inner
     }
 
-    fn mut_f32(&mut self, _name: &'static str, _value: &mut f32) -> bool {
-        false
+    fn mut_f32(&mut self, name: &'static str, value: &mut f32) -> bool {
+        self.ui
+            .horizontal(|ui| {
+                ui.label(name);
+                ui.add(egui::DragValue::new(value)).changed()
+            })
+            .inner
     }
 
-    fn mut_i32(&mut self, _name: &'static str, _value: &mut i32) -> bool {
-        false
+    fn mut_i32(&mut self, name: &'static str, value: &mut i32) -> bool {
+        self.ui
+            .horizontal(|ui| {
+                ui.label(name);
+                ui.add(egui::DragValue::new(value)).changed()
+            })
+            .inner
     }
 
-    fn mut_u32(&mut self, _name: &'static str, _value: &mut u32) -> bool {
-        false
+    fn mut_u32(&mut self, name: &'static str, value: &mut u32) -> bool {
+        self.ui
+            .horizontal(|ui| {
+                ui.label(name);
+                ui.add(egui::DragValue::new(value)).changed()
+            })
+            .inner
     }
 
-    fn mut_img(&mut self, _name: &'static str, _value: &mut String) -> bool {
-        false
+    fn mut_img(&mut self, name: &'static str, value: &mut String) -> bool {
+        self.ui
+            .horizontal(|ui| {
+                ui.label(name);
+                ui.text_edit_singleline(value).changed()
+            })
+            .inner
     }
 
     fn mut_matrix(&mut self, _name: &'static str, _value: &mut Matrix4<f32>) -> bool {

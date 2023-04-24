@@ -128,6 +128,9 @@ impl Flow {
     }
 
     pub fn render(&self, surface: &Surface, encoder: &mut CommandEncoder, screen: &RenderTexture) {
+        // Update UI if present.
+        self.update_ui();
+
         // Render all nodes.
         let last_index = self.nodes.borrow_mut().len() - 1;
         for (idx, node) in self.nodes.borrow_mut().iter_mut().enumerate() {
@@ -141,6 +144,30 @@ impl Flow {
                 },
             );
         }
+    }
+
+    fn update_ui(&self) {
+        let (context, input) = self
+            .nodes
+            .borrow_mut()
+            .iter_mut()
+            .find_map(|node| node.as_ui_mut().map(|ui_node| ui_node.begin_run()))
+            .unwrap();
+
+        let full_output = context.run(input, |ctx| {
+            egui::Window::new("Inspector").show(ctx, |ui| {
+                self.inspect(&mut UiInspector::new(ui));
+            });
+        });
+
+        self.nodes
+            .borrow_mut()
+            .iter_mut()
+            .find_map(|node| {
+                node.as_ui_mut()
+                    .map(|ui_node| ui_node.end_run(full_output.clone()))
+            })
+            .unwrap();
     }
 
     pub fn post_render(&self, surface: &Surface) {

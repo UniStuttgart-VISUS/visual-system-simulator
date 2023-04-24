@@ -1,5 +1,5 @@
 use crate::*;
-use std::cell::{RefCell, Cell};
+use std::cell::{Cell, RefCell};
 use std::iter;
 use std::rc::Rc;
 use std::time::Instant;
@@ -24,10 +24,11 @@ impl Surface {
         W: raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle,
     {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            #[cfg(target_os = "macos")]
-            backends: wgpu::Backends::METAL,
-            #[cfg(not(target_os = "macos"))]
-            backends: wgpu::Backends::VULKAN,
+            backends: if cfg!(target_os = "macos") {
+                wgpu::Backends::METAL
+            } else {
+                wgpu::Backends::VULKAN
+            },
             dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
         });
         let surface = unsafe { instance.create_surface(&window_handle) }.unwrap();

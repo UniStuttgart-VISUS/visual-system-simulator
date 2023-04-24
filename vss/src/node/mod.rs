@@ -8,21 +8,21 @@ mod eye_control;
 mod gui_overlay;
 mod lens;
 mod passthrough;
+mod peacock;
 mod retina;
 mod rgb_buffer;
-mod peacock;
 mod slot;
 mod variance;
 mod vis_overlay;
 mod yuv_buffer;
 
+use wgpu::util::DeviceExt;
 use wgpu::BindGroupLayout;
 use wgpu::ColorTargetState;
 use wgpu::CommandEncoder;
 use wgpu::DepthStencilState;
 use wgpu::RenderPipeline;
 use wgpu::ShaderModule;
-use wgpu::util::DeviceExt;
 
 use cgmath::Matrix4;
 
@@ -32,9 +32,9 @@ pub use self::eye_control::*;
 pub use self::gui_overlay::*;
 pub use self::lens::*;
 pub use self::passthrough::*;
+pub use self::peacock::*;
 pub use self::retina::*;
 pub use self::rgb_buffer::*;
-pub use self::peacock::*;
 pub use self::slot::*;
 pub use self::variance::*;
 pub use self::vis_overlay::*;
@@ -51,7 +51,12 @@ pub trait Node {
 
     /// Negociates input and output for this node (source texture and render target),
     /// possibly re-using suggested `slots` (for efficiency).
-    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, original_image: &mut Option<Texture>) -> NodeSlots;
+    fn negociate_slots(
+        &mut self,
+        surface: &Surface,
+        slots: NodeSlots,
+        original_image: &mut Option<Texture>,
+    ) -> NodeSlots;
 
     /// Set new parameters for this effect
     #[allow(unused_variables)]
@@ -59,16 +64,27 @@ pub trait Node {
 
     /// Handle input.
     #[allow(unused_variables)]
-    fn input(&mut self, perspective: &EyePerspective, vis_param: &VisualizationParameters) -> EyePerspective {
+    fn input(
+        &mut self,
+        perspective: &EyePerspective,
+        vis_param: &VisualizationParameters,
+    ) -> EyePerspective {
         perspective.clone()
     }
 
     /// Issue render commands for the node.
-    fn render(&mut self, surface: &Surface, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>);
+    fn render(
+        &mut self,
+        surface: &Surface,
+        encoder: &mut CommandEncoder,
+        screen: Option<&RenderTexture>,
+    );
 
     /// Invoked after all rendering commands have completed. (TODO: rename to on_frame_complete)
     #[allow(unused_variables)]
-    fn post_render(&mut self, surface: &Surface){}
+    fn post_render(&mut self, surface: &Surface) {}
+
+    fn as_ui_mut(&mut self) ->Option<&'_ mut GuiOverlay> {None}
 }
 
 pub trait Inspector {
@@ -88,7 +104,7 @@ pub trait Inspector {
     fn mut_matrix(&mut self, name: &'static str, value: &mut Matrix4<f32>) -> bool;
 }
 
-pub struct ShaderUniforms<T>{
+pub struct ShaderUniforms<T> {
     pub data: T,
     buffer: wgpu::Buffer,
     pub bind_group_layout: wgpu::BindGroupLayout,
@@ -103,20 +119,19 @@ impl<T> ShaderUniforms<T> {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-                label: Some("uniforms_bind_group_layout"),
-            });
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+            label: Some("uniforms_bind_group_layout"),
+        });
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &bind_group_layout,
@@ -127,7 +142,7 @@ impl<T> ShaderUniforms<T> {
             label: Some("uniforms_bind_group"),
         });
 
-        ShaderUniforms{
+        ShaderUniforms {
             data,
             buffer,
             bind_group_layout,
@@ -135,12 +150,12 @@ impl<T> ShaderUniforms<T> {
         }
     }
 
-    pub fn upload(&self, queue: &wgpu::Queue){
+    pub fn upload(&self, queue: &wgpu::Queue) {
         queue.write_buffer(&self.buffer, 0, unsafe { any_as_u8_slice(&self.data) });
     }
 }
 
-pub fn simple_color_state(format: wgpu::TextureFormat) -> Option<ColorTargetState>{
+pub fn simple_color_state(format: wgpu::TextureFormat) -> Option<ColorTargetState> {
     Some(ColorTargetState {
         format,
         blend: None,
@@ -148,7 +163,7 @@ pub fn simple_color_state(format: wgpu::TextureFormat) -> Option<ColorTargetStat
     })
 }
 
-pub fn blended_color_state(format: wgpu::TextureFormat) -> Option<ColorTargetState>{
+pub fn blended_color_state(format: wgpu::TextureFormat) -> Option<ColorTargetState> {
     Some(ColorTargetState {
         format,
         blend: Some(wgpu::BlendState {
@@ -159,7 +174,7 @@ pub fn blended_color_state(format: wgpu::TextureFormat) -> Option<ColorTargetSta
     })
 }
 
-pub fn all_color_states() -> [Option<ColorTargetState>; 5]{
+pub fn all_color_states() -> [Option<ColorTargetState>; 5] {
     [
         blended_color_state(COLOR_FORMAT),
         simple_color_state(HIGHP_FORMAT),
@@ -169,7 +184,7 @@ pub fn all_color_states() -> [Option<ColorTargetState>; 5]{
     ]
 }
 
-pub fn simple_depth_state(format: wgpu::TextureFormat) -> Option<DepthStencilState>{
+pub fn simple_depth_state(format: wgpu::TextureFormat) -> Option<DepthStencilState> {
     Some(DepthStencilState {
         format,
         depth_write_enabled: true,
@@ -187,12 +202,11 @@ pub fn create_render_pipeline(
     color_targets: &[Option<ColorTargetState>],
     depth_tagret: Option<DepthStencilState>,
     label: Option<&str>,
-) -> RenderPipeline{
-    let pipeline_layout =
-        device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label,
-            bind_group_layouts,
-            push_constant_ranges: &[],
+) -> RenderPipeline {
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label,
+        bind_group_layouts,
+        push_constant_ranges: &[],
     });
 
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
