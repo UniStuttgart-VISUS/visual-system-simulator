@@ -209,64 +209,59 @@ impl<'open> UiInspector<'open> {
 
 impl<'open> Inspector for UiInspector<'open> {
     fn begin_flow(&mut self, index: usize) {
-        self.ui.label(format!("Flow {}", index));
+        self.ui.heading(format!("Flow {}", index));
+        self.ui.end_row();
     }
 
     fn end_flow(&mut self) {}
 
     fn begin_node(&mut self, name: &'static str) {
-        self.ui.label(name);
+        self.ui.heading(name);
+        self.ui.end_row();
     }
 
     fn end_node(&mut self) {}
 
     fn mut_bool(&mut self, name: &'static str, value: &mut bool) -> bool {
-        self.ui.checkbox(value, name).changed()
+        self.ui.label(name);
+        let changed = self.ui.checkbox(value, "Enabled").changed();
+        self.ui.end_row();
+        changed
     }
 
     fn mut_f64(&mut self, name: &'static str, value: &mut f64) -> bool {
-        self.ui
-            .horizontal(|ui| {
-                ui.label(name);
-                ui.add(egui::DragValue::new(value)).changed()
-            })
-            .inner
+        self.ui.label(name);
+        let changed = self.ui.add(egui::DragValue::new(value)).changed();
+        self.ui.end_row();
+        changed
     }
 
     fn mut_f32(&mut self, name: &'static str, value: &mut f32) -> bool {
-        self.ui
-            .horizontal(|ui| {
-                ui.label(name);
-                ui.add(egui::DragValue::new(value)).changed()
-            })
-            .inner
+        self.ui.label(name);
+        let changed = self.ui.add(egui::DragValue::new(value)).changed();
+        self.ui.end_row();
+        changed
     }
 
     fn mut_i32(&mut self, name: &'static str, value: &mut i32) -> bool {
-        self.ui
-            .horizontal(|ui| {
-                ui.label(name);
-                ui.add(egui::DragValue::new(value)).changed()
-            })
-            .inner
+        self.ui.label(name);
+        let changed = self.ui.add(egui::DragValue::new(value)).changed();
+        self.ui.end_row();
+        changed
     }
 
     fn mut_u32(&mut self, name: &'static str, value: &mut u32) -> bool {
-        self.ui
-            .horizontal(|ui| {
-                ui.label(name);
-                ui.add(egui::DragValue::new(value)).changed()
-            })
-            .inner
+        self.ui.label(name);
+        let changed = self.ui.add(egui::DragValue::new(value)).changed();
+        self.ui.end_row();
+        changed
     }
 
     fn mut_img(&mut self, name: &'static str, value: &mut String) -> bool {
-        self.ui
-            .horizontal(|ui| {
-                ui.label(name);
-                ui.text_edit_singleline(value).changed()
-            })
-            .inner
+        self.ui.label(name);
+        let changed = self.ui.text_edit_singleline(value).changed();
+        self.ui.end_row();
+        changed
     }
 
     fn mut_matrix(&mut self, _name: &'static str, _value: &mut Matrix4<f32>) -> bool {

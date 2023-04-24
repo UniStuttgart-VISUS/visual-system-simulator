@@ -156,7 +156,13 @@ impl Flow {
 
         let full_output = context.run(input, |ctx| {
             egui::Window::new("Inspector").show(ctx, |ui| {
-                self.inspect(&mut UiInspector::new(ui));
+                egui::Grid::new("inspector_grid")
+                    .num_columns(2)
+                    .spacing([6.0, 4.0])
+                    .striped(true)
+                    .show(ui, |ui| {
+                        self.inspect(&mut UiInspector::new(ui));
+                    });
             });
         });
 
