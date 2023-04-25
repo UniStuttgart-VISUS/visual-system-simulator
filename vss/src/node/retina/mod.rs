@@ -18,6 +18,8 @@ pub struct Retina {
     retina_bind_group: wgpu::BindGroup,
     targets: ColorTargets,
 
+    retina_map_builder: RetinaMapBuilder,
+
     map_valid: bool,
     retina_map_pos_x_path: String,
     retina_map_neg_x_path: String,
@@ -27,8 +29,7 @@ pub struct Retina {
     retina_map_neg_z_path: String,
     proj_matrix: Matrix4<f32>,
     cubemap_scale: f64,
-
-    retina_map_builder: RetinaMapBuilder,
+    track_error: bool,
 }
 
 impl Retina {
@@ -104,6 +105,7 @@ impl Retina {
             proj_matrix: Matrix4::from_scale(1.0),
             cubemap_scale: 1.0,
             retina_map_builder: RetinaMapBuilder::new(),
+            track_error: false,
         }
     }
 
@@ -270,7 +272,7 @@ impl Node for Retina {
     fn input(
         &mut self,
         perspective: &EyePerspective,
-        vis_param: &VisualizationParameters,
+        _vis_param: &VisualizationParameters,
     ) -> EyePerspective {
         let gaze_rotation = Matrix4::look_to_lh(
             Point3::new(0.0, 0.0, 0.0),
@@ -280,7 +282,7 @@ impl Node for Retina {
         //let gaze_rotation = Matrix4::from_scale(1.0);
         self.uniforms.data.proj = (gaze_rotation * perspective.proj.invert().unwrap()).into();
         //self.pso_data.u_proj = (head.proj * (Matrix4::from_translation(-head.position) * head.view)).into();
-        self.uniforms.data.track_error = vis_param.has_to_track_error() as i32;
+
         perspective.clone()
     }
 
@@ -290,6 +292,7 @@ impl Node for Retina {
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
+        self.uniforms.data.track_error = self.track_error as i32;
         self.uniforms.upload(surface.queue());
         self.validate_map(surface);
 

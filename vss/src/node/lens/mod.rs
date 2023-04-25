@@ -49,6 +49,7 @@ pub struct Lens {
     presbyopia_onoff: bool,
     myopiahyperopia_onoff: bool,
     myopiahyperopia_mnh: f64,
+    track_error: bool,
 }
 
 impl Lens {
@@ -139,6 +140,7 @@ impl Lens {
             presbyopia_onoff: false,
             myopiahyperopia_onoff: false,
             myopiahyperopia_mnh: 0.0,
+            track_error: false,
         }
     }
 }
@@ -192,7 +194,7 @@ impl Node for Lens {
 
         inspector.mut_bool("myopiahyperopia_onoff", &mut self.myopiahyperopia_onoff);
         if self.myopiahyperopia_onoff {
-            self.uniforms.data.active = 1;  
+            self.uniforms.data.active = 1;
         }
 
         if inspector.mut_f64("myopiahyperopia_mnh", &mut self.myopiahyperopia_mnh) {
@@ -209,22 +211,16 @@ impl Node for Lens {
                     .near_point
                     .min(self.uniforms.data.far_point);
                 let vision_factor = 1.0 - dioptres * DIOPTRES_SCALING as f32;
-                self.uniforms.data.far_vision_factor = self
-                    .uniforms
-                    .data
-                    .far_vision_factor
-                    .max(vision_factor);
+                self.uniforms.data.far_vision_factor =
+                    self.uniforms.data.far_vision_factor.max(vision_factor);
             } else if dioptres > 0.0 {
                 // hyperopia
                 let hyperopia_near_point = 1000.0 / (4.4 - dioptres);
                 self.uniforms.data.near_point =
                     self.uniforms.data.near_point.max(hyperopia_near_point);
                 let vision_factor = 1.0 + dioptres * DIOPTRES_SCALING as f32;
-                self.uniforms.data.near_vision_factor = self
-                    .uniforms
-                    .data
-                    .near_vision_factor
-                    .max(vision_factor);
+                self.uniforms.data.near_vision_factor =
+                    self.uniforms.data.near_vision_factor.max(vision_factor);
             }
         }
 
@@ -246,6 +242,8 @@ impl Node for Lens {
             &mut self.uniforms.data.eye_distance_center,
         );
 
+        inspector.mut_bool("track_error", &mut self.track_error);
+
         inspector.end_node();
     }
 
@@ -259,7 +257,6 @@ impl Node for Lens {
         self.uniforms.data.depth_min = vis_param.test_depth_min;
         self.uniforms.data.lens_position[0] = vis_param.eye_position.0;
         self.uniforms.data.lens_position[1] = vis_param.eye_position.1;
-        self.uniforms.data.track_error = vis_param.has_to_track_error() as i32;
         perspective.clone()
     }
 
@@ -269,6 +266,7 @@ impl Node for Lens {
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
+        self.uniforms.data.track_error = self.track_error as i32;
         self.uniforms.upload(surface.queue());
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

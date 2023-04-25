@@ -19,6 +19,7 @@ pub struct PeacockCB {
 
     peacock_cb_onoff: bool,
     peacock_cb_type: i32,
+    track_error: bool,
 }
 
 impl PeacockCB {
@@ -67,6 +68,8 @@ impl PeacockCB {
 
             peacock_cb_onoff: false,
             peacock_cb_type: 0,
+
+            track_error: false,
         }
     }
 }
@@ -117,16 +120,9 @@ impl Node for PeacockCB {
             self.uniforms.data.cb_strength = 0.0;
         }
 
-        inspector.end_node();
-    }
+        inspector.mut_bool("track_error", &mut self.track_error);
 
-    fn input(
-        &mut self,
-        perspective: &EyePerspective,
-        vis_param: &VisualizationParameters,
-    ) -> EyePerspective {
-        self.uniforms.data.track_error = vis_param.has_to_track_error() as i32;
-        perspective.clone()
+        inspector.end_node();
     }
 
     fn render(
@@ -135,6 +131,7 @@ impl Node for PeacockCB {
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
+        self.uniforms.data.track_error = self.track_error as i32;
         self.uniforms.upload(surface.queue());
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

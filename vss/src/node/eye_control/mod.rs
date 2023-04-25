@@ -9,6 +9,7 @@ pub struct EyeControl {
 
     eye_axis_rot_x: f64,
     eye_axis_rot_y: f64,
+    edit_eye_position: u32,
 }
 
 impl EyeControl {
@@ -17,6 +18,7 @@ impl EyeControl {
             configured_view: Matrix4::from_scale(1.0),
             eye_axis_rot_x: 0.0,
             eye_axis_rot_y: 0.0,
+            edit_eye_position: 0,
         }
     }
 }
@@ -55,20 +57,19 @@ impl Node for EyeControl {
         perspective: &EyePerspective,
         _vis_param: &VisualizationParameters,
     ) -> EyePerspective {
-        // let mut vp = self.surface.vis_param.borrow_mut();
         // vp.mouse_input.position = (position.x as f32, position.y as f32);
-        // match vp.edit_eye_position {
-        //     1 => {
-        //         vp.previous_mouse_position = (position.x as f32 * 0.1, position.y as f32 * 0.1);
-        //         vp.edit_eye_position = 2;
-        //     }
-        //     2 => {
-        //         let (p_x, p_y) = vp.previous_mouse_position;
-        //         let (c_x, c_y) = (position.x as f32 * 0.1, position.y as f32 * 0.1);
-        //         vp.eye_position = (c_x - p_x, c_y - p_y);
-        //     }
-        //     _ => {}
-        // }
+        match self.edit_eye_position {
+            1 => {
+                //         vp.previous_mouse_position = (position.x as f32 * 0.1, position.y as f32 * 0.1);
+                self.edit_eye_position = 2;
+            }
+            //     2 => {
+            //         let (p_x, p_y) = vp.previous_mouse_position;
+            //         let (c_x, c_y) = (position.x as f32 * 0.1, position.y as f32 * 0.1);
+            //         vp.eye_position = (c_x - p_x, c_y - p_y);
+            //     }
+            _ => {}
+        }
 
         let mut perspective = perspective.clone();
         perspective.view = self.configured_view.mul(perspective.view);

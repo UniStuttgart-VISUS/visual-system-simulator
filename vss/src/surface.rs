@@ -119,11 +119,7 @@ impl Surface {
     }
 
     pub fn delta_t(&self) -> f32 {
-        if self.vis_param.borrow().bees_flying {
-            self.last_render_instant.get().elapsed().as_micros() as f32
-        } else {
-            0.0
-        }
+        self.last_render_instant.get().elapsed().as_micros() as f32
     }
 
     pub fn nodes_lens(&self) -> Vec<usize> {
@@ -137,8 +133,6 @@ impl Surface {
     }
 
     pub fn inspect(&self, inspector: &mut dyn Inspector) {
-        self.vis_param.borrow_mut().inspect(inspector);
-
         for (i, flow) in self.flows.iter().enumerate() {
             inspector.begin_flow(i);
             flow.inspect(inspector);

@@ -23,6 +23,51 @@ struct Uniforms {
     colormap_type: i32,
 }
 
+#[derive(Copy, Clone, Debug, Default)]
+enum CombinationFunction {
+    #[default]
+    AbsoluteErrorRGBVectorLength,
+    AbsoluteErrorXYVectorLength,
+    AbsoluteErrorRGBXYVectorLength,
+    UncertaintyRGBVectorLength,
+    UncertaintyXYVectorLength,
+    UncertaintyRGBXYVectorLength,
+    UncertaintyGenVar,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Default)]
+enum MixType {
+    #[default]
+    BaseImageOnly,
+    ColorMapOnly,
+    OverlayThreshold,
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+enum ColorMapType {
+    #[default]
+    Viridis,
+    Turbo,
+    Grayscale,
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+enum BaseImage {
+    #[default]
+    Output,
+    Original,
+    Ganglion,
+    Variance,
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+struct VisualizationType {
+    pub base_image: BaseImage,
+    pub combination_function: CombinationFunction,
+    pub mix_type: MixType,
+    pub color_map_type: ColorMapType,
+}
+
 pub struct VisOverlay {
     hive_rot: Matrix4<f32>,
     pipeline: wgpu::RenderPipeline,
@@ -30,6 +75,14 @@ pub struct VisOverlay {
     sources_bind_group: wgpu::BindGroup,
     original_bind_group: wgpu::BindGroup,
     render_target: RenderTexture,
+
+    eye_idx: u32,
+    vis_type: VisualizationType,
+    heat_scale: f32,
+    //previous_mouse_position: (f32, f32),
+    highlight_position: (f32, f32),
+    //bees_flying: bool,
+    bees_visible: bool,
 }
 
 impl VisOverlay {
@@ -100,6 +153,13 @@ impl VisOverlay {
             sources_bind_group,
             original_bind_group,
             render_target,
+            eye_idx: 0,
+            vis_type: VisualizationType::default(),
+            heat_scale: 1.0,
+            highlight_position: (0.0, 0.0),
+            // bees_flying: true,
+            bees_visible: false,
+            //  previous_mouse_position: (0.0, 0.0),
         }
     }
 }
@@ -130,6 +190,51 @@ impl Node for VisOverlay {
     fn inspect(&mut self, inspector: &mut dyn Inspector) {
         inspector.begin_node("VisOverlay");
         inspector.mut_i32("flow_id", &mut self.uniforms.data.flow_idx);
+        let mut file_base_image = self.vis_type.base_image as i32;
+        if inspector.mut_i32("file_base_image", &mut file_base_image) {
+            self.vis_type.base_image = match file_base_image {
+                0 => BaseImage::Output,
+                1 => BaseImage::Original,
+                2 => BaseImage::Ganglion,
+                _ => panic!("No BaseImage of {} found", file_base_image),
+            };
+        }
+
+        let mut file_mix_type = self.vis_type.mix_type as i32;
+        if inspector.mut_i32("file_mix_type", &mut file_mix_type) {
+            self.vis_type.mix_type = match file_mix_type {
+                0 => MixType::BaseImageOnly,
+                1 => MixType::ColorMapOnly,
+                2 => MixType::OverlayThreshold,
+                _ => panic!("No MixType of {} found", file_mix_type),
+            };
+        }
+
+        let mut file_cm_type = self.vis_type.color_map_type as i32;
+        if inspector.mut_i32("file_cm_type", &mut file_cm_type) {
+            self.vis_type.color_map_type = match file_cm_type {
+                0 => ColorMapType::Viridis,
+                1 => ColorMapType::Turbo,
+                2 => ColorMapType::Grayscale,
+                _ => panic!("No ColorMapType of {} found", file_cm_type),
+            };
+        }
+
+        let mut file_cf = self.vis_type.combination_function as i32;
+        if inspector.mut_i32("file_cf", &mut file_cf) {
+            self.vis_type.combination_function = match file_cf {
+                0 => CombinationFunction::AbsoluteErrorRGBVectorLength,
+                1 => CombinationFunction::AbsoluteErrorXYVectorLength,
+                2 => CombinationFunction::AbsoluteErrorRGBXYVectorLength,
+                3 => CombinationFunction::UncertaintyRGBVectorLength,
+                4 => CombinationFunction::UncertaintyXYVectorLength,
+                5 => CombinationFunction::UncertaintyRGBXYVectorLength,
+                6 => CombinationFunction::UncertaintyGenVar,
+                _ => panic!("No CombinationFunction of {} found", file_cf),
+            };
+        }
+        inspector.mut_f32("cm_scale", &mut self.heat_scale);
+
         inspector.end_node();
     }
 
@@ -138,18 +243,7 @@ impl Node for VisOverlay {
         perspective: &EyePerspective,
         vis_param: &VisualizationParameters,
     ) -> EyePerspective {
-        self.uniforms.data.heat_scale = vis_param.heat_scale;
         self.uniforms.data.dir_calc_scale = vis_param.dir_calc_scale;
-        self.uniforms.data.flow_idx = vis_param.eye_idx as i32;
-        self.uniforms.data.hive_position[0] = vis_param.highlight_position.0;
-        self.uniforms.data.hive_position[1] = vis_param.highlight_position.1;
-        self.uniforms.data.hive_visible = vis_param.bees_visible as i32;
-
-        self.uniforms.data.base_image = vis_param.vis_type.base_image as i32;
-        self.uniforms.data.combination_function = vis_param.vis_type.combination_function as i32;
-        self.uniforms.data.mix_type = vis_param.vis_type.mix_type as i32;
-        self.uniforms.data.colormap_type = vis_param.vis_type.color_map_type as i32;
-
         perspective.clone()
     }
 
@@ -160,6 +254,17 @@ impl Node for VisOverlay {
         screen: Option<&RenderTexture>,
     ) {
         let speed = 4.0;
+
+        self.uniforms.data.heat_scale = self.heat_scale;
+        self.uniforms.data.flow_idx = self.eye_idx as i32;
+        self.uniforms.data.hive_position[0] = self.highlight_position.0;
+        self.uniforms.data.hive_position[1] = self.highlight_position.1;
+        self.uniforms.data.hive_visible = self.bees_visible as i32;
+
+        self.uniforms.data.base_image = self.vis_type.base_image as i32;
+        self.uniforms.data.combination_function = self.vis_type.combination_function as i32;
+        self.uniforms.data.mix_type = self.vis_type.mix_type as i32;
+        self.uniforms.data.colormap_type = self.vis_type.color_map_type as i32;
 
         self.hive_rot =
             self.hive_rot * Matrix4::from_angle_x(Rad(speed * surface.delta_t() / 1_000_000.0));
