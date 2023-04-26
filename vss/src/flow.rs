@@ -147,33 +147,34 @@ impl Flow {
     }
 
     fn update_ui(&self) {
-        let (context, input) = self
+        let ui_tuple = self
             .nodes
             .borrow_mut()
             .iter_mut()
-            .find_map(|node| node.as_ui_mut().map(|ui_node| ui_node.begin_run()))
-            .unwrap();
-
-        let full_output = context.run(input, |ctx| {
-            egui::Window::new("Inspector").show(ctx, |ui| {
-                egui::Grid::new("inspector_grid")
-                    .num_columns(2)
-                    .spacing([6.0, 4.0])
-                    .striped(true)
-                    .show(ui, |ui| {
-                        self.inspect(&mut UiInspector::new(ui));
-                    });
+            .find_map(|node| node.as_ui_mut().map(|ui_node| ui_node.begin_run()));
+        
+        if let Some((context, input)) = ui_tuple {
+            let full_output = context.run(input, |ctx| {
+                egui::Window::new("Inspector").show(ctx, |ui| {
+                    egui::Grid::new("inspector_grid")
+                        .num_columns(2)
+                        .spacing([6.0, 4.0])
+                        .striped(true)
+                        .show(ui, |ui| {
+                            self.inspect(&mut UiInspector::new(ui));
+                        });
+                });
             });
-        });
 
-        self.nodes
-            .borrow_mut()
-            .iter_mut()
-            .find_map(|node| {
-                node.as_ui_mut()
-                    .map(|ui_node| ui_node.end_run(full_output.clone()))
-            })
-            .unwrap();
+            self.nodes
+                .borrow_mut()
+                .iter_mut()
+                .find_map(|node| {
+                    node.as_ui_mut()
+                        .map(|ui_node| ui_node.end_run(full_output.clone()))
+                })
+                .unwrap();
+        }
     }
 
     pub fn post_render(&self, surface: &Surface) {
