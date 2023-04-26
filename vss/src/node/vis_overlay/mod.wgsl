@@ -10,12 +10,13 @@ struct Uniforms{
     flow_idx: i32,
 
     heat_scale: f32,
-    dir_calc_scale: f32,
 
     base_image: i32,
     combination_function: i32,
     mix_type: i32,
     colormap_type: i32,
+
+    _padding: i32,
 };
 
 @group(0) @binding(0)

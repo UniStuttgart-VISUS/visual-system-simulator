@@ -15,12 +15,13 @@ struct Uniforms {
     flow_idx: i32,
 
     heat_scale: f32,
-    dir_calc_scale: f32,
 
     base_image: i32,
     combination_function: i32,
     mix_type: i32,
     colormap_type: i32,
+
+    _padding: i32,
 }
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -95,7 +96,6 @@ impl VisOverlay {
                 flow_idx: 0,
 
                 heat_scale: 1.0,
-                dir_calc_scale: 1.0,
 
                 hive_rotation: [[0.0; 4]; 4],
                 hive_position: [0.0; 2],
@@ -105,6 +105,8 @@ impl VisOverlay {
                 combination_function: 0,
                 mix_type: 0,
                 colormap_type: 0,
+
+                _padding: 0,
             },
         );
 
@@ -233,15 +235,6 @@ impl Node for VisOverlay {
         inspector.mut_f32("cm_scale", &mut self.heat_scale);
 
         inspector.end_node();
-    }
-
-    fn input(
-        &mut self,
-        perspective: &EyePerspective,
-        vis_param: &VisualizationParameters,
-    ) -> EyePerspective {
-        self.uniforms.data.dir_calc_scale = vis_param.dir_calc_scale;
-        perspective.clone()
     }
 
     fn render(

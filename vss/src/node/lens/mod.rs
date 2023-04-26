@@ -28,13 +28,10 @@ struct Uniforms {
     // should be between 0 and 2
     far_vision_factor: f32,
 
-    dir_calc_scale: f32,
     astigmatism_ecc_mm: f32,
     astigmatism_angle_deg: f32,
     eye_distance_center: f32,
     track_error: i32,
-
-    _padding: i32,
 }
 
 pub struct Lens {
@@ -72,12 +69,10 @@ impl Lens {
                 far_point: f32::INFINITY,
                 near_vision_factor: 0.0,
                 far_vision_factor: 0.0,
-                dir_calc_scale: 1.0,
                 astigmatism_ecc_mm: 0.0,
                 astigmatism_angle_deg: 0.0,
                 eye_distance_center: 0.0,
                 track_error: 0,
-                _padding: 0,
             },
         );
 
@@ -252,7 +247,6 @@ impl Node for Lens {
         perspective: &EyePerspective,
         vis_param: &VisualizationParameters,
     ) -> EyePerspective {
-        self.uniforms.data.dir_calc_scale = vis_param.dir_calc_scale;
         self.uniforms.data.depth_max = vis_param.test_depth_max;
         self.uniforms.data.depth_min = vis_param.test_depth_min;
         self.uniforms.data.lens_position[0] = vis_param.eye_position.0;

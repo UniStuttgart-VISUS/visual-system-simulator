@@ -25,13 +25,10 @@ struct Uniforms {
     // should be between 0 and 2
     far_vision_factor: f32,
 
-    dir_calc_scale: f32,
     astigmatism_ecc_mm: f32,
     astigmatism_angle_deg: f32,
     eye_distance_center: f32,
     track_error: i32,
-
-    _padding: i32,
 };
 
 struct Simulation {
