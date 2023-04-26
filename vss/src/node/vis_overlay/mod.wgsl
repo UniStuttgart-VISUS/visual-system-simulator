@@ -307,9 +307,6 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         case 2:{
             color = RetinalGanglion(in.tex_coords);
         }
-        case 3:{
-            color = textureSampleLevel(in_color_t, in_color_s, in.tex_coords, 0.0).rgb;
-        }
         default:{
             // leave default value
         }

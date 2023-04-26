@@ -10,7 +10,6 @@ pub struct VisualizationParameters {
     pub dir_calc_scale: f32,
     pub test_depth_min: f32,
     pub test_depth_max: f32,
-    //DEAD CODE? pub astigmatism_strength: f32,
     pub eye_position: (f32, f32),
     pub mouse_input: VisMouseInput,
 }
@@ -18,10 +17,9 @@ pub struct VisualizationParameters {
 impl Default for VisualizationParameters {
     fn default() -> Self {
         Self {
-             dir_calc_scale: 0.0,
+            dir_calc_scale: 0.0,
             test_depth_min: 200.0,
             test_depth_max: 5000.0,
-            //DEAD CODE? astigmatism_strength: 0.0,
             eye_position: (0.0, 0.0),
             mouse_input: VisMouseInput::default(),
         }

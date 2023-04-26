@@ -57,7 +57,6 @@ enum BaseImage {
     Output,
     Original,
     Ganglion,
-    Variance,
 }
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -81,7 +80,6 @@ pub struct VisOverlay {
     heat_scale: f32,
     //previous_mouse_position: (f32, f32),
     highlight_position: (f32, f32),
-    //bees_flying: bool,
     bees_visible: bool,
 }
 
@@ -157,7 +155,6 @@ impl VisOverlay {
             vis_type: VisualizationType::default(),
             heat_scale: 1.0,
             highlight_position: (0.0, 0.0),
-            // bees_flying: true,
             bees_visible: false,
             //  previous_mouse_position: (0.0, 0.0),
         }
