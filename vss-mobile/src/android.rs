@@ -1,11 +1,12 @@
 #![allow(non_snake_case)]
 #![cfg(target_os = "android")]
 
-use std::ffi::c_void;
+use std::ffi::{c_void, CString};
+use std::io::{Cursor, Read};
 use std::panic;
 use std::ptr::NonNull;
-use std::sync::{Mutex, MutexGuard};
 use std::sync::mpsc::{self, Receiver, SyncSender};
+use std::sync::{Mutex, MutexGuard};
 
 use log::*;
 
@@ -52,7 +53,12 @@ impl CameraStream {
 }
 
 impl Node for CameraStream {
-    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, original_image: &mut Option<Texture>) -> NodeSlots {
+    fn negociate_slots(
+        &mut self,
+        surface: &Surface,
+        slots: NodeSlots,
+        original_image: &mut Option<Texture>,
+    ) -> NodeSlots {
         self.upload.negociate_slots(&surface, slots, original_image)
     }
 
@@ -60,17 +66,16 @@ impl Node for CameraStream {
         self.upload.inspect(inspector);
     }
 
-    fn input(
-        &mut self,
-        eye: &EyeInput,
-        mouse: &MouseInput,
-    ) -> EyeInput {
+    fn input(&mut self, eye: &EyeInput, mouse: &MouseInput) -> EyeInput {
         let buffer = self.frame_receiver.try_recv();
         if let Ok(buffer) = buffer {
-            debug!("Uploading... {}x{} {}", buffer.width, buffer.height, buffer.pixels_y[0]);
+            debug!(
+                "Uploading... {}x{} {}",
+                buffer.width, buffer.height, buffer.pixels_y[0]
+            );
             self.upload.upload_buffer(buffer);
         }
-        self.upload.input(&eye, vis_param)
+        self.upload.input(&eye, mouse)
     }
 
     fn render(
@@ -144,8 +149,20 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate<'loca
                 assetManager.as_raw(),
             ))
             .unwrap(),
-        );
+        )
     };
+
+    set_load(Box::new(move |full_path| {
+        let full_path = CString::new(full_path).unwrap();
+        let mut asset = assetManager.open(&full_path).expect("Cannot open asset");
+        let mut buffer = Vec::new();
+        match asset.read_to_end(&mut buffer) {
+            Ok(_) => Cursor::new(buffer),
+            Err(err) => {
+                panic!("Cannot read asset ({})", err);
+            }
+        }
+    }));
 
     // let mut value_map = ValueMap::new();
 
@@ -169,13 +186,12 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate<'loca
     build_flow(&mut surface, rx);
     //TODO: surface.inspect();
 
-    
-    *guard = Some(Bridge { 
+    *guard = Some(Bridge {
         surface,
         frame_sender: tx,
         current_size: [1, 1],
         new_size: [1, 1],
-     });
+    });
 }
 
 fn build_flow(surface: &mut Surface, frame_receiver: Receiver<YuvBuffer>) {
@@ -236,8 +252,13 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDraw<'local>
     //}
     //TODO replace this with some better way of triggering a node update
     //(it is neccessary to refresh node resolutions but for this we need the upload node to have a buffer available to get the new resolution from)
-    if (bridge.new_size[0] != bridge.current_size[0]) || (bridge.new_size[1] != bridge.current_size[1]) {
-        debug!("Buffer sizes do not match, old({}, {}), new({}, {})", bridge.current_size[0], bridge.current_size[1], bridge.new_size[0], bridge.new_size[1]);
+    if (bridge.new_size[0] != bridge.current_size[0])
+        || (bridge.new_size[1] != bridge.current_size[1])
+    {
+        debug!(
+            "Buffer sizes do not match, old({}, {}), new({}, {})",
+            bridge.current_size[0], bridge.current_size[1], bridge.new_size[0], bridge.new_size[1]
+        );
         //TODO: bridge.surface.inspect();
         bridge.current_size = bridge.new_size;
     }
@@ -272,7 +293,7 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostFrame<'l
     let res = bridge.frame_sender.try_send(buffer);
     if res.is_err() {
         warn!("{}, dropping frame", res.err().unwrap());
-    }else{
+    } else {
         bridge.new_size = [width, height];
     }
 }
@@ -296,8 +317,8 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostSettings
 
 #[no_mangle]
 pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeQuerySettings<'local>(
-    mut env: JNIEnv<'local>,
-    _class: JClass
+    env: JNIEnv<'local>,
+    _class: JClass,
 ) -> JString<'local> {
     let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
     let bridge = (*guard).as_mut().expect("Bridge should be created");

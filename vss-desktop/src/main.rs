@@ -7,6 +7,7 @@ mod varjo;
 mod openxr;
 
 use std::fs;
+use std::io::Cursor;
 use std::time::Instant;
 use vss::*;
 
@@ -179,9 +180,30 @@ fn build_flow(
     surface.negociate_slots();
 }
 
+pub fn load_fn(full_path: &str) -> Cursor<Vec<u8>> {
+    use std::fs::File;
+    use std::io::Read;
+
+    let mut file = match File::open(full_path) {
+        Ok(file) => file,
+        Err(err) => {
+            panic!("Cannot open file '{}' ({})", full_path, err);
+        }
+    };
+    let mut buffer = Vec::new();
+    match file.read_to_end(&mut buffer) {
+        Ok(_) => Cursor::new(buffer),
+        Err(err) => {
+            panic!("Cannot read file '{}' ({})", full_path, err);
+        }
+    }
+}
+
 // "Default" main
 #[cfg(not(any(feature = "varjo", feature = "openxr")))]
 pub fn main() {
+    set_load(Box::new(load_fn));
+
     let config = cmd_parse();
 
     let flow_count = config.flow_configs.len();
