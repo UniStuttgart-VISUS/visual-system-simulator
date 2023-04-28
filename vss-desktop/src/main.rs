@@ -242,7 +242,9 @@ pub fn main() {
     }
 
     let mut done = false;
-    window.surface.inspect(&mut ConfigInspector::new(&config));
+    let mut inspector = ConfigInspector::new(&config);
+    window.surface.inspect(&mut inspector);
+    inspector.print_unused();
 
     let mut frame_counter = 0;
     let mut frame_perfs: Vec<(u128, u128)> = vec![];

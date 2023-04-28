@@ -1,6 +1,6 @@
 use glob::glob;
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
@@ -60,6 +60,7 @@ impl Default for Config {
 
 pub struct ConfigInspector<'a> {
     config: &'a Config,
+    keys_used: HashSet<String>,
     flow_index: usize,
 }
 
@@ -67,14 +68,27 @@ impl<'a> ConfigInspector<'a> {
     pub fn new(config: &'a Config) -> Self {
         ConfigInspector {
             config,
+            keys_used: HashSet::new(),
             flow_index: 0,
+        }
+    }
+
+    pub fn print_unused(&self) {
+        for flow_config in self.config.flow_configs.iter() {
+            for (key, value) in flow_config.values.iter() {
+                if !self.keys_used.contains(key) {
+                    println!(
+                        "Unused setting from {}: \"{}\" = \"{}\"",
+                        flow_config.name, key, value
+                    );
+                }
+            }
         }
     }
 }
 
 impl Inspector for ConfigInspector<'_> {
     fn begin_flow(&mut self, index: usize) {
-        dbg!(index);
         self.flow_index = index;
     }
 
@@ -82,9 +96,7 @@ impl Inspector for ConfigInspector<'_> {
         self.flow_index = 0;
     }
 
-    fn begin_node(&mut self, name: &'static str) {
-        dbg!(name);
-    }
+    fn begin_node(&mut self, _name: &'static str) {}
 
     fn end_node(&mut self) {}
 
@@ -92,6 +104,7 @@ impl Inspector for ConfigInspector<'_> {
         let config_values = &self.config.flow_configs[self.flow_index].values;
         if let Some(serde_json::value::Value::Bool(config_value)) = config_values.get(name) {
             *value = *config_value;
+            self.keys_used.insert(name.to_string());
             true
         } else {
             false
@@ -101,7 +114,8 @@ impl Inspector for ConfigInspector<'_> {
     fn mut_f64(&mut self, name: &'static str, value: &mut f64) -> bool {
         let config_values = &self.config.flow_configs[self.flow_index].values;
         if let Some(serde_json::value::Value::Number(config_value)) = config_values.get(name) {
-            *value =  config_value.as_f64().unwrap();
+            *value = config_value.as_f64().unwrap();
+            self.keys_used.insert(name.to_string());
             true
         } else {
             false
@@ -111,7 +125,8 @@ impl Inspector for ConfigInspector<'_> {
     fn mut_f32(&mut self, name: &'static str, value: &mut f32) -> bool {
         let config_values = &self.config.flow_configs[self.flow_index].values;
         if let Some(serde_json::value::Value::Number(config_value)) = config_values.get(name) {
-            *value =  config_value.as_f64().unwrap() as f32;
+            *value = config_value.as_f64().unwrap() as f32;
+            self.keys_used.insert(name.to_string());
             true
         } else {
             false
@@ -121,7 +136,8 @@ impl Inspector for ConfigInspector<'_> {
     fn mut_i32(&mut self, name: &'static str, value: &mut i32) -> bool {
         let config_values = &self.config.flow_configs[self.flow_index].values;
         if let Some(serde_json::value::Value::Number(config_value)) = config_values.get(name) {
-            *value =  config_value.as_f64().unwrap() as i32;
+            *value = config_value.as_f64().unwrap() as i32;
+            self.keys_used.insert(name.to_string());
             true
         } else {
             false
@@ -131,7 +147,8 @@ impl Inspector for ConfigInspector<'_> {
     fn mut_u32(&mut self, name: &'static str, value: &mut u32) -> bool {
         let config_values = &self.config.flow_configs[self.flow_index].values;
         if let Some(serde_json::value::Value::Number(config_value)) = config_values.get(name) {
-            *value =  config_value.as_f64().unwrap() as u32;
+            *value = config_value.as_f64().unwrap() as u32;
+            self.keys_used.insert(name.to_string());
             true
         } else {
             false
@@ -141,7 +158,8 @@ impl Inspector for ConfigInspector<'_> {
     fn mut_img(&mut self, name: &'static str, value: &mut String) -> bool {
         let config_values = &self.config.flow_configs[self.flow_index].values;
         if let Some(serde_json::value::Value::String(config_value)) = config_values.get(name) {
-            *value =  config_value.to_string() ;
+            *value = config_value.to_string();
+            self.keys_used.insert(name.to_string());
             true
         } else {
             false
@@ -149,7 +167,7 @@ impl Inspector for ConfigInspector<'_> {
     }
 
     fn mut_matrix(&mut self, _name: &'static str, _value: &mut cgmath::Matrix4<f32>) -> bool {
-    false //TODO: do this properly
+        false //TODO: do this properly
     }
 }
 
