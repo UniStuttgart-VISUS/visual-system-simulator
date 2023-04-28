@@ -1,5 +1,5 @@
 use crate::*;
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::iter;
 use std::rc::Rc;
 use std::time::Instant;
@@ -14,7 +14,6 @@ pub struct Surface {
     queue: wgpu::Queue,
 
     pub flows: Vec<Flow>,
-    vis_param: RefCell<VisualizationParameters>,
     last_render_instant: Cell<Instant>,
 }
 
@@ -97,7 +96,6 @@ impl Surface {
             device,
             queue,
             flows,
-            vis_param: RefCell::new(VisualizationParameters::default()),
             last_render_instant: Cell::new(Instant::now()),
         }
     }
@@ -193,9 +191,5 @@ impl Surface {
         output.present();
         self.flows.iter().for_each(|f| f.post_render(self));
         self.last_render_instant.replace(Instant::now());
-    }
-
-    pub fn input(&self, f: &Flow) {
-        f.input(&self.vis_param.borrow());
     }
 }

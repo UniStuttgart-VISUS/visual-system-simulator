@@ -4,26 +4,34 @@ use cgmath::Vector3;
 use std::cell::{RefCell, RefMut};
 use wgpu::CommandEncoder;
 
-/// Represents properties of eye-tracking data.
-#[derive(Debug, Clone)]
-pub struct EyePerspective {
+/// Represents properties of eye input (perspetive and tracking).
+#[derive(Clone, Debug)]
+pub struct EyeInput {
     pub position: Vector3<f32>,
     pub view: Matrix4<f32>,
     pub proj: Matrix4<f32>,
     pub gaze: Vector3<f32>,
 }
 
+/// Represents properties of mouse input.
+#[derive(Clone, Debug)]
+pub struct MouseInput {
+    pub position: (f32, f32),
+    pub left_button: bool,
+    pub right_button: bool,
+}
+
 /// A flow encapsulates simulation nodes, i.e., all simulation and rendering.
 pub struct Flow {
     nodes: RefCell<Vec<Box<dyn Node>>>,
-    perspective: RefCell<EyePerspective>,
+    eye: RefCell<EyeInput>,
 }
 
 impl Flow {
     pub fn new() -> Self {
         Flow {
             nodes: RefCell::new(Vec::new()),
-            perspective: RefCell::new(EyePerspective {
+            eye: RefCell::new(EyeInput {
                 position: Vector3::new(0.0, 0.0, 0.0),
                 view: Matrix4::from_scale(1.0),
                 proj: cgmath::perspective(cgmath::Deg(70.0), 1.0, 0.05, 1000.0),
@@ -32,8 +40,8 @@ impl Flow {
         }
     }
 
-    pub fn perspective_mut(&self) -> RefMut<EyePerspective> {
-        self.perspective.borrow_mut()
+    pub fn eye_mut(&self) -> RefMut<EyeInput> {
+        self.eye.borrow_mut()
     }
 
     pub fn add_node(&mut self, node: Box<dyn Node>) {
@@ -119,11 +127,11 @@ impl Flow {
         }
     }
 
-    pub fn input(&self, vis_param: &VisualizationParameters) {
+    pub fn input(&self, mouse: &MouseInput) {
         // Propagate to nodes.
-        let mut perspective = self.perspective.borrow().clone();
+        let mut eye = self.eye.borrow().clone();
         for node in self.nodes.borrow_mut().iter_mut().rev() {
-            perspective = node.input(&perspective, vis_param);
+            eye = node.input(&eye, mouse);
         }
     }
 

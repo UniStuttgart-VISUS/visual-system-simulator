@@ -232,8 +232,8 @@ impl Node for UploadVideo {
         self.uploader.inspect(inspector);
     }
 
-    fn input(&mut self, perspective: &EyePerspective, vis_param: &VisualizationParameters) -> EyePerspective {
-        self.uploader.input(perspective, vis_param)
+    fn input(&mut self, eye: &EyeInput, mouse: &MouseInput) -> EyeInput {
+        self.uploader.input(eye, mouse)
     }
 
     fn render(&mut self, surface: &Surface, encoder: &mut wgpu::CommandEncoder, screen: Option<&RenderTexture>) {

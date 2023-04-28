@@ -54,9 +54,9 @@ impl Node for EyeControl {
 
     fn input(
         &mut self,
-        perspective: &EyePerspective,
-        _vis_param: &VisualizationParameters,
-    ) -> EyePerspective {
+        eye: &EyeInput,
+        _mouse: &MouseInput,
+    ) -> EyeInput {
         // vp.mouse_input.position = (position.x as f32, position.y as f32);
         match self.edit_eye_position {
             1 => {
@@ -71,9 +71,9 @@ impl Node for EyeControl {
             _ => {}
         }
 
-        let mut perspective = perspective.clone();
-        perspective.view = self.configured_view.mul(perspective.view);
-        perspective
+        let mut eye = eye.clone();
+        eye.view = self.configured_view.mul(eye.view);
+        eye
     }
 
     fn render(

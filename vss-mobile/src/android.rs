@@ -62,15 +62,15 @@ impl Node for CameraStream {
 
     fn input(
         &mut self,
-        perspective: &EyePerspective,
-        vis_param: &VisualizationParameters,
-    ) -> EyePerspective {
+        eye: &EyeInput,
+        mouse: &MouseInput,
+    ) -> EyeInput {
         let buffer = self.frame_receiver.try_recv();
         if let Ok(buffer) = buffer {
             debug!("Uploading... {}x{} {}", buffer.width, buffer.height, buffer.pixels_y[0]);
             self.upload.upload_buffer(buffer);
         }
-        self.upload.input(&perspective, vis_param)
+        self.upload.input(&eye, vis_param)
     }
 
     fn render(

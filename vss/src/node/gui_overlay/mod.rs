@@ -117,23 +117,23 @@ impl Node for GuiOverlay {
 
     fn input(
         &mut self,
-        perspective: &EyePerspective,
-        vis_param: &VisualizationParameters,
-    ) -> EyePerspective {
+        eye: &EyeInput,
+        mouse: &MouseInput,
+    ) -> EyeInput {
         let mut egui_input = egui::RawInput::default();
         egui_input.events.push(egui::Event::PointerButton {
             pos: egui::pos2(
-                vis_param.mouse_input.position.0,
-                vis_param.mouse_input.position.1,
+                mouse.position.0,
+                mouse.position.1,
             ),
             button: egui::PointerButton::Primary,
-            pressed: vis_param.mouse_input.left_button,
+            pressed: mouse.left_button,
             modifiers: egui::Modifiers::default(),
         });
 
         self.egui_input = Some(egui_input);
 
-        perspective.clone()
+        eye.clone()
     }
 
     fn render(

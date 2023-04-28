@@ -46,6 +46,8 @@ pub struct Lens {
     presbyopia_onoff: bool,
     myopiahyperopia_onoff: bool,
     myopiahyperopia_mnh: f64,
+    depth_min: f32,
+    depth_max: f32,
     track_error: bool,
 }
 
@@ -61,10 +63,8 @@ impl Lens {
                 lens_position: [0.0, 0.0],
                 active: 0,
                 samplecount: 4,
-                //depth_min: 200.0,  //XXX: was 1000.0 - 300.0,
-                depth_min: 100.0, //XXX: was 1000.0 - 300.0,
-                //depth_max: 5000.0, //XXX: was 1000.0 + 0.0,
-                depth_max: 1800.0, //XXX: was 1000.0 + 0.0,
+                depth_min: 200.0, //XXX: was 1000.0 - 300.0,
+                depth_max: 5000.0, //XXX: was 1000.0 + 0.0,
                 near_point: 0.0,
                 far_point: f32::INFINITY,
                 near_vision_factor: 0.0,
@@ -135,6 +135,8 @@ impl Lens {
             presbyopia_onoff: false,
             myopiahyperopia_onoff: false,
             myopiahyperopia_mnh: 0.0,
+            depth_min: 200.0,
+            depth_max: 5000.0,
             track_error: false,
         }
     }
@@ -237,6 +239,8 @@ impl Node for Lens {
             &mut self.uniforms.data.eye_distance_center,
         );
 
+        inspector.mut_f32("depth_min", &mut self.depth_min);
+        inspector.mut_f32("depth_max", &mut self.depth_max);
         inspector.mut_bool("track_error", &mut self.track_error);
 
         inspector.end_node();
@@ -244,14 +248,12 @@ impl Node for Lens {
 
     fn input(
         &mut self,
-        perspective: &EyePerspective,
-        vis_param: &VisualizationParameters,
-    ) -> EyePerspective {
-        self.uniforms.data.depth_max = vis_param.test_depth_max;
-        self.uniforms.data.depth_min = vis_param.test_depth_min;
-        self.uniforms.data.lens_position[0] = vis_param.eye_position.0;
-        self.uniforms.data.lens_position[1] = vis_param.eye_position.1;
-        perspective.clone()
+        eye: &EyeInput,
+        _mouse: &MouseInput,
+    ) -> EyeInput {
+        self.uniforms.data.lens_position[0] = eye.position.x;
+        self.uniforms.data.lens_position[1] = eye.position.y;
+        eye.clone()
     }
 
     fn render(
@@ -260,6 +262,8 @@ impl Node for Lens {
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
+        self.uniforms.data.depth_min = self.depth_min;
+        self.uniforms.data.depth_max = self.depth_max;
         self.uniforms.data.track_error = self.track_error as i32;
         self.uniforms.upload(surface.queue());
 

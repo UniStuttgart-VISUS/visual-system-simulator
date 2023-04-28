@@ -243,9 +243,9 @@ impl Node for UploadRgbBuffer {
         slots
     }
 
-    fn input(&mut self, perspective: &EyePerspective, _vis_param: &VisualizationParameters) -> EyePerspective {
-        self.uniforms.data.inv_proj_view = (perspective.proj * (Matrix4::from_translation(-perspective.position) * perspective.view)).invert().unwrap().into();
-        perspective.clone()
+    fn input(&mut self, eye: &EyeInput, _mouse: &MouseInput) -> EyeInput {
+        self.uniforms.data.inv_proj_view = (eye.proj * (Matrix4::from_translation(-eye.position) * eye.view)).invert().unwrap().into();
+        eye.clone()
     }
 
     fn render(&mut self, surface: &Surface, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {

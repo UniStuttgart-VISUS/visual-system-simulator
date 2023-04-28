@@ -15,8 +15,8 @@ pub struct Window {
     pub surface: surface::Surface,
 
     active: bool,
-    cursor_pos: (f32, f32),
     static_pos: Option<(f32, f32)>,
+    mouse: MouseInput,
 
     override_gaze: bool,
     override_view: bool,
@@ -59,8 +59,12 @@ impl Window {
             events_loop,
             surface,
             active: false,
-            cursor_pos: (0.0, 0.0),
             static_pos,
+            mouse: MouseInput {
+                position: (0.0, 0.0),
+                left_button: false,
+                right_button: false,
+            },
             override_view: static_pos.is_some(),
             override_gaze: false,
         }
@@ -100,8 +104,7 @@ impl Window {
                         }
                         WindowEvent::CursorMoved { position, .. } => {
                             if self.active {
-                                let position = (position.x as f32, position.y as f32);
-                                self.cursor_pos = position;
+                                self.mouse.position = (position.x as f32, position.y as f32);
                             }
                         }
                         WindowEvent::CursorLeft { .. } => {
@@ -116,9 +119,11 @@ impl Window {
                                 match button {
                                     MouseButton::Left => {
                                         self.override_view = *state == ElementState::Pressed;
+                                        self.mouse.left_button = *state == ElementState::Pressed;
                                     }
                                     MouseButton::Right => {
                                         self.override_gaze = *state == ElementState::Pressed;
+                                        self.mouse.right_button = *state == ElementState::Pressed;
                                     }
                                     _ => {}
                                 }
@@ -166,8 +171,7 @@ impl Window {
         // Update input.
         for f in self.surface.flows.iter() {
             if self.override_view || self.override_gaze {
-                let cursor_pos = self.cursor_pos;
-                let view_pos = self.static_pos.unwrap_or(cursor_pos);
+                let view_pos = self.static_pos.unwrap_or(self.mouse.position);
 
                 let yaw =
                     view_pos.0 / (self.surface.width() as f32) * std::f32::consts::PI * 2.0 - 0.5;
@@ -176,23 +180,20 @@ impl Window {
                 let view = Matrix4::from_angle_x(cgmath::Rad(pitch))
                     * Matrix4::from_angle_y(cgmath::Rad(yaw));
 
-                let mut perspective = f.perspective_mut();
+                let mut eye = f.eye_mut();
 
                 if self.override_view {
                     if !self.override_gaze {
-                        perspective.gaze = (view
-                            * perspective.view.invert().unwrap()
-                            * perspective.gaze.extend(1.0))
-                        .truncate();
+                        eye.gaze =
+                            (view * eye.view.invert().unwrap() * eye.gaze.extend(1.0)).truncate();
                     }
-                    perspective.view = view;
+                    eye.view = view;
                 }
                 if self.override_gaze {
-                    perspective.gaze =
-                        (perspective.view * view.invert().unwrap() * Vector4::unit_z()).truncate();
+                    eye.gaze = (eye.view * view.invert().unwrap() * Vector4::unit_z()).truncate();
                 }
             }
-            self.surface.input(f);
+            f.input(&self.mouse);
         }
 
         if redraw_requested {

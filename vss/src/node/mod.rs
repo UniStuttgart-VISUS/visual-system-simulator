@@ -66,10 +66,10 @@ pub trait Node {
     #[allow(unused_variables)]
     fn input(
         &mut self,
-        perspective: &EyePerspective,
-        vis_param: &VisualizationParameters,
-    ) -> EyePerspective {
-        perspective.clone()
+        eye: &EyeInput,
+        mouse: &MouseInput,
+    ) -> EyeInput {
+        eye.clone()
     }
 
     /// Issue render commands for the node.
@@ -86,7 +86,7 @@ pub trait Node {
 
     fn as_ui_mut(&mut self) ->Option<&'_ mut GuiOverlay> {None}
 }
-
+ 
 pub trait Inspector {
     fn begin_flow(&mut self, index: usize);
     fn end_flow(&mut self);

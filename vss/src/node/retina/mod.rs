@@ -271,19 +271,19 @@ impl Node for Retina {
 
     fn input(
         &mut self,
-        perspective: &EyePerspective,
-        _vis_param: &VisualizationParameters,
-    ) -> EyePerspective {
+        eye: &EyeInput,
+        _mouse: &MouseInput,
+    ) -> EyeInput {
         let gaze_rotation = Matrix4::look_to_lh(
             Point3::new(0.0, 0.0, 0.0),
-            perspective.gaze,
+            eye.gaze,
             Vector3::unit_y(),
         );
         //let gaze_rotation = Matrix4::from_scale(1.0);
-        self.uniforms.data.proj = (gaze_rotation * perspective.proj.invert().unwrap()).into();
+        self.uniforms.data.proj = (gaze_rotation * eye.proj.invert().unwrap()).into();
         //self.pso_data.u_proj = (head.proj * (Matrix4::from_translation(-head.position) * head.view)).into();
 
-        perspective.clone()
+        eye.clone()
     }
 
     fn render(

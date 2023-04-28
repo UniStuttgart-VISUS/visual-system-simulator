@@ -421,7 +421,7 @@ pub fn set_varjo_data(
             last_fov[index].0 = fov_x;
             last_fov[index].1 = fov_y;
         }
-        // window.surface.flow[index].set_perspective(EyePerspective{
+        // window.surface.flow[index].set_eye(EyeInput{
         //     position: head_position,
         //     view: view_matrices[index],
         //     proj: proj_matrices[index],
