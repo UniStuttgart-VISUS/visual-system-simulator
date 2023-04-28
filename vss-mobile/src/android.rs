@@ -43,7 +43,7 @@ struct CameraStream {
 
 impl CameraStream {
     fn new(surface: &Surface, frame_receiver: Receiver<YuvBuffer>) -> Self {
-        let mut upload = UploadYuvBuffer::new(&surface);
+        let mut upload = UploadYuvBuffer::new(surface);
         upload.set_format(YuvFormat::_420888);
         CameraStream {
             upload,
@@ -59,7 +59,7 @@ impl Node for CameraStream {
         slots: NodeSlots,
         original_image: &mut Option<Texture>,
     ) -> NodeSlots {
-        self.upload.negociate_slots(&surface, slots, original_image)
+        self.upload.negociate_slots(surface, slots, original_image)
     }
 
     fn inspect(&mut self, inspector: &mut dyn Inspector) {
@@ -75,7 +75,7 @@ impl Node for CameraStream {
             );
             self.upload.upload_buffer(buffer);
         }
-        self.upload.input(&eye, mouse)
+        self.upload.input(eye, mouse)
     }
 
     fn render(
@@ -84,11 +84,11 @@ impl Node for CameraStream {
         encoder: &mut wgpu::CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        self.upload.render(&surface, encoder, screen);
+        self.upload.render(surface, encoder, screen);
     }
 
     fn post_render(&mut self, surface: &Surface) {
-        self.upload.post_render(&surface);
+        self.upload.post_render(surface);
     }
 }
 
@@ -198,21 +198,21 @@ fn build_flow(surface: &mut Surface, frame_receiver: Receiver<YuvBuffer>) {
     //TODO: use a proper set of nodes.
 
     // Add input node.
-    let node = CameraStream::new(&surface, frame_receiver);
+    let node = CameraStream::new(surface, frame_receiver);
     surface.add_node(Box::new(node), 0);
 
     // Visual system passes.
-    // let node = Lens::new(&surface);
+    // let node = Lens::new(surface);
     // surface.add_node(Box::new(node), 0);
-    // let node = Cataract::new(&surface);
+    // let node = Cataract::new(surface);
     // surface.add_node(Box::new(node), 0);
-    let node = Retina::new(&surface);
+    let node = Retina::new(surface);
     surface.add_node(Box::new(node), 0);
-    // let node = PeacockCB::new(&surface);
+    // let node = PeacockCB::new(surface);
     // surface.add_node(Box::new(node), 0);
 
     // Display node.
-    let mut node = Display::new(&surface);
+    let mut node = Display::new(surface);
     node.set_output_scale(OutputScale::Fill);
     surface.add_node(Box::new(node), 0);
 
@@ -220,8 +220,8 @@ fn build_flow(surface: &mut Surface, frame_receiver: Receiver<YuvBuffer>) {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDestroy<'local>(
-    _env: JNIEnv<'local>,
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDestroy(
+    _env: JNIEnv<'_>,
     _class: JClass,
 ) {
     let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
@@ -229,8 +229,8 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDestroy<'loc
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeResize<'local>(
-    _env: JNIEnv<'local>,
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeResize(
+    _env: JNIEnv<'_>,
     _class: JClass,
     width: jint,
     height: jint,
@@ -241,8 +241,8 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeResize<'loca
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDraw<'local>(
-    _env: JNIEnv<'local>,
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDraw(
+    _env: JNIEnv<'_>,
     _class: JClass,
 ) {
     let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
@@ -278,9 +278,9 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostFrame<'l
     let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
     let bridge = (*guard).as_mut().expect("Bridge should be created");
 
-    let pixels_y = env.convert_byte_array(&y).unwrap().into_boxed_slice();
-    let pixels_u = env.convert_byte_array(&u).unwrap().into_boxed_slice();
-    let pixels_v = env.convert_byte_array(&v).unwrap().into_boxed_slice();
+    let pixels_y = env.convert_byte_array(y).unwrap().into_boxed_slice();
+    let pixels_u = env.convert_byte_array(u).unwrap().into_boxed_slice();
+    let pixels_v = env.convert_byte_array(v).unwrap().into_boxed_slice();
 
     let buffer = YuvBuffer {
         pixels_y,
