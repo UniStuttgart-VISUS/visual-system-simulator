@@ -200,63 +200,61 @@ fn parse_flow_config(json_or_path: &str) -> Result<FlowConfig, Box<dyn Error>> {
 }
 
 pub fn cmd_parse() -> Config {
-    use clap::{App, AppSettings, Arg};
+    use clap::{Arg, ArgAction, Command};
 
-    let matches = App::new("Visual System Simulator (VSS)")
+    let matches = Command::new("Visual System Simulator (VSS)")
         .version("1.1.0")
         .author("The Visual System Simulator Developers")
         .about("Simulates various aspects of the human visual system")
         .arg(
-            Arg::with_name("show")
+            Arg::new("show")
                 .long("show")
-                .short("s")
-                .takes_value(false)
+                .short('s')
+                .action(ArgAction::SetTrue)
                 .help("Forces window visibility"),
         )
         .arg(
-            Arg::with_name("res")
+            Arg::new("res")
                 .long("res")
-                .value_names(&["W", "H"])
-                .number_of_values(2)
+                .value_names(["W", "H"])
+                .num_args(2)
                 .help("Sets the internal render resolution"),
         )
         .arg(
-            Arg::with_name("measure_frames")
+            Arg::new("measure_frames")
                 .long("measure_frames")
-                .number_of_values(1)
+                .num_args(1)
                 .help("Tracks performance metrics for N frames"),
         )
         .arg(
-            Arg::with_name("flow_configs")
+            Arg::new("flow_configs")
                 .long("flow_configs")
-                .short("c")
+                .short('c')
                 .value_name("FILE|JSON")
-                .number_of_values(1)
-                .multiple(true)
+                .num_args(1)
+                .action(ArgAction::Append)
                 .help("Sets the configuration for a simulation flow"),
         )
         .arg(
-            Arg::with_name("gaze")
+            Arg::new("gaze")
                 .long("gaze")
-                .short("g")
-                .value_names(&["X", "Y"])
-                .number_of_values(2)
+                .short('g')
+                .value_names(["X", "Y"])
+                .num_args(2)
                 .help("Sets the fallback gaze position"),
         )
         .arg(
-            Arg::with_name("view")
+            Arg::new("view")
                 .long("view")
-                .value_names(&["X", "Y"])
-                .number_of_values(2)
+                .value_names(["X", "Y"])
+                .num_args(2)
                 .help("Sets the fallback view position"),
         )
         .arg(
-            Arg::with_name("output")
+            Arg::new("output")
                 .long("output")
-                .short("o")
+                .short('o')
                 .value_name("MUSTACHE_PATTERN?")
-                .min_values(0)
-                .max_values(1)
                 .help(
                     "Enables output with optional mustache-style pattern, e.g.:\n\
                     \x20\x20\"{{dirname}}/{{stem}}_{{configname}}.{{extension}}\"  (default)\n\
@@ -264,16 +262,16 @@ pub fn cmd_parse() -> Config {
                 ),
         )
         .arg(
-            Arg::with_name("output_scale")
+            Arg::new("output_scale")
                 .long("output_scale")
-                .number_of_values(1)
+                .num_args(1)
                 .help(
                     "Which Scaling should be used for the Display Node\n\
                 \x20\x20available are: \"fit\", \"fill\" and \"stretch\"",
                 ),
         )
         .arg(
-            Arg::with_name("input")
+            Arg::new("input")
                 .value_name("INPUT|GLOB_PATTERN")
                 .help(
                     "Input identifier or glob-style patterns, e.g.:\n\
@@ -281,58 +279,64 @@ pub fn cmd_parse() -> Config {
                     \x20\x20**/*.png video.avi",
                 )
                 .required(true)
-                .multiple(true)
+                .action(ArgAction::Append)
                 .index(1),
         )
-        .setting(AppSettings::ArgRequiredElseHelp)
-        .setting(AppSettings::UnifiedHelpMessage)
+        .arg_required_else_help(true)
         .get_matches();
 
     let mut config = Config::default();
 
-    if matches.is_present("show") {
-        config.visible = true;
-    }
+    config.visible = matches.get_flag("show");
 
-    if let Some(res) = matches.values_of("res") {
-        let res = res
-            .map(|t| t.trim().parse::<u32>().unwrap())
-            .collect::<Vec<u32>>();
+    let res = matches
+        .get_many::<String>("res")
+        .unwrap_or_default()
+        .map(|t| t.trim().parse::<u32>().unwrap())
+        .collect::<Vec<u32>>();
+    if res.len() == 2 {
         config.resolution = Some((res[0], res[1]));
-    };
+    }
 
     config.measure_frames = matches
-        .value_of("measure_frames")
-        .map(|v| v.parse::<u128>())
-        .unwrap_or(Ok(0u128))
-        .unwrap_or(config.measure_frames);
+        .get_one::<String>("measure_frames")
+        .map_or(config.measure_frames, |v| {
+            v.parse::<u128>().unwrap_or(0u128)
+        });
 
-    if let Some(configs) = matches.values_of("flow_configs") {
-        config.flow_configs = configs
-            .map(|config_str| parse_flow_config(config_str).expect("Invalid flow config"))
-            .collect()
+    let flow_configs = matches
+        .get_many::<String>("flow_configs")
+        .unwrap_or_default()
+        .map(|config_str| parse_flow_config(config_str.as_str()).expect("Invalid flow config"))
+        .collect::<Vec<FlowConfig>>();
+    if !flow_configs.is_empty() {
+        config.flow_configs = flow_configs;
     }
 
-    if let Some(gaze) = matches.values_of("gaze") {
-        let gaze = gaze
-            .map(|t| t.trim().parse::<f32>().unwrap())
-            .collect::<Vec<f32>>();
+    let gaze = matches
+        .get_many::<String>("gaze")
+        .unwrap_or_default()
+        .map(|t| t.trim().parse::<f32>().unwrap())
+        .collect::<Vec<f32>>();
+    if gaze.len() == 2 {
         for flow_config in &mut config.flow_configs {
             flow_config.static_gaze = Some((gaze[0], gaze[1]));
         }
     }
 
-    if let Some(view) = matches.values_of("view") {
-        let view = view
-            .map(|t| t.trim().parse::<f32>().unwrap())
-            .collect::<Vec<f32>>();
+    let view = matches
+        .get_many::<String>("view")
+        .unwrap_or_default()
+        .map(|t| t.trim().parse::<f32>().unwrap())
+        .collect::<Vec<f32>>();
+    if view.len() == 2 {
         for flow_config in &mut config.flow_configs {
             flow_config.static_view = Some((view[0], view[1]));
         }
     }
 
-    if matches.is_present("output") {
-        let output = if let Some(output) = matches.value_of("output") {
+    if matches.contains_id("output") {
+        let output = if let Some(output) = matches.get_one::<String>("output") {
             output
         } else {
             "{{dirname}}/{{stem}}_{{configname}}.{{extension}}"
@@ -342,15 +346,15 @@ pub fn cmd_parse() -> Config {
         config.visible = true;
     }
 
-    config.output_scale = if let Some(str) = matches.value_of("output_scale") {
+    config.output_scale = if let Some(str) = matches.get_one::<String>("output_scale") {
         OutputScale::from_string(str)
     } else {
         OutputScale::default()
     };
 
     config.inputs = matches
-        .values_of("input")
-        .unwrap()
+        .get_many::<String>("input")
+        .unwrap_or_default()
         .flat_map(|pattern| {
             if let Ok(entries) = glob(pattern) {
                 entries

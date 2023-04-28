@@ -6,7 +6,7 @@ use ac_ffmpeg::{
         VideoDecoder,
     },
     format::{
-        demuxer::{Demuxer, DemuxerWithCodecParameters},
+        demuxer::{Demuxer, DemuxerWithStreamInfo},
         io::IO,
     },
     Error,
@@ -23,7 +23,7 @@ pub struct UploadVideo {
     next_pts: f32,
     next_buffer: RgbBuffer,
     #[cfg(feature = "video")]
-    demuxer: Option<DemuxerWithCodecParameters<File>>,
+    demuxer: Option<DemuxerWithStreamInfo<File>>,
     #[cfg(feature = "video")]
     video_stream_index: usize,
     #[cfg(feature = "video")]
@@ -90,8 +90,9 @@ impl UploadVideo {
 
         // Locate video stream and create a decoder.
         let (video_stream_index, video_params) = demuxer
-            .codec_parameters()
+            .streams()
             .iter()
+            .map(|stream| stream.codec_parameters())
             .enumerate()
             .find(|(_, params)| params.is_video_codec())
             .ok_or_else(|| Error::new("Missing video stream"))?;

@@ -13,19 +13,19 @@ path = "src/main.rs"
 
 [dependencies]
 vss = { path = "../vss" }
-clap = "2"
+clap = "4"
 serde = { version = "1", features = ["derive"] }
 glob = "0.3"
 mustache = "0.9"
 serde_json = "*"
-ac_ffmpeg = { package = "ac-ffmpeg", version = "0.15.3", optional = true }
+ac_ffmpeg = { package = "ac-ffmpeg", version = "0.17.4", optional = true }
 log = "0.4.11"
 simple-logging = "2.0.2"
 cgmath = "0.18"
 wgpu = "0.15.1"
 wgpu-hal = { version = "0.15.3", optional = true }
 ash = { version = "0.37.2", optional = true }
-pollster = "0.2"
+pollster = "0.3"
 egui = "0.21.0"
 
 [build-dependencies]
