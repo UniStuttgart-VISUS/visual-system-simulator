@@ -64,11 +64,7 @@ pub trait Node {
 
     /// Handle input.
     #[allow(unused_variables)]
-    fn input(
-        &mut self,
-        eye: &EyeInput,
-        mouse: &MouseInput,
-    ) -> EyeInput {
+    fn input(&mut self, eye: &EyeInput, mouse: &MouseInput) -> EyeInput {
         eye.clone()
     }
 
@@ -84,24 +80,9 @@ pub trait Node {
     #[allow(unused_variables)]
     fn post_render(&mut self, surface: &Surface) {}
 
-    fn as_ui_mut(&mut self) ->Option<&'_ mut GuiOverlay> {None}
-}
- 
-pub trait Inspector {
-    fn begin_flow(&mut self, index: usize);
-    fn end_flow(&mut self);
-
-    fn begin_node(&mut self, name: &'static str);
-    fn end_node(&mut self);
-
-    // Returns true if value was changed.
-    fn mut_bool(&mut self, name: &'static str, value: &mut bool) -> bool;
-    fn mut_f64(&mut self, name: &'static str, value: &mut f64) -> bool;
-    fn mut_f32(&mut self, name: &'static str, value: &mut f32) -> bool;
-    fn mut_i32(&mut self, name: &'static str, value: &mut i32) -> bool;
-    fn mut_u32(&mut self, name: &'static str, value: &mut u32) -> bool;
-    fn mut_img(&mut self, name: &'static str, value: &mut String) -> bool;
-    fn mut_matrix(&mut self, name: &'static str, value: &mut Matrix4<f32>) -> bool;
+    fn as_ui_mut(&mut self) -> Option<&'_ mut GuiOverlay> {
+        None
+    }
 }
 
 pub struct ShaderUniforms<T> {

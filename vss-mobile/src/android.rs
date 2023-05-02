@@ -259,7 +259,6 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDraw(
             "Buffer sizes do not match, old({}, {}), new({}, {})",
             bridge.current_size[0], bridge.current_size[1], bridge.new_size[0], bridge.new_size[1]
         );
-        //TODO: bridge.surface.inspect();
         bridge.current_size = bridge.new_size;
     }
     bridge.surface.draw();
@@ -312,7 +311,8 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostSettings
         .expect("Should be a Java String")
         .into();
 
-    //TODO: bridge.post_settings()
+    let mut inspector = FromJsonInspector::new(&json_string);
+    bridge.surface.inspect(&mut inspector);
 }
 
 #[no_mangle]
@@ -323,7 +323,9 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeQuerySetting
     let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
     let bridge = (*guard).as_mut().expect("Bridge should be created");
 
-    //TODO: bridge.query_settings()
+    let mut inspector = ToJsonInspector::new();
+    bridge.surface.inspect(&mut inspector);
+    let json_string = inspector.to_string();
 
-    return env.new_string("{}").unwrap();
+    return env.new_string(json_string).unwrap();
 }
