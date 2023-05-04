@@ -67,12 +67,9 @@ impl Node for CameraStream {
     }
 
     fn input(&mut self, eye: &EyeInput, mouse: &MouseInput) -> EyeInput {
-        let buffer = self.frame_receiver.try_recv();
-        if let Ok(buffer) = buffer {
-            debug!(
-                "Uploading... {}x{} {}",
-                buffer.width, buffer.height, buffer.pixels_y[0]
-            );
+        // Uploading the buffer here is a bit sketchy but works.
+        if let Ok(buffer) = self.frame_receiver.try_recv() {
+            debug!("Uploading {}x{}px frame...", buffer.width, buffer.height);
             self.upload.upload_buffer(buffer);
         }
         self.upload.input(eye, mouse)
@@ -197,7 +194,7 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate<'loca
 fn build_flow(surface: &mut Surface, frame_receiver: Receiver<YuvBuffer>) {
     //TODO: use a proper set of nodes.
 
-    // Add input node.
+    // Camera node.
     let node = CameraStream::new(surface, frame_receiver);
     surface.add_node(Box::new(node), 0);
 
@@ -247,11 +244,13 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDraw(
 ) {
     let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
     let bridge = (*guard).as_mut().expect("Bridge should be created");
-    //for f in bridge.surface.flows.iter(){
-    //    f.input(&bridge.surface.vis_param.borrow());
-    //}
+    // Fake input event for uploading and perspetive computation.
+    for flow in bridge.surface.flows.iter() {
+        flow.input(&MouseInput::default());
+    }
     //TODO replace this with some better way of triggering a node update
-    //(it is neccessary to refresh node resolutions but for this we need the upload node to have a buffer available to get the new resolution from)
+    //(it is neccessary to refresh node resolutions but for this we need
+    //the upload node to have a buffer available to get the new resolution from)
     if (bridge.new_size[0] != bridge.current_size[0])
         || (bridge.new_size[1] != bridge.current_size[1])
     {
@@ -260,6 +259,7 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDraw(
             bridge.current_size[0], bridge.current_size[1], bridge.new_size[0], bridge.new_size[1]
         );
         bridge.current_size = bridge.new_size;
+        bridge.surface.negociate_slots();
     }
     bridge.surface.draw();
 }
@@ -290,10 +290,10 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostFrame<'l
     };
 
     let res = bridge.frame_sender.try_send(buffer);
-    if res.is_err() {
-        warn!("{}, dropping frame", res.err().unwrap());
-    } else {
+    if res.is_ok() {
         bridge.new_size = [width, height];
+    } else {
+        warn!("{}, dropping frame", res.err().unwrap());
     }
 }
 

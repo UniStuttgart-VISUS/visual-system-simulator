@@ -14,7 +14,7 @@ pub struct EyeInput {
 }
 
 /// Represents properties of mouse input.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct MouseInput {
     pub position: (f32, f32),
     pub left_button: bool,
