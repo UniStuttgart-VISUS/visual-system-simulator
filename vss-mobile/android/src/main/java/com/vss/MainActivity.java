@@ -2,7 +2,6 @@ package com.vss;
 
 import android.Manifest;
 import android.app.AlertDialog;
-import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.hardware.camera2.CameraDevice;
 import android.net.Uri;
@@ -29,9 +28,9 @@ import androidx.slidingpanelayout.widget.SlidingPaneLayout;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.vss.simulator.SimulatorSurfaceView;
 
-import java.io.File;
-import java.net.URI;
-import java.util.Locale;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
 
 /**
  * Main activity.
@@ -74,7 +73,8 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         if (activityState == ActivityState.Simulating) {
             stopSimulator();
         } else if (activityState == ActivityState.Inspecting) {
-            loadPage("index.html");
+            inspectorView.loadUrl("file:///android_asset/index.html");
+            activityState = ActivityState.Welcome;
         } else {
             super.onBackPressed();
         }
@@ -85,8 +85,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     //region Android permissions
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
-                                           @NonNull int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == CAMERA_REQUEST_CODE) {
             if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
@@ -99,8 +98,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
 
     private void checkCameraPermission() {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_DENIED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA},
-                    CAMERA_REQUEST_CODE);
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, CAMERA_REQUEST_CODE);
         }
     }
 
@@ -136,6 +134,11 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 final Uri url = request.getUrl();
+                if (request.getUrl().getPath().endsWith("index.html")) {
+                    activityState = ActivityState.Welcome;
+                } else {
+                    activityState = ActivityState.Inspecting;
+                }
                 // Allow local files and suppress other URLs.
                 Log.i(LOG_TAG, "Loading URL: " + url);
                 return url.getScheme() != "file";
@@ -147,48 +150,31 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         inspectorView.addJavascriptInterface(this, "Activity");
 
         // Load welcome page.
-        loadPage("index.html");
+        inspectorView.loadUrl("file:///android_asset/index.html");
+        activityState = ActivityState.Welcome;
     }
 
     @JavascriptInterface
-    public void loadPage(String pageName) {
-        runOnUiThread(new Runnable() {
+    public String querySettings() throws ExecutionException, InterruptedException {
+        FutureTask<String> futureResult = new FutureTask<String>(new Callable<String>() {
             @Override
-            public void run() {
-                if (pageName == "index.html") {
-                    activityState = ActivityState.Welcome;
-                } else {
-                    activityState = ActivityState.Inspecting;
-                }
-                Locale currentLocale = getResources().getConfiguration().getLocales().get(0);
-                String isoName = currentLocale.getISO3Country();
-                String url = "file:///android_asset/" + isoName + "/" + pageName;
-                File file = new File(URI.create(isoName).getPath());
-                if (file.exists()) {
-                    Log.i(LOG_TAG, "Loading " + url);
-                    inspectorView.loadUrl(url);
-                } else {
-                    String urlFallback = "file:///android_asset/en/" + pageName;
-                    Log.w(LOG_TAG, "Loading fallback " + urlFallback);
-                    inspectorView.loadUrl(urlFallback);
-                }
+            public String call() throws Exception {
+                return simulatorView.querySettings();
             }
         });
+
+        runOnUiThread(futureResult);
+        return futureResult.get();
     }
 
     @JavascriptInterface
-    public void setJSONSettings(String jsonString) {
+    public void postSettings(String jsonString) {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
                 simulatorView.postSettings(jsonString);
             }
         });
-    }
-
-    @JavascriptInterface
-    public String getJSONSettings(String jsonString) {
-        return simulatorView.querySettings();
     }
 
     //endregion
@@ -227,8 +213,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         });
 
         // Enter immersive mode.
-        WindowInsetsControllerCompat windowInsetsController =
-                WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        WindowInsetsControllerCompat windowInsetsController = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
         windowInsetsController.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_BARS_BY_TOUCH);
         windowInsetsController.hide(WindowInsetsCompat.Type.systemBars());
         // Prevent screen from turning off.
@@ -246,8 +231,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         this.cameraAccess = null;
 
         // Leave immersive mode.
-        WindowInsetsControllerCompat windowInsetsController =
-                WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        WindowInsetsControllerCompat windowInsetsController = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
         windowInsetsController.show(WindowInsetsCompat.Type.systemBars());
         // Allow turning off the screen.
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
