@@ -6,29 +6,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="css/pico.css">
   <script src="js/jquery.js"></script>
-  <script>
-    // Inject mockup Activity when running outside of app.
-    var Activity;
-    if (typeof Activity === "undefined") {
-      Activity = {
-        querySettings: function () {
-          let mock_data = '[{"MockNode": {"MockParam1": 1, "MockParam2": false}}]';
-          console.log("Querying...", JSON.parse(mock_data));
-          return mock_data;
-        },
-        postSettings: function (json_string) {
-          console.log("Posting...", JSON.parse(json_string));
-          return;
-        }
-      };
-    }
-  </script>
+  <script src="js/simulator-bridge.js"></script>
   <title>Welcome!</title>
 </head>
 
 <body>
-  <main>
-    <!--
+      <!--
+      <main>
       <div class="grid">
         <a role="button" href="achromatopsia.html">Achromatopsia</a>
         <a role="button" href="ametropia.html">Ametropia</a>
@@ -39,27 +23,8 @@
         <a role="button" href="night-blindness.html">Night Blindness</a>
         <a role="button" href="presbyopia.html">Presbyopia</a>
       </div>
+      </main>
       -->
-  </main>
-  <script>
-    const settings = JSON.parse(Activity.querySettings());
-    const text = "JSON: \"" + JSON.stringify(settings) + "\"";
-    let main = $("main");
-    for (var flow of settings) {
-      for (var nodeName in flow) {
-        if (flow.hasOwnProperty(nodeName)) {
-          $("main").append("<p>" + nodeName + "</p>");
-          let node = flow[nodeName];
-          for (var attributeName in node) {
-            if (node.hasOwnProperty(attributeName)) {
-              let attributeValue = node[attributeName];
-              $("main").append("<p>" + attributeName + ": " + attributeValue + "</p>");
-            }
-          }
-        }
-      }
-    };
-  </script>
 </body>
 
 </html>

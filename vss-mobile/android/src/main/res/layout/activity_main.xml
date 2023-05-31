@@ -22,9 +22,7 @@
                 android:background="?attr/colorPrimary"
                 android:minHeight="?attr/actionBarSize"
                 android:theme="?attr/actionBarTheme"
-                app:title="Visual Deficiency Simulator"
-                app:menu="@menu/appbar_menu"
-                app:navigationIcon="@drawable/ic_home_24"
+                app:title="@string/app_full_name"
                 app:titleCentered="true" />
 
             <WebView
@@ -46,7 +44,7 @@
         android:id="@+id/start_button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_margin="@dimen/fab_margin"
+        android:layout_margin="16dp"
         android:clickable="true"
         android:contentDescription="Start Simulation"
         android:focusable="true"
