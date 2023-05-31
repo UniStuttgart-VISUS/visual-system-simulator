@@ -55,6 +55,7 @@ android {
         implementation 'androidx.appcompat:appcompat:1.6.1'
         implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
         implementation 'androidx.slidingpanelayout:slidingpanelayout:1.2.0'
+        implementation 'androidx.webkit:webkit:1.7.0'
         implementation 'com.google.android.material:material:1.8.0'
     }
     namespace 'com.vss'
