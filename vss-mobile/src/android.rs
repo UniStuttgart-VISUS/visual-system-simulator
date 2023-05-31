@@ -311,8 +311,15 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostSettings
         .expect("Should be a Java String")
         .into();
 
-    let mut inspector = FromJsonInspector::new(&json_string);
-    bridge.surface.inspect(&mut inspector);
+    let inspector = FromJsonInspector::try_new(&json_string);
+    match inspector {
+        Ok(mut inspector) => {
+            bridge.surface.inspect(&mut inspector);
+        }
+        Err(err) => {
+            error!("{:?}", err);
+        }
+    }
 }
 
 #[no_mangle]

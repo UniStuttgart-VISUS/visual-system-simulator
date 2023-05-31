@@ -20,6 +20,18 @@ pub trait Inspector {
     fn mut_matrix(&mut self, name: &'static str, value: &mut Matrix4<f32>) -> bool;
 }
 
+#[derive(Debug)]
+pub enum JsonError {
+    Serde(serde_json::error::Error),
+    ExpectedFlowArray,
+}
+
+impl From<serde_json::error::Error> for JsonError {
+    fn from(err: serde_json::error::Error) -> JsonError {
+        JsonError::Serde(err)
+    }
+}
+
 pub struct FromJsonInspector<'a> {
     flows: Vec<serde_json::value::Value>,
     current_flow: Option<&'a serde_json::Map<String, serde_json::Value>>,
@@ -27,18 +39,16 @@ pub struct FromJsonInspector<'a> {
 }
 
 impl<'a> FromJsonInspector<'a> {
-    pub fn new(json_string: &str) -> Self {
-        let flows = if let serde_json::Value::Array(flows) =
-            serde_json::from_str(json_string).unwrap_or_default()
-        {
-            flows
+    pub fn try_new(json_string: &str) -> Result<Self, JsonError> {
+        let json = serde_json::from_str(json_string)?;
+        if let serde_json::Value::Array(flows) = json {
+            Ok(Self {
+                flows,
+                current_flow: None,
+                current_node: None,
+            })
         } else {
-            Vec::new()
-        };
-        Self {
-            flows,
-            current_flow: None,
-            current_node: None,
+            Err(JsonError::ExpectedFlowArray)
         }
     }
 
@@ -49,7 +59,8 @@ impl<'a> FromJsonInspector<'a> {
 
 impl<'a> Inspector for FromJsonInspector<'a> {
     fn begin_flow(&mut self, index: usize) {
-        self.flows.get(index).and_then(|flow| flow.as_object());
+        //TODO: deal with lifetimes
+        //self.current_flow = self.flows.get(index).and_then(|flow| flow.as_object());
     }
 
     fn end_flow(&mut self) {

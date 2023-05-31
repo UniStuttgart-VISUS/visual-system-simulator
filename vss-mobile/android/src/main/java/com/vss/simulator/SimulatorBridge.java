@@ -42,13 +42,13 @@ public class SimulatorBridge {
 
     public static void create(Surface surface, AssetManager assetManager) {
         assert LIBRARY_LOADED : "Native library not loaded";
-        Log.d(LOG_TAG, "Creating simulator");
+        Log.v(LOG_TAG, "Creating simulator");
         nativeCreate(surface, assetManager);
     }
 
     public static void destroy() {
         assert LIBRARY_LOADED : "Native library not loaded";
-        Log.d(LOG_TAG, "Destroying simulator");
+        Log.v(LOG_TAG, "Destroying simulator");
         nativeDestroy();
     }
 
@@ -60,13 +60,13 @@ public class SimulatorBridge {
 
     public static void draw() {
         assert LIBRARY_LOADED : "Native library not loaded";
-        Log.v(LOG_TAG, "Drawing simulation");
+        //Log.d(LOG_TAG, "Drawing simulation");
         nativeDraw();
     }
 
     public static void postFrame(int width, int height, byte[] y, byte[] u, byte[] v) {
         assert LIBRARY_LOADED : "Native library not loaded";
-        Log.v(LOG_TAG, "Posting input frame");
+        //Log.d(LOG_TAG, "Posting input frame");
         nativePostFrame(width, height, y, u, v);
     }
 
@@ -74,6 +74,7 @@ public class SimulatorBridge {
         assert LIBRARY_LOADED : "Native library not loaded";
         Log.v(LOG_TAG, "Posting simulator settings: " + jsonString);
         nativePostSettings(jsonString);
+        //Log.d(LOG_TAG, "Post-Posting query: " + nativeQuerySettings());
     }
 
     public static String querySettings() {

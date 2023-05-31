@@ -53,6 +53,8 @@ function buildSettingsPanel(settings) {
                         var value;
                         if (attributeType == "checkbox") {
                             value = $(this).prop('checked');
+                        } else if (attributeType == "number") {
+                            value = parseFloat($(this).val());
                         } else {
                             value = $(this).val();
                         }
