@@ -75,6 +75,10 @@ impl PeacockCB {
 }
 
 impl Node for PeacockCB {
+    fn name(&self) -> &'static str {
+        "PeacockCB"
+    }
+
     fn negociate_slots(
         &mut self,
         surface: &Surface,
@@ -93,8 +97,6 @@ impl Node for PeacockCB {
     }
 
     fn inspect(&mut self, inspector: &mut dyn Inspector) {
-        inspector.begin_node("Peacock");
-
         const V_CPU: [f32; 3] = [0.753, 1.140, 0.171];
         const V_CPV: [f32; 3] = [0.265, -0.140, -0.003];
         const V_AM: [f32; 3] = [1.273463, 0.968437, 0.062921];
@@ -121,8 +123,6 @@ impl Node for PeacockCB {
         }
 
         inspector.mut_bool("track_error", &mut self.track_error);
-
-        inspector.end_node();
     }
 
     fn render(

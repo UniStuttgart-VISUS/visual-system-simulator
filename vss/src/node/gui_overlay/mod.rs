@@ -89,6 +89,10 @@ impl GuiOverlay {
 }
 
 impl Node for GuiOverlay {
+    fn name(&self) -> &'static str {
+        "GuiOverlay"
+    }
+
     fn negociate_slots(
         &mut self,
         surface: &Surface,
@@ -115,17 +119,10 @@ impl Node for GuiOverlay {
         slots
     }
 
-    fn input(
-        &mut self,
-        eye: &EyeInput,
-        mouse: &MouseInput,
-    ) -> EyeInput {
+    fn input(&mut self, eye: &EyeInput, mouse: &MouseInput) -> EyeInput {
         let mut egui_input = egui::RawInput::default();
         egui_input.events.push(egui::Event::PointerButton {
-            pos: egui::pos2(
-                mouse.position.0,
-                mouse.position.1,
-            ),
+            pos: egui::pos2(mouse.position.0, mouse.position.1),
             button: egui::PointerButton::Primary,
             pressed: mouse.left_button,
             modifiers: egui::Modifiers::default(),
@@ -208,19 +205,17 @@ impl<'open> UiInspector<'open> {
 }
 
 impl<'open> Inspector for UiInspector<'open> {
-    fn begin_flow(&mut self, index: usize) {
+    fn flow(&mut self, index: usize, flow: &Flow) {
         self.ui.heading(format!("Flow {}", index));
         self.ui.end_row();
+        flow.inspect(self);
     }
 
-    fn end_flow(&mut self) {}
-
-    fn begin_node(&mut self, name: &'static str) {
-        self.ui.heading(name);
+    fn mut_node(&mut self, node: &mut dyn Node) {
+        self.ui.heading(node.name());
         self.ui.end_row();
+        node.inspect(self);
     }
-
-    fn end_node(&mut self) {}
 
     fn mut_bool(&mut self, name: &'static str, value: &mut bool) -> bool {
         self.ui.label(name);

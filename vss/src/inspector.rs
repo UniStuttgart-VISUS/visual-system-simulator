@@ -1,14 +1,14 @@
+use crate::*;
+
 use std::cell::RefCell;
 
 use cgmath::Matrix4;
 use egui::TextBuffer;
 
 pub trait Inspector {
-    fn begin_flow(&mut self, index: usize);
-    fn end_flow(&mut self);
+    fn flow(&mut self, index: usize, flow: &Flow);
 
-    fn begin_node(&mut self, name: &'static str);
-    fn end_node(&mut self);
+    fn mut_node(&mut self, node: &mut dyn Node);
 
     // Returns true if value was changed.
     fn mut_bool(&mut self, name: &'static str, value: &mut bool) -> bool;
@@ -58,23 +58,20 @@ impl<'a> FromJsonInspector<'a> {
 }
 
 impl<'a> Inspector for FromJsonInspector<'a> {
-    fn begin_flow(&mut self, index: usize) {
-        //TODO: deal with lifetimes
-        //self.current_flow = self.flows.get(index).and_then(|flow| flow.as_object());
-    }
-
-    fn end_flow(&mut self) {
+    fn flow(&mut self, index: usize, flow: &Flow) {
+        //TODO: self.current_flow = self.flows.get(index).and_then(|flow| flow.as_object());
+        flow.inspect(self);
         self.current_flow = None;
     }
 
-    fn begin_node(&mut self, name: &'static str) {
+    fn mut_node(&mut self, node: &mut dyn Node) {
         self.current_node = self
             .current_flow
-            .and_then(|flow| flow.get(name))
+            .and_then(|flow| flow.get(node.name()))
             .and_then(|node| node.as_object());
-    }
 
-    fn end_node(&mut self) {
+        node.inspect(self);
+
         self.current_node = None;
     }
 
@@ -167,26 +164,26 @@ impl ToJsonInspector {
 }
 
 impl Inspector for ToJsonInspector {
-    fn begin_flow(&mut self, index: usize) {
+    fn flow(&mut self, index: usize, flow: &Flow) {
         assert_eq!(
             index,
             self.flows.len(),
             "Indices must be accessed in ascending consecutive order"
         );
         self.current_flow.borrow_mut().clear();
-    }
 
-    fn end_flow(&mut self) {
+        flow.inspect(self);
+
         self.flows
             .push(serde_json::Value::Object(self.current_flow.take()));
     }
 
-    fn begin_node(&mut self, name: &'static str) {
+    fn mut_node(&mut self, node: &mut dyn Node) {
         self.current_node_attributes.borrow_mut().clear();
-        self.current_node_name = name.to_string();
-    }
+        self.current_node_name = node.name().to_string();
 
-    fn end_node(&mut self) {
+        node.inspect(self);
+
         self.current_flow.borrow_mut().insert(
             self.current_node_name.take(),
             serde_json::Value::Object(self.current_node_attributes.take()),

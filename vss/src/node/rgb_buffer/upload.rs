@@ -178,6 +178,10 @@ impl UploadRgbBuffer {
 }
 
 impl Node for UploadRgbBuffer {
+    fn name(&self) -> &'static str {
+        "UploadRgbBuffer"
+    }
+
     fn negociate_slots(
         &mut self,
         surface: &Surface,

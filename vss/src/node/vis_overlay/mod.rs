@@ -164,6 +164,10 @@ impl VisOverlay {
 }
 
 impl Node for VisOverlay {
+    fn name(&self) -> &'static str {
+        "VisOverlay"
+    }
+
     fn negociate_slots(
         &mut self,
         surface: &Surface,
@@ -187,7 +191,6 @@ impl Node for VisOverlay {
     }
 
     fn inspect(&mut self, inspector: &mut dyn Inspector) {
-        inspector.begin_node("VisOverlay");
         inspector.mut_i32("flow_id", &mut self.uniforms.data.flow_idx);
         let mut file_base_image = self.vis_type.base_image as i32;
         if inspector.mut_i32("file_base_image", &mut file_base_image) {
@@ -233,8 +236,6 @@ impl Node for VisOverlay {
             };
         }
         inspector.mut_f32("cm_scale", &mut self.heat_scale);
-
-        inspector.end_node();
     }
 
     fn render(

@@ -108,6 +108,10 @@ impl Display {
 }
 
 impl Node for Display {
+    fn name(&self) -> &'static str {
+        "Display"
+    }
+
     fn negociate_slots(
         &mut self,
         surface: &Surface,

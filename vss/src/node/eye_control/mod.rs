@@ -24,6 +24,10 @@ impl EyeControl {
 }
 
 impl Node for EyeControl {
+    fn name(&self) -> &'static str {
+        "EyeControl"
+    }
+
     fn negociate_slots(
         &mut self,
         _surface: &Surface,
@@ -34,8 +38,6 @@ impl Node for EyeControl {
     }
 
     fn inspect(&mut self, inspector: &mut dyn Inspector) {
-        inspector.begin_node("EyeControl");
-
         let mut configured_view = Matrix4::from_scale(1.0);
 
         // if the eye has strabism, it needs some angle offset
@@ -48,15 +50,9 @@ impl Node for EyeControl {
             configured_view.mul(Matrix4::from_angle_y(Rad(self.eye_axis_rot_y as f32)));
 
         self.configured_view = configured_view;
-
-        inspector.end_node();
     }
 
-    fn input(
-        &mut self,
-        eye: &EyeInput,
-        _mouse: &MouseInput,
-    ) -> EyeInput {
+    fn input(&mut self, eye: &EyeInput, _mouse: &MouseInput) -> EyeInput {
         // vp.mouse_input.position = (position.x as f32, position.y as f32);
         match self.edit_eye_position {
             1 => {

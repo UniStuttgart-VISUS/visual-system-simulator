@@ -63,7 +63,7 @@ impl Lens {
                 lens_position: [0.0, 0.0],
                 active: 0,
                 samplecount: 4,
-                depth_min: 200.0, //XXX: was 1000.0 - 300.0,
+                depth_min: 200.0,  //XXX: was 1000.0 - 300.0,
                 depth_max: 5000.0, //XXX: was 1000.0 + 0.0,
                 near_point: 0.0,
                 far_point: f32::INFINITY,
@@ -143,6 +143,10 @@ impl Lens {
 }
 
 impl Node for Lens {
+    fn name(&self) -> &'static str {
+        "Lens"
+    }
+
     fn negociate_slots(
         &mut self,
         surface: &Surface,
@@ -167,8 +171,6 @@ impl Node for Lens {
     }
 
     fn inspect(&mut self, inspector: &mut dyn Inspector) {
-        inspector.begin_node("Lens");
-
         // default values
         self.uniforms.data.near_point = 0.0;
         self.uniforms.data.far_point = f32::INFINITY;
@@ -242,15 +244,9 @@ impl Node for Lens {
         inspector.mut_f32("depth_min", &mut self.depth_min);
         inspector.mut_f32("depth_max", &mut self.depth_max);
         inspector.mut_bool("track_error", &mut self.track_error);
-
-        inspector.end_node();
     }
 
-    fn input(
-        &mut self,
-        eye: &EyeInput,
-        _mouse: &MouseInput,
-    ) -> EyeInput {
+    fn input(&mut self, eye: &EyeInput, _mouse: &MouseInput) -> EyeInput {
         self.uniforms.data.lens_position[0] = eye.position.x;
         self.uniforms.data.lens_position[1] = eye.position.y;
         eye.clone()

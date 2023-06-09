@@ -10,6 +10,10 @@ impl Passthrough {
 }
 
 impl Node for Passthrough {
+    fn name(&self) -> &'static str {
+        "Passthrough"
+    }
+
     fn negociate_slots(
         &mut self,
         _surface: &Surface,

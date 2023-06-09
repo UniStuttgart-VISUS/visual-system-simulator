@@ -1,9 +1,13 @@
-use std::{borrow::Borrow, default, mem::{self, size_of}, os::raw::{c_char, c_void}};
-use vss::*;
+use std::{
+    borrow::Borrow,
+    default,
+    mem::{self, size_of},
+    os::raw::{c_char, c_void},
+};
 use vss::gfx::Factory;
+use vss::*;
 
 pub type OpenXRPtr = *mut c_void;
-
 
 extern "C" {
     fn openxr_new(openxr: *mut OpenXRPtr) -> *const c_char;
@@ -18,7 +22,6 @@ extern "C" {
     ) -> *const c_char;
 }
 
-
 pub struct OpenXR {
     openxr: OpenXRPtr,
     render_targets_color: Vec<RenderTargetColor>,
@@ -27,29 +30,26 @@ pub struct OpenXR {
 impl OpenXR {
     pub fn new() -> Self {
         let mut openxr = std::ptr::null_mut();
-        unsafe { openxr_new(&mut openxr as *mut *mut _)};
-        OpenXR{
+        unsafe { openxr_new(&mut openxr as *mut *mut _) };
+        OpenXR {
             openxr,
-            render_targets_color: Vec::new()
+            render_targets_color: Vec::new(),
         }
     }
 
-    pub fn initialize(&self){
+    pub fn initialize(&self) {
         unsafe {
             openxr_init(self.openxr);
         }
     }
 
-    pub fn create_session(&self, surface: &Surface){
-
+    pub fn create_session(&self, surface: &Surface) {
         //TODO do
         unsafe {
-            openxr_create_session(self.openxr);            
+            openxr_create_session(self.openxr);
         }
-
     }
-    pub fn create_render_targets(&mut self, surface: &Surface) -> (u32, u32){
-
+    pub fn create_render_targets(&mut self, surface: &Surface) -> (u32, u32) {
         let mut render_targets_size = 0u32;
         let mut surface_width = 0u32;
         let mut surface_height = 0u32;
@@ -63,7 +63,6 @@ impl OpenXR {
                 &mut surface_width as *mut _,
                 &mut surface_height as *mut _,
             );
-
         }
 
         let render_targets =
@@ -71,14 +70,17 @@ impl OpenXR {
 
         let mut factory = window.factory().borrow_mut();
         for render_target in render_targets {
-            let color_texture =texture_from_id_and_size::<ColorFormat>(
+            let color_texture = texture_from_id_and_size::<ColorFormat>(
                 *render_target,
                 surface_width,
                 surface_height,
             );
-            self.render_targets_color.push(factory.view_texture_as_render_target(&color_texture, 0, None).unwrap());
+            self.render_targets_color.push(
+                factory
+                    .view_texture_as_render_target(&color_texture, 0, None)
+                    .unwrap(),
+            );
         }
         (surface_width, surface_height)
     }
 }
-

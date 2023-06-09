@@ -1,15 +1,19 @@
-use std::{os::raw::{c_char, c_void}, rc::Rc, num::NonZeroU32};
-use log::LevelFilter;
 use ash::vk;
+use log::LevelFilter;
+use std::{
+    num::NonZeroU32,
+    os::raw::{c_char, c_void},
+    rc::Rc,
+};
 
-use vss::*;
 use cgmath::{Matrix4, Vector3};
+use vss::*;
 
 type VarjoPtr = *mut c_void;
 
 #[repr(C)]
 #[derive(Clone)]
-struct VulkanData{
+struct VulkanData {
     pub instance: vk::Instance,
     pub device: vk::Device,
     pub queue_family_index: u32,
@@ -30,15 +34,14 @@ struct VarjoRenderTarget {
 #[repr(C)]
 #[derive(Clone)]
 pub struct varjo_Viewport {
-    pub  x: u32,
-    pub  y: u32,
-    pub  width: u32,
-    pub  height: u32,
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
 }
 
 #[repr(C)]
-#[derive(Clone)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct VarjoGazeData {
     pub left_eye: [f32; 3],
     pub right_eye: [f32; 3],
@@ -46,10 +49,7 @@ pub struct VarjoGazeData {
 }
 
 extern "C" {
-    fn varjo_new(
-        varjo: *mut VarjoPtr,
-        vulkan_data: *mut VulkanData,
-    ) -> *const c_char;
+    fn varjo_new(varjo: *mut VarjoPtr, vulkan_data: *mut VulkanData) -> *const c_char;
     fn varjo_render_targets(
         varjo: VarjoPtr,
         render_targets: *mut *mut VarjoRenderTarget,
@@ -106,26 +106,34 @@ impl Varjo {
     pub fn new(surface: &Surface) -> Self {
         simple_logging::log_to_file("vss_latest.log", LevelFilter::Info).unwrap();
 
-        let mut vulkan_data = unsafe{
+        let mut vulkan_data = unsafe {
             surface.device().as_hal::<wgpu_hal::vulkan::Api, _, _>(
-                |vk_device: Option<&wgpu_hal::vulkan::Device>| -> VulkanData{
+                |vk_device: Option<&wgpu_hal::vulkan::Device>| -> VulkanData {
                     let dev = vk_device.unwrap();
-                    VulkanData{
+                    VulkanData {
                         instance: dev.shared_instance().raw_instance().handle(),
                         device: dev.raw_device().handle(),
                         queue_family_index: dev.queue_family_index(),
                         queue_index: dev.queue_index(),
                     }
-                }
+                },
             )
         };
-        println!("rust-side: instance: {:?}, device: {:?}", vulkan_data.instance, vulkan_data.device);
+        println!(
+            "rust-side: instance: {:?}, device: {:?}",
+            vulkan_data.instance, vulkan_data.device
+        );
         let mut varjo = std::ptr::null_mut();
         try_fail(unsafe { varjo_new(&mut varjo as *mut *mut _, &mut vulkan_data) }).unwrap();
-        Self { varjo, render_targets_color: Vec::new(), render_targets_depth: Vec::new(), logging_enabled: true}
+        Self {
+            varjo,
+            render_targets_color: Vec::new(),
+            render_targets_depth: Vec::new(),
+            logging_enabled: true,
+        }
     }
 
-    pub fn create_render_targets(&mut self, surface: &Surface) -> Vec<varjo_Viewport>{
+    pub fn create_render_targets(&mut self, surface: &Surface) -> Vec<varjo_Viewport> {
         let mut render_targets = std::ptr::null_mut::<VarjoRenderTarget>();
         let mut viewports = std::ptr::null_mut::<varjo_Viewport>();
         let mut render_targets_size = 0u32;
@@ -152,33 +160,33 @@ impl Varjo {
                 height: render_target.height,
                 depth_or_array_layers: 1,
             };
-            let (color_texture, depth_texture) = unsafe{
-                (create_render_texture_from_hal(
-                    &device,
-                    render_target.color_image,
-                    // NonZeroU32::new(render_target.color_texture_id).unwrap(),
-                    render_target.width,
-                    render_target.height,
-                    wgpu::TextureFormat::Rgba8Unorm,
-                    create_sampler_nearest(&device),
-                    Some("Varjo RenderTexture Color")
-                    // usage: wgpu::TextureUsages::TEXTURE_BINDING |
-                    //         wgpu::TextureUsages::RENDER_ATTACHMENT |
-                    //         wgpu::TextureUsages::COPY_SRC,
-                ),
-                create_render_texture_from_hal(
-                    &device,
-                    render_target.depth_image,
-                    // NonZeroU32::new(render_target.depth_texture_id).unwrap(),
-                    render_target.width,
-                    render_target.height,
-                    wgpu::TextureFormat::Depth24PlusStencil8,
-                    create_sampler_nearest(&device),
-                    Some("Varjo RenderTexture Depth")
-                    // usage: wgpu::TextureUsages::TEXTURE_BINDING |
-                    //         wgpu::TextureUsages::RENDER_ATTACHMENT |
-                    //         wgpu::TextureUsages::COPY_SRC,
-                ))
+            let (color_texture, depth_texture) = unsafe {
+                (
+                    create_render_texture_from_hal(
+                        &device,
+                        render_target.color_image,
+                        // NonZeroU32::new(render_target.color_texture_id).unwrap(),
+                        render_target.width,
+                        render_target.height,
+                        wgpu::TextureFormat::Rgba8Unorm,
+                        create_sampler_nearest(&device),
+                        Some("Varjo RenderTexture Color"), // usage: wgpu::TextureUsages::TEXTURE_BINDING |
+                                                           //         wgpu::TextureUsages::RENDER_ATTACHMENT |
+                                                           //         wgpu::TextureUsages::COPY_SRC,
+                    ),
+                    create_render_texture_from_hal(
+                        &device,
+                        render_target.depth_image,
+                        // NonZeroU32::new(render_target.depth_texture_id).unwrap(),
+                        render_target.width,
+                        render_target.height,
+                        wgpu::TextureFormat::Depth24PlusStencil8,
+                        create_sampler_nearest(&device),
+                        Some("Varjo RenderTexture Depth"), // usage: wgpu::TextureUsages::TEXTURE_BINDING |
+                                                           //         wgpu::TextureUsages::RENDER_ATTACHMENT |
+                                                           //         wgpu::TextureUsages::COPY_SRC,
+                    ),
+                )
             };
             self.render_targets_color.push(color_texture);
             self.render_targets_depth.push(depth_texture);
@@ -186,20 +194,20 @@ impl Varjo {
         viewports.to_vec()
     }
 
-    pub fn get_current_render_target(&self) -> (RenderTexture, RenderTexture){
+    pub fn get_current_render_target(&self) -> (RenderTexture, RenderTexture) {
         let mut current_swap_chain_index = 0u32;
         try_fail(unsafe {
-            varjo_current_swap_chain_index(
-                self.varjo,
-                &mut current_swap_chain_index as *mut _,
-            )
+            varjo_current_swap_chain_index(self.varjo, &mut current_swap_chain_index as *mut _)
         })
         .unwrap();
 
-        return(self.render_targets_color[current_swap_chain_index as usize].clone(), self.render_targets_depth[current_swap_chain_index as usize].clone());
+        return (
+            self.render_targets_color[current_swap_chain_index as usize].clone(),
+            self.render_targets_depth[current_swap_chain_index as usize].clone(),
+        );
     }
 
-    pub fn get_current_view_matrices(&self) -> Vec<Matrix4<f32>>{
+    pub fn get_current_view_matrices(&self) -> Vec<Matrix4<f32>> {
         let mut view_matrix_values = std::ptr::null_mut::<f32>();
         let mut view_matrix_count = 0u32;
         try_fail(unsafe {
@@ -210,17 +218,31 @@ impl Varjo {
             )
         })
         .unwrap();
-        let matrix_values =
-        unsafe { std::slice::from_raw_parts(view_matrix_values, (view_matrix_count*16) as usize) };
+        let matrix_values = unsafe {
+            std::slice::from_raw_parts(view_matrix_values, (view_matrix_count * 16) as usize)
+        };
 
-        let mut matrices= Vec::new();
+        let mut matrices = Vec::new();
 
-        for i in 0..view_matrix_count{
+        for i in 0..view_matrix_count {
             let m = Matrix4::new(
-                matrix_values[(i*16+0) as usize], matrix_values[(i*16+1) as usize], matrix_values[(i*16+2) as usize], matrix_values[(i*16+3) as usize],
-                matrix_values[(i*16+4) as usize], matrix_values[(i*16+5) as usize], matrix_values[(i*16+6) as usize], matrix_values[(i*16+7) as usize],
-                matrix_values[(i*16+8) as usize], matrix_values[(i*16+9) as usize], matrix_values[(i*16+10) as usize], matrix_values[(i*16+11) as usize],
-                matrix_values[(i*16+12) as usize], matrix_values[(i*16+13) as usize], matrix_values[(i*16+14) as usize], matrix_values[(i*16+15) as usize]);
+                matrix_values[(i * 16 + 0) as usize],
+                matrix_values[(i * 16 + 1) as usize],
+                matrix_values[(i * 16 + 2) as usize],
+                matrix_values[(i * 16 + 3) as usize],
+                matrix_values[(i * 16 + 4) as usize],
+                matrix_values[(i * 16 + 5) as usize],
+                matrix_values[(i * 16 + 6) as usize],
+                matrix_values[(i * 16 + 7) as usize],
+                matrix_values[(i * 16 + 8) as usize],
+                matrix_values[(i * 16 + 9) as usize],
+                matrix_values[(i * 16 + 10) as usize],
+                matrix_values[(i * 16 + 11) as usize],
+                matrix_values[(i * 16 + 12) as usize],
+                matrix_values[(i * 16 + 13) as usize],
+                matrix_values[(i * 16 + 14) as usize],
+                matrix_values[(i * 16 + 15) as usize],
+            );
             matrices.push(m);
         }
         if self.logging_enabled {
@@ -228,8 +250,8 @@ impl Varjo {
         }
         matrices
     }
-    
-    pub fn get_current_proj_matrices(&self) -> Vec<Matrix4<f32>>{
+
+    pub fn get_current_proj_matrices(&self) -> Vec<Matrix4<f32>> {
         let mut proj_matrix_values = std::ptr::null_mut::<f32>();
         let mut proj_matrix_count = 0u32;
         try_fail(unsafe {
@@ -240,17 +262,31 @@ impl Varjo {
             )
         })
         .unwrap();
-        let matrix_values =
-        unsafe { std::slice::from_raw_parts(proj_matrix_values, (proj_matrix_count*16) as usize) };
+        let matrix_values = unsafe {
+            std::slice::from_raw_parts(proj_matrix_values, (proj_matrix_count * 16) as usize)
+        };
 
-        let mut matrices= Vec::new();
+        let mut matrices = Vec::new();
 
-        for i in 0..proj_matrix_count{
+        for i in 0..proj_matrix_count {
             let m = Matrix4::new(
-                matrix_values[(i*16+0) as usize], matrix_values[(i*16+1) as usize], matrix_values[(i*16+2) as usize], matrix_values[(i*16+3) as usize],
-                matrix_values[(i*16+4) as usize], matrix_values[(i*16+5) as usize], matrix_values[(i*16+6) as usize], matrix_values[(i*16+7) as usize],
-                matrix_values[(i*16+8) as usize], matrix_values[(i*16+9) as usize], matrix_values[(i*16+10) as usize], matrix_values[(i*16+11) as usize],
-                matrix_values[(i*16+12) as usize], matrix_values[(i*16+13) as usize], matrix_values[(i*16+14) as usize], matrix_values[(i*16+15) as usize]);
+                matrix_values[(i * 16 + 0) as usize],
+                matrix_values[(i * 16 + 1) as usize],
+                matrix_values[(i * 16 + 2) as usize],
+                matrix_values[(i * 16 + 3) as usize],
+                matrix_values[(i * 16 + 4) as usize],
+                matrix_values[(i * 16 + 5) as usize],
+                matrix_values[(i * 16 + 6) as usize],
+                matrix_values[(i * 16 + 7) as usize],
+                matrix_values[(i * 16 + 8) as usize],
+                matrix_values[(i * 16 + 9) as usize],
+                matrix_values[(i * 16 + 10) as usize],
+                matrix_values[(i * 16 + 11) as usize],
+                matrix_values[(i * 16 + 12) as usize],
+                matrix_values[(i * 16 + 13) as usize],
+                matrix_values[(i * 16 + 14) as usize],
+                matrix_values[(i * 16 + 15) as usize],
+            );
             matrices.push(m);
         }
         if self.logging_enabled {
@@ -258,9 +294,9 @@ impl Varjo {
         }
         matrices
     }
-    
-    pub fn get_current_gaze(&self) -> (Vector3<f32>, Vector3<f32>, f32){
-        let mut varjo_gaze_data = VarjoGazeData{
+
+    pub fn get_current_gaze(&self) -> (Vector3<f32>, Vector3<f32>, f32) {
+        let mut varjo_gaze_data = VarjoGazeData {
             left_eye: [0.0; 3],
             right_eye: [0.0; 3],
             focus_distance: 0.0,
@@ -279,12 +315,17 @@ impl Varjo {
             log::info!("{:?}", varjo_gaze_data);
         }
 
-        (Vector3::from(varjo_gaze_data.left_eye), Vector3::from(varjo_gaze_data.right_eye), varjo_gaze_data.focus_distance)
+        (
+            Vector3::from(varjo_gaze_data.left_eye),
+            Vector3::from(varjo_gaze_data.right_eye),
+            varjo_gaze_data.focus_distance,
+        )
     }
 
-    pub fn begin_frame_sync(&self) -> bool{
+    pub fn begin_frame_sync(&self) -> bool {
         let mut is_available = false;
-        try_fail(unsafe { varjo_begin_frame_sync(self.varjo, &mut is_available as *mut _) }).unwrap();
+        try_fail(unsafe { varjo_begin_frame_sync(self.varjo, &mut is_available as *mut _) })
+            .unwrap();
 
         is_available
     }
@@ -311,18 +352,17 @@ pub fn create_render_texture_from_hal(
     format: wgpu::TextureFormat,
     sampler: Sampler,
     label: Option<&str>,
-) -> RenderTexture{
-
+) -> RenderTexture {
     let size = wgpu::Extent3d {
         width,
         height,
         depth_or_array_layers: 1,
     };
 
-    let hal_texture = unsafe{
+    let hal_texture = unsafe {
         wgpu_hal::vulkan::Device::texture_from_raw(
-                raw_image,
-            &wgpu_hal::TextureDescriptor{
+            raw_image,
+            &wgpu_hal::TextureDescriptor {
                 label,
                 size: size,
                 mip_level_count: 1,
@@ -337,27 +377,28 @@ pub fn create_render_texture_from_hal(
         )
     };
 
-    let texture = unsafe{
-        device.create_texture_from_hal::<wgpu_hal::vulkan::Api>(hal_texture,
-        // device.create_texture_from_hal::<wgpu_hal::gles::Api>(hal_texture,
-                &wgpu::TextureDescriptor {
+    let texture = unsafe {
+        device.create_texture_from_hal::<wgpu_hal::vulkan::Api>(
+            hal_texture,
+            // device.create_texture_from_hal::<wgpu_hal::gles::Api>(hal_texture,
+            &wgpu::TextureDescriptor {
                 label,
                 size,
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: format,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING |
-                    wgpu::TextureUsages::RENDER_ATTACHMENT |
-                    wgpu::TextureUsages::COPY_SRC, // TODO double check these to lign up with the ones above
+                usage: wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::COPY_SRC, // TODO double check these to lign up with the ones above
                 view_formats: &[format],
-            }
+            },
         )
     };
 
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-    RenderTexture{
+    RenderTexture {
         texture: Some(Rc::new(texture)),
         view: Rc::new(view),
         sampler: Rc::new(sampler),

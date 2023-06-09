@@ -69,6 +69,10 @@ impl Cataract {
 }
 
 impl Node for Cataract {
+    fn name(&self) -> &'static str {
+        "Cataract"
+    }
+
     fn negociate_slots(
         &mut self,
         surface: &Surface,
@@ -89,8 +93,6 @@ impl Node for Cataract {
     }
 
     fn inspect(&mut self, inspector: &mut dyn Inspector) {
-        inspector.begin_node("cataract");
-
         let mut active = self.uniforms.data.active == 0;
         if inspector.mut_bool("ct_onoff", &mut active) {
             self.uniforms.data.active = active as i32;
@@ -113,8 +115,6 @@ impl Node for Cataract {
         }
 
         inspector.mut_bool("track_error", &mut self.track_error);
-
-        inspector.end_node();
     }
 
     fn render(

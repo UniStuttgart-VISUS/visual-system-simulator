@@ -139,6 +139,10 @@ impl UploadYuvBuffer {
 }
 
 impl Node for UploadYuvBuffer {
+    fn name(&self) -> &'static str {
+        "UploadYuvBuffer"
+    }
+
     fn negociate_slots(
         &mut self,
         surface: &Surface,

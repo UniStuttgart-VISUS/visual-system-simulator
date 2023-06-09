@@ -88,17 +88,15 @@ impl<'a> ConfigInspector<'a> {
 }
 
 impl Inspector for ConfigInspector<'_> {
-    fn begin_flow(&mut self, index: usize) {
+    fn flow(&mut self, index: usize, flow: &Flow) {
         self.flow_index = index;
-    }
-
-    fn end_flow(&mut self) {
+        flow.inspect(self);
         self.flow_index = 0;
     }
 
-    fn begin_node(&mut self, _name: &'static str) {}
-
-    fn end_node(&mut self) {}
+    fn mut_node(&mut self, node: &mut dyn Node) {
+        node.inspect(self);
+    }
 
     fn mut_bool(&mut self, name: &'static str, value: &mut bool) -> bool {
         let config_values = &self.config.flow_configs[self.flow_index].values;

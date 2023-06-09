@@ -52,7 +52,6 @@ impl UploadVideo {
         }
     }
 
-
     pub fn has_video_extension<P>(path: P) -> bool
     where
         P: AsRef<Path>,
@@ -223,10 +222,19 @@ impl UploadVideo {
 }
 
 impl Node for UploadVideo {
-   
-    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, original_image: &mut Option<Texture>) -> NodeSlots {
+    fn name(&self) -> &'static str {
+        "UploadVideo"
+    }
+
+    fn negociate_slots(
+        &mut self,
+        surface: &Surface,
+        slots: NodeSlots,
+        original_image: &mut Option<Texture>,
+    ) -> NodeSlots {
         self.validate_data();
-        self.uploader.negociate_slots(surface, slots, original_image)
+        self.uploader
+            .negociate_slots(surface, slots, original_image)
     }
 
     fn inspect(&mut self, inspector: &mut dyn Inspector) {
@@ -237,7 +245,12 @@ impl Node for UploadVideo {
         self.uploader.input(eye, mouse)
     }
 
-    fn render(&mut self, surface: &Surface, encoder: &mut wgpu::CommandEncoder, screen: Option<&RenderTexture>) {
+    fn render(
+        &mut self,
+        surface: &Surface,
+        encoder: &mut wgpu::CommandEncoder,
+        screen: Option<&RenderTexture>,
+    ) {
         self.validate_data();
         self.uploader.render(surface, encoder, screen)
     }

@@ -134,7 +134,6 @@ fn main() {
             .file("src/openxr.cpp")
             .compile("vss-desktop-cc");
 
-
         for dir in lib_dirs {
             println!("cargo:rustc-link-search=native={}", dir.to_str().unwrap());
         }

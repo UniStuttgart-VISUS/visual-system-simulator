@@ -89,6 +89,10 @@ impl DownloadRgbBuffer {
 }
 
 impl Node for DownloadRgbBuffer {
+    fn name(&self) -> &'static str {
+        "DownloadRgbBuffer"
+    }
+
     fn negociate_slots(
         &mut self,
         surface: &Surface,

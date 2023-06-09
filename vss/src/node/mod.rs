@@ -44,10 +44,8 @@ use super::*;
 
 /// An executable function that implements an aspect of the simulation.
 pub trait Node {
-    /// Initializes this node.
-    //fn new(surface: &Surface) -> Self
-    //where
-    //    Self: Sized;
+    // Returns the node name.
+    fn name(&self) -> &'static str;
 
     /// Negociates input and output for this node (source texture and render target),
     /// possibly re-using suggested `slots` (for efficiency).
@@ -82,6 +80,48 @@ pub trait Node {
 
     fn as_ui_mut(&mut self) -> Option<&'_ mut GuiOverlay> {
         None
+    }
+}
+/* */
+impl Node for Box<dyn Node> {
+    fn name(&self) -> &'static str {
+        self.as_ref().name()
+    }
+
+    fn negociate_slots(
+        &mut self,
+        surface: &Surface,
+        slots: NodeSlots,
+        original_image: &mut Option<Texture>,
+    ) -> NodeSlots {
+        self.as_mut()
+            .negociate_slots(surface, slots, original_image)
+    }
+
+    fn inspect(&mut self, inspector: &mut dyn Inspector) {
+        self.as_mut().inspect(inspector);
+    }
+
+    fn input(&mut self, eye: &EyeInput, mouse: &MouseInput) -> EyeInput {
+        self.as_mut().input(eye, mouse)
+    }
+    fn render(
+        &mut self,
+        surface: &Surface,
+        encoder: &mut CommandEncoder,
+        screen: Option<&RenderTexture>,
+    ) {
+        self.as_mut().render(surface, encoder, screen);
+    }
+
+    /// Invoked after all rendering commands have completed. (TODO: rename to on_frame_complete)
+    #[allow(unused_variables)]
+    fn post_render(&mut self, surface: &Surface) {
+        self.as_mut().post_render(surface);
+    }
+
+    fn as_ui_mut(&mut self) -> Option<&'_ mut GuiOverlay> {
+        self.as_mut().as_ui_mut()
     }
 }
 

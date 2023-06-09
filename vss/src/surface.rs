@@ -132,9 +132,7 @@ impl Surface {
 
     pub fn inspect(&self, inspector: &mut dyn Inspector) {
         for (i, flow) in self.flows.iter().enumerate() {
-            inspector.begin_flow(i);
-            flow.inspect(inspector);
-            inspector.end_flow();
+            inspector.flow(i, &flow);
         }
     }
 

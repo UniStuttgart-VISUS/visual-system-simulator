@@ -206,6 +206,10 @@ impl VarianceMeasure {
 }
 
 impl Node for VarianceMeasure {
+    fn name(&self) -> &'static str {
+        "VarianceMeasure"
+    }
+
     fn negociate_slots(
         &mut self,
         surface: &Surface,

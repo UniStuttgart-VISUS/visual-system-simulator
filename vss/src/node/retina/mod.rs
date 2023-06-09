@@ -217,6 +217,10 @@ impl Retina {
 }
 
 impl Node for Retina {
+    fn name(&self) -> &'static str {
+        "Retina"
+    }
+
     fn negociate_slots(
         &mut self,
         surface: &Surface,
@@ -236,8 +240,6 @@ impl Node for Retina {
     }
 
     fn inspect(&mut self, inspector: &mut dyn Inspector) {
-        inspector.begin_node("Retina");
-
         if inspector.mut_img("retina_map_pos_x_path", &mut self.retina_map_pos_x_path) {
             self.map_valid = false;
         }
@@ -265,20 +267,11 @@ impl Node for Retina {
         inspector.mut_f64("cubemap_scale", &mut self.cubemap_scale);
 
         self.retina_map_builder.inspect(inspector);
-
-        inspector.end_node();
     }
 
-    fn input(
-        &mut self,
-        eye: &EyeInput,
-        _mouse: &MouseInput,
-    ) -> EyeInput {
-        let gaze_rotation = Matrix4::look_to_lh(
-            Point3::new(0.0, 0.0, 0.0),
-            eye.gaze,
-            Vector3::unit_y(),
-        );
+    fn input(&mut self, eye: &EyeInput, _mouse: &MouseInput) -> EyeInput {
+        let gaze_rotation =
+            Matrix4::look_to_lh(Point3::new(0.0, 0.0, 0.0), eye.gaze, Vector3::unit_y());
         //let gaze_rotation = Matrix4::from_scale(1.0);
         self.uniforms.data.proj = (gaze_rotation * eye.proj.invert().unwrap()).into();
         //self.pso_data.u_proj = (head.proj * (Matrix4::from_translation(-head.position) * head.view)).into();
