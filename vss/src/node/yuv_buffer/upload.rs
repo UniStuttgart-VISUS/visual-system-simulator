@@ -51,20 +51,30 @@ impl UploadYuvBuffer {
         let (sources_bind_group_layout, sources_bind_group) = create_textures_bind_group(
             device,
             &[
-                &placeholder_single_channel_texture(device, queue, Some("UploadYuvBuffer in_y (placeholder)"))
-                    .unwrap(),
-                &placeholder_single_channel_texture(device, queue, Some("UploadYuvBuffer in_u (placeholder)"))
-                    .unwrap(),
-                &placeholder_single_channel_texture(device, queue, Some("UploadYuvBuffer in_v (placeholder)"))
-                    .unwrap(),
+                &placeholder_single_channel_texture(
+                    device,
+                    queue,
+                    Some("UploadYuvBuffer in_y (placeholder)"),
+                )
+                .unwrap(),
+                &placeholder_single_channel_texture(
+                    device,
+                    queue,
+                    Some("UploadYuvBuffer in_u (placeholder)"),
+                )
+                .unwrap(),
+                &placeholder_single_channel_texture(
+                    device,
+                    queue,
+                    Some("UploadYuvBuffer in_v (placeholder)"),
+                )
+                .unwrap(),
             ],
         );
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("UploadYuvBuffer Shader"),
-            source: wgpu::ShaderSource::Wgsl(
-                include_str!("upload.wgsl").into(),
-            ),
+            source: wgpu::ShaderSource::Wgsl(include_str!("upload.wgsl").into()),
         });
 
         let pipeline = create_render_pipeline(
@@ -90,10 +100,18 @@ impl UploadYuvBuffer {
         }
     }
 
-    pub fn get_formatted_sizes(format: YuvFormat, width: u32, height: u32) -> ([u32; 2], [u32; 2], [u32; 2]){
-        match format{
-            YuvFormat::YCbCr => ([width, height], [width/2, height/2], [width/2, height/2]),
-            YuvFormat::_420888 => ([width, height], [width, height/2], [1, 1]),
+    pub fn get_formatted_sizes(
+        format: YuvFormat,
+        width: u32,
+        height: u32,
+    ) -> ([u32; 2], [u32; 2], [u32; 2]) {
+        match format {
+            YuvFormat::YCbCr => (
+                [width, height],
+                [width / 2, height / 2],
+                [width / 2, height / 2],
+            ),
+            YuvFormat::_420888 => ([width, height], [width, height / 2], [1, 1]),
         }
     }
 
@@ -121,11 +139,17 @@ impl UploadYuvBuffer {
 }
 
 impl Node for UploadYuvBuffer {
-    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, original_image: &mut Option<Texture>) -> NodeSlots {
+    fn negociate_slots(
+        &mut self,
+        surface: &Surface,
+        slots: NodeSlots,
+        original_image: &mut Option<Texture>,
+    ) -> NodeSlots {
         if let Some(buffer) = &self.buffer_next {
             let device = surface.device();
             let queue = surface.queue();
-            let (size_y, size_u, size_v) = UploadYuvBuffer::get_formatted_sizes(self.format, buffer.width, buffer.height);
+            let (size_y, size_u, size_v) =
+                UploadYuvBuffer::get_formatted_sizes(self.format, buffer.width, buffer.height);
 
             let texture_y = load_texture_from_bytes(
                 device,
@@ -198,41 +222,37 @@ impl Node for UploadYuvBuffer {
         {
             if let Some(buffer) = self.buffer_next.take() {
                 // Update texture pixels.
-                let (size_y, size_u, size_v) = UploadYuvBuffer::get_formatted_sizes(self.format, buffer.width, buffer.height);
+                let (size_y, size_u, size_v) =
+                    UploadYuvBuffer::get_formatted_sizes(self.format, buffer.width, buffer.height);
                 match self.format {
                     YuvFormat::YCbCr => {
                         update_texture(queue, texture_y, size_y, None, &buffer.pixels_y, 0);
                         update_texture(queue, texture_u, size_u, None, &buffer.pixels_u, 0);
                         update_texture(queue, texture_v, size_v, None, &buffer.pixels_v, 0);
-                    },
+                    }
                     YuvFormat::_420888 => {
-                        update_texture(
-                            queue,
-                            texture_y,
-                            size_y,
-                            None,
-                            &buffer.pixels_y,
-                            0
-                        );
+                        update_texture(queue, texture_y, size_y, None, &buffer.pixels_y, 0);
                         update_texture(
                             queue,
                             texture_u,
-                            [size_u[0],
-                            size_u[1]/2],
+                            [size_u[0], size_u[1] / 2],
                             None,
                             &buffer.pixels_u,
-                            0
+                            0,
                         );
                         update_texture(
                             queue,
                             texture_u,
-                            [size_u[0],
-                            size_u[1]/2],
-                            Some(Origin3d{x:0, y:size_u[1]/2, z:0}),
+                            [size_u[0], size_u[1] / 2],
+                            Some(Origin3d {
+                                x: 0,
+                                y: size_u[1] / 2,
+                                z: 0,
+                            }),
                             &buffer.pixels_v,
-                            (size_u[0] * size_u[1]/2 - 1) as u64
+                            (size_u[0] * size_u[1] / 2 - 1) as u64,
                         );
-                    },
+                    }
                 }
             }
         }

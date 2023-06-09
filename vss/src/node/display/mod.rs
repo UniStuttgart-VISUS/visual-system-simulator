@@ -34,8 +34,6 @@ impl OutputScale {
     }
 }
 
-
-
 #[derive(Copy, Clone)]
 pub struct ViewPort {
     pub x: f32,

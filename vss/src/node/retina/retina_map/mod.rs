@@ -96,7 +96,7 @@ impl RetinaMapBuilder {
 
         inspector.mut_bool("receptordensity_onoff", &mut self.receptordensity_onoff);
     }
-    
+
     pub fn generate(&self, resolution: (u32, u32), orientation: &[Vector3<f32>; 3]) -> Box<[u8]> {
         let mut maps: Vec<image::ImageBuffer<image::Rgba<u8>, Vec<u8>>> = Vec::new();
 

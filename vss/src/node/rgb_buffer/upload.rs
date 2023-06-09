@@ -1,26 +1,26 @@
 use super::*;
+use cgmath::SquareMatrix;
 use std::io::Cursor;
 use std::path::Path;
-use cgmath::SquareMatrix;
 use wgpu::CommandEncoder;
 
-struct Uniforms{
-    inv_proj_view: [[f32; 4];4],
+struct Uniforms {
+    inv_proj_view: [[f32; 4]; 4],
     flags: u32,
     _padding: [i32; 3],
 }
 
-pub enum RenderResolution{
-    Screen{
+pub enum RenderResolution {
+    Screen {
         output_scale: OutputScale,
         input_scale: f32,
     },
-    Buffer{
+    Buffer {
         input_scale: f32,
     },
-    Custom{
+    Custom {
         res: [u32; 2],
-    }
+    },
 }
 
 bitflags! {
@@ -72,23 +72,27 @@ impl UploadRgbBuffer {
         let device = surface.device();
         let queue = surface.queue();
 
-        let uniforms = ShaderUniforms::new(device, 
-            Uniforms{
+        let uniforms = ShaderUniforms::new(
+            device,
+            Uniforms {
                 inv_proj_view: [[0.0; 4]; 4],
                 flags: RgbInputFlags::empty().bits(),
                 _padding: [0; 3],
-            });
-        
-        let source_texture = placeholder_texture(device, queue, Some("UploadNode source_texture")).unwrap();
-        let (source_bind_group_layout, source_bind_group) = source_texture.create_bind_group(device);
+            },
+        );
+
+        let source_texture =
+            placeholder_texture(device, queue, Some("UploadNode source_texture")).unwrap();
+        let (source_bind_group_layout, source_bind_group) =
+            source_texture.create_bind_group(device);
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("UploadNode Shader"),
-            source: wgpu::ShaderSource::Wgsl(concat!(
-                include_str!("../vert.wgsl"),
-                include_str!("upload.wgsl")).into()),
+            source: wgpu::ShaderSource::Wgsl(
+                concat!(include_str!("../vert.wgsl"), include_str!("upload.wgsl")).into(),
+            ),
         });
-        
+
         let pipeline = create_render_pipeline(
             device,
             &[&shader, &shader],
@@ -96,13 +100,14 @@ impl UploadRgbBuffer {
             &[&source_bind_group_layout, &uniforms.bind_group_layout],
             &all_color_states(),
             simple_depth_state(DEPTH_FORMAT),
-            Some("UploadNode Render Pipeline"));
+            Some("UploadNode Render Pipeline"),
+        );
 
         UploadRgbBuffer {
             buffer_next: RgbBuffer::default(),
             buffer_upload: false,
             texture: None,
-            render_resolution: RenderResolution::Buffer{input_scale: 1.0},
+            render_resolution: RenderResolution::Buffer { input_scale: 1.0 },
 
             pipeline,
             uniforms,
@@ -133,7 +138,11 @@ impl UploadRgbBuffer {
     }
 
     pub fn upload_buffer(&mut self, buffer: &RgbBuffer) {
-        assert_eq!(buffer.pixels_rgb.len(), (buffer.width * buffer.height * 4) as usize, "Unexpected RGBA pixel buffer size");
+        assert_eq!(
+            buffer.pixels_rgb.len(),
+            (buffer.width * buffer.height * 4) as usize,
+            "Unexpected RGBA pixel buffer size"
+        );
 
         // Test if we have to invalidate the texture.
         if let Some(texture) = &self.texture {
@@ -169,9 +178,12 @@ impl UploadRgbBuffer {
 }
 
 impl Node for UploadRgbBuffer {
-   
-
-    fn negociate_slots(&mut self, surface: &Surface, slots: NodeSlots, original_image: &mut Option<Texture>) -> NodeSlots {
+    fn negociate_slots(
+        &mut self,
+        surface: &Surface,
+        slots: NodeSlots,
+        original_image: &mut Option<Texture>,
+    ) -> NodeSlots {
         if self.buffer_upload {
             let device = surface.device();
             let queue = surface.queue();
@@ -199,38 +211,44 @@ impl Node for UploadRgbBuffer {
                 tex_h /= 2.0;
             }
             match self.render_resolution {
-                RenderResolution::Screen {output_scale, input_scale} => {
+                RenderResolution::Screen {
+                    output_scale,
+                    input_scale,
+                } => {
                     let mut screen_w = surface.width() as f32;
                     let mut screen_h = surface.height() as f32;
                     let tex_aspect_ratio = tex_w / tex_h;
                     let screen_aspect_ratio = screen_w / screen_h;
                     match output_scale {
                         OutputScale::Fit => {
-                            if tex_aspect_ratio > screen_aspect_ratio{ // scale down the larger side
+                            if tex_aspect_ratio > screen_aspect_ratio {
+                                // scale down the larger side
                                 screen_h *= screen_aspect_ratio / tex_aspect_ratio;
-                            }else{
+                            } else {
                                 screen_w *= tex_aspect_ratio / screen_aspect_ratio;
                             }
-                        },
+                        }
                         OutputScale::Fill => {
-                            if tex_aspect_ratio > screen_aspect_ratio{ // scale up the smaller side
+                            if tex_aspect_ratio > screen_aspect_ratio {
+                                // scale up the smaller side
                                 screen_w *= tex_aspect_ratio / screen_aspect_ratio;
-                            }else{
+                            } else {
                                 screen_h *= screen_aspect_ratio / tex_aspect_ratio;
                             }
-                        },
-                        OutputScale::Stretch => {}, // no adjustment needed
+                        }
+                        OutputScale::Stretch => {} // no adjustment needed
                     }
-                    ((screen_w * input_scale) as u32, (screen_h * input_scale) as u32)
-                },
-                RenderResolution::Buffer {input_scale} => {
+                    (
+                        (screen_w * input_scale) as u32,
+                        (screen_h * input_scale) as u32,
+                    )
+                }
+                RenderResolution::Buffer { input_scale } => {
                     ((tex_w * input_scale) as u32, (tex_h * input_scale) as u32)
-                },
-                RenderResolution::Custom { res } => {
-                    (res[0], res[1])
-                },
+                }
+                RenderResolution::Custom { res } => (res[0], res[1]),
             }
-        }else{
+        } else {
             (1, 1)
         };
 
@@ -244,11 +262,20 @@ impl Node for UploadRgbBuffer {
     }
 
     fn input(&mut self, eye: &EyeInput, _mouse: &MouseInput) -> EyeInput {
-        self.uniforms.data.inv_proj_view = (eye.proj * (Matrix4::from_translation(-eye.position) * eye.view)).invert().unwrap().into();
+        self.uniforms.data.inv_proj_view = (eye.proj
+            * (Matrix4::from_translation(-eye.position) * eye.view))
+            .invert()
+            .unwrap()
+            .into();
         eye.clone()
     }
 
-    fn render(&mut self, surface: &Surface, encoder: &mut CommandEncoder, screen: Option<&RenderTexture>) {
+    fn render(
+        &mut self,
+        surface: &Surface,
+        encoder: &mut CommandEncoder,
+        screen: Option<&RenderTexture>,
+    ) {
         let queue = surface.queue();
         self.uniforms.upload(queue);
 
@@ -257,10 +284,7 @@ impl Node for UploadRgbBuffer {
                 update_texture(
                     queue,
                     texture,
-                    [
-                        self.buffer_next.width,
-                        self.buffer_next.height,
-                    ],
+                    [self.buffer_next.width, self.buffer_next.height],
                     None,
                     &self.buffer_next.pixels_rgb,
                     0,
@@ -274,7 +298,7 @@ impl Node for UploadRgbBuffer {
             color_attachments: &self.targets.color_attachments(screen),
             depth_stencil_attachment: self.targets.depth_attachment(),
         });
-    
+
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, &self.source_bind_group, &[]);
         render_pass.set_bind_group(1, &self.uniforms.bind_group, &[]);

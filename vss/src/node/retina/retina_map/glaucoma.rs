@@ -49,11 +49,11 @@ fn generate(
 
     let mut mapbuffer = image::ImageBuffer::new(res.0, res.1);
 
-    let global_forward = -Vector3::unit_z();//Result of OpenGL being Right-handed
+    let global_forward = -Vector3::unit_z(); //Result of OpenGL being Right-handed
 
     for (x, y, pixel) in mapbuffer.enumerate_pixels_mut() {
-        let right = (((x as f32 + 0.5)/ res.0 as f32) * 2.0 - 1.0) * orientation[0];
-        let up = (((y as f32 + 0.5)/ res.1 as f32) * 2.0 - 1.0) * orientation[1];
+        let right = (((x as f32 + 0.5) / res.0 as f32) * 2.0 - 1.0) * orientation[0];
+        let up = (((y as f32 + 0.5) / res.1 as f32) * 2.0 - 1.0) * orientation[1];
         let direction = (right + up + orientation[2]).normalize();
         let angle = global_forward.angle(direction).0 as f64;
 
@@ -62,7 +62,8 @@ fn generate(
             cells = 0;
 
             // partly affected cells just outside the healthy circle
-            cells += (255.0 * ((border_width - (angle - factor)) / border_width)
+            cells += (255.0
+                * ((border_width - (angle - factor)) / border_width)
                     .min(1.0)
                     .max(0.0)) as u8;
         }
