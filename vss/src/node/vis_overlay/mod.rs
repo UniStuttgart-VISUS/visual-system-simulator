@@ -190,7 +190,7 @@ impl Node for VisOverlay {
         slots
     }
 
-    fn inspect(&mut self, inspector: &mut dyn Inspector) {
+    fn inspect(&mut self, inspector: &dyn Inspector) {
         inspector.mut_i32("flow_id", &mut self.uniforms.data.flow_idx);
         let mut file_base_image = self.vis_type.base_image as i32;
         if inspector.mut_i32("file_base_image", &mut file_base_image) {

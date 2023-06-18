@@ -120,7 +120,7 @@ impl Flow {
         }
     }
 
-    pub fn inspect(&self, inspector: &mut dyn Inspector) {
+    pub fn inspect(&self, inspector: &dyn Inspector) {
         // Propagate to nodes.
         for node in self.nodes.borrow_mut().iter_mut() {
             inspector.mut_node(node);

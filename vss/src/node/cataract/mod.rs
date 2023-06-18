@@ -92,7 +92,7 @@ impl Node for Cataract {
         slots
     }
 
-    fn inspect(&mut self, inspector: &mut dyn Inspector) {
+    fn inspect(&mut self, inspector: &dyn Inspector) {
         let mut active = self.uniforms.data.active == 0;
         if inspector.mut_bool("ct_onoff", &mut active) {
             self.uniforms.data.active = active as i32;

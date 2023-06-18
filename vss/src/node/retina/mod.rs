@@ -239,7 +239,7 @@ impl Node for Retina {
         slots
     }
 
-    fn inspect(&mut self, inspector: &mut dyn Inspector) {
+    fn inspect(&mut self, inspector: &dyn Inspector) {
         if inspector.mut_img("retina_map_pos_x_path", &mut self.retina_map_pos_x_path) {
             self.map_valid = false;
         }

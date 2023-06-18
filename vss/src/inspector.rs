@@ -3,21 +3,20 @@ use crate::*;
 use std::cell::RefCell;
 
 use cgmath::Matrix4;
-use egui::TextBuffer;
 
 pub trait Inspector {
-    fn flow(&mut self, index: usize, flow: &Flow);
+    fn flow(&self, index: usize, flow: &Flow);
 
-    fn mut_node(&mut self, node: &mut dyn Node);
+    fn mut_node(&self, node: &mut dyn Node);
 
     // Returns true if value was changed.
-    fn mut_bool(&mut self, name: &'static str, value: &mut bool) -> bool;
-    fn mut_f64(&mut self, name: &'static str, value: &mut f64) -> bool;
-    fn mut_f32(&mut self, name: &'static str, value: &mut f32) -> bool;
-    fn mut_i32(&mut self, name: &'static str, value: &mut i32) -> bool;
-    fn mut_u32(&mut self, name: &'static str, value: &mut u32) -> bool;
-    fn mut_img(&mut self, name: &'static str, value: &mut String) -> bool;
-    fn mut_matrix(&mut self, name: &'static str, value: &mut Matrix4<f32>) -> bool;
+    fn mut_bool(&self, name: &'static str, value: &mut bool) -> bool;
+    fn mut_f64(&self, name: &'static str, value: &mut f64) -> bool;
+    fn mut_f32(&self, name: &'static str, value: &mut f32) -> bool;
+    fn mut_i32(&self, name: &'static str, value: &mut i32) -> bool;
+    fn mut_u32(&self, name: &'static str, value: &mut u32) -> bool;
+    fn mut_img(&self, name: &'static str, value: &mut String) -> bool;
+    fn mut_matrix(&self, name: &'static str, value: &mut Matrix4<f32>) -> bool;
 }
 
 #[derive(Debug)]
@@ -34,8 +33,8 @@ impl From<serde_json::error::Error> for JsonError {
 
 pub struct FromJsonInspector<'a> {
     flows: Vec<serde_json::value::Value>,
-    current_flow: Option<&'a serde_json::Map<String, serde_json::Value>>,
-    current_node: Option<&'a serde_json::Map<String, serde_json::Value>>,
+    current_flow_index: RefCell<usize>,
+    current_node: RefCell<Option<&'a serde_json::Map<String, serde_json::Value>>>,
 }
 
 impl<'a> FromJsonInspector<'a> {
@@ -44,38 +43,42 @@ impl<'a> FromJsonInspector<'a> {
         if let serde_json::Value::Array(flows) = json {
             Ok(Self {
                 flows,
-                current_flow: None,
-                current_node: None,
+                current_flow_index: RefCell::new(usize::default()),
+                current_node: RefCell::new(None),
             })
         } else {
             Err(JsonError::ExpectedFlowArray)
         }
     }
 
-    fn node_attribute(&mut self, name: &'static str) -> Option<&'a serde_json::Value> {
-        self.current_node.and_then(|node| node.get(name))
+    fn node_attribute(&self, name: &'static str) -> Option<&'a serde_json::Value> {
+        None //self.current_node.and_then(|node| node.borrow().get(name))
     }
 }
 
 impl<'a> Inspector for FromJsonInspector<'a> {
-    fn flow(&mut self, index: usize, flow: &Flow) {
-        //TODO: self.current_flow = self.flows.get(index).and_then(|flow| flow.as_object());
+    fn flow(&self, index: usize, flow: &Flow) {
+        self.current_flow_index.replace(index);
         flow.inspect(self);
-        self.current_flow = None;
+        self.current_flow_index.take();
     }
 
-    fn mut_node(&mut self, node: &mut dyn Node) {
-        self.current_node = self
-            .current_flow
-            .and_then(|flow| flow.get(node.name()))
-            .and_then(|node| node.as_object());
+    fn mut_node(&self, node: &mut dyn Node) {
+        let current_flow = self
+            .flows
+            .get(*self.current_flow_index.borrow())
+            .and_then(|flow| flow.as_object());
+
+        //self.current_node = current_flow
+        //    .and_then(|flow| flow.borrow().get(node.name()))
+        //    .and_then(|node| node.as_object());
 
         node.inspect(self);
 
-        self.current_node = None;
+        self.current_node.take();
     }
 
-    fn mut_bool(&mut self, name: &'static str, value: &mut bool) -> bool {
+    fn mut_bool(&self, name: &'static str, value: &mut bool) -> bool {
         if let Some(serde_json::value::Value::Bool(json_value)) = self.node_attribute(name) {
             *value = *json_value;
             true
@@ -84,7 +87,7 @@ impl<'a> Inspector for FromJsonInspector<'a> {
         }
     }
 
-    fn mut_f64(&mut self, name: &'static str, value: &mut f64) -> bool {
+    fn mut_f64(&self, name: &'static str, value: &mut f64) -> bool {
         if let Some(serde_json::value::Value::Number(json_value)) = self.node_attribute(name) {
             *value = json_value.as_f64().unwrap();
             true
@@ -93,7 +96,7 @@ impl<'a> Inspector for FromJsonInspector<'a> {
         }
     }
 
-    fn mut_f32(&mut self, name: &'static str, value: &mut f32) -> bool {
+    fn mut_f32(&self, name: &'static str, value: &mut f32) -> bool {
         if let Some(serde_json::value::Value::Number(json_value)) = self.node_attribute(name) {
             *value = json_value.as_f64().unwrap() as f32;
             true
@@ -102,7 +105,7 @@ impl<'a> Inspector for FromJsonInspector<'a> {
         }
     }
 
-    fn mut_i32(&mut self, name: &'static str, value: &mut i32) -> bool {
+    fn mut_i32(&self, name: &'static str, value: &mut i32) -> bool {
         if let Some(serde_json::value::Value::Number(json_value)) = self.node_attribute(name) {
             *value = json_value.as_f64().unwrap() as i32;
             true
@@ -111,7 +114,7 @@ impl<'a> Inspector for FromJsonInspector<'a> {
         }
     }
 
-    fn mut_u32(&mut self, name: &'static str, value: &mut u32) -> bool {
+    fn mut_u32(&self, name: &'static str, value: &mut u32) -> bool {
         if let Some(serde_json::value::Value::Number(json_value)) = self.node_attribute(name) {
             *value = json_value.as_f64().unwrap() as u32;
             true
@@ -120,7 +123,7 @@ impl<'a> Inspector for FromJsonInspector<'a> {
         }
     }
 
-    fn mut_img(&mut self, name: &'static str, value: &mut String) -> bool {
+    fn mut_img(&self, name: &'static str, value: &mut String) -> bool {
         if let Some(serde_json::value::Value::String(json_value)) = self.node_attribute(name) {
             *value = json_value.to_string();
             true
@@ -129,33 +132,31 @@ impl<'a> Inspector for FromJsonInspector<'a> {
         }
     }
 
-    fn mut_matrix(&mut self, _name: &'static str, _value: &mut cgmath::Matrix4<f32>) -> bool {
+    fn mut_matrix(&self, _name: &'static str, _value: &mut cgmath::Matrix4<f32>) -> bool {
         false //TODO: implement this as needed.
     }
 }
 
 pub struct ToJsonInspector {
-    flows: Vec<serde_json::Value>,
+    flows: RefCell<Vec<serde_json::Value>>,
     current_flow: RefCell<serde_json::Map<String, serde_json::Value>>,
     current_node_attributes: RefCell<serde_json::Map<String, serde_json::Value>>,
-    current_node_name: String,
 }
 
 impl ToJsonInspector {
     pub fn new() -> Self {
         Self {
-            flows: Vec::new(),
+            flows: RefCell::new(Vec::new()),
             current_flow: RefCell::new(serde_json::Map::new()),
             current_node_attributes: RefCell::new(serde_json::Map::new()),
-            current_node_name: String::new(),
         }
     }
 
     pub fn to_string(self) -> String {
-        serde_json::Value::Array(self.flows).to_string()
+        serde_json::Value::Array(self.flows.borrow().clone()).to_string()
     }
 
-    fn insert_attribute(&mut self, name: &'static str, value: serde_json::Value) -> bool {
+    fn insert_attribute(&self, name: &'static str, value: serde_json::Value) -> bool {
         self.current_node_attributes
             .borrow_mut()
             .insert(name.to_string(), value);
@@ -164,10 +165,10 @@ impl ToJsonInspector {
 }
 
 impl Inspector for ToJsonInspector {
-    fn flow(&mut self, index: usize, flow: &Flow) {
+    fn flow(&self, index: usize, flow: &Flow) {
         assert_eq!(
             index,
-            self.flows.len(),
+            self.flows.borrow().len(),
             "Indices must be accessed in ascending consecutive order"
         );
         self.current_flow.borrow_mut().clear();
@@ -175,46 +176,46 @@ impl Inspector for ToJsonInspector {
         flow.inspect(self);
 
         self.flows
+            .borrow_mut()
             .push(serde_json::Value::Object(self.current_flow.take()));
     }
 
-    fn mut_node(&mut self, node: &mut dyn Node) {
+    fn mut_node(&self, node: &mut dyn Node) {
         self.current_node_attributes.borrow_mut().clear();
-        self.current_node_name = node.name().to_string();
 
         node.inspect(self);
 
         self.current_flow.borrow_mut().insert(
-            self.current_node_name.take(),
+            node.name().to_string(),
             serde_json::Value::Object(self.current_node_attributes.take()),
         );
     }
 
-    fn mut_bool(&mut self, name: &'static str, value: &mut bool) -> bool {
+    fn mut_bool(&self, name: &'static str, value: &mut bool) -> bool {
         self.insert_attribute(name, serde_json::Value::Bool(*value))
     }
 
-    fn mut_f64(&mut self, name: &'static str, value: &mut f64) -> bool {
+    fn mut_f64(&self, name: &'static str, value: &mut f64) -> bool {
         self.insert_attribute(name, serde_json::Value::from(*value as f64))
     }
 
-    fn mut_f32(&mut self, name: &'static str, value: &mut f32) -> bool {
+    fn mut_f32(&self, name: &'static str, value: &mut f32) -> bool {
         self.insert_attribute(name, serde_json::Value::from(*value as f64))
     }
 
-    fn mut_i32(&mut self, name: &'static str, value: &mut i32) -> bool {
+    fn mut_i32(&self, name: &'static str, value: &mut i32) -> bool {
         self.insert_attribute(name, serde_json::Value::from(*value as f64))
     }
 
-    fn mut_u32(&mut self, name: &'static str, value: &mut u32) -> bool {
+    fn mut_u32(&self, name: &'static str, value: &mut u32) -> bool {
         self.insert_attribute(name, serde_json::Value::from(*value as f64))
     }
 
-    fn mut_img(&mut self, name: &'static str, value: &mut String) -> bool {
+    fn mut_img(&self, name: &'static str, value: &mut String) -> bool {
         self.insert_attribute(name, serde_json::Value::String(value.clone()))
     }
 
-    fn mut_matrix(&mut self, _name: &'static str, _value: &mut cgmath::Matrix4<f32>) -> bool {
+    fn mut_matrix(&self, _name: &'static str, _value: &mut cgmath::Matrix4<f32>) -> bool {
         false //TODO: implement this as needed.
     }
 }

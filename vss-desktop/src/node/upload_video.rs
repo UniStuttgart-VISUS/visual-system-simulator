@@ -237,7 +237,7 @@ impl Node for UploadVideo {
             .negociate_slots(surface, slots, original_image)
     }
 
-    fn inspect(&mut self, inspector: &mut dyn Inspector) {
+    fn inspect(&mut self, inspector: &dyn Inspector) {
         self.uploader.inspect(inspector);
     }
 

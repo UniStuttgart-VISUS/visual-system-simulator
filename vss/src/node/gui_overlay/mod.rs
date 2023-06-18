@@ -1,4 +1,5 @@
 use super::*;
+use std::cell::RefCell;
 use wgpu::CommandEncoder;
 
 struct Uniforms {
@@ -195,71 +196,85 @@ impl Node for GuiOverlay {
 }
 
 pub struct UiInspector<'open> {
-    ui: &'open mut egui::Ui,
+    ui: RefCell<&'open mut egui::Ui>,
 }
 
 impl<'open> UiInspector<'open> {
     pub fn new(ui: &'open mut egui::Ui) -> Self {
-        Self { ui }
+        Self {
+            ui: RefCell::new(ui),
+        }
     }
 }
 
 impl<'open> Inspector for UiInspector<'open> {
-    fn flow(&mut self, index: usize, flow: &Flow) {
-        self.ui.heading(format!("Flow {}", index));
-        self.ui.end_row();
+    fn flow(&self, index: usize, flow: &Flow) {
+        {
+            let mut ui = self.ui.borrow_mut();
+            ui.heading(format!("Flow {}", index));
+            ui.end_row();
+        }
         flow.inspect(self);
     }
 
-    fn mut_node(&mut self, node: &mut dyn Node) {
-        self.ui.heading(node.name());
-        self.ui.end_row();
+    fn mut_node(&self, node: &mut dyn Node) {
+        {
+            let mut ui = self.ui.borrow_mut();
+            ui.heading(node.name());
+            ui.end_row();
+        }
         node.inspect(self);
     }
 
-    fn mut_bool(&mut self, name: &'static str, value: &mut bool) -> bool {
-        self.ui.label(name);
-        let changed = self.ui.checkbox(value, "Enabled").changed();
-        self.ui.end_row();
+    fn mut_bool(&self, name: &'static str, value: &mut bool) -> bool {
+        let mut ui = self.ui.borrow_mut();
+        ui.label(name);
+        let changed = ui.checkbox(value, "Enabled").changed();
+        ui.end_row();
         changed
     }
 
-    fn mut_f64(&mut self, name: &'static str, value: &mut f64) -> bool {
-        self.ui.label(name);
-        let changed = self.ui.add(egui::DragValue::new(value)).changed();
-        self.ui.end_row();
+    fn mut_f64(&self, name: &'static str, value: &mut f64) -> bool {
+        let mut ui = self.ui.borrow_mut();
+        ui.label(name);
+        let changed = ui.add(egui::DragValue::new(value)).changed();
+        ui.end_row();
         changed
     }
 
-    fn mut_f32(&mut self, name: &'static str, value: &mut f32) -> bool {
-        self.ui.label(name);
-        let changed = self.ui.add(egui::DragValue::new(value)).changed();
-        self.ui.end_row();
+    fn mut_f32(&self, name: &'static str, value: &mut f32) -> bool {
+        let mut ui = self.ui.borrow_mut();
+        ui.label(name);
+        let changed = ui.add(egui::DragValue::new(value)).changed();
+        ui.end_row();
         changed
     }
 
-    fn mut_i32(&mut self, name: &'static str, value: &mut i32) -> bool {
-        self.ui.label(name);
-        let changed = self.ui.add(egui::DragValue::new(value)).changed();
-        self.ui.end_row();
+    fn mut_i32(&self, name: &'static str, value: &mut i32) -> bool {
+        let mut ui = self.ui.borrow_mut();
+        ui.label(name);
+        let changed = ui.add(egui::DragValue::new(value)).changed();
+        ui.end_row();
         changed
     }
 
-    fn mut_u32(&mut self, name: &'static str, value: &mut u32) -> bool {
-        self.ui.label(name);
-        let changed = self.ui.add(egui::DragValue::new(value)).changed();
-        self.ui.end_row();
+    fn mut_u32(&self, name: &'static str, value: &mut u32) -> bool {
+        let mut ui = self.ui.borrow_mut();
+        ui.label(name);
+        let changed = ui.add(egui::DragValue::new(value)).changed();
+        ui.end_row();
         changed
     }
 
-    fn mut_img(&mut self, name: &'static str, value: &mut String) -> bool {
-        self.ui.label(name);
-        let changed = self.ui.text_edit_singleline(value).changed();
-        self.ui.end_row();
+    fn mut_img(&self, name: &'static str, value: &mut String) -> bool {
+        let mut ui = self.ui.borrow_mut();
+        ui.label(name);
+        let changed = ui.text_edit_singleline(value).changed();
+        ui.end_row();
         changed
     }
 
-    fn mut_matrix(&mut self, _name: &'static str, _value: &mut Matrix4<f32>) -> bool {
+    fn mut_matrix(&self, _name: &'static str, _value: &mut Matrix4<f32>) -> bool {
         false
     }
 }

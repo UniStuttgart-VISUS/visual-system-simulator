@@ -58,7 +58,7 @@ pub trait Node {
 
     /// Set new parameters for this effect
     #[allow(unused_variables)]
-    fn inspect(&mut self, inspector: &mut dyn Inspector) {}
+    fn inspect(&mut self, inspector: &dyn Inspector) {}
 
     /// Handle input.
     #[allow(unused_variables)]
@@ -98,7 +98,7 @@ impl Node for Box<dyn Node> {
             .negociate_slots(surface, slots, original_image)
     }
 
-    fn inspect(&mut self, inspector: &mut dyn Inspector) {
+    fn inspect(&mut self, inspector: &dyn Inspector) {
         self.as_mut().inspect(inspector);
     }
 

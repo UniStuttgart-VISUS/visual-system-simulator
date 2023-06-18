@@ -37,7 +37,7 @@ impl Node for EyeControl {
         slots.to_passthrough()
     }
 
-    fn inspect(&mut self, inspector: &mut dyn Inspector) {
+    fn inspect(&mut self, inspector: &dyn Inspector) {
         let mut configured_view = Matrix4::from_scale(1.0);
 
         // if the eye has strabism, it needs some angle offset

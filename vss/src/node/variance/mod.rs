@@ -253,7 +253,7 @@ impl Node for VarianceMeasure {
         slots
     }
 
-    fn inspect(&mut self, inspector: &mut dyn Inspector) {
+    fn inspect(&mut self, inspector: &dyn Inspector) {
         inspector.mut_u32("measure_variance", &mut self.measure_variance);
         inspector.mut_u32("variance_metric", &mut self.variance_metric);
         inspector.mut_u32("variance_color_space", &mut self.variance_color_space);

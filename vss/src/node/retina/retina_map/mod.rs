@@ -55,7 +55,7 @@ impl RetinaMapBuilder {
         }
     }
 
-    pub fn inspect(&mut self, inspector: &mut dyn Inspector) {
+    pub fn inspect(&mut self, inspector: &dyn Inspector) {
         inspector.mut_bool("glaucoma_onoff", &mut self.glaucoma_onoff);
         inspector.mut_i32("glaucoma_fov", &mut self.glaucoma_fov);
 

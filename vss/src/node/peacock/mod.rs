@@ -96,7 +96,7 @@ impl Node for PeacockCB {
         slots
     }
 
-    fn inspect(&mut self, inspector: &mut dyn Inspector) {
+    fn inspect(&mut self, inspector: &dyn Inspector) {
         const V_CPU: [f32; 3] = [0.753, 1.140, 0.171];
         const V_CPV: [f32; 3] = [0.265, -0.140, -0.003];
         const V_AM: [f32; 3] = [1.273463, 0.968437, 0.062921];

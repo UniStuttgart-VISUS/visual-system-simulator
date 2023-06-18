@@ -170,7 +170,7 @@ impl Node for Lens {
         slots
     }
 
-    fn inspect(&mut self, inspector: &mut dyn Inspector) {
+    fn inspect(&mut self, inspector: &dyn Inspector) {
         // default values
         self.uniforms.data.near_point = 0.0;
         self.uniforms.data.far_point = f32::INFINITY;

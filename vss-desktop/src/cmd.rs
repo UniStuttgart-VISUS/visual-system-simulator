@@ -1,5 +1,6 @@
 use glob::glob;
 use serde::Serialize;
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fs::File;
@@ -60,23 +61,23 @@ impl Default for Config {
 
 pub struct ConfigInspector<'a> {
     config: &'a Config,
-    keys_used: HashSet<String>,
-    flow_index: usize,
+    keys_used: RefCell<HashSet<String>>,
+    flow_index: RefCell<usize>,
 }
 
 impl<'a> ConfigInspector<'a> {
     pub fn new(config: &'a Config) -> Self {
         ConfigInspector {
             config,
-            keys_used: HashSet::new(),
-            flow_index: 0,
+            keys_used: RefCell::new(HashSet::new()),
+            flow_index: RefCell::new(usize::default()),
         }
     }
 
     pub fn print_unused(&self) {
         for flow_config in self.config.flow_configs.iter() {
             for (key, value) in flow_config.values.iter() {
-                if !self.keys_used.contains(key) {
+                if !self.keys_used.borrow().contains(key) {
                     println!(
                         "Unused setting from {}: \"{}\" = \"{}\"",
                         flow_config.name, key, value
@@ -88,83 +89,83 @@ impl<'a> ConfigInspector<'a> {
 }
 
 impl Inspector for ConfigInspector<'_> {
-    fn flow(&mut self, index: usize, flow: &Flow) {
-        self.flow_index = index;
+    fn flow(&self, index: usize, flow: &Flow) {
+        self.flow_index.replace(index);
         flow.inspect(self);
-        self.flow_index = 0;
+        self.flow_index.take();
     }
 
-    fn mut_node(&mut self, node: &mut dyn Node) {
+    fn mut_node(&self, node: &mut dyn Node) {
         node.inspect(self);
     }
 
-    fn mut_bool(&mut self, name: &'static str, value: &mut bool) -> bool {
-        let config_values = &self.config.flow_configs[self.flow_index].values;
+    fn mut_bool(&self, name: &'static str, value: &mut bool) -> bool {
+        let config_values = &self.config.flow_configs[*self.flow_index.borrow()].values;
         if let Some(serde_json::value::Value::Bool(config_value)) = config_values.get(name) {
             *value = *config_value;
-            self.keys_used.insert(name.to_string());
+            self.keys_used.borrow_mut().insert(name.to_string());
             true
         } else {
             false
         }
     }
 
-    fn mut_f64(&mut self, name: &'static str, value: &mut f64) -> bool {
-        let config_values = &self.config.flow_configs[self.flow_index].values;
+    fn mut_f64(&self, name: &'static str, value: &mut f64) -> bool {
+        let config_values = &self.config.flow_configs[*self.flow_index.borrow()].values;
         if let Some(serde_json::value::Value::Number(config_value)) = config_values.get(name) {
             *value = config_value.as_f64().unwrap();
-            self.keys_used.insert(name.to_string());
+            self.keys_used.borrow_mut().insert(name.to_string());
             true
         } else {
             false
         }
     }
 
-    fn mut_f32(&mut self, name: &'static str, value: &mut f32) -> bool {
-        let config_values = &self.config.flow_configs[self.flow_index].values;
+    fn mut_f32(&self, name: &'static str, value: &mut f32) -> bool {
+        let config_values = &self.config.flow_configs[*self.flow_index.borrow()].values;
         if let Some(serde_json::value::Value::Number(config_value)) = config_values.get(name) {
             *value = config_value.as_f64().unwrap() as f32;
-            self.keys_used.insert(name.to_string());
+            self.keys_used.borrow_mut().insert(name.to_string());
             true
         } else {
             false
         }
     }
 
-    fn mut_i32(&mut self, name: &'static str, value: &mut i32) -> bool {
-        let config_values = &self.config.flow_configs[self.flow_index].values;
+    fn mut_i32(&self, name: &'static str, value: &mut i32) -> bool {
+        let config_values = &self.config.flow_configs[*self.flow_index.borrow()].values;
         if let Some(serde_json::value::Value::Number(config_value)) = config_values.get(name) {
             *value = config_value.as_f64().unwrap() as i32;
-            self.keys_used.insert(name.to_string());
+            self.keys_used.borrow_mut().insert(name.to_string());
             true
         } else {
             false
         }
     }
 
-    fn mut_u32(&mut self, name: &'static str, value: &mut u32) -> bool {
-        let config_values = &self.config.flow_configs[self.flow_index].values;
+    fn mut_u32(&self, name: &'static str, value: &mut u32) -> bool {
+        let config_values = &self.config.flow_configs[*self.flow_index.borrow()].values;
         if let Some(serde_json::value::Value::Number(config_value)) = config_values.get(name) {
             *value = config_value.as_f64().unwrap() as u32;
-            self.keys_used.insert(name.to_string());
+            self.keys_used.borrow_mut().insert(name.to_string());
             true
         } else {
             false
         }
     }
 
-    fn mut_img(&mut self, name: &'static str, value: &mut String) -> bool {
-        let config_values = &self.config.flow_configs[self.flow_index].values;
+    fn mut_img(&self, name: &'static str, value: &mut String) -> bool {
+        let config_values = &self.config.flow_configs[*self.flow_index.borrow()].values;
         if let Some(serde_json::value::Value::String(config_value)) = config_values.get(name) {
             *value = config_value.to_string();
-            self.keys_used.insert(name.to_string());
+            self.keys_used.borrow_mut().insert(name.to_string());
             true
         } else {
             false
         }
     }
 
-    fn mut_matrix(&mut self, _name: &'static str, _value: &mut cgmath::Matrix4<f32>) -> bool {
+    fn mut_matrix(&self, _name: &'static str, _value: &mut cgmath::Matrix4<f32>) -> bool {
         false //TODO: do this properly
     }
 }
