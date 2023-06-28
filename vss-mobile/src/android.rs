@@ -53,6 +53,8 @@ impl CameraStream {
 }
 
 impl Node for CameraStream {
+    fn name(&self) -> &'static str { "CameraStream" }
+
     fn negociate_slots(
         &mut self,
         surface: &Surface,
@@ -62,7 +64,7 @@ impl Node for CameraStream {
         self.upload.negociate_slots(surface, slots, original_image)
     }
 
-    fn inspect(&mut self, inspector: &mut dyn Inspector) {
+    fn inspect(&mut self, inspector: &dyn Inspector) {
         self.upload.inspect(inspector);
     }
 
@@ -201,8 +203,8 @@ fn build_flow(surface: &mut Surface, frame_receiver: Receiver<YuvBuffer>) {
     // Visual system passes.
     // let node = Lens::new(surface);
     // surface.add_node(Box::new(node), 0);
-    // let node = Cataract::new(surface);
-    // surface.add_node(Box::new(node), 0);
+    //let node = Cataract::new(surface);
+    //surface.add_node(Box::new(node), 0);
     let node = Retina::new(surface);
     surface.add_node(Box::new(node), 0);
     // let node = PeacockCB::new(surface);

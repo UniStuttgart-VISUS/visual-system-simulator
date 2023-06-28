@@ -31,32 +31,42 @@ impl From<serde_json::error::Error> for JsonError {
     }
 }
 
-pub struct FromJsonInspector<'a> {
+pub struct FromJsonInspector {
     flows: Vec<serde_json::value::Value>,
     current_flow_index: RefCell<usize>,
-    current_node: RefCell<Option<&'a serde_json::Map<String, serde_json::Value>>>,
+    current_node_name: RefCell<String>,
 }
 
-impl<'a> FromJsonInspector<'a> {
+impl FromJsonInspector {
     pub fn try_new(json_string: &str) -> Result<Self, JsonError> {
         let json = serde_json::from_str(json_string)?;
         if let serde_json::Value::Array(flows) = json {
             Ok(Self {
                 flows,
                 current_flow_index: RefCell::new(usize::default()),
-                current_node: RefCell::new(None),
+                current_node_name: RefCell::new(String::new()),
             })
         } else {
             Err(JsonError::ExpectedFlowArray)
         }
     }
 
-    fn node_attribute(&self, name: &'static str) -> Option<&'a serde_json::Value> {
-        None //self.current_node.and_then(|node| node.borrow().get(name))
+    fn node_attribute(&self, name: &'static str) -> Option<&serde_json::Value> {
+        let current_flow = self
+            .flows
+            .get(*self.current_flow_index.borrow())
+            .and_then(|flow| flow.as_object());
+
+        let node_name = self.current_node_name.borrow().clone();
+        let current_node = current_flow
+            .and_then(|flow| flow.get(&node_name))
+            .and_then(|node| node.as_object());
+
+        current_node.and_then(|node| node.get(name))
     }
 }
 
-impl<'a> Inspector for FromJsonInspector<'a> {
+impl Inspector for FromJsonInspector {
     fn flow(&self, index: usize, flow: &Flow) {
         self.current_flow_index.replace(index);
         flow.inspect(self);
@@ -64,18 +74,9 @@ impl<'a> Inspector for FromJsonInspector<'a> {
     }
 
     fn mut_node(&self, node: &mut dyn Node) {
-        let current_flow = self
-            .flows
-            .get(*self.current_flow_index.borrow())
-            .and_then(|flow| flow.as_object());
-
-        //self.current_node = current_flow
-        //    .and_then(|flow| flow.borrow().get(node.name()))
-        //    .and_then(|node| node.as_object());
-
+        self.current_node_name.replace(node.name().to_string());
         node.inspect(self);
-
-        self.current_node.take();
+        self.current_node_name.take();
     }
 
     fn mut_bool(&self, name: &'static str, value: &mut bool) -> bool {
