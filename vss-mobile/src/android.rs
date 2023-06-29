@@ -53,7 +53,9 @@ impl CameraStream {
 }
 
 impl Node for CameraStream {
-    fn name(&self) -> &'static str { "CameraStream" }
+    fn name(&self) -> &'static str {
+        "CameraStream"
+    }
 
     fn negociate_slots(
         &mut self,
@@ -163,8 +165,6 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate<'loca
         }
     }));
 
-    // let mut value_map = ValueMap::new();
-
     //TODO for testing purposes only
     // value_map.insert("peacock_cb_onoff".into(), Value::Bool(true));
     // value_map.insert("peacock_cb_strength".into(), Value::Number(1.0 as f64));
@@ -183,7 +183,6 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate<'loca
 
     let (tx, rx) = mpsc::sync_channel(2);
     build_flow(&mut surface, rx);
-    //TODO: surface.inspect();
 
     *guard = Some(Bridge {
         surface,
@@ -201,14 +200,14 @@ fn build_flow(surface: &mut Surface, frame_receiver: Receiver<YuvBuffer>) {
     surface.add_node(Box::new(node), 0);
 
     // Visual system passes.
+    // let node = Cataract::new(surface);
+    // surface.add_node(Box::new(node), 0);
     // let node = Lens::new(surface);
     // surface.add_node(Box::new(node), 0);
-    //let node = Cataract::new(surface);
-    //surface.add_node(Box::new(node), 0);
     let node = Retina::new(surface);
     surface.add_node(Box::new(node), 0);
-    // let node = PeacockCB::new(surface);
-    // surface.add_node(Box::new(node), 0);
+    let node = PeacockCB::new(surface);
+    surface.add_node(Box::new(node), 0);
 
     // Display node.
     let mut node = Display::new(surface);
