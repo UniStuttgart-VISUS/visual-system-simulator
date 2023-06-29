@@ -200,8 +200,8 @@ fn build_flow(surface: &mut Surface, frame_receiver: Receiver<YuvBuffer>) {
     surface.add_node(Box::new(node), 0);
 
     // Visual system passes.
-    // let node = Cataract::new(surface);
-    // surface.add_node(Box::new(node), 0);
+    let node = Cataract::new(surface);
+    surface.add_node(Box::new(node), 0);
     // let node = Lens::new(surface);
     // surface.add_node(Box::new(node), 0);
     let node = Retina::new(surface);

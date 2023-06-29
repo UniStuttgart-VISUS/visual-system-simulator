@@ -29,7 +29,7 @@ pub struct UploadYuvBuffer {
     pipeline: wgpu::RenderPipeline,
     uniforms: ShaderUniforms<Uniforms>,
     sources_bind_group: wgpu::BindGroup,
-    targets: ColorTargets,
+    targets: ColorDepthTargets,
 
     texture_y: Option<Texture>,
     texture_u: Option<Texture>,
@@ -93,7 +93,7 @@ impl UploadYuvBuffer {
             pipeline,
             uniforms,
             sources_bind_group,
-            targets: ColorTargets::new(device, "UploadYuvBuffer"),
+            targets: ColorDepthTargets::new(device, "UploadYuvBuffer"),
             texture_y: None,
             texture_u: None,
             texture_v: None,
@@ -204,10 +204,11 @@ impl Node for UploadYuvBuffer {
             height = texture_y.height;
         }
 
-        let slots = slots.emplace_color_output(surface, height, width, "UploadYuvBuffer");
-        self.targets = slots.as_all_colors_target();
+        let slots = slots.emplace_color_depth_output(surface, height, width, "UploadYuvBuffer");
+        self.targets = slots.as_all_target();
 
-        original_image.replace(slots.as_color_target().as_texture());
+        let (color_out, _) = slots.as_color_depth_target();
+        original_image.replace(color_out.as_texture());
 
         slots
     }
