@@ -149,6 +149,9 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         inspectorView.getSettings().setJavaScriptEnabled(true);
         inspectorView.addJavascriptInterface(this, "Activity");
 
+        // Disable autofill.
+        inspectorView.getSettings().setSaveFormData(false);
+
         // Load welcome page.
         inspectorView.loadUrl("file:///android_asset/index.html");
         activityState = ActivityState.Welcome;

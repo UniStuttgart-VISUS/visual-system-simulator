@@ -29,7 +29,8 @@ if (typeof Activity === "undefined") {
     };
 }
 
-function buildAttributeInput(attributeId, attributeName, attributeValue, updateValue) {
+function buildAttributeInput(nodeName, attributeName, attributeValue, updateValue) {
+    let attributeId = `sp__${nodeName}__${attributeName}`;
     var elAttribute;
     if (typeof attributeValue == "boolean") {
         elAttribute = $(`
@@ -69,7 +70,7 @@ function buildAttributeInput(attributeId, attributeName, attributeValue, updateV
 
 // Build DOM subtree with proper event listeners
 function buildSettingsPanel(settings) {
-    let elPanel = $(`<div class="settings-panel"><form></form></div>`);
+    let elPanel = $(`<div class="settings-panel"><form autocomplete="off"></form></div>`);
     let elForm = elPanel.children('form');
     elPanel.settings = JSON.parse(JSON.stringify(settings));
     for (let flowIndex = 0; flowIndex < settings.length; ++flowIndex) {
@@ -81,10 +82,9 @@ function buildSettingsPanel(settings) {
                 </fieldset>`); 
             let node = flow[nodeName];
             for (let attributeName in node) {
-                let attributeId = `sp__${nodeName}__${attributeName}`;
                 let attributeValue = node[attributeName];
                 let elAttribute = buildAttributeInput(
-                    attributeId, attributeName, attributeValue,
+                    nodeName, attributeName, attributeValue,
                     function (flowIndex, nodeName, attributeName) {
                         return function (value) {
                             elPanel.settings[flowIndex][nodeName][attributeName] = value;

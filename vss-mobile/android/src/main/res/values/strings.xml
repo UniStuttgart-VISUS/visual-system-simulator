@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">VDS</string>
-    <string name="app_full_name">Visual Deficiency Simulator</string>
+    <string name="app_name">HowTheySee</string>
+    <string name="app_full_name">How They See</string>
     <string name="start_simulation">Start Simulation</string>
 </resources>
