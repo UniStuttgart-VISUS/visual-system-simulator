@@ -1,0 +1,27 @@
+@charset "UTF-8";
+
+.settings-panel {
+  max-width: 720px;
+}
+
+.settings-panel [type=checkbox][role=switch] {
+  float: right;
+  clear: both;
+  margin-top: 4px;
+}
+
+.settings-panel input:not([type=checkbox], [type=radio]), select, textarea {
+  margin-bottom: 0;
+  text-align: right;
+}
+
+.settings-panel fieldset {
+  padding-bottom: 5px;
+  border-bottom: 1px solid #1f2d38;
+  margin-bottom: 0.5rem;
+}
+
+.settings-panel fieldset:last-child {
+  padding-bottom: 5px;
+  border-bottom: none;
+}

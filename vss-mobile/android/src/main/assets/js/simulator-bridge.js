@@ -8,7 +8,8 @@ if (typeof Activity === "undefined") {
                     "MockParamA1": "A String",
                     "MockParamA2": 42,
                     "MockParamA3": true,
-                    "MockParamA4": "Another String"
+                    "MockParamA4": "Another String",
+                    "MockParamA5": {value: 0.5, min: 0.0, max: 1.0}
                 }
             }, {
                 "MockNodeB": {
@@ -29,27 +30,39 @@ if (typeof Activity === "undefined") {
     };
 }
 
+// Generate a label for an attribute.
+function trAttribute(nodeName, attributeName) {
+    return `${nodeName} / ${attributeName}`;
+}
+
+// Build a DOM subtree with event listeners for an attribute.
 function buildAttributeInput(nodeName, attributeName, attributeValue, updateValue) {
     let attributeId = `sp__${nodeName}__${attributeName}`;
     var elAttribute;
     if (typeof attributeValue == "boolean") {
         elAttribute = $(`
-        <fieldset>
             <label for="${attributeId}">
-                ${attributeName}<br>
+                <small>${trAttribute(nodeName, attributeName)}</small>
                 <input type="checkbox" id="${attributeId}" name="${attributeId}" role="switch" ${attributeValue ? "checked" : ""}>
-            </label></fieldset>`);
+            </label>`);
     } else if (typeof attributeValue == "number") {
         elAttribute = $(`
             <label for="${attributeId}">
-                ${attributeName}
+                <small>${trAttribute(nodeName, attributeName)}</small>
                 <input type="number" id="${attributeId}" name="${attributeId}" value="${attributeValue}">
-            </label>
-            `);
+            </label>`);
+    } else if (typeof (typeof attributeValue !== "undefined" && attributeValue !== null ? attributeValue.value : void 0) === "number") {
+        let step = (attributeValue.max - attributeValue.min) / 100.0;
+        elAttribute = $(`
+            <label for="${attributeId}">
+                <small>${trAttribute(nodeName, attributeName)}</small>
+                <input type="range" id="${attributeId}" name="${attributeId}" value="${attributeValue.value}" 
+                    min="${attributeValue.min}" max="${attributeValue.max}" step="${step}">
+            </label>`);
     } else {
         elAttribute = $(`
             <label for="${attributeId}">
-                ${attributeName}
+                <small>${trAttribute(nodeName, attributeName)}</small>
                 <input type="text" id="${attributeId}" name="${attributeId}" value="${attributeValue}">
             </label>`);
     }
@@ -68,7 +81,7 @@ function buildAttributeInput(nodeName, attributeName, attributeValue, updateValu
     return elAttribute;
 }
 
-// Build DOM subtree with proper event listeners
+// Build DOM subtree listeners for the settings panel.
 function buildSettingsPanel(settings) {
     let elPanel = $(`<div class="settings-panel"><form autocomplete="off"></form></div>`);
     let elForm = elPanel.children('form');
@@ -76,10 +89,7 @@ function buildSettingsPanel(settings) {
     for (let flowIndex = 0; flowIndex < settings.length; ++flowIndex) {
         let flow = settings[flowIndex];
         for (let nodeName in flow) {
-            let elAttributeSet = $(`
-                <fieldset>
-                    <legend><strong>${nodeName}</strong></legend>
-                </fieldset>`); 
+            let elAttributeSet = $(`<fieldset></fieldset>`);
             let node = flow[nodeName];
             for (let attributeName in node) {
                 let attributeValue = node[attributeName];
