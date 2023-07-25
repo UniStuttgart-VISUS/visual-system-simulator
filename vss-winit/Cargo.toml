@@ -8,5 +8,5 @@ resolver = "2"
 
 [dependencies]
 vss = { path = "../vss" }
-winit = "0.27.5"
+winit = "0.28"
 cgmath = "0.18"

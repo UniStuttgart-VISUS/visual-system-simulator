@@ -1,7 +1,6 @@
 use wgpu::Origin3d;
 
 use crate::*;
-use core::num::NonZeroU32;
 use std::io::Cursor;
 use std::rc::Rc;
 
@@ -396,10 +395,10 @@ pub fn update_texture(
         raw_data,
         wgpu::ImageDataLayout {
             offset: data_offset,
-            bytes_per_row: NonZeroU32::new(
-                texture.texture.format().describe().block_size as u32 * size[0],
+            bytes_per_row: Some(
+                texture.texture.format().block_size(None).expect("combined depth-stencil format requires specifying a TextureAspect") as u32 * size[0],
             ),
-            rows_per_image: NonZeroU32::new(size[1]),
+            rows_per_image: Some(size[1]),
         },
         texture_size,
     );
@@ -479,8 +478,8 @@ pub fn load_texture_from_bytes(
         data,
         wgpu::ImageDataLayout {
             offset: 0,
-            bytes_per_row: NonZeroU32::new(format.describe().block_size as u32 * width),
-            rows_per_image: NonZeroU32::new(height),
+            bytes_per_row: Some(format.block_size(None).expect("combined depth-stencil format requires specifying a TextureAspect") as u32 * width),
+            rows_per_image: Some(height),
         },
         size,
     );
@@ -684,9 +683,9 @@ pub fn load_cubemap_from_bytes(
         dimension: Some(wgpu::TextureViewDimension::Cube),
         aspect: wgpu::TextureAspect::default(),
         base_mip_level: 0,
-        mip_level_count: NonZeroU32::new(1),
+        mip_level_count: Some(1),
         base_array_layer: 0, // this is wrong; setting to 6 gets rid of some errors
-        array_layer_count: NonZeroU32::new(6),
+        array_layer_count: Some(6),
         label,
     });
 
@@ -700,8 +699,8 @@ pub fn load_cubemap_from_bytes(
         data,
         wgpu::ImageDataLayout {
             offset: 0,
-            bytes_per_row: NonZeroU32::new(4 * width),
-            rows_per_image: NonZeroU32::new(width),
+            bytes_per_row: Some(4 * width),
+            rows_per_image: Some(width),
         },
         size,
     );

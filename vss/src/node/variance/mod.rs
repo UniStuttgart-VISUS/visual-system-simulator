@@ -317,12 +317,7 @@ impl Node for VarianceMeasure {
                     buffer: &self.download_buffer,
                     layout: wgpu::ImageDataLayout {
                         offset: 0,
-                        bytes_per_row: Some(
-                            std::num::NonZeroU32::new(
-                                self.buffer_dimensions.padded_bytes_per_row as u32,
-                            )
-                            .unwrap(),
-                        ),
+                        bytes_per_row: Some(self.buffer_dimensions.padded_bytes_per_row as u32),
                         rows_per_image: None,
                     },
                 },
