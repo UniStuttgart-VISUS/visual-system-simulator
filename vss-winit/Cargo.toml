@@ -1,0 +1,12 @@
+[package]
+name = "vss-winit"
+version = "0.1.0"
+edition = "2021"
+authors = ["The Visual System Simulator Developers"]
+license = "Apache-2.0"
+resolver = "2"
+
+[dependencies]
+vss = { path = "../vss" }
+winit = "0.27.5"
+cgmath = "0.18"

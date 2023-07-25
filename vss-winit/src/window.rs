@@ -1,4 +1,4 @@
-use crate::*;
+use vss::*;
 use cgmath::{Matrix4, SquareMatrix, Vector4};
 use winit::{
     dpi::*,
@@ -12,7 +12,7 @@ use winit::{
 pub struct Window {
     wgpu_window: winit::window::Window,
     events_loop: EventLoop<()>,
-    pub surface: surface::Surface,
+    pub surface: Surface,
 
     active: bool,
     static_pos: Option<(f32, f32)>,
@@ -47,7 +47,7 @@ impl Window {
         wgpu_window.set_cursor_visible(true);
         let window_size = wgpu_window.inner_size();
 
-        let surface = surface::Surface::new(
+        let surface = Surface::new(
             [window_size.width, window_size.height],
             &wgpu_window,
             flow_count,
