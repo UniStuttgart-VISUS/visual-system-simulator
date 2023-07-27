@@ -9,5 +9,6 @@ license = "Apache-2.0"
 crate-type = ["cdylib"]
 
 [dependencies]
+vss = { path = "../vss", features = ['webgl'] }
 wasm-bindgen = "0.2.87"
 web-sys = { version = "0.3.64", features = ['console'] }

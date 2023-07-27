@@ -17,3 +17,6 @@ futures-intrusive = "0.5"
 raw-window-handle = "0.5"
 serde_json = "*"
 serde = "1"
+
+[features]
+webgl = ["wgpu/webgl"]
