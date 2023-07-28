@@ -4,13 +4,12 @@ use winit::{
     dpi::*,
     event::*,
     event_loop::{ControlFlow, EventLoop},
-    platform::run_return::EventLoopExtRunReturn,
     window::WindowBuilder,
 };
 
 /// Represents a window along with its associated rendering context and [Flow].
 pub struct WindowSurface {
-    events_loop: EventLoop<()>,
+    events_loop: Option<EventLoop<()>>,
     window: winit::window::Window,
     surface: Surface,
 
@@ -40,7 +39,7 @@ impl WindowSurface {
 
         Self {
             window,
-            events_loop,
+            events_loop: Some(events_loop),
             surface,
             active: false,
             static_pos,
@@ -58,14 +57,15 @@ impl WindowSurface {
         return &mut self.surface;
     }
 
-    pub fn poll_events(&mut self) -> bool {
-        let mut done = false;
+    pub fn run_and_exit<F>(mut self, mut poll_fn: F)
+    where
+        F: 'static + FnMut() -> bool,
+    {
+        let events_loop = self.events_loop.take().unwrap();
         let mut deferred_size = None;
-        let mut redraw_requested = true;
 
-        // Poll for window events.
-        // TODO-WGPU use .run() instead of .run_return() as it is highly discouraged and incompatible with some platforms
-        self.events_loop.run_return(|event, _, control_flow| {
+        events_loop.run(move |event, _, control_flow| {
+            *control_flow = ControlFlow::Poll;
             match event {
                 Event::WindowEvent {
                     window_id,
@@ -82,7 +82,7 @@ impl WindowSurface {
                         }
                         | WindowEvent::CloseRequested
                         | WindowEvent::Destroyed => {
-                            done = true;
+                            *control_flow = ControlFlow::Exit;
                         }
                         WindowEvent::Focused(active) => {
                             self.active = *active;
@@ -121,42 +121,27 @@ impl WindowSurface {
                     }
                 }
                 Event::RedrawRequested(window_id) if window_id == self.window.id() => {
-                    redraw_requested = true;
+                    self.surface.draw();
                 }
                 Event::RedrawEventsCleared => {
-                    *control_flow = ControlFlow::Exit;
+                    //*control_flow = ControlFlow::Exit;
                     self.window.request_redraw();
+                }
+                Event::MainEventsCleared => {
+                    self.update_size(deferred_size);
+
+                    self.update_input();
+
+                    if poll_fn() {
+                        *control_flow = ControlFlow::Exit;
+                    }
                 }
                 _ => {}
             }
         });
+    }
 
-        if self.static_pos.is_some() {
-            // Update flow IO.
-            let new_size = PhysicalSize::new(1920, 1080);
-            self.surface.resize([new_size.width, new_size.height]);
-            // TODO-WGPU
-            // for (i, f) in self.flow.iter().enumerate(){
-            //     f.negociate_slots(&self);
-            //     f.last_perspective.borrow_mut().proj = cgmath::perspective(
-            //         cgmath::Deg(70.0), (size.width/size.height) as f32, 0.05, 1000.0);
-            // }
-        }
-
-        if let Some(new_size) = deferred_size {
-            // Update flow IO.
-            // let dpi_factor = self.window.scale_factor();
-            // let size = size.to_physical(dpi_factor);
-            self.surface.resize([new_size.width, new_size.height]);
-            // TODO-WGPU
-            // for (i, f) in self.flow.iter().enumerate(){
-            //     f.negociate_slots(&self);
-            //     f.last_perspective.borrow_mut().proj = cgmath::perspective(
-            //         cgmath::Deg(70.0), (size.width/size.height) as f32, 0.05, 1000.0);
-            // }
-        }
-
-        // Update input.
+    fn update_input(&self) {
         for f in self.surface.flows.iter() {
             if self.override_view || self.override_gaze {
                 let view_pos = self.static_pos.unwrap_or(self.mouse.position);
@@ -183,11 +168,32 @@ impl WindowSurface {
             }
             f.input(&self.mouse);
         }
+    }
 
-        if redraw_requested {
-            self.surface.draw();
+    fn update_size(&mut self, deferred_size: Option<PhysicalSize<u32>>) {
+        if self.static_pos.is_some() {
+            // Update flow IO.
+            let new_size = PhysicalSize::new(1920, 1080);
+            self.surface.resize([new_size.width, new_size.height]);
+            // TODO-WGPU
+            // for (i, f) in self.flow.iter().enumerate(){
+            //     f.negociate_slots(&self);
+            //     f.last_perspective.borrow_mut().proj = cgmath::perspective(
+            //         cgmath::Deg(70.0), (size.width/size.height) as f32, 0.05, 1000.0);
+            // }
         }
 
-        done
+        if let Some(new_size) = deferred_size {
+            // Update flow IO.
+            // let dpi_factor = self.window.scale_factor();
+            // let size = size.to_physical(dpi_factor);
+            self.surface.resize([new_size.width, new_size.height]);
+            // TODO-WGPU
+            // for (i, f) in self.flow.iter().enumerate(){
+            //     f.negociate_slots(&self);
+            //     f.last_perspective.borrow_mut().proj = cgmath::perspective(
+            //         cgmath::Deg(70.0), (size.width/size.height) as f32, 0.05, 1000.0);
+            // }
+        }
     }
 }

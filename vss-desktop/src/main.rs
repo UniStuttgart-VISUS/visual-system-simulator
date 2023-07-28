@@ -255,7 +255,7 @@ pub fn main() {
             config.output.clone(),
         );
         build_flow(
-              window.surface(),
+            window.surface(),
             &mut io_generator,
             index,
             config.resolution,
@@ -264,7 +264,6 @@ pub fn main() {
         );
     }
 
-    let mut done = false;
     let mut inspector = ConfigInspector::new(&config);
     window.surface().inspect(&mut inspector);
     inspector.print_unused();
@@ -273,11 +272,10 @@ pub fn main() {
     let mut frame_perfs: Vec<(u128, u128)> = vec![];
     let mut previous_frame = Instant::now();
     let print_spacing = 60;
-
-    while !done {
+ 
+    window.run_and_exit(move || {
+        let mut done = false;
         frame_counter += 1;
-
-        done = window.poll_events();
 
         // Batch output and automatic exit should happen after ~3 frames to ensure proper/stable results.
         if !config.visible || config.output.is_some() && frame_counter == 3 {
@@ -302,7 +300,7 @@ pub fn main() {
             }
             previous_frame = Instant::now();
             if frame_counter > config.measure_frames {
-                break;
+                done = true;
             }
         }
 
@@ -329,7 +327,11 @@ pub fn main() {
         // ...
         //     }
         // }
-    }
+
+        done
+    });
+
+    /*
 
     if config.measure_frames > 0 {
         if let Err(e) = fs::write(
@@ -347,6 +349,7 @@ pub fn main() {
     // writing the image to file might not be done yet, so we wait a second
     // this async behaviour stems from the callback used in the download buffer
     std::thread::sleep(std::time::Duration::from_secs(1));
+    */
 }
 
 //TODO: this one is super unfinished.
