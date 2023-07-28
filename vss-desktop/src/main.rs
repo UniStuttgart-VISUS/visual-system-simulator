@@ -209,7 +209,7 @@ pub fn main() {
 
     let flow_count = config.flow_configs.len();
 
-    let mut window = pollster::block_on(Window::new(
+    let mut window = pollster::block_on(WindowSurface::new(
         config.visible,
         flow_count,
         config.flow_configs[0].static_gaze,
@@ -255,7 +255,7 @@ pub fn main() {
             config.output.clone(),
         );
         build_flow(
-            &mut window.surface,
+              window.surface(),
             &mut io_generator,
             index,
             config.resolution,
@@ -266,7 +266,7 @@ pub fn main() {
 
     let mut done = false;
     let mut inspector = ConfigInspector::new(&config);
-    window.surface.inspect(&mut inspector);
+    window.surface().inspect(&mut inspector);
     inspector.print_unused();
 
     let mut frame_counter = 0;

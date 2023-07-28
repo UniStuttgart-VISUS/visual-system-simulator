@@ -1,3 +1,3 @@
-mod window;
+mod window_surface;
 
-pub use self::window::*;
+pub use self::window_surface::*;

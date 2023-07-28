@@ -1,5 +1,5 @@
-use vss::*;
 use cgmath::{Matrix4, SquareMatrix, Vector4};
+use vss::*;
 use winit::{
     dpi::*,
     event::*,
@@ -9,10 +9,10 @@ use winit::{
 };
 
 /// Represents a window along with its associated rendering context and [Flow].
-pub struct Window {
-    wgpu_window: winit::window::Window,
+pub struct WindowSurface {
     events_loop: EventLoop<()>,
-    pub surface: Surface,
+    window: winit::window::Window,
+    surface: Surface,
 
     active: bool,
     static_pos: Option<(f32, f32)>,
@@ -22,40 +22,24 @@ pub struct Window {
     override_view: bool,
 }
 
-impl Window {
+impl WindowSurface {
     pub async fn new(visible: bool, flow_count: usize, static_pos: Option<(f32, f32)>) -> Self {
-        // Create a window and context.
-        let events_loop = EventLoop::new();
-
         let window_builder = WindowBuilder::new()
             .with_title("Visual System Simulator")
             .with_min_inner_size(LogicalSize::new(640.0, 360.0))
             .with_inner_size(LogicalSize::new(1280.0, 720.0))
             .with_visible(visible);
 
-        // let context_builder = glutin::ContextBuilder::new()
-        //     .with_vsync(true)
-        //     .with_gl(gl_version);
-        // let (wgpu_window, mut device, mut factory, render_target, main_depth) =
-        //     gfx_window_glutin::init::<
-        //         (gfx::format::R8_G8_B8_A8, gfx::format::Unorm),
-        //         gfx::format::DepthStencil,
-        //     >(window_builder, context_builder, &events_loop)
-        //     .unwrap();
+        let events_loop = EventLoop::new();
+        let window = window_builder.build(&events_loop).unwrap();
+        window.set_cursor_visible(true);
+        let window_size = window.inner_size();
 
-        let wgpu_window = window_builder.build(&events_loop).unwrap();
-        wgpu_window.set_cursor_visible(true);
-        let window_size = wgpu_window.inner_size();
+        let surface =
+            Surface::new([window_size.width, window_size.height], &window, flow_count).await;
 
-        let surface = Surface::new(
-            [window_size.width, window_size.height],
-            &wgpu_window,
-            flow_count,
-        )
-        .await;
-
-        Window {
-            wgpu_window,
+        Self {
+            window,
             events_loop,
             surface,
             active: false,
@@ -70,6 +54,10 @@ impl Window {
         }
     }
 
+    pub fn surface(&mut self) -> &mut Surface {
+        return &mut self.surface;
+    }
+
     pub fn poll_events(&mut self) -> bool {
         let mut done = false;
         let mut deferred_size = None;
@@ -82,7 +70,7 @@ impl Window {
                 Event::WindowEvent {
                     window_id,
                     ref event,
-                } if window_id == self.wgpu_window.id() => {
+                } if window_id == self.window.id() => {
                     match event {
                         WindowEvent::KeyboardInput {
                             input:
@@ -132,12 +120,12 @@ impl Window {
                         _ => (),
                     }
                 }
-                Event::RedrawRequested(window_id) if window_id == self.wgpu_window.id() => {
+                Event::RedrawRequested(window_id) if window_id == self.window.id() => {
                     redraw_requested = true;
                 }
                 Event::RedrawEventsCleared => {
                     *control_flow = ControlFlow::Exit;
-                    self.wgpu_window.request_redraw();
+                    self.window.request_redraw();
                 }
                 _ => {}
             }
@@ -157,7 +145,7 @@ impl Window {
 
         if let Some(new_size) = deferred_size {
             // Update flow IO.
-            // let dpi_factor = self.wgpu_window.scale_factor();
+            // let dpi_factor = self.window.scale_factor();
             // let size = size.to_physical(dpi_factor);
             self.surface.resize([new_size.width, new_size.height]);
             // TODO-WGPU
