@@ -7,3 +7,9 @@ members = [
   "vss-web",
   "vss-winit"
 ]
+
+[workspace.dependencies]
+cgmath = "0.18"
+raw-window-handle = "0.5"
+wgpu = "0.16"
+wgpu-hal = "0.16"

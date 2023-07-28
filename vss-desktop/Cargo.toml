@@ -12,19 +12,19 @@ name = "vss"
 path = "src/main.rs"
 
 [dependencies]
+wgpu = { workspace = true }
+wgpu-hal = { workspace = true, optional = true }
+cgmath = { workspace = true }
 vss = { path = "../vss" }
 vss-winit = { path = "../vss-winit" }
 clap = "4"
 serde = { version = "1", features = ["derive"] }
+serde_json = "*"
 glob = "0.3"
 mustache = "0.9"
-serde_json = "*"
 ac_ffmpeg = { package = "ac-ffmpeg", version = "0.17.4", optional = true }
 log = "0.4"
 simple-logging = "2.0.2"
-cgmath = "0.18"
-wgpu = "0.16"
-wgpu-hal = { version = "0.16", optional = true }
 ash = { version = "0.37.3", optional = true }
 pollster = "0.3"
 

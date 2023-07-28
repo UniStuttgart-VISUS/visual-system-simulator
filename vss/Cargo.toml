@@ -7,14 +7,14 @@ license = "Apache-2.0"
 resolver = "2"
 
 [dependencies]
+cgmath = { workspace = true }
+raw-window-handle = { workspace = true }
+wgpu = { workspace = true }
 egui = "0.22"
 egui-wgpu = "0.22"
-wgpu = "0.16"
 image = "0.24"
-cgmath = "0.18"
 bitflags = "2.3"
 futures-intrusive = "0.5"
-raw-window-handle = "0.5"
 serde_json = "*"
 serde = "1"
 
