@@ -1002,12 +1002,3 @@ pub fn placeholder_highp_rt(device: &wgpu::Device, label: Option<&str>) -> Rende
         label,
     )
 }
-
-pub fn placeholder_rt(
-    device: &wgpu::Device,
-    format: wgpu::TextureFormat,
-    sampler: Sampler,
-    label: Option<&str>,
-) -> RenderTexture {
-    create_render_texture(device, 1, 1, format, sampler, label)
-}
