@@ -6,7 +6,6 @@ mod varjo;
 #[cfg(feature = "openxr")]
 mod openxr;
 
-use std::fs;
 use std::io::Cursor;
 use std::time::Instant;
 use vss::*;
@@ -206,14 +205,15 @@ pub fn main() {
     set_load(Box::new(load_fn));
 
     let config = cmd_parse();
+    let config_poll = config.clone();
 
     let flow_count = config.flow_configs.len();
 
-    let mut window = pollster::block_on(WindowSurface::new(
+    let window = WindowSurface::new(
         config.visible,
         flow_count,
         config.flow_configs[0].static_gaze,
-    ));
+    );
 
     let view_ports = match flow_count {
         1 => {
@@ -248,88 +248,91 @@ pub fn main() {
         }
     };
 
-    for (index, flow_config) in config.flow_configs.iter().enumerate() {
-        let mut io_generator = IoGenerator::new(
-            config.inputs.clone(),
-            flow_config.name.clone(),
-            config.output.clone(),
-        );
-        build_flow(
-            window.surface(),
-            &mut io_generator,
-            index,
-            config.resolution,
-            view_ports[index],
-            config.output_scale,
-        );
-    }
-
-    let mut inspector = ConfigInspector::new(&config);
-    window.surface().inspect(&mut inspector);
-    inspector.print_unused();
-
     let mut frame_counter = 0;
     let mut frame_perfs: Vec<(u128, u128)> = vec![];
     let mut previous_frame = Instant::now();
     let print_spacing = 60;
- 
-    window.run_and_exit(move || {
-        let mut done = false;
-        frame_counter += 1;
 
-        // Batch output and automatic exit should happen after ~3 frames to ensure proper/stable results.
-        if !config.visible || config.output.is_some() && frame_counter == 3 {
-            // Exit once all inputs have been processed, unless visible.
-            done = true;
-        }
-
-        if config.measure_frames > 0 {
-            let time_diff = previous_frame.elapsed().as_micros();
-            let frame_perf = (frame_counter, time_diff);
-            frame_perfs.push(frame_perf);
-
-            if frame_counter > 0 && frame_counter % print_spacing == 0 {
-                let avg_fps: i32 = frame_perfs
-                    [(frame_counter - print_spacing) as usize..frame_counter as usize]
-                    .iter()
-                    .map(|t| t.1 as i32)
-                    .sum::<i32>()
-                    / (print_spacing as i32);
-
-                println!("{:?} ≙ {}fps", frame_perf, 1_000_000 / (avg_fps));
+    pollster::block_on(window.run_and_exit(
+        move |surface| {
+            for (index, flow_config) in config.flow_configs.iter().enumerate() {
+                let mut io_generator = IoGenerator::new(
+                    config.inputs.clone(),
+                    flow_config.name.clone(),
+                    config.output.clone(),
+                );
+                build_flow(
+                    surface,
+                    &mut io_generator,
+                    index,
+                    config.resolution,
+                    view_ports[index],
+                    config.output_scale,
+                );
             }
-            previous_frame = Instant::now();
-            if frame_counter > config.measure_frames {
+
+            let mut inspector = ConfigInspector::new(&config);
+            surface.inspect(&mut inspector);
+            inspector.print_unused();
+        },
+        move || {
+            let mut done = false;
+            frame_counter += 1;
+
+            // Batch output and automatic exit should happen after ~3 frames to ensure proper/stable results.
+            if !config_poll.visible || config_poll.output.is_some() && frame_counter == 3 {
+                // Exit once all inputs have been processed, unless visible.
                 done = true;
             }
-        }
 
-        /*
-            The above hack works only with still images
-            The original solution below has several problems:
-            - it is only used for video
-            - There needs to be an io generator for each eye to provide them with independent input
-            - one io generator shoult be able to multtiplex its output to both eyes
-            - if one generator is ready, to we already trigger the render step or do we wait for both?
-        */
+            if config_poll.measure_frames > 0 {
+                let time_diff = previous_frame.elapsed().as_micros();
+                let frame_perf = (frame_counter, time_diff);
+                frame_perfs.push(frame_perf);
 
-        // if io_generator.is_ready() {
-        //     if let Some((input_node, output_node)) = io_generator.next(&window, None) {
-        //         window.replace_node(0, input_node, 0);
-        //         let output_node = if let Some(output_node) = output_node {
-        //             output_node
-        //         } else {
-        //             Box::new(Passthrough::new(&window))
-        //         };
-        //         window.replace_node(window.nodes_len() - 2, output_node, 0);
-        //         window.update_nodes();
-        //     } else {
-        // ...
-        //     }
-        // }
+                if frame_counter > 0 && frame_counter % print_spacing == 0 {
+                    let avg_fps: i32 = frame_perfs
+                        [(frame_counter - print_spacing) as usize..frame_counter as usize]
+                        .iter()
+                        .map(|t| t.1 as i32)
+                        .sum::<i32>()
+                        / (print_spacing as i32);
 
-        done
-    });
+                    println!("{:?} ≙ {}fps", frame_perf, 1_000_000 / (avg_fps));
+                }
+                previous_frame = Instant::now();
+                if frame_counter > config_poll.measure_frames {
+                    done = true;
+                }
+            }
+
+            /*
+                The above hack works only with still images
+                The original solution below has several problems:
+                - it is only used for video
+                - There needs to be an io generator for each eye to provide them with independent input
+                - one io generator shoult be able to multtiplex its output to both eyes
+                - if one generator is ready, to we already trigger the render step or do we wait for both?
+            */
+
+            // if io_generator.is_ready() {
+            //     if let Some((input_node, output_node)) = io_generator.next(&window, None) {
+            //         window.replace_node(0, input_node, 0);
+            //         let output_node = if let Some(output_node) = output_node {
+            //             output_node
+            //         } else {
+            //             Box::new(Passthrough::new(&window))
+            //         };
+            //         window.replace_node(window.nodes_len() - 2, output_node, 0);
+            //         window.update_nodes();
+            //     } else {
+            // ...
+            //     }
+            // }
+
+            done
+        },
+    ));
 
     /*
 

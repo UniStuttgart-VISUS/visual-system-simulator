@@ -22,14 +22,16 @@ impl Surface {
     where
         W: raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle,
     {
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: if cfg!(target_os = "macos") {
-                wgpu::Backends::METAL
-            } else {
-                wgpu::Backends::VULKAN
-            },
-            dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
-        });
+        let instance = if cfg!(target_os = "windows") {
+            // Use Vulkan for consistency with Varjo/OpenXR builds on windows.
+            wgpu::Instance::new(wgpu::InstanceDescriptor {
+                backends: wgpu::Backends::VULKAN,
+                dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
+            })
+        } else {
+            wgpu::Instance::default()
+        };
+
         let surface = unsafe { instance.create_surface(&window_handle) }.unwrap();
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -38,27 +40,24 @@ impl Surface {
                 force_fallback_adapter: false,
             })
             .await
-            .unwrap();
+            .expect("Cannot create adapter");
 
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
                     features: wgpu::Features::empty(),
-                    // WebGL doesn't support all of wgpu's features, so if
-                    // we're building for the web we'll have to disable some.
-                    // TODO-WGPU will look into this at a later point
-                    // limits: if cfg!(target_arch = "wasm32") {
-                    //     wgpu::Limits::downlevel_webgl2_defaults()
-                    // } else {
-                    //     wgpu::Limits::default()
-                    // },
-                    limits: wgpu::Limits::default(),
+                    limits: if cfg!(target_arch = "wasm32") {
+                        // WebGL does not support all features, thus disable some.
+                        wgpu::Limits::downlevel_webgl2_defaults().using_resolution(adapter.limits())
+                    } else {
+                        wgpu::Limits::default()
+                    },
                     label: None,
                 },
                 None,
             )
             .await
-            .unwrap();
+            .expect("Cannot create device");
 
         // Query surface capablities, preferably with sRGB support.
         let swapchain_capabilities = surface.get_capabilities(&adapter);

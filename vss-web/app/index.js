@@ -1,3 +1,3 @@
-import { run } from './pkg';
+import { append_and_run } from './pkg';
 
-run();
+append_and_run("vss-container");

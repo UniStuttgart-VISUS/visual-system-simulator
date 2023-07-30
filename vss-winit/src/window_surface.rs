@@ -11,7 +11,7 @@ use winit::{
 pub struct WindowSurface {
     events_loop: Option<EventLoop<()>>,
     window: winit::window::Window,
-    surface: Surface,
+    flow_count: usize,
 
     active: bool,
     static_pos: Option<(f32, f32)>,
@@ -22,7 +22,7 @@ pub struct WindowSurface {
 }
 
 impl WindowSurface {
-    pub async fn new(visible: bool, flow_count: usize, static_pos: Option<(f32, f32)>) -> Self {
+    pub fn new(visible: bool, flow_count: usize, static_pos: Option<(f32, f32)>) -> Self {
         let window_builder = WindowBuilder::new()
             .with_title("Visual System Simulator")
             .with_min_inner_size(LogicalSize::new(640.0, 360.0))
@@ -32,15 +32,11 @@ impl WindowSurface {
         let events_loop = EventLoop::new();
         let window = window_builder.build(&events_loop).unwrap();
         window.set_cursor_visible(true);
-        let window_size = window.inner_size();
-
-        let surface =
-            Surface::new([window_size.width, window_size.height], &window, flow_count).await;
 
         Self {
             window,
             events_loop: Some(events_loop),
-            surface,
+            flow_count,
             active: false,
             static_pos,
             mouse: MouseInput {
@@ -53,14 +49,26 @@ impl WindowSurface {
         }
     }
 
-    pub fn surface(&mut self) -> &mut Surface {
-        return &mut self.surface;
+    pub fn window(&mut self) -> &mut winit::window::Window {
+        return &mut self.window;
     }
 
-    pub fn run_and_exit<F>(mut self, mut poll_fn: F)
+    pub async fn run_and_exit<I, P>(mut self, mut init_fn: I, mut poll_fn: P)
     where
-        F: 'static + FnMut() -> bool,
+        I: 'static + FnMut(&mut Surface),
+        P: 'static + FnMut() -> bool,
     {
+        let window_size = self.window.inner_size();
+
+        let mut surface = Surface::new(
+            [window_size.width, window_size.height],
+            &self.window,
+            self.flow_count,
+        )
+        .await;
+
+        init_fn(&mut surface);
+
         let events_loop = self.events_loop.take().unwrap();
         let mut deferred_size = None;
 
@@ -121,16 +129,16 @@ impl WindowSurface {
                     }
                 }
                 Event::RedrawRequested(window_id) if window_id == self.window.id() => {
-                    self.surface.draw();
+                    surface.draw();
                 }
                 Event::RedrawEventsCleared => {
                     //*control_flow = ControlFlow::Exit;
                     self.window.request_redraw();
                 }
                 Event::MainEventsCleared => {
-                    self.update_size(deferred_size);
+                    self.update_size(&mut surface, deferred_size);
 
-                    self.update_input();
+                    self.update_input(&mut surface);
 
                     if poll_fn() {
                         *control_flow = ControlFlow::Exit;
@@ -141,15 +149,13 @@ impl WindowSurface {
         });
     }
 
-    fn update_input(&self) {
-        for f in self.surface.flows.iter() {
+    fn update_input(&self, surface: &mut Surface) {
+        for f in surface.flows.iter() {
             if self.override_view || self.override_gaze {
                 let view_pos = self.static_pos.unwrap_or(self.mouse.position);
 
-                let yaw =
-                    view_pos.0 / (self.surface.width() as f32) * std::f32::consts::PI * 2.0 - 0.5;
-                let pitch =
-                    view_pos.1 / (self.surface.height() as f32) * std::f32::consts::PI - 0.5; //50 mm lens
+                let yaw = view_pos.0 / (surface.width() as f32) * std::f32::consts::PI * 2.0 - 0.5;
+                let pitch = view_pos.1 / (surface.height() as f32) * std::f32::consts::PI - 0.5; //50 mm lens
                 let view = Matrix4::from_angle_x(cgmath::Rad(pitch))
                     * Matrix4::from_angle_y(cgmath::Rad(yaw));
 
@@ -170,11 +176,11 @@ impl WindowSurface {
         }
     }
 
-    fn update_size(&mut self, deferred_size: Option<PhysicalSize<u32>>) {
+    fn update_size(&mut self, surface: &mut Surface, deferred_size: Option<PhysicalSize<u32>>) {
         if self.static_pos.is_some() {
             // Update flow IO.
             let new_size = PhysicalSize::new(1920, 1080);
-            self.surface.resize([new_size.width, new_size.height]);
+            surface.resize([new_size.width, new_size.height]);
             // TODO-WGPU
             // for (i, f) in self.flow.iter().enumerate(){
             //     f.negociate_slots(&self);
@@ -187,7 +193,7 @@ impl WindowSurface {
             // Update flow IO.
             // let dpi_factor = self.window.scale_factor();
             // let size = size.to_physical(dpi_factor);
-            self.surface.resize([new_size.width, new_size.height]);
+            surface.resize([new_size.width, new_size.height]);
             // TODO-WGPU
             // for (i, f) in self.flow.iter().enumerate(){
             //     f.negociate_slots(&self);

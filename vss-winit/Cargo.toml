@@ -9,4 +9,4 @@ resolver = "2"
 [dependencies]
 cgmath = { workspace = true }
 vss = { path = "../vss" }
-winit = "0.28"
+winit = { workspace = true }
