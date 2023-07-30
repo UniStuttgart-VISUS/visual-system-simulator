@@ -81,7 +81,7 @@ pub trait Node {
         None
     }
 }
-/* */
+
 impl Node for Box<dyn Node> {
     fn name(&self) -> &'static str {
         self.as_ref().name()
