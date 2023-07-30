@@ -1,7 +1,6 @@
 //!
 //! This module contains several [Nodes](Node) that can be chained to form a [Flow].
 //!
-#[macro_use]
 mod cataract;
 mod display;
 mod eye_control;
