@@ -17,6 +17,7 @@ bitflags = "2.3"
 futures-intrusive = "0.5"
 serde_json = "*"
 serde = "1"
+instant = "0.1"
 
 [features]
 webgl = ["wgpu/webgl"]
