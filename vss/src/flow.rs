@@ -69,27 +69,31 @@ impl Flow {
                 let width = surface.width();
                 let height = surface.height();
 
-                let color_target =
-                    create_color_rt(device, width, height, Some("flow_negociate_slots color"));
-                let deflection_target = create_highp_rt(
+                let color_target = RenderTexture::create_color(
+                    device,
+                    width,
+                    height,
+                    Some("flow_negociate_slots color"),
+                );
+                let deflection_target = RenderTexture::create_highp(
                     device,
                     width,
                     height,
                     Some("flow_negociate_slots deflection"),
                 );
-                let color_change_target = create_highp_rt(
+                let color_change_target = RenderTexture::create_highp(
                     device,
                     width,
                     height,
                     Some("flow_negociate_slots color_change"),
                 );
-                let color_uncertainty_target = create_highp_rt(
+                let color_uncertainty_target = RenderTexture::create_highp(
                     device,
                     width,
                     height,
                     Some("flow_negociate_slots color_uncertainty"),
                 );
-                let covariances_target = create_highp_rt(
+                let covariances_target = RenderTexture::create_highp(
                     device,
                     width,
                     height,

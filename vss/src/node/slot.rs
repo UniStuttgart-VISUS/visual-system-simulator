@@ -28,27 +28,27 @@ pub struct ColorDepthTargets {
 
 impl ColorDepthTargets {
     pub fn new(device: &wgpu::Device, node_name: &str) -> Self {
-        let rt_color = placeholder_color_rt(
+        let rt_color = RenderTexture::empty_color(
             device,
             Some(format!("{}{}", node_name, " rt_color (placeholder)").as_str()),
         );
-        let rt_depth = placeholder_depth_rt(
+        let rt_depth = RenderTexture::empty_depth(
             device,
             Some(format!("{}{}", node_name, " rt_depth (placeholder)").as_str()),
         );
-        let rt_deflection = placeholder_highp_rt(
+        let rt_deflection = RenderTexture::empty_highp(
             device,
             Some(format!("{}{}", node_name, " rt_deflection (placeholder)").as_str()),
         );
-        let rt_color_change = placeholder_highp_rt(
+        let rt_color_change = RenderTexture::empty_highp(
             device,
             Some(format!("{}{}", node_name, " rt_color_change (placeholder)").as_str()),
         );
-        let rt_color_uncertainty = placeholder_highp_rt(
+        let rt_color_uncertainty = RenderTexture::empty_highp(
             device,
             Some(format!("{}{}", node_name, " rt_color_uncertainty (placeholder)").as_str()),
         );
-        let rt_covariances = placeholder_highp_rt(
+        let rt_covariances = RenderTexture::empty_highp(
             device,
             Some(format!("{}{}", node_name, " rt_covariances (placeholder)").as_str()),
         );
@@ -94,23 +94,23 @@ pub struct ColorTargets {
 
 impl ColorTargets {
     pub fn new(device: &wgpu::Device, node_name: &str) -> Self {
-        let rt_color = placeholder_color_rt(
+        let rt_color = RenderTexture::empty_color(
             device,
             Some(format!("{}{}", node_name, " rt_color (placeholder)").as_str()),
         );
-        let rt_deflection = placeholder_highp_rt(
+        let rt_deflection = RenderTexture::empty_highp(
             device,
             Some(format!("{}{}", node_name, " rt_deflection (placeholder)").as_str()),
         );
-        let rt_color_change = placeholder_highp_rt(
+        let rt_color_change = RenderTexture::empty_highp(
             device,
             Some(format!("{}{}", node_name, " rt_color_change (placeholder)").as_str()),
         );
-        let rt_color_uncertainty = placeholder_highp_rt(
+        let rt_color_uncertainty = RenderTexture::empty_highp(
             device,
             Some(format!("{}{}", node_name, " rt_color_uncertainty (placeholder)").as_str()),
         );
-        let rt_covariances = placeholder_highp_rt(
+        let rt_covariances = RenderTexture::empty_highp(
             device,
             Some(format!("{}{}", node_name, " rt_covariances (placeholder)").as_str()),
         );
@@ -268,31 +268,31 @@ impl NodeSlots {
                     }
                 };
                 let device = surface.device();
-                let color_target = create_color_rt(
+                let color_target = RenderTexture::create_color(
                     device,
                     width,
                     height,
                     Some(format!("{}{}", node_name, " to_color_output color").as_str()),
                 );
-                let deflection_target = create_highp_rt(
+                let deflection_target = RenderTexture::create_highp(
                     device,
                     width,
                     height,
                     Some(format!("{}{}", node_name, " to_color_output deflection").as_str()),
                 );
-                let color_change_target = create_highp_rt(
+                let color_change_target = RenderTexture::create_highp(
                     device,
                     width,
                     height,
                     Some(format!("{}{}", node_name, " to_color_output color_change").as_str()),
                 );
-                let color_uncertainty_target = create_highp_rt(
+                let color_uncertainty_target = RenderTexture::create_highp(
                     device,
                     width,
                     height,
                     Some(format!("{}{}", node_name, " to_color_output color_uncertainty").as_str()),
                 );
-                let covariances_target = create_highp_rt(
+                let covariances_target = RenderTexture::create_highp(
                     device,
                     width,
                     height,
@@ -360,25 +360,25 @@ impl NodeSlots {
                     }
                 };
                 let device = surface.device();
-                let color_target = create_color_rt(
+                let color_target = RenderTexture::create_color(
                     device,
                     width,
                     height,
                     Some(format!("{}{}", node_name, " to_color_depth_output color").as_str()),
                 );
-                let depth_target = create_depth_rt(
+                let depth_target = RenderTexture::create_depth(
                     device,
                     width,
                     height,
                     Some(format!("{}{}", node_name, " to_color_depth_output depth").as_str()),
                 );
-                let deflection_target = create_highp_rt(
+                let deflection_target = RenderTexture::create_highp(
                     device,
                     width,
                     height,
                     Some(format!("{}{}", node_name, " to_color_depth_output deflection").as_str()),
                 );
-                let color_change_target = create_highp_rt(
+                let color_change_target = RenderTexture::create_highp(
                     device,
                     width,
                     height,
@@ -386,7 +386,7 @@ impl NodeSlots {
                         format!("{}{}", node_name, " to_color_depth_output color_change").as_str(),
                     ),
                 );
-                let color_uncertainty_target = create_highp_rt(
+                let color_uncertainty_target = RenderTexture::create_highp(
                     device,
                     width,
                     height,
@@ -398,7 +398,7 @@ impl NodeSlots {
                         .as_str(),
                     ),
                 );
-                let covariances_target = create_highp_rt(
+                let covariances_target = RenderTexture::create_highp(
                     device,
                     width,
                     height,
@@ -438,7 +438,7 @@ impl NodeSlots {
             } => {
                 // Guess missing depth, based on color.
                 let device = surface.device();
-                let depth_target = create_depth_rt(
+                let depth_target = RenderTexture::create_depth(
                     device,
                     color_target.width,
                     color_target.height,
@@ -474,31 +474,31 @@ impl NodeSlots {
         node_name: &str,
     ) -> Self {
         let device = surface.device();
-        let color_target = create_color_rt(
+        let color_target = RenderTexture::create_color(
             device,
             width,
             height,
             Some(format!("{}{}", node_name, " emplace_color_output color").as_str()),
         );
-        let deflection_target = create_highp_rt(
+        let deflection_target = RenderTexture::create_highp(
             device,
             width,
             height,
             Some(format!("{}{}", node_name, " emplace_color_output deflection").as_str()),
         );
-        let color_change_target = create_highp_rt(
+        let color_change_target = RenderTexture::create_highp(
             device,
             width,
             height,
             Some(format!("{}{}", node_name, " emplace_color_output color_change").as_str()),
         );
-        let color_uncertainty_target = create_highp_rt(
+        let color_uncertainty_target = RenderTexture::create_highp(
             device,
             width,
             height,
             Some(format!("{}{}", node_name, " emplace_color_output color_uncertainty").as_str()),
         );
-        let covariances_target = create_highp_rt(
+        let covariances_target = RenderTexture::create_highp(
             device,
             width,
             height,
@@ -530,25 +530,25 @@ impl NodeSlots {
         node_name: &str,
     ) -> Self {
         let device = surface.device();
-        let color_target = create_color_rt(
+        let color_target = RenderTexture::create_color(
             device,
             width,
             height,
             Some(format!("{}{}", node_name, " emplace_color_depth_output color").as_str()),
         );
-        let depth_target = create_depth_rt(
+        let depth_target = RenderTexture::create_depth(
             device,
             width,
             height,
             Some(format!("{}{}", node_name, " emplace_color_depth_output depth").as_str()),
         );
-        let deflection_target = create_highp_rt(
+        let deflection_target = RenderTexture::create_highp(
             device,
             width,
             height,
             Some(format!("{}{}", node_name, " emplace_color_depth_output deflection").as_str()),
         );
-        let color_change_target = create_highp_rt(
+        let color_change_target = RenderTexture::create_highp(
             device,
             width,
             height,
@@ -560,7 +560,7 @@ impl NodeSlots {
                 .as_str(),
             ),
         );
-        let color_uncertainty_target = create_highp_rt(
+        let color_uncertainty_target = RenderTexture::create_highp(
             device,
             width,
             height,
@@ -572,7 +572,7 @@ impl NodeSlots {
                 .as_str(),
             ),
         );
-        let covariances_target = create_highp_rt(
+        let covariances_target = RenderTexture::create_highp(
             device,
             width,
             height,
@@ -704,16 +704,14 @@ impl NodeSlots {
                 covariances_source,
                 ..
             } => {
-                create_textures_bind_group(
-                    device,
-                    &[
-                        color_source,
-                        deflection_source,
-                        color_change_source,
-                        color_uncertainty_source,
-                        covariances_source,
-                    ],
-                )
+                [
+                    color_source,
+                    deflection_source,
+                    color_change_source,
+                    color_uncertainty_source,
+                    covariances_source,
+                ]
+                .create_bind_group(device)
                 .1
             }
         }
@@ -733,17 +731,15 @@ impl NodeSlots {
                 covariances_source,
                 ..
             } => {
-                create_textures_bind_group(
-                    device,
-                    &[
-                        color_source,
-                        depth_source,
-                        deflection_source,
-                        color_change_source,
-                        color_uncertainty_source,
-                        covariances_source,
-                    ],
-                )
+                [
+                    color_source,
+                    depth_source,
+                    deflection_source,
+                    color_change_source,
+                    color_uncertainty_source,
+                    covariances_source,
+                ]
+                .create_bind_group(device)
                 .1
             }
         }

@@ -22,7 +22,8 @@ impl NormalMapGenerator {
             ),
         });
 
-        let texture = placeholder_highp_rt(device, Some("Generator RenderTexture placeholder"));
+        let texture =
+            RenderTexture::empty_highp(device, Some("Generator RenderTexture placeholder"));
 
         let pipeline = create_render_pipeline(
             device,
@@ -44,7 +45,8 @@ impl NormalMapGenerator {
         width: u32,
         height: u32,
     ) {
-        self.texture = create_highp_rt(device, width, height, Some("Generator RenderTexture"));
+        self.texture =
+            RenderTexture::create_highp(device, width, height, Some("Generator RenderTexture"));
 
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Generator Encoder"),

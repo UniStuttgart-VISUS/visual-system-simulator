@@ -98,7 +98,7 @@ impl VarianceMeasure {
             sources_bind_group,
             original_bind_group,
             targets: ColorTargets::new(device, "VarianceNode"),
-            target_measurement: placeholder_highp_rt(
+            target_measurement: RenderTexture::empty_highp(
                 device,
                 Some("VarianceNode target_measurement (placeholder)"),
             ),
@@ -226,12 +226,10 @@ impl Node for VarianceMeasure {
         self.sources_bind_group = slots.as_all_colors_source(device);
         self.targets = slots.as_all_colors_target();
 
-        self.target_measurement = create_render_texture(
+        self.target_measurement = RenderTexture::create_highp(
             device,
             self.uniforms.data.resolution[0] as u32,
             self.uniforms.data.resolution[1] as u32,
-            HIGHP_FORMAT,
-            create_sampler_nearest(device),
             Some("VarianceNode target_measurement"),
         );
 

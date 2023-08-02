@@ -118,7 +118,8 @@ impl VisOverlay {
         let (original_bind_group_layout, original_bind_group) =
             original_tex.create_bind_group(device);
 
-        let render_target = placeholder_color_rt(device, Some("VisOverlayNode render_target"));
+        let render_target =
+            RenderTexture::empty_color(device, Some("VisOverlayNode render_target"));
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("VisOverlayNode Shader"),

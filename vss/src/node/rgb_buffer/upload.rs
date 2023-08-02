@@ -146,7 +146,7 @@ impl UploadRgbBuffer {
 
         // Test if we have to invalidate the texture.
         if let Some(texture) = &self.texture {
-            if buffer.width != texture.width || buffer.height != texture.height {
+            if buffer.width != texture.width() || buffer.height != texture.height() {
                 self.texture = None;
             }
         }
@@ -208,8 +208,8 @@ impl Node for UploadRgbBuffer {
         }
 
         let (width, height) = if let Some(texture) = &self.texture {
-            let tex_w = texture.width as f32;
-            let mut tex_h = texture.height as f32;
+            let tex_w = texture.width() as f32;
+            let mut tex_h = texture.height() as f32;
             let flags = RgbInputFlags::from_bits(self.uniforms.data.flags).unwrap();
             if flags.contains(RgbInputFlags::RGBD_HORIZONTAL) {
                 tex_h /= 2.0;

@@ -1,8 +1,8 @@
 use crate::*;
+use instant::Instant;
 use std::cell::Cell;
 use std::iter;
 use std::rc::Rc;
-use instant::Instant;
 use wgpu::{self, SurfaceError, SurfaceTexture};
 
 /// Represents a rendering surface and its associated [Flow].

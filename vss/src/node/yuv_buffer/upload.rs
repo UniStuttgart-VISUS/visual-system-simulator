@@ -48,29 +48,27 @@ impl UploadYuvBuffer {
             },
         );
 
-        let (sources_bind_group_layout, sources_bind_group) = create_textures_bind_group(
-            device,
-            &[
-                &placeholder_single_channel_texture(
-                    device,
-                    queue,
-                    Some("UploadYuvBuffer in_y (placeholder)"),
-                )
-                .unwrap(),
-                &placeholder_single_channel_texture(
-                    device,
-                    queue,
-                    Some("UploadYuvBuffer in_u (placeholder)"),
-                )
-                .unwrap(),
-                &placeholder_single_channel_texture(
-                    device,
-                    queue,
-                    Some("UploadYuvBuffer in_v (placeholder)"),
-                )
-                .unwrap(),
-            ],
-        );
+        let (sources_bind_group_layout, sources_bind_group) = [
+            &placeholder_single_channel_texture(
+                device,
+                queue,
+                Some("UploadYuvBuffer in_y (placeholder)"),
+            )
+            .unwrap(),
+            &placeholder_single_channel_texture(
+                device,
+                queue,
+                Some("UploadYuvBuffer in_u (placeholder)"),
+            )
+            .unwrap(),
+            &placeholder_single_channel_texture(
+                device,
+                queue,
+                Some("UploadYuvBuffer in_v (placeholder)"),
+            )
+            .unwrap(),
+        ]
+        .create_bind_group(device);
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("UploadYuvBuffer Shader"),
@@ -122,7 +120,7 @@ impl UploadYuvBuffer {
     pub fn upload_buffer(&mut self, buffer: YuvBuffer) {
         // Test if we have to invalidate textures.
         if let Some(texture_y) = &self.texture_y {
-            if buffer.width != texture_y.width || buffer.height != texture_y.height {
+            if buffer.width != texture_y.width() || buffer.height != texture_y.height() {
                 self.texture_y = None;
                 self.texture_u = None;
                 self.texture_v = None;
@@ -190,7 +188,7 @@ impl Node for UploadYuvBuffer {
             .unwrap();
 
             (_, self.sources_bind_group) =
-                create_textures_bind_group(device, &[&texture_y, &texture_u, &texture_v]);
+                [&texture_y, &texture_u, &texture_v].create_bind_group(device);
 
             self.texture_y = Some(texture_y);
             self.texture_u = Some(texture_u);
@@ -200,8 +198,8 @@ impl Node for UploadYuvBuffer {
         let mut width = 1;
         let mut height = 1;
         if let Some(texture_y) = &self.texture_y {
-            width = texture_y.width;
-            height = texture_y.height;
+            width = texture_y.width();
+            height = texture_y.height();
         }
 
         let slots = slots.emplace_color_depth_output(surface, height, width, "UploadYuvBuffer");
