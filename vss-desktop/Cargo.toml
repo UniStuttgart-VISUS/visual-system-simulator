@@ -4,7 +4,6 @@ edition = "2018"
 version = "1.0.0"
 authors = ["The Visual System Simulator Developers"]
 license = "Apache-2.0"
-build = "build.rs"
 default-run = "vss"
 
 [[bin]]
@@ -17,6 +16,7 @@ wgpu-hal = { workspace = true, optional = true }
 cgmath = { workspace = true }
 vss = { path = "../vss" }
 vss-winit = { path = "../vss-winit" }
+vss-vr = { path = "../vss-vr", optional = true}
 clap = "4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "*"
@@ -28,11 +28,8 @@ simple-logging = "2.0.2"
 ash = { version = "0.37.3", optional = true }
 pollster = "0.3"
 
-[build-dependencies]
-cc = "^1.0.61"
-
 [features]
 default = []
 video = ["ac_ffmpeg"]
-varjo = ["wgpu-hal", "ash"]
+varjo = ["wgpu-hal", "ash", "vss-vr"]
 openxr = []

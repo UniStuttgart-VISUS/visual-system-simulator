@@ -1,0 +1,24 @@
+[package]
+name = "vss-vr"
+version = "0.1.0"
+edition = "2021"
+authors = ["The Visual System Simulator Developers"]
+license = "Apache-2.0"
+build = "build.rs"
+resolver = "2"
+
+[dependencies]
+cgmath = { workspace = true }
+vss = { path = "../vss" }
+winit = { workspace = true }
+wgpu = { workspace = true }
+wgpu-hal = { workspace = true, optional = true }
+ash = { version = "0.37.3", optional = true }
+simple-logging = "2.0.2"
+log = "0.4"
+
+[build-dependencies]
+cc = "^1.0.61"
+
+[features]
+varjo = ["wgpu-hal", "ash"]

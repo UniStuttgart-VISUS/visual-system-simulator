@@ -11,7 +11,6 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 #include <Varjo.h>
 #include <Varjo_vk.h>
-// #include <Varjo_gl.h>
 #include <Varjo_layers.h>
 #include <Varjo_types_layers.h>
 #include <cassert>
@@ -21,6 +20,7 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 #include <time.h>
 
+// TODO instead of getting these values from wgpu we need to create and provide them here
 struct VulkanData{
     VkInstance instance;
     VkDevice device;
@@ -32,8 +32,6 @@ struct VarjoRenderTarget
 {
     VkImage colorImage;
     VkImage depthImage;
-    // GLuint colorTextureId;
-    // GLuint depthTextureId;
     uint32_t width;
     uint32_t height;
 };
@@ -132,6 +130,12 @@ public:
     bool m_visible = true;
     vk::DebugUtilsMessengerEXT vkDebugUtilsMessenger;
 
+    vk::UniqueInstance vkInstance;
+    vk::PhysicalDevice vkPhysicalDevice;
+    vk::UniqueDevice vkDevice;
+    vk::Queue graphicsQueue;
+    uint32_t graphicsQueueFamily = -1;
+
     void validate()
     {
         varjo_Error error = varjo_GetError(m_session);
@@ -156,43 +160,21 @@ public:
         VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
         printf("VULKAN_HPP_DEFAULT_DISPATCHER.init done\n");
         
-        vk::Instance inst = vk::Instance(vulkan_data->instance);
         
-        auto test1 = vkGetInstanceProcAddr(nullptr, "vkCreateInstance");
-        auto test2 = vkGetInstanceProcAddr(vulkan_data->instance, "vkCreateInstance");
-        auto test3 = vkGetInstanceProcAddr(inst, "vkCreateInstance");
+        //auto test1 = vkGetInstanceProcAddr(nullptr, "vkCreateInstance"); // this one gives a proper result, all others are null
+        //auto test2 = vkGetInstanceProcAddr(vulkan_data->instance, "vkCreateInstance");
+        //auto test3 = vkGetInstanceProcAddr(inst, "vkCreateInstance");
 
-        int instanceExtensionCount = 0;
-        varjo_GetInstanceExtensionsVk(m_session, &instanceExtensionCount, nullptr);
-        std::vector<const char*> enabledInstanceExtensions(instanceExtensionCount);
-        varjo_GetInstanceExtensionsVk(m_session, &instanceExtensionCount, enabledInstanceExtensions.data());
-        printf("Enabled Vulkan instance extensions:\n");
-        for (const auto& ext : enabledInstanceExtensions) {
-            printf("    %s\n", ext);
-        }
-
-        VULKAN_HPP_DEFAULT_DISPATCHER.init(vk::Instance(vulkan_data->instance));
-
-        vkDebugUtilsMessenger = inst.createDebugUtilsMessengerEXT(
-        vk::DebugUtilsMessengerCreateInfoEXT()
-            .setMessageSeverity(vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose | vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo |
-                                vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError)
-            .setMessageType(vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation |
-                            vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance)
-            .setPfnUserCallback(debugUtilsMessengerCallback));
-
+        createInstance(m_session);
+        //vkInstance = vk::UniqueInstance(vulkan_data->instance);
+        //VULKAN_HPP_DEFAULT_DISPATCHER.init(vkInstance.get());
+        
+        std::printf("Breakpoint\n");
         //VkPhysicalDevice vkPhysicalDevice = 
-        varjo_GetPhysicalDeviceVk(m_session, vulkan_data->instance);//CRASH
+        varjo_GetPhysicalDeviceVk(m_session, vkInstance.get());//CRASH
         // varjo_GetPhysicalDeviceVk(m_session, nullptr);//CRASH
 
-        int32_t deviceExtensionsCount = 0;
-        varjo_GetDeviceExtensionsVk(m_session, &deviceExtensionsCount, nullptr);
-        std::vector<const char*> extVec(deviceExtensionsCount);
-        varjo_GetDeviceExtensionsVk(m_session, &deviceExtensionsCount, extVec.data());
-
-
-        VULKAN_HPP_DEFAULT_DISPATCHER.init(vk::Device(vulkan_data->device));
-
+        createDevice(m_session);
 
         // Enumerate and pack views into an atlas-like layout.
         m_viewCount = varjo_GetViewCount(m_session);
@@ -212,23 +194,8 @@ public:
         }
 
         printf("varjo_GetPhysicalDeviceVk start\n");
-        auto physicalDevice = vk::PhysicalDevice(varjo_GetPhysicalDeviceVk(m_session, vulkan_data->instance));
+        auto physicalDevice = vk::PhysicalDevice(varjo_GetPhysicalDeviceVk(m_session, vkInstance.get()));
         printf("varjo_GetPhysicalDeviceVk end\n");
-
-        const auto props =  physicalDevice.getQueueFamilyProperties();
-
-        uint32_t graphicsQueueFamily;
-        for (int i = 0; i < static_cast<int>(props.size()); i++) {
-            const auto& queueFamily = props[i];
-
-            if (graphicsQueueFamily == -1) {
-                if (queueFamily.queueCount > 0 && (queueFamily.queueFlags & vk::QueueFlagBits::eGraphics)) {
-                    graphicsQueueFamily = i;
-                }
-            }
-        }
-
-        printf("graphicsQueueFamily: %i (our: %i, %i)\n", graphicsQueueFamily, vulkan_data->queueFamilyIndex, vulkan_data->queueIndex);
 
         // Setup color swap chain (ring buffer of render targets).
         m_swapChainConfig.numberOfTextures = 4;
@@ -236,13 +203,11 @@ public:
         m_swapChainConfig.textureFormat = varjo_TextureFormat_R8G8B8A8_SRGB;
         m_swapChainConfig.textureWidth = m_viewports.back().width + m_viewports.back().x;
         m_swapChainConfig.textureHeight = m_viewports.back().height + m_viewports.back().y;
-        m_colorSwapChain = varjo_VKCreateSwapChain(m_session, vulkan_data->device, graphicsQueueFamily, vulkan_data->queueIndex, &m_swapChainConfig);
-        // m_colorSwapChain = varjo_GLCreateSwapChain(m_session, &m_swapChainConfig);
+        m_colorSwapChain = varjo_VKCreateSwapChain(m_session, vkDevice.get(), graphicsQueueFamily, 0, &m_swapChainConfig);
 
         m_depthSwapChainConfig = m_swapChainConfig;
         m_depthSwapChainConfig.textureFormat = varjo_DepthTextureFormat_D24_UNORM_S8_UINT;
-        m_depthSwapChain = varjo_VKCreateSwapChain(m_session, vulkan_data->device, graphicsQueueFamily, vulkan_data->queueIndex, &m_depthSwapChainConfig);
-        // m_depthSwapChain = varjo_GLCreateSwapChain(m_session, &m_depthSwapChainConfig);
+        m_depthSwapChain = varjo_VKCreateSwapChain(m_session, vkDevice.get(), graphicsQueueFamily, 0, &m_depthSwapChainConfig);
         validate();
 
         // Create a render target per swap chain texture.
@@ -254,8 +219,6 @@ public:
                 VarjoRenderTarget{
                     varjo_ToVkTexture(colorTexture),
                     varjo_ToVkTexture(depthTexture),
-                    // varjo_ToGLTexture(colorTexture),
-                    // varjo_ToGLTexture(depthTexture),
                     static_cast<uint32_t>(m_swapChainConfig.textureWidth),
                     static_cast<uint32_t>(m_swapChainConfig.textureHeight)});
         }
@@ -302,6 +265,124 @@ public:
         varjo_FreeSwapChain(m_colorSwapChain);
         varjo_FreeSwapChain(m_depthSwapChain);
         varjo_SessionShutDown(m_session);
+    }
+
+    
+    void createInstance(varjo_Session* session){
+        int instanceExtensionCount = 0;
+        varjo_GetInstanceExtensionsVk(m_session, &instanceExtensionCount, nullptr);
+        std::vector<const char*> enabledInstanceExtensions(instanceExtensionCount);
+        varjo_GetInstanceExtensionsVk(m_session, &instanceExtensionCount, enabledInstanceExtensions.data());
+        printf("Required Vulkan instance extensions:\n");
+        for (const auto& ext : enabledInstanceExtensions) {
+            printf("    %s\n", ext);
+        }
+
+        enabledInstanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+
+        enabledInstanceExtensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
+        enabledInstanceExtensions.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
+        //enabledInstanceExtensions.push_back(VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME);
+        enabledInstanceExtensions.push_back(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
+
+        printf("Enabled Vulkan instance extensions:\n");
+        for (const auto& ext : enabledInstanceExtensions) {
+            printf("    %s\n", ext);
+        }
+
+        const std::vector<const char*> enabledLayers = {
+            "VK_LAYER_KHRONOS_validation"
+        };
+
+        const auto applicationInfo = vk::ApplicationInfo().setApiVersion(VK_MAKE_VERSION(1, 3, 0));
+        const vk::InstanceCreateInfo info = vk::InstanceCreateInfo()
+                                                .setPEnabledLayerNames(enabledLayers)
+                                                .setPEnabledExtensionNames(enabledInstanceExtensions)
+                                                .setPApplicationInfo(&applicationInfo);
+        vkInstance = vk::createInstanceUnique(info);
+        //if (res != vk::Result::eSuccess) {
+        //    fprintf(stderr, "Failed to create a Vulkan instance, error code = %x", res);
+        //    return false;
+        //}
+
+        VULKAN_HPP_DEFAULT_DISPATCHER.init(vkInstance.get());
+
+        vkDebugUtilsMessenger = vkInstance->createDebugUtilsMessengerEXTUnique(
+            vk::DebugUtilsMessengerCreateInfoEXT()
+                .setMessageSeverity(vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose | vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo |
+                                    vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError)
+                .setMessageType(vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation |
+                                vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance)
+                .setPfnUserCallback(debugUtilsMessengerCallback)).get();
+
+        return;
+    }
+
+    void createDevice(varjo_Session* session){
+        vkPhysicalDevice = varjo_GetPhysicalDeviceVk(session, vkInstance.get());
+        findQueueFamilies(vkPhysicalDevice);
+
+        const float priority = 1.f;
+        std::vector<vk::DeviceQueueCreateInfo> queueDesc;
+        for (const int queueFamily : {graphicsQueueFamily}) {
+            queueDesc.push_back(vk::DeviceQueueCreateInfo().setQueueFamilyIndex(queueFamily).setQueueCount(1).setPQueuePriorities(&priority));
+        }
+
+        const auto deviceFeatures = vk::PhysicalDeviceFeatures();
+
+        auto synchronization2Features = vk::PhysicalDeviceSynchronization2Features().setSynchronization2(VK_TRUE);
+
+        int32_t deviceExtensionsCount = 0;
+        varjo_GetDeviceExtensionsVk(session, &deviceExtensionsCount, nullptr);
+        std::vector<const char*> extVec(deviceExtensionsCount);
+        varjo_GetDeviceExtensionsVk(session, &deviceExtensionsCount, extVec.data());
+
+        extVec.push_back(VK_KHR_MAINTENANCE_1_EXTENSION_NAME);
+        extVec.push_back(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
+
+        // needed for wgpu
+        extVec.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+        //extVec.push_back(VK_KHR_IMAGELESS_FRAMEBUFFER_EXTENSION_NAME);
+
+        printf("Enabled Vulkan device extensions:\n");
+        for (const auto& ext : extVec) {
+            printf("    %s\n", ext);
+        }
+
+        std::vector<char*> layerVec;
+
+        const auto deviceDesc = vk::DeviceCreateInfo()
+                                    .setQueueCreateInfos(queueDesc)
+                                    .setPEnabledFeatures(&deviceFeatures)
+                                    .setPEnabledExtensionNames(extVec)
+                                    .setPEnabledLayerNames(layerVec)
+                                    .setPNext(&synchronization2Features);
+
+        vkDevice = vkPhysicalDevice.createDeviceUnique(deviceDesc);
+        //if (res != vk::Result::eSuccess) {
+        //    return false;
+        //}
+
+        VULKAN_HPP_DEFAULT_DISPATCHER.init(vkDevice.get());
+        graphicsQueue = vkDevice->getQueue(graphicsQueueFamily, 0);
+        // TODO Check for errors
+        return;
+    }
+
+    void findQueueFamilies(vk::PhysicalDevice physicalDevice){
+        const auto props = physicalDevice.getQueueFamilyProperties();
+
+        for (int i = 0; i < static_cast<int>(props.size()); i++) {
+            const auto& queueFamily = props[i];
+
+            if (graphicsQueueFamily == -1) {
+                if (queueFamily.queueCount > 0 && (queueFamily.queueFlags & vk::QueueFlagBits::eGraphics)) {
+                    graphicsQueueFamily = i;
+                }
+            }
+        }
+
+        return;
     }
 
     bool beginFrameSync()
@@ -384,6 +465,13 @@ API_EXPORT const char *varjo_new(Varjo **varjo, VulkanData *vulkan_data)
     try
     {
         *varjo = new Varjo(vulkan_data);
+        *vulkan_data = VulkanData{
+            (*varjo)->vkInstance.get(),
+            (*varjo)->vkDevice.get(),
+            (*varjo)->graphicsQueueFamily,
+            0
+        };
+        printf("cpp-side: instance: %p, device: %p\n", (void *)vulkan_data->instance, (void *)vulkan_data->device);
         return nullptr;
     }
     catch (const std::exception &ex)

@@ -18,6 +18,41 @@ pub struct Surface {
 }
 
 impl Surface {
+    pub async fn with_existing(surface_size: [u32; 2], flow_count: usize, surface: wgpu::Surface, adapter: wgpu::Adapter, device: wgpu::Device, queue: wgpu::Queue) -> Self {
+
+        // Query surface capablities, preferably with sRGB support.
+        let swapchain_capabilities = surface.get_capabilities(&adapter);
+        let view_formats = vec![];
+
+        let surface_config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            #[cfg(target_os = "android")]
+            format: swapchain_capabilities.formats[0],
+            #[cfg(not(target_os = "android"))]
+            format: swapchain_capabilities.formats[0].remove_srgb_suffix(), // TODO find a better workaround for this (e.g. adjust output format of last node)
+            width: surface_size[0],
+            height: surface_size[1],
+            present_mode: wgpu::PresentMode::Fifo,
+            alpha_mode: swapchain_capabilities.alpha_modes[0],
+            view_formats,
+        };
+        surface.configure(&device, &surface_config);
+
+        // Create flows.
+        let mut flows = Vec::new();
+        flows.resize_with(flow_count, Flow::new);
+
+        Surface {
+            surface,
+            surface_size,
+            surface_config,
+            device,
+            queue,
+            flows,
+            last_render_instant: Cell::new(Instant::now()),
+        }
+    }
+
     pub async fn new<W>(surface_size: [u32; 2], window_handle: W, flow_count: usize) -> Self
     where
         W: raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle,

@@ -1,7 +1,5 @@
 mod cmd;
 mod node;
-#[cfg(feature = "varjo")]
-mod varjo;
 
 #[cfg(feature = "openxr")]
 mod openxr;
@@ -9,7 +7,10 @@ mod openxr;
 use std::io::Cursor;
 use std::time::Instant;
 use vss::*;
+#[cfg(not(any(feature = "varjo", feature = "openxr")))]
 use vss_winit::*;
+#[cfg(feature = "varjo")]
+use vss_vr::*;
 
 use crate::cmd::*;
 use crate::node::*;
@@ -420,9 +421,11 @@ pub fn main() {
     }
 }
 
+//TODO update method
+/*
 #[cfg(feature = "varjo")]
 pub fn set_varjo_data(
-    window: &mut Window,
+    window: &mut WindowSurface,
     last_fov: &mut Vec<(f32, f32)>,
     varjo: &mut varjo::Varjo,
 ) {
@@ -460,18 +463,20 @@ pub fn set_varjo_data(
         // }); // TODO-readd
     }
 }
+ */
 
 #[cfg(feature = "varjo")]
 pub fn main() {
+    let varjo = Varjo::new();
+
+    set_load(Box::new(load_fn));
+
     let config = cmd_parse();
+    let config_poll = config.clone();
 
-    let remote = if let Some(port) = config.port {
-        Some(Remote::new(port))
-    } else {
-        None
-    };
-
-    let flow_count = 4; //TODO take this number from the varjo api instead ? (for example the size of the viewports vector)
+    let flow_count = 1; //TODO take this number from the varjo api instead ? (for example the size of the viewports vector)
+    // TODO check if this is still needed
+    /*
     let mut parameters = Vec::new();
     for _ in 0..flow_count {
         let mut value_map = ValueMap::new();
@@ -479,11 +484,18 @@ pub fn main() {
             value_map.insert((*key).clone(), (*val).clone());
         }
         parameters.push(RefCell::new(value_map));
-    }
+    } */
 
-    let mut window = pollster::block_on(Window::new(config.visible, None, parameters, flow_count));
+    // TODO create optional parameter to pass existing instance, then create this instance in varjo.rs using wgpu::Instance::from_hal()
+    let window = WindowVRSurface::new(
+        config.visible,
+        flow_count,
+        config.flow_configs[0].static_gaze,
+    );
 
-    let mut varjo = varjo::Varjo::new(&window.surface);
+    // TODO check if this is still needed
+    /*
+
     let mut log_counter = 0; //TODO: used to reduce log spam, remove when no longer needed or replace with a better solution
     let varjo_viewports = varjo.create_render_targets(&window.surface);
     let mut varjo_fov = vec![(100.0, 70.0); 4];
@@ -507,7 +519,10 @@ pub fn main() {
         );
         window.surface.add_node(Box::new(node), index);
     }
+     */
 
+    //TODO change to new window.run_and_exit
+    /*
     let mut done = false;
     while !done {
         varjo.logging_enabled = log_counter == 0;
@@ -525,4 +540,107 @@ pub fn main() {
             log_counter = (log_counter + 1) % 10;
         }
     }
+    */
+
+    let view_ports = vec![ViewPort {
+        x: 0.0,
+        y: 0.0,
+        width: 1.0,
+        height: 1.0,
+        absolute_viewport: false,
+    }];
+
+    let mut frame_counter = 0;
+    let mut frame_perfs: Vec<(u128, u128)> = vec![];
+    let mut previous_frame = Instant::now();
+    let print_spacing = 60;
+
+    pollster::block_on(window.run_and_exit(
+        move |surface| {
+            for (index, flow_config) in config.flow_configs.iter().enumerate() {
+                let mut io_generator = IoGenerator::new(
+                    config.inputs.clone(),
+                    flow_config.name.clone(),
+                    config.output.clone(),
+                );
+                build_flow(
+                    surface,
+                    &mut io_generator,
+                    index,
+                    config.resolution,
+                    view_ports[index],
+                    config.output_scale,
+                );
+            }
+
+            let mut inspector = ConfigInspector::new(&config);
+            surface.inspect(&mut inspector);
+            inspector.print_unused();
+        },
+        move || {
+            let mut done = false;
+            frame_counter += 1;
+
+            // Batch output and automatic exit should happen after ~3 frames to ensure proper/stable results.
+            if !config_poll.visible || config_poll.output.is_some() && frame_counter == 3 {
+                // Exit once all inputs have been processed, unless visible.
+                done = true;
+            }
+
+            //let varjo_should_render = varjo_ref2.borrow().begin_frame_sync();
+
+            // if varjo_should_render {
+            //     //set_varjo_data(&mut window, &mut varjo_fov, &mut varjo);
+            //     varjo_ref2.borrow().end_frame();
+            // }
+
+            if config_poll.measure_frames > 0 {
+                let time_diff = previous_frame.elapsed().as_micros();
+                let frame_perf = (frame_counter, time_diff);
+                frame_perfs.push(frame_perf);
+
+                if frame_counter > 0 && frame_counter % print_spacing == 0 {
+                    let avg_fps: i32 = frame_perfs
+                        [(frame_counter - print_spacing) as usize..frame_counter as usize]
+                        .iter()
+                        .map(|t| t.1 as i32)
+                        .sum::<i32>()
+                        / (print_spacing as i32);
+
+                    println!("{:?} ≙ {}fps", frame_perf, 1_000_000 / (avg_fps));
+                }
+                previous_frame = Instant::now();
+                if frame_counter > config_poll.measure_frames {
+                    done = true;
+                }
+            }
+
+            /*
+                The above hack works only with still images
+                The original solution below has several problems:
+                - it is only used for video
+                - There needs to be an io generator for each eye to provide them with independent input
+                - one io generator shoult be able to multtiplex its output to both eyes
+                - if one generator is ready, to we already trigger the render step or do we wait for both?
+            */
+
+            // if io_generator.is_ready() {
+            //     if let Some((input_node, output_node)) = io_generator.next(&window, None) {
+            //         window.replace_node(0, input_node, 0);
+            //         let output_node = if let Some(output_node) = output_node {
+            //             output_node
+            //         } else {
+            //             Box::new(Passthrough::new(&window))
+            //         };
+            //         window.replace_node(window.nodes_len() - 2, output_node, 0);
+            //         window.update_nodes();
+            //     } else {
+            // ...
+            //     }
+            // }
+
+            done
+        },
+        varjo));
+        // varjo.instance.take()));
 }
