@@ -157,25 +157,37 @@ fn build_flow(
     let node = PeacockCB::new(surface);
     surface.add_node(Box::new(node), flow_index);
 
-    // Measurement Nodes for variance and error
-    let node = VarianceMeasure::new(surface);
-    surface.add_node(Box::new(node), flow_index);
-    let node = VisOverlay::new(surface);
-    surface.add_node(Box::new(node), flow_index);
+    #[cfg(not(any(feature = "varjo", feature = "openxr")))]
+    {
+        // Measurement Nodes for variance and error
+        let node = VarianceMeasure::new(surface);
+        surface.add_node(Box::new(node), flow_index);
+        let node = VisOverlay::new(surface);
+        surface.add_node(Box::new(node), flow_index);
+    
+        // Display node.
+        let mut node = Display::new(surface);
+        node.set_viewport(view_port);
+        node.set_output_scale(output_scale);
+        surface.add_node(Box::new(node), flow_index);
+    
+        // Add UI overlay.
+        let node = GuiOverlay::new(surface);
+        surface.add_node(Box::new(node), flow_index);
+    
+        // Add output node, if present.
+        if let Some(output_node) = output_node {
+            surface.add_node(output_node, flow_index);
+        }
+    }
 
-    // Display node.
-    let mut node = Display::new(surface);
-    node.set_viewport(view_port);
-    node.set_output_scale(output_scale);
-    surface.add_node(Box::new(node), flow_index);
-
-    // Add UI overlay.
-    let node = GuiOverlay::new(surface);
-    surface.add_node(Box::new(node), flow_index);
-
-    // Add output node, if present.
-    if let Some(output_node) = output_node {
-        surface.add_node(output_node, flow_index);
+    #[cfg(feature = "varjo")]
+    {
+        // Display node.
+        let mut node = Display::new(surface);
+        node.set_viewport(view_port);
+        node.set_output_scale(output_scale);
+        surface.add_node(Box::new(node), flow_index);
     }
 
     surface.negociate_slots();
@@ -491,6 +503,7 @@ pub fn main() {
         config.visible,
         flow_count,
         config.flow_configs[0].static_gaze,
+        varjo,
     );
 
     // TODO check if this is still needed
@@ -640,7 +653,6 @@ pub fn main() {
             // }
 
             done
-        },
-        varjo));
+        }));
         // varjo.instance.take()));
 }

@@ -1,10 +1,11 @@
 use ash::vk::{self, Handle};
 use ash::extensions::{ext, khr};
 use log::LevelFilter;
+
+use std::iter;
 use std::{
-    num::NonZeroU32,
     os::raw::{c_char, c_void},
-    rc::Rc, ffi::{CString, CStr},
+    rc::Rc, ffi::{CStr},
 };
 use wgpu_hal::{vulkan::Instance, InstanceFlags};
 
@@ -319,7 +320,15 @@ impl Varjo {
                     let adapter = vk_adapter.unwrap();
                     let features = wgpu::Features::empty();
                     let enabled_extensions = adapter.required_device_extensions(features);
-                    //let mut enabled_phd_features = adapter.physical_device_features(&enabled_extensions, features);
+                    let mut enabled_phd_features = adapter.physical_device_features(&enabled_extensions, features);
+
+                    println!("features: {:b}", features);
+            
+                    for e in &enabled_extensions{
+                        println!("enabled extensions: {:?}", e);
+                    }
+
+                    println!("enabled extensions: {:?}", enabled_phd_features);
             
                     let family_index = 0; //TODO
                     let family_info = vk::DeviceQueueCreateInfo::builder()
@@ -373,29 +382,21 @@ impl Varjo {
         )}.unwrap()
     }
 
-/*    pub fn open(
-        &self,
-        features: wgt::Features,
-    ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
-        let enabled_extensions = self.required_device_extensions(features);
+    pub fn draw(&mut self, surface: &Surface){
+        let mut encoder = surface.device()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Varjo Render Encoder"),
+            });
 
-        let family_index = 0; //TODO
-        let family_info = vk::DeviceQueueCreateInfo::builder()
-            .queue_family_index(family_index)
-            .queue_priorities(&[1.0])
-            .build();
+        let (color_rt, depth_rt) = self.get_current_render_target();
 
-        unsafe {
-            self.device_from_raw(
-                raw_device,
-                true,
-                &enabled_extensions,
-                features,
-                family_info.queue_family_index,
-                0,
-            )
-        }
-    }*/
+        surface.flows
+            .iter()
+            .for_each(|f| f.render(surface, &mut encoder, &color_rt));
+
+        surface.queue().submit(iter::once(encoder.finish()));
+        // surface.flows.iter().for_each(|f| f.post_render(surface));
+    }
 
     pub fn create_render_targets(&mut self, surface: &Surface) -> Vec<varjo_Viewport> {
         let mut render_targets = std::ptr::null_mut::<VarjoRenderTarget>();
@@ -624,7 +625,7 @@ pub fn create_render_texture_from_hal(
                 memory_flags: wgpu_hal::MemoryFlags::TRANSIENT,
                 view_formats: vec![format],
             },
-            None,
+            Some(Box::new(())),
         )
     };
 
@@ -639,9 +640,7 @@ pub fn create_render_texture_from_hal(
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: format,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING
-                    | wgpu::TextureUsages::RENDER_ATTACHMENT
-                    | wgpu::TextureUsages::COPY_SRC, // TODO double check these to lign up with the ones above
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[format],
             },
         )

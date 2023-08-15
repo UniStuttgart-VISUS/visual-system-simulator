@@ -21,10 +21,12 @@ pub struct WindowVRSurface {
 
     override_gaze: bool,
     override_view: bool,
+
+    varjo: Varjo,
 }
 
 impl WindowVRSurface {
-    pub fn new(visible: bool, flow_count: usize, static_pos: Option<(f32, f32)>) -> Self {
+    pub fn new(visible: bool, flow_count: usize, static_pos: Option<(f32, f32)>, varjo: Varjo) -> Self {
         let window_builder = WindowBuilder::new()
             .with_title("Visual System Simulator")
             .with_min_inner_size(LogicalSize::new(640.0, 360.0))
@@ -48,6 +50,7 @@ impl WindowVRSurface {
             },
             override_view: static_pos.is_some(),
             override_gaze: false,
+            varjo,
         }
     }
 
@@ -55,14 +58,14 @@ impl WindowVRSurface {
         return &mut self.window;
     }
 
-    pub async fn run_and_exit<I, P>(mut self, mut init_fn: I, mut poll_fn: P, mut varjo: Varjo)
+    pub async fn run_and_exit<I, P>(mut self, mut init_fn: I, mut poll_fn: P)
     where
         I: 'static + FnMut(&mut Surface),
         P: 'static + FnMut() -> bool,
     {
         let window_size = self.window.inner_size();
 
-        let instance = varjo.create_custom_vk_instance();
+        let instance = self.varjo.create_custom_vk_instance();
 
         let mut surface = match instance {
             Some(inst) => {
@@ -79,22 +82,9 @@ impl WindowVRSurface {
                     .expect("Cannot create adapter");
                 println!("Adapter created");
 
-                let (device, queue) = varjo.create_custom_vk_device(&inst, &adapter);
+                let (device, queue) = self.varjo.create_custom_vk_device(&inst, &adapter);
                 println!("Device and Queue created");
         
-                /*let (device, queue) = adapter
-                    .request_device(
-                        &wgpu::DeviceDescriptor {
-                            features: wgpu::Features::empty(),
-                            limits: wgpu::Limits::default(),
-                            label: None,
-                        },
-                        None,
-                    )
-                    .await
-                    .expect("Cannot create device");
-                println!("Device and Queue created");*/
-
                 Surface::with_existing(
                     [window_size.width, window_size.height],
                     self.flow_count,
@@ -116,7 +106,7 @@ impl WindowVRSurface {
         };
 
         Varjo::check_handles(&surface);
-        let varjo_viewports = varjo.create_render_targets(&surface);
+        let varjo_viewports = self.varjo.create_render_targets(&surface);
 
         init_fn(&mut surface);
 
@@ -181,6 +171,10 @@ impl WindowVRSurface {
                 }
                 Event::RedrawRequested(window_id) if window_id == self.window.id() => {
                     surface.draw();
+                    // if self.varjo.begin_frame_sync() {
+                    //     self.varjo.draw(&surface);
+                    //     self.varjo.end_frame();
+                    // }
                 }
                 Event::RedrawEventsCleared => {
                     //*control_flow = ControlFlow::Exit;

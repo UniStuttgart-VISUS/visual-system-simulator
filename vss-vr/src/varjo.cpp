@@ -128,11 +128,11 @@ public:
     VarjoGazeData m_gazeData;
     varjo_FrameInfo *m_frameInfo = nullptr;
     bool m_visible = true;
-    vk::DebugUtilsMessengerEXT vkDebugUtilsMessenger;
+    vk::UniqueDebugUtilsMessengerEXT vkDebugUtilsMessenger;
 
-    vk::UniqueInstance vkInstance;
+    vk::Instance vkInstance;
     vk::PhysicalDevice vkPhysicalDevice;
-    vk::UniqueDevice vkDevice;
+    vk::Device vkDevice;
     vk::Queue graphicsQueue;
     uint32_t graphicsQueueFamily = -1;
 
@@ -171,7 +171,7 @@ public:
         
         std::printf("Breakpoint\n");
         //VkPhysicalDevice vkPhysicalDevice = 
-        varjo_GetPhysicalDeviceVk(m_session, vkInstance.get());//CRASH
+        varjo_GetPhysicalDeviceVk(m_session, vkInstance);//CRASH
         // varjo_GetPhysicalDeviceVk(m_session, nullptr);//CRASH
 
         createDevice(m_session);
@@ -194,7 +194,7 @@ public:
         }
 
         printf("varjo_GetPhysicalDeviceVk start\n");
-        auto physicalDevice = vk::PhysicalDevice(varjo_GetPhysicalDeviceVk(m_session, vkInstance.get()));
+        auto physicalDevice = vk::PhysicalDevice(varjo_GetPhysicalDeviceVk(m_session, vkInstance));
         printf("varjo_GetPhysicalDeviceVk end\n");
 
         // Setup color swap chain (ring buffer of render targets).
@@ -203,11 +203,11 @@ public:
         m_swapChainConfig.textureFormat = varjo_TextureFormat_R8G8B8A8_SRGB;
         m_swapChainConfig.textureWidth = m_viewports.back().width + m_viewports.back().x;
         m_swapChainConfig.textureHeight = m_viewports.back().height + m_viewports.back().y;
-        m_colorSwapChain = varjo_VKCreateSwapChain(m_session, vkDevice.get(), graphicsQueueFamily, 0, &m_swapChainConfig);
+        m_colorSwapChain = varjo_VKCreateSwapChain(m_session, vkDevice, graphicsQueueFamily, 0, &m_swapChainConfig);
 
         m_depthSwapChainConfig = m_swapChainConfig;
         m_depthSwapChainConfig.textureFormat = varjo_DepthTextureFormat_D24_UNORM_S8_UINT;
-        m_depthSwapChain = varjo_VKCreateSwapChain(m_session, vkDevice.get(), graphicsQueueFamily, 0, &m_depthSwapChainConfig);
+        m_depthSwapChain = varjo_VKCreateSwapChain(m_session, vkDevice, graphicsQueueFamily, 0, &m_depthSwapChainConfig);
         validate();
 
         // Create a render target per swap chain texture.
@@ -299,27 +299,27 @@ public:
                                                 .setPEnabledLayerNames(enabledLayers)
                                                 .setPEnabledExtensionNames(enabledInstanceExtensions)
                                                 .setPApplicationInfo(&applicationInfo);
-        vkInstance = vk::createInstanceUnique(info);
+        vkInstance = vk::createInstance(info);
         //if (res != vk::Result::eSuccess) {
         //    fprintf(stderr, "Failed to create a Vulkan instance, error code = %x", res);
         //    return false;
         //}
 
-        VULKAN_HPP_DEFAULT_DISPATCHER.init(vkInstance.get());
+        VULKAN_HPP_DEFAULT_DISPATCHER.init(vkInstance);
 
-        vkDebugUtilsMessenger = vkInstance->createDebugUtilsMessengerEXTUnique(
+        vkDebugUtilsMessenger = vkInstance.createDebugUtilsMessengerEXTUnique(
             vk::DebugUtilsMessengerCreateInfoEXT()
                 .setMessageSeverity(vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose | vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo |
                                     vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError)
                 .setMessageType(vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation |
                                 vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance)
-                .setPfnUserCallback(debugUtilsMessengerCallback)).get();
+                .setPfnUserCallback(debugUtilsMessengerCallback));
 
         return;
     }
 
     void createDevice(varjo_Session* session){
-        vkPhysicalDevice = varjo_GetPhysicalDeviceVk(session, vkInstance.get());
+        vkPhysicalDevice = varjo_GetPhysicalDeviceVk(session, vkInstance);
         findQueueFamilies(vkPhysicalDevice);
 
         const float priority = 1.f;
@@ -328,9 +328,14 @@ public:
             queueDesc.push_back(vk::DeviceQueueCreateInfo().setQueueFamilyIndex(queueFamily).setQueueCount(1).setPQueuePriorities(&priority));
         }
 
-        const auto deviceFeatures = vk::PhysicalDeviceFeatures();
+        const auto deviceFeatures = vk::PhysicalDeviceFeatures().setRobustBufferAccess(VK_TRUE).setImageCubeArray(VK_TRUE).setIndependentBlend(VK_TRUE).setSampleRateShading(VK_TRUE).setSamplerAnisotropy(VK_TRUE).setFragmentStoresAndAtomics(VK_TRUE);
 
-        auto synchronization2Features = vk::PhysicalDeviceSynchronization2Features().setSynchronization2(VK_TRUE);
+        auto framebufferFeatures = vk::PhysicalDeviceImagelessFramebufferFeatures().setImagelessFramebuffer(VK_TRUE);
+        auto semaphoreFeatures = vk::PhysicalDeviceTimelineSemaphoreFeatures().setTimelineSemaphore(VK_TRUE).setPNext(&framebufferFeatures);
+        auto robustnessFeatures = vk::PhysicalDeviceImageRobustnessFeatures().setRobustImageAccess(VK_TRUE).setPNext(&semaphoreFeatures);
+        auto synchronization2Features = vk::PhysicalDeviceSynchronization2Features().setSynchronization2(VK_TRUE).setPNext(&robustnessFeatures);
+        auto robustness2Features = vk::PhysicalDeviceRobustness2FeaturesEXT().setRobustBufferAccess2(VK_TRUE).setRobustImageAccess2(VK_TRUE).setPNext(&synchronization2Features);
+        auto memoryFeatures = vk::PhysicalDeviceZeroInitializeWorkgroupMemoryFeatures().setShaderZeroInitializeWorkgroupMemory(VK_TRUE).setPNext(&robustness2Features);
 
         int32_t deviceExtensionsCount = 0;
         varjo_GetDeviceExtensionsVk(session, &deviceExtensionsCount, nullptr);
@@ -356,15 +361,15 @@ public:
                                     .setPEnabledFeatures(&deviceFeatures)
                                     .setPEnabledExtensionNames(extVec)
                                     .setPEnabledLayerNames(layerVec)
-                                    .setPNext(&synchronization2Features);
+                                    .setPNext(&memoryFeatures);
 
-        vkDevice = vkPhysicalDevice.createDeviceUnique(deviceDesc);
+        vkDevice = vkPhysicalDevice.createDevice(deviceDesc);
         //if (res != vk::Result::eSuccess) {
         //    return false;
         //}
 
-        VULKAN_HPP_DEFAULT_DISPATCHER.init(vkDevice.get());
-        graphicsQueue = vkDevice->getQueue(graphicsQueueFamily, 0);
+        VULKAN_HPP_DEFAULT_DISPATCHER.init(vkDevice);
+        graphicsQueue = vkDevice.getQueue(graphicsQueueFamily, 0);
         // TODO Check for errors
         return;
     }
@@ -466,8 +471,8 @@ API_EXPORT const char *varjo_new(Varjo **varjo, VulkanData *vulkan_data)
     {
         *varjo = new Varjo(vulkan_data);
         *vulkan_data = VulkanData{
-            (*varjo)->vkInstance.get(),
-            (*varjo)->vkDevice.get(),
+            (*varjo)->vkInstance,
+            (*varjo)->vkDevice,
             (*varjo)->graphicsQueueFamily,
             0
         };
