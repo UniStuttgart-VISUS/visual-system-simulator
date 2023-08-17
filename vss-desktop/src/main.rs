@@ -157,8 +157,7 @@ fn build_flow(
     let node = PeacockCB::new(surface);
     surface.add_node(Box::new(node), flow_index);
 
-    #[cfg(not(any(feature = "varjo", feature = "openxr")))]
-    {
+    #[cfg(not(any(feature = "varjo", feature = "openxr")))]{
         // Measurement Nodes for variance and error
         let node = VarianceMeasure::new(surface);
         surface.add_node(Box::new(node), flow_index);
@@ -181,13 +180,17 @@ fn build_flow(
         }
     }
 
-    #[cfg(feature = "varjo")]
-    {
+    #[cfg(feature = "varjo")]{
         // Display node.
         let mut node = Display::new(surface);
         node.set_viewport(view_port);
         node.set_output_scale(output_scale);
         surface.add_node(Box::new(node), flow_index);
+
+        // Add output node, if present.
+        if let Some(output_node) = output_node {
+            surface.add_node(output_node, flow_index);
+        }
     }
 
     surface.negociate_slots();
@@ -481,12 +484,16 @@ pub fn set_varjo_data(
 pub fn main() {
     let varjo = Varjo::new();
 
+    let (varjo_viewports, varjo_texture_width, varjo_texture_height) = varjo.get_viewports();
+
     set_load(Box::new(load_fn));
 
     let config = cmd_parse();
     let config_poll = config.clone();
 
-    let flow_count = 1; //TODO take this number from the varjo api instead ? (for example the size of the viewports vector)
+    let flow_count = varjo_viewports.len();
+    assert!(flow_count == config.flow_configs.len(), "Number of provided configs does not match viewport count of {}", flow_count);
+
     // TODO check if this is still needed
     /*
     let mut parameters = Vec::new();
@@ -554,14 +561,15 @@ pub fn main() {
         }
     }
     */
-
-    let view_ports = vec![ViewPort {
-        x: 0.0,
-        y: 0.0,
-        width: 1.0,
-        height: 1.0,
-        absolute_viewport: false,
-    }];
+    let view_ports = varjo_viewports.iter().map( |vp| {
+        ViewPort{
+            x: vp.x as f32 / varjo_texture_width as f32,
+            y: 1.0 - ((vp.y + vp.height) as f32 / varjo_texture_height as f32), // flip on the y axis
+            width: vp.width as f32 / varjo_texture_width as f32,
+            height: vp.height as f32 / varjo_texture_height as f32,
+            absolute_viewport: false,
+        }
+    }).collect::<Vec<ViewPort>>();
 
     let mut frame_counter = 0;
     let mut frame_perfs: Vec<(u128, u128)> = vec![];

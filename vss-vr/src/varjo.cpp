@@ -21,15 +21,14 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 #include <time.h>
 
 // TODO instead of getting these values from wgpu we need to create and provide them here
-struct VulkanData{
+struct VulkanData {
     VkInstance instance;
     VkDevice device;
     uint32_t queueFamilyIndex;
     uint32_t queueIndex;
 };
 
-struct VarjoRenderTarget
-{
+struct VarjoRenderTarget {
     VkImage colorImage;
     VkImage depthImage;
     uint32_t width;
@@ -73,49 +72,12 @@ const float sample_gaze_data[] = {
 0.04779644,0.3268422,0.94386953,-0.020878065,0.33345357,0.94253534,0.94545525,
 0.12674566,-0.19637074,0.9723035,0.034955703,-0.22613285,0.9734691,0.6457808};
 
-VKAPI_ATTR VkBool32 VKAPI_CALL debugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageTypes,
-    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
-{
-    (void)pUserData;
-
-    switch (messageSeverity) {
-        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT: std::printf("[VERBOSE]"); break;
-        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT: std::printf("[INFO]"); break;
-        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT: std::printf("[WARNING]"); break;
-        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT: std::printf("[ERROR]"); break;
-        default: std::printf("[UNKNOWN]"); break;
-    }
-
-    std::printf(" ");
-
-    if (messageTypes & VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT) {
-        std::printf("GENERAL ");
-    }
-
-    if (messageTypes & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT) {
-        std::printf("VALIDATION ");
-    }
-
-    if (messageTypes & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT) {
-        std::printf("PERFORMANCE ");
-    }
-
-    if (pCallbackData->pMessageIdName) {
-        std::printf("%s: %s\n", pCallbackData->pMessageIdName, pCallbackData->pMessage);
-    } else {
-        std::printf("%s\n", pCallbackData->pMessage);
-    }
-
-    return VK_FALSE;
-}
-
-class Varjo
-{
+class Varjo {
 public:
     varjo_Session *m_session = nullptr;
     int32_t m_viewCount;
     std::vector<varjo_Viewport> m_viewports;
-    varjo_SwapChainConfig2 m_swapChainConfig;
+    varjo_SwapChainConfig2 m_colorSwapChainConfig;
     varjo_SwapChainConfig2 m_depthSwapChainConfig;
     varjo_SwapChain *m_colorSwapChain = nullptr;
     varjo_SwapChain *m_depthSwapChain = nullptr;
@@ -128,7 +90,6 @@ public:
     VarjoGazeData m_gazeData;
     varjo_FrameInfo *m_frameInfo = nullptr;
     bool m_visible = true;
-    vk::UniqueDebugUtilsMessengerEXT vkDebugUtilsMessenger;
 
     vk::Instance vkInstance;
     vk::PhysicalDevice vkPhysicalDevice;
@@ -136,16 +97,14 @@ public:
     vk::Queue graphicsQueue;
     uint32_t graphicsQueueFamily = -1;
 
-    void validate()
-    {
+    void validate() {
         varjo_Error error = varjo_GetError(m_session);
         if (error != varjo_NoError)
             throw std::runtime_error(varjo_GetErrorDesc(error));
     }
 
 public:
-    Varjo(VulkanData* vulkan_data)
-    {
+    Varjo(VulkanData* vulkan_data) {
         // Test if Varjo system is available.
         if (!varjo_IsAvailable())
             throw std::runtime_error("Varjo system is unavailable");
@@ -154,81 +113,71 @@ public:
         m_session = varjo_SessionInit();
         validate();
 
-        printf("cpp-side: instance: %p, device: %p\n", vulkan_data->instance, vulkan_data->device);
+        // printf("cpp-side: instance: %p, device: %p\n", vulkan_data->instance, vulkan_data->device);
         vk::DynamicLoader vkLoader;
         const PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = vkLoader.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
         VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
-        printf("VULKAN_HPP_DEFAULT_DISPATCHER.init done\n");
+        // printf("VULKAN_HPP_DEFAULT_DISPATCHER.init done\n");
         
-        
-        //auto test1 = vkGetInstanceProcAddr(nullptr, "vkCreateInstance"); // this one gives a proper result, all others are null
-        //auto test2 = vkGetInstanceProcAddr(vulkan_data->instance, "vkCreateInstance");
-        //auto test3 = vkGetInstanceProcAddr(inst, "vkCreateInstance");
-
         createInstance(m_session);
-        //vkInstance = vk::UniqueInstance(vulkan_data->instance);
-        //VULKAN_HPP_DEFAULT_DISPATCHER.init(vkInstance.get());
-        
-        std::printf("Breakpoint\n");
-        //VkPhysicalDevice vkPhysicalDevice = 
-        varjo_GetPhysicalDeviceVk(m_session, vkInstance);//CRASH
-        // varjo_GetPhysicalDeviceVk(m_session, nullptr);//CRASH
-
         createDevice(m_session);
 
         // Enumerate and pack views into an atlas-like layout.
         m_viewCount = varjo_GetViewCount(m_session);
         m_viewports.reserve(m_viewCount);
         int x = 0, y = 0;
-        for (int32_t i = 0; i < m_viewCount; i++)
-        {
+        int textureWidth = 0, textureHeight = 0;
+        for (int32_t i = 0; i < m_viewCount; i++) {
             const varjo_ViewDescription viewDescription = varjo_GetViewDescription(m_session, i);
             const varjo_Viewport viewport = varjo_Viewport{x, y, viewDescription.width, viewDescription.height};
+            // int32_t width_rec, height_rec;
+            // varjo_GetTextureSize(m_session, varjo_TextureSize_Type_Recommended, i, &width_rec, &height_rec);
+            // int32_t width_best, height_best;
+            // varjo_GetTextureSize(m_session, varjo_TextureSize_Type_Recommended, i, &width_best, &height_best);
+            // printf("cpp-side viewports: %i, %i recommended: %i, %i best: %i, %i\n", viewport.width, viewport.height, width_rec, height_rec, width_best, height_best);
             m_viewports.push_back(viewport);
             x += viewport.width;
-            if (i > 0 && m_viewports.size() % 2 == 0)
-            {
+            textureWidth = x > textureWidth ? x : textureWidth;
+            // every two views we jump to the next "row"
+            if (i % 2 == 1){
                 x = 0;
                 y += viewport.height;
+                textureHeight = y > textureHeight ? y : textureHeight;
             }
         }
 
-        printf("varjo_GetPhysicalDeviceVk start\n");
-        auto physicalDevice = vk::PhysicalDevice(varjo_GetPhysicalDeviceVk(m_session, vkInstance));
-        printf("varjo_GetPhysicalDeviceVk end\n");
-
         // Setup color swap chain (ring buffer of render targets).
-        m_swapChainConfig.numberOfTextures = 4;
-        m_swapChainConfig.textureArraySize = 1;
-        m_swapChainConfig.textureFormat = varjo_TextureFormat_R8G8B8A8_SRGB;
-        m_swapChainConfig.textureWidth = m_viewports.back().width + m_viewports.back().x;
-        m_swapChainConfig.textureHeight = m_viewports.back().height + m_viewports.back().y;
-        m_colorSwapChain = varjo_VKCreateSwapChain(m_session, vkDevice, graphicsQueueFamily, 0, &m_swapChainConfig);
+        m_colorSwapChainConfig = varjo_SwapChainConfig2 {
+            varjo_TextureFormat_B8G8R8A8_SRGB,  // textureFormat
+            4,                                  // numberOfTextures
+            textureWidth,                       // textureWidth
+            textureHeight,                      // textureHeight
+            1                                   // textureArraySize
+        };
+        m_colorSwapChain = varjo_VKCreateSwapChain(m_session, vkDevice, graphicsQueueFamily, 0, &m_colorSwapChainConfig);
 
-        m_depthSwapChainConfig = m_swapChainConfig;
+        m_depthSwapChainConfig = m_colorSwapChainConfig;
         m_depthSwapChainConfig.textureFormat = varjo_DepthTextureFormat_D24_UNORM_S8_UINT;
         m_depthSwapChain = varjo_VKCreateSwapChain(m_session, vkDevice, graphicsQueueFamily, 0, &m_depthSwapChainConfig);
         validate();
 
         // Create a render target per swap chain texture.
-        for (int i = 0; i < m_swapChainConfig.numberOfTextures; ++i)
-        {
+        for (int i = 0; i < m_colorSwapChainConfig.numberOfTextures; ++i) {
             const varjo_Texture colorTexture = varjo_GetSwapChainImage(m_colorSwapChain, i);
             const varjo_Texture depthTexture = varjo_GetSwapChainImage(m_depthSwapChain, i);
             m_renderTargets.push_back(
                 VarjoRenderTarget{
                     varjo_ToVkTexture(colorTexture),
                     varjo_ToVkTexture(depthTexture),
-                    static_cast<uint32_t>(m_swapChainConfig.textureWidth),
-                    static_cast<uint32_t>(m_swapChainConfig.textureHeight)});
+                    static_cast<uint32_t>(textureWidth),
+                    static_cast<uint32_t>(textureHeight)});
         }
 
         // Create projection layers views
         m_projectionLayers.reserve(m_viewCount);
         m_viewMatrices.reserve(m_viewCount*16);
         m_projMatrices.reserve(m_viewCount*16);
-        for (int32_t i = 0; i < m_viewCount; i++)
-        {
+        for (int32_t i = 0; i < m_viewCount; i++) {
             m_projectionLayers[i].extension = nullptr;//XXX: add usage of depth textures
             m_projectionLayers[i].viewport = varjo_SwapChainViewport{m_colorSwapChain, m_viewports[i].x, m_viewports[i].y, m_viewports[i].width, m_viewports[i].height, 0};
         }
@@ -244,7 +193,7 @@ public:
             varjo_Error err = varjo_GetError(m_session);
             if (err != varjo_NoError) {
                 printf("Using default Gaze Data; Failed to initialize Gaze: %s\n", varjo_GetErrorDesc(err));
-            }else{
+            } else {
                 m_gazeAvailable = true;
                 m_gazeData.leftEye[0] = 0.0;
                 m_gazeData.leftEye[1] = 0.0;
@@ -254,7 +203,7 @@ public:
                 m_gazeData.rightEye[2] = 1.0;
                 m_gazeData.focusDistance = 1.0;
             }
-        }else{
+        } else {
             printf("Using default Gaze Data; Gaze tracking is not allowed!\n");
         }
     }
@@ -268,7 +217,7 @@ public:
     }
 
     
-    void createInstance(varjo_Session* session){
+    void createInstance(varjo_Session* session) {
         int instanceExtensionCount = 0;
         varjo_GetInstanceExtensionsVk(m_session, &instanceExtensionCount, nullptr);
         std::vector<const char*> enabledInstanceExtensions(instanceExtensionCount);
@@ -280,6 +229,7 @@ public:
 
         enabledInstanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
+        // TODO: automatically adjust these to wgpu requirements
         enabledInstanceExtensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
         enabledInstanceExtensions.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
         //enabledInstanceExtensions.push_back(VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME);
@@ -307,18 +257,10 @@ public:
 
         VULKAN_HPP_DEFAULT_DISPATCHER.init(vkInstance);
 
-        vkDebugUtilsMessenger = vkInstance.createDebugUtilsMessengerEXTUnique(
-            vk::DebugUtilsMessengerCreateInfoEXT()
-                .setMessageSeverity(vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose | vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo |
-                                    vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError)
-                .setMessageType(vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation |
-                                vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance)
-                .setPfnUserCallback(debugUtilsMessengerCallback));
-
         return;
     }
 
-    void createDevice(varjo_Session* session){
+    void createDevice(varjo_Session* session) {
         vkPhysicalDevice = varjo_GetPhysicalDeviceVk(session, vkInstance);
         findQueueFamilies(vkPhysicalDevice);
 
@@ -328,8 +270,10 @@ public:
             queueDesc.push_back(vk::DeviceQueueCreateInfo().setQueueFamilyIndex(queueFamily).setQueueCount(1).setPQueuePriorities(&priority));
         }
 
+        // TODO: automatically adjust these to wgpu requirements
         const auto deviceFeatures = vk::PhysicalDeviceFeatures().setRobustBufferAccess(VK_TRUE).setImageCubeArray(VK_TRUE).setIndependentBlend(VK_TRUE).setSampleRateShading(VK_TRUE).setSamplerAnisotropy(VK_TRUE).setFragmentStoresAndAtomics(VK_TRUE);
 
+        // TODO: automatically adjust these to wgpu requirements
         auto framebufferFeatures = vk::PhysicalDeviceImagelessFramebufferFeatures().setImagelessFramebuffer(VK_TRUE);
         auto semaphoreFeatures = vk::PhysicalDeviceTimelineSemaphoreFeatures().setTimelineSemaphore(VK_TRUE).setPNext(&framebufferFeatures);
         auto robustnessFeatures = vk::PhysicalDeviceImageRobustnessFeatures().setRobustImageAccess(VK_TRUE).setPNext(&semaphoreFeatures);
@@ -374,7 +318,7 @@ public:
         return;
     }
 
-    void findQueueFamilies(vk::PhysicalDevice physicalDevice){
+    void findQueueFamilies(vk::PhysicalDevice physicalDevice) {
         const auto props = physicalDevice.getQueueFamilyProperties();
 
         for (int i = 0; i < static_cast<int>(props.size()); i++) {
@@ -390,13 +334,10 @@ public:
         return;
     }
 
-    bool beginFrameSync()
-    {
+    bool beginFrameSync() {
         varjo_Event evt;
-        while (varjo_PollEvent(m_session, &evt))
-        {
-            switch (evt.header.type)
-            {
+        while (varjo_PollEvent(m_session, &evt)) {
+            switch (evt.header.type) {
             case varjo_EventType_Visibility:
                 m_visible = evt.data.visibility.visible;
                 printf("Visible %s\n", evt.data.visibility.visible ? "true" : "false");
@@ -408,8 +349,7 @@ public:
                 printf("Headset on standby %s\n", evt.data.headsetStandbyStatus.onStandby ? "true" : "false");
                 break;
             case varjo_EventType_Button:
-                if (evt.data.button.buttonId == varjo_ButtonId_Application && evt.data.button.pressed)
-                {
+                if (evt.data.button.buttonId == varjo_ButtonId_Application && evt.data.button.pressed) {
                     //gaze.requestCalibration();
                 }
                 break;
@@ -418,8 +358,7 @@ public:
             //     break;
             }
         }
-        if (m_visible)
-        {
+        if (m_visible) {
             // Wait before rendering the next frame.
             varjo_WaitSync(m_session, m_frameInfo);
 
@@ -427,16 +366,14 @@ public:
 
             varjo_AcquireSwapChainImage(m_colorSwapChain, &m_currentSwapChainIndex);
             varjo_AcquireSwapChainImage(m_depthSwapChain, &m_currentSwapChainIndex);
-            for (uint32_t i = 0; i < m_viewCount; ++i)
-            {
+            for (uint32_t i = 0; i < m_viewCount; ++i) {
                 varjo_ViewInfo &view = m_frameInfo->views[i];
-                if (!view.enabled)
-                {
+                if (!view.enabled) {
                     continue; // Skip a view if it is not enabled.
                 }
 
                 //...
-                for(int j = 0; j < 16; ++j){
+                for(int j = 0; j < 16; ++j) {
                     m_viewMatrices[i*16+j] = view.viewMatrix[j];
                     m_projMatrices[i*16+j] = view.projectionMatrix[j];
                 }
@@ -448,8 +385,7 @@ public:
         return m_visible;
     }
 
-    void endFrame()
-    {
+    void endFrame() {
         varjo_LayerMultiProj multiProjectionLayer{
             {varjo_LayerMultiProjType, 0}, varjo_SpaceLocal, static_cast<int32_t>(m_viewCount), m_projectionLayers.data()};
         std::array<varjo_LayerHeader *, 1> layers = {&multiProjectionLayer.header};
@@ -495,13 +431,33 @@ API_EXPORT void varjo_drop(Varjo **varjo)
     *varjo = nullptr;
 }
 
-API_EXPORT const char *varjo_render_targets(Varjo *varjo, VarjoRenderTarget **render_targets, varjo_Viewport **viewports, uint32_t *render_target_size)
+API_EXPORT const char *varjo_viewports(Varjo *varjo, varjo_Viewport **viewports, int32_t *view_count, int32_t *texture_width, int32_t *texture_height)
+{
+    assert(varjo != nullptr && "Varjo instance expected");
+    try
+    {
+        *viewports = varjo->m_viewports.data();
+        *view_count = varjo->m_viewCount;
+        *texture_width = varjo->m_colorSwapChainConfig.textureWidth;
+        *texture_height = varjo->m_colorSwapChainConfig.textureHeight;
+        return nullptr;
+    }
+    catch (const std::exception &ex)
+    {
+        return ex.what();
+    }
+    catch (...)
+    {
+        return "Unexpected exception";
+    }
+}
+
+API_EXPORT const char *varjo_render_targets(Varjo *varjo, VarjoRenderTarget **render_targets, uint32_t *render_target_size)
 {
     assert(varjo != nullptr && "Varjo instance expected");
     try
     {
         *render_targets = varjo->m_renderTargets.data();
-        *viewports = varjo->m_viewports.data();
         *render_target_size = static_cast<uint32_t>(varjo->m_renderTargets.size());
         return nullptr;
     }

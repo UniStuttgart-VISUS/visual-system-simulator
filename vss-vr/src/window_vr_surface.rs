@@ -106,7 +106,7 @@ impl WindowVRSurface {
         };
 
         Varjo::check_handles(&surface);
-        let varjo_viewports = self.varjo.create_render_targets(&surface);
+        self.varjo.create_render_targets(&surface);
 
         init_fn(&mut surface);
 
@@ -171,10 +171,10 @@ impl WindowVRSurface {
                 }
                 Event::RedrawRequested(window_id) if window_id == self.window.id() => {
                     surface.draw();
-                    // if self.varjo.begin_frame_sync() {
-                    //     self.varjo.draw(&surface);
-                    //     self.varjo.end_frame();
-                    // }
+                    if self.varjo.begin_frame_sync() {
+                        self.varjo.draw(&surface);
+                        self.varjo.end_frame();
+                    }
                 }
                 Event::RedrawEventsCleared => {
                     //*control_flow = ControlFlow::Exit;

@@ -34,7 +34,7 @@ struct VarjoRenderTarget {
 
 #[repr(C)]
 #[derive(Clone)]
-pub struct varjo_Viewport {
+pub struct VarjoViewport {
     pub x: u32,
     pub y: u32,
     pub width: u32,
@@ -51,10 +51,16 @@ pub struct VarjoGazeData {
 
 extern "C" {
     fn varjo_new(varjo: *mut VarjoPtr, vulkan_data: *mut VulkanData) -> *const c_char;
+    fn varjo_viewports(
+        varjo: VarjoPtr,
+        viewports: *mut *mut VarjoViewport,
+        view_count: *mut i32,
+        texture_width: *mut i32,
+        texture_height: *mut i32,
+    ) -> *const c_char;
     fn varjo_render_targets(
         varjo: VarjoPtr,
         render_targets: *mut *mut VarjoRenderTarget,
-        viewports: *mut *mut varjo_Viewport,
         render_targets_size: *mut u32,
     ) -> *const c_char;
     fn varjo_begin_frame_sync(varjo: VarjoPtr, is_available: *mut bool) -> *const c_char;
@@ -320,7 +326,7 @@ impl Varjo {
                     let adapter = vk_adapter.unwrap();
                     let features = wgpu::Features::empty();
                     let enabled_extensions = adapter.required_device_extensions(features);
-                    let mut enabled_phd_features = adapter.physical_device_features(&enabled_extensions, features);
+                    //let mut enabled_phd_features = adapter.physical_device_features(&enabled_extensions, features);
 
                     println!("features: {:b}", features);
             
@@ -328,7 +334,7 @@ impl Varjo {
                         println!("enabled extensions: {:?}", e);
                     }
 
-                    println!("enabled extensions: {:?}", enabled_phd_features);
+                    //println!("enabled extensions: {:?}", enabled_phd_features);
             
                     let family_index = 0; //TODO
                     let family_info = vk::DeviceQueueCreateInfo::builder()
@@ -395,18 +401,37 @@ impl Varjo {
             .for_each(|f| f.render(surface, &mut encoder, &color_rt));
 
         surface.queue().submit(iter::once(encoder.finish()));
-        // surface.flows.iter().for_each(|f| f.post_render(surface));
+        surface.flows.iter().for_each(|f| f.post_render(surface));
     }
 
-    pub fn create_render_targets(&mut self, surface: &Surface) -> Vec<varjo_Viewport> {
+    pub fn get_viewports(&self) -> (Vec<VarjoViewport>, i32, i32) {
+        let mut viewports = std::ptr::null_mut::<VarjoViewport>();
+        let mut view_count = 0;
+        let mut texture_width = 0;
+        let mut texture_height = 0;
+        try_fail(unsafe {
+            varjo_viewports(
+                self.varjo,
+                &mut viewports as *mut *mut _,
+                &mut view_count as *mut _,
+                &mut texture_width as *mut _,
+                &mut texture_height as *mut _,
+            )
+        })
+        .unwrap();
+        println!("varjo_viewports done");
+        let viewports =
+            unsafe { std::slice::from_raw_parts(viewports, view_count as usize) };
+        (viewports.to_vec(), texture_width, texture_height)
+    }
+
+    pub fn create_render_targets(&mut self, surface: &Surface) {
         let mut render_targets = std::ptr::null_mut::<VarjoRenderTarget>();
-        let mut viewports = std::ptr::null_mut::<varjo_Viewport>();
         let mut render_targets_size = 0u32;
         try_fail(unsafe {
             varjo_render_targets(
                 self.varjo,
                 &mut render_targets as *mut *mut _,
-                &mut viewports as *mut *mut _,
                 &mut render_targets_size as *mut _,
             )
         })
@@ -414,8 +439,6 @@ impl Varjo {
         println!("varjo_render_targets done");
         let render_targets =
             unsafe { std::slice::from_raw_parts(render_targets, render_targets_size as usize) };
-        let viewports =
-            unsafe { std::slice::from_raw_parts(viewports, render_targets_size as usize) };
 
         let device = surface.device();
         for render_target in render_targets {
@@ -425,7 +448,7 @@ impl Varjo {
                     render_target.color_image,
                     render_target.width,
                     render_target.height,
-                    wgpu::TextureFormat::Rgba8Unorm,
+                    wgpu::TextureFormat::Bgra8Unorm,
                     create_sampler_nearest(&device),
                     Some("Varjo RenderTexture Color"),
                 );
@@ -441,7 +464,6 @@ impl Varjo {
             self.render_targets_color.push(color_texture);
             self.render_targets_depth.push(depth_texture);
         }
-        viewports.to_vec()
     }
 
     pub fn get_current_render_target(&self) -> (RenderTexture, RenderTexture) {
