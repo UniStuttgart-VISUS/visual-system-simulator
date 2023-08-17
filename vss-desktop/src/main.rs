@@ -436,50 +436,6 @@ pub fn main() {
     }
 }
 
-//TODO update method
-/*
-#[cfg(feature = "varjo")]
-pub fn set_varjo_data(
-    window: &mut WindowSurface,
-    last_fov: &mut Vec<(f32, f32)>,
-    varjo: &mut varjo::Varjo,
-) {
-    let (varjo_target_color, varjo_target_depth) = varjo.get_current_render_target();
-    // window.replace_targets(varjo_target_color, varjo_target_depth, false); // TODO-readd
-
-    let view_matrices = varjo.get_current_view_matrices();
-    let proj_matrices = varjo.get_current_proj_matrices();
-    let head_position = 0.5 * (view_matrices[0].w.truncate() + view_matrices[1].w.truncate());
-    let (left_gaze, right_gaze, _focus_distance) = varjo.get_current_gaze();
-
-    for index in 0..4 {
-        let fov_x = 2.0 * (1.0 / proj_matrices[index][0][0]).atan(); // * 180.0 / 3.1415926535;
-        let fov_y = 2.0 * (1.0 / proj_matrices[index][1][1]).atan(); // * 180.0 / 3.1415926535;
-        if last_fov[index].0 != fov_x || last_fov[index].1 != fov_y {
-            window
-                .surface
-                .set_value("fov_x".to_string(), Value::Number(fov_x as f64), index);
-            window
-                .surface
-                .set_value("fov_y".to_string(), Value::Number(fov_y as f64), index);
-            window.surface.set_value(
-                "proj_matrix".to_string(),
-                Value::Matrix(proj_matrices[index % 2]),
-                index,
-            );
-            last_fov[index].0 = fov_x;
-            last_fov[index].1 = fov_y;
-        }
-        // window.surface.flow[index].set_eye(EyeInput{
-        //     position: head_position,
-        //     view: view_matrices[index],
-        //     proj: proj_matrices[index],
-        //     gaze: if index%2 == 0 {left_gaze} else {right_gaze},
-        // }); // TODO-readd
-    }
-}
- */
-
 #[cfg(feature = "varjo")]
 pub fn main() {
     let varjo = Varjo::new();
@@ -494,73 +450,6 @@ pub fn main() {
     let flow_count = varjo_viewports.len();
     assert!(flow_count == config.flow_configs.len(), "Number of provided configs does not match viewport count of {}", flow_count);
 
-    // TODO check if this is still needed
-    /*
-    let mut parameters = Vec::new();
-    for _ in 0..flow_count {
-        let mut value_map = ValueMap::new();
-        for (key, val) in config.parameters.iter() {
-            value_map.insert((*key).clone(), (*val).clone());
-        }
-        parameters.push(RefCell::new(value_map));
-    } */
-
-    // TODO create optional parameter to pass existing instance, then create this instance in varjo.rs using wgpu::Instance::from_hal()
-    let window = WindowVRSurface::new(
-        config.visible,
-        flow_count,
-        config.flow_configs[0].static_gaze,
-        varjo,
-    );
-
-    // TODO check if this is still needed
-    /*
-
-    let mut log_counter = 0; //TODO: used to reduce log spam, remove when no longer needed or replace with a better solution
-    let varjo_viewports = varjo.create_render_targets(&window.surface);
-    let mut varjo_fov = vec![(100.0, 70.0); 4];
-
-    let mut io_generator = IoGenerator::new(config.inputs, config.name.clone(), config.output);
-
-    for index in 0..flow_count {
-        let viewport = &varjo_viewports[index];
-        build_flow(
-            &mut window.surface,
-            &mut io_generator,
-            index,
-            Some([viewport.width, viewport.height]),
-        );
-        let mut node = VRCompositor::new(&window.surface);
-        node.set_viewport(
-            viewport.x as f32,
-            viewport.y as f32,
-            viewport.width as f32,
-            viewport.height as f32,
-        );
-        window.surface.add_node(Box::new(node), index);
-    }
-     */
-
-    //TODO change to new window.run_and_exit
-    /*
-    let mut done = false;
-    while !done {
-        varjo.logging_enabled = log_counter == 0;
-
-        let varjo_should_render = varjo.begin_frame_sync();
-
-        if varjo_should_render {
-            set_varjo_data(&mut window, &mut varjo_fov, &mut varjo);
-        }
-
-        done = window.poll_events();
-
-        if varjo_should_render {
-            varjo.end_frame();
-            log_counter = (log_counter + 1) % 10;
-        }
-    }
-    */
     let view_ports = varjo_viewports.iter().map( |vp| {
         ViewPort{
             x: vp.x as f32 / varjo_texture_width as f32,
@@ -570,6 +459,13 @@ pub fn main() {
             absolute_viewport: false,
         }
     }).collect::<Vec<ViewPort>>();
+
+    let window = WindowVRSurface::new(
+        config.visible,
+        flow_count,
+        config.flow_configs[0].static_gaze,
+        varjo,
+    );
 
     let mut frame_counter = 0;
     let mut frame_perfs: Vec<(u128, u128)> = vec![];
@@ -607,13 +503,6 @@ pub fn main() {
                 // Exit once all inputs have been processed, unless visible.
                 done = true;
             }
-
-            //let varjo_should_render = varjo_ref2.borrow().begin_frame_sync();
-
-            // if varjo_should_render {
-            //     //set_varjo_data(&mut window, &mut varjo_fov, &mut varjo);
-            //     varjo_ref2.borrow().end_frame();
-            // }
 
             if config_poll.measure_frames > 0 {
                 let time_diff = previous_frame.elapsed().as_micros();
@@ -662,5 +551,4 @@ pub fn main() {
 
             done
         }));
-        // varjo.instance.take()));
 }

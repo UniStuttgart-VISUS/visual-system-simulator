@@ -1,4 +1,3 @@
-//#[cfg(feature = "varjo")]
 mod varjo;
 mod window_vr_surface;
 

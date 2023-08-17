@@ -1,13 +1,12 @@
 use ash::vk::{self, Handle};
-use ash::extensions::{ext, khr};
 use log::LevelFilter;
 
 use std::iter;
 use std::{
     os::raw::{c_char, c_void},
-    rc::Rc, ffi::{CStr},
+    rc::Rc, ffi::CStr,
 };
-use wgpu_hal::{vulkan::Instance, InstanceFlags};
+use wgpu_hal::InstanceFlags;
 
 use cgmath::{Matrix4, Vector3};
 use vss::*;
@@ -94,7 +93,6 @@ fn try_fail(error: *const c_char) -> Result<(), VarjoErr> {
     if error == std::ptr::null_mut() {
         Ok(())
     } else {
-        use std::ffi::CStr;
         let c_str: &CStr = unsafe { CStr::from_ptr(error) };
         let str_slice: &str = c_str.to_str().unwrap();
 
@@ -394,7 +392,7 @@ impl Varjo {
                 label: Some("Varjo Render Encoder"),
             });
 
-        let (color_rt, depth_rt) = self.get_current_render_target();
+        let (color_rt, _depth_rt) = self.get_current_render_target();
 
         surface.flows
             .iter()

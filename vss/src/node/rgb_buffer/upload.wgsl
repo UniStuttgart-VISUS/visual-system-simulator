@@ -35,10 +35,10 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
          
     if ((uniforms.flags & 1u) == 1u) {
         // Equirectangular 360° projection.
-        let ndc = vec4<f32>(tex * 2.0 - 1.0, 0.9, 1.0);
+        let ndc = vec4<f32>(vec2(tex.x, 1.0 - tex.y) * 2.0 - 1.0, 0.9, 1.0);
         var world_dir = uniforms.inv_proj_view * ndc;
         world_dir = vec4<f32>(normalize(world_dir.xyz)/world_dir.w, world_dir.w);
-        tex = vec2<f32>(atan2(world_dir.z, world_dir.x) + PI, acos(-world_dir.y)) / vec2<f32>(2.0 * PI, PI);
+        tex = vec2<f32>(atan2(world_dir.z, world_dir.x) + PI, acos(world_dir.y)) / vec2<f32>(2.0 * PI, PI);
     }
 
     if ((uniforms.flags & 2u) == 2u) {

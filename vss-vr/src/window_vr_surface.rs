@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, SquareMatrix, Vector4};
+use cgmath::{Matrix4, SquareMatrix, Vector4, Vector3};
 use vss::*;
 use winit::{
     dpi::*,
@@ -170,8 +170,10 @@ impl WindowVRSurface {
                     }
                 }
                 Event::RedrawRequested(window_id) if window_id == self.window.id() => {
+                    // TODO: somehow separate varjo drawing from the surface and only draw the final framebuffer onto the surface (if possible with gui node)
                     surface.draw();
                     if self.varjo.begin_frame_sync() {
+                        self.set_varjo_data(&mut surface);
                         self.varjo.draw(&surface);
                         self.varjo.end_frame();
                     }
@@ -192,6 +194,22 @@ impl WindowVRSurface {
                 _ => {}
             }
         });
+    }
+
+    fn set_varjo_data(&self, surface: &mut Surface) {
+        let view_matrices = self.varjo.get_current_view_matrices();
+        let proj_matrices = self.varjo.get_current_proj_matrices();
+        // let head_position = 0.5 * (view_matrices[0].w.truncate() + view_matrices[1].w.truncate());
+        let eye_position = Vector3::new(0.0, 0.0, 0.0);
+        let (left_gaze, right_gaze, _focus_distance) = self.varjo.get_current_gaze();
+
+        for (i, flow) in surface.flows.iter_mut().enumerate(){
+            let mut eye = flow.eye_mut();
+            eye.position = eye_position;
+            eye.view = view_matrices[i];
+            eye.proj = proj_matrices[i];
+            eye.gaze = if i % 2 == 0 {left_gaze} else {right_gaze};
+        }
     }
 
     fn update_input(&self, surface: &mut Surface) {
