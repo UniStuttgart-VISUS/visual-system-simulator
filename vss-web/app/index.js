@@ -1,3 +1,1 @@
-import { append_and_run } from './pkg';
-
-append_and_run("vss-container");
+import('./pkg').then(m => m.append_and_run("vss-container"));
