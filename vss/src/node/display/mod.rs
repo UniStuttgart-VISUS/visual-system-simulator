@@ -84,7 +84,7 @@ impl Display {
             &[&shader, &shader],
             &["vs_main", "fs_main"],
             &[&uniforms.bind_group_layout, &source_bind_group_layout],
-            &[blended_color_state(COLOR_FORMAT)],
+            &[simple_color_state(COLOR_FORMAT)],
             None,
             Some("DisplayNode Render Pipeline"),
         );
