@@ -6,6 +6,7 @@ struct Uniforms{
     contrast_factor: f32,
     is_active: i32,
     track_error: i32,
+    _padding: vec2<i32>,
 }
 
 @group(0) @binding(0)

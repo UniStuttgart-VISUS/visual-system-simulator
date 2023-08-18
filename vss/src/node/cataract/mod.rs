@@ -6,6 +6,7 @@ struct Uniforms {
     contrast_factor: f32,
     active: i32,
     track_error: i32,
+    _padding: [i32; 2],
 }
 
 pub struct Cataract {
@@ -30,6 +31,7 @@ impl Cataract {
                 contrast_factor: 0.0,
                 active: 0,
                 track_error: 0,
+                _padding: [0, 0],
             },
         );
 

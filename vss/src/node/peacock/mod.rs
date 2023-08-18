@@ -9,6 +9,8 @@ struct Uniforms {
     track_error: i32,
     cb_monochrome: i32,
     cb_strength: f32,
+
+    _padding: f32,
 }
 
 pub struct PeacockCB {
@@ -37,6 +39,7 @@ impl PeacockCB {
                 track_error: 0,
                 cb_monochrome: 0,
                 cb_strength: 0.0,
+                _padding: 0.0,
             },
         );
 

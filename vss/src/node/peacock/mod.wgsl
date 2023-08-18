@@ -9,6 +9,8 @@ struct Uniforms{
     track_error: i32,
     cb_monochrome: i32,
     cb_strength: f32,
+    
+    _padding: f32
 };
 // possible types:
 // 0 = Protanopia
