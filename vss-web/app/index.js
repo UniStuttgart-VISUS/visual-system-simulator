@@ -1,1 +1,1 @@
-import('./pkg').then(m => m.append_and_run("vss-container"));
+import('./pkg').then(m => m.Simulator.create_and_run("vss-container"));
