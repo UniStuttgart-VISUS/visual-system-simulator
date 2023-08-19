@@ -110,7 +110,6 @@ impl Simulator {
             .expect("Cannot append canvas element");
 
         let (tx, rx) = mpsc::sync_channel(2);
-        let frame_sender = tx.clone();
         wasm_bindgen_futures::spawn_local(window_surface.run_and_exit(
             move |surface| {
                 build_flow(surface, rx);
@@ -120,7 +119,7 @@ impl Simulator {
 
         Simulator {
             parent_id: parent_id.to_string(),
-            frame_sender,
+            frame_sender: tx,
         }
     }
 
