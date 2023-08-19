@@ -3,10 +3,13 @@ use wgpu::{BindGroup, RenderPassColorAttachment, RenderPassDepthStencilAttachmen
 use super::*;
 
 //TODO: we might need to select this at runtime.
-#[cfg(target_os = "android")]
-pub static COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
-#[cfg(not(target_os = "android"))]
-pub static COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8Unorm;
+pub static COLOR_FORMAT: wgpu::TextureFormat = if cfg!(target_arch = "wasm32") {
+    wgpu::TextureFormat::Rgba8Unorm
+} else if cfg!(target_os = "android") {
+    wgpu::TextureFormat::Rgba8UnormSrgb
+} else {
+    wgpu::TextureFormat::Bgra8Unorm
+};
 pub static HIGHP_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
 pub static DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
