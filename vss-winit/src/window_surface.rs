@@ -53,9 +53,9 @@ impl WindowSurface {
         return &mut self.window;
     }
 
-    pub async fn run_and_exit<I, P>(mut self, mut init_fn: I, mut poll_fn: P)
+    pub async fn run_and_exit<I, P>(mut self, init_fn: I, mut poll_fn: P)
     where
-        I: 'static + FnMut(&mut Surface),
+        I: 'static + FnOnce(&mut Surface),
         P: 'static + FnMut() -> bool,
     {
         let window_size = self.window.inner_size();
