@@ -154,18 +154,14 @@ impl WindowSurface {
             if self.override_view || self.override_gaze {
                 let view_pos = self.static_pos.unwrap_or(self.mouse.position);
 
-                let yaw = view_pos.0 / (surface.width() as f32) * std::f32::consts::PI * 2.0 - 0.5;
-                let pitch = view_pos.1 / (surface.height() as f32) * std::f32::consts::PI - 0.5; //50 mm lens
+                let yaw = (view_pos.0 / (surface.width() as f32) - 0.5) * std::f32::consts::PI * 2.0;
+                let pitch = (view_pos.1 / (surface.height() as f32) - 0.5) * std::f32::consts::PI; //50 mm lens
                 let view = Matrix4::from_angle_x(cgmath::Rad(pitch))
                     * Matrix4::from_angle_y(cgmath::Rad(yaw));
 
                 let mut eye = f.eye_mut();
 
                 if self.override_view {
-                    if !self.override_gaze {
-                        eye.gaze =
-                            (view * eye.view.invert().unwrap() * eye.gaze.extend(1.0)).truncate();
-                    }
                     eye.view = view;
                 }
                 if self.override_gaze {

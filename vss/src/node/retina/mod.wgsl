@@ -2,7 +2,7 @@
 const GLAUCOMA_COLOR: vec4<f32> = vec4<f32>(0.02, 0.02, 0.02, 1.0);
 
 struct Uniforms{
-    proj: mat4x4<f32>,
+    gaze_inv_proj: mat4x4<f32>,
     resolution: vec2<f32>,
     achromatopsia_blur_factor: f32,
     track_error: i32,
@@ -223,8 +223,10 @@ fn glaucoma(color: vec4<f32>, retina: vec4<f32>, ev: ptr<function, ErrorValues>)
 fn fs_main(in: VertexOutput) -> FragmentOutput {
     var out: FragmentOutput;
 
-    let fragment_dir = normalize((uniforms.proj * vec4<f32>(in.tex_coords*2.0 - 1.0, 0.9, 1.0)).xyz);
-    let retina_mask = textureSample(in_retina_t, in_retina_s, fragment_dir);
+    let ndc = vec4<f32>(vec2(in.tex_coords.x, 1.0 - in.tex_coords.y) * 2.0 - 1.0, 0.9, 1.0);
+    let frag_dir = uniforms.gaze_inv_proj * ndc;
+
+    let retina_mask = textureSample(in_retina_t, in_retina_s, normalize(frag_dir.xyz)/frag_dir.w);
 
     let original_color = textureSample(in_color_t, in_color_s, in.tex_coords);
     let deflection = textureSample(in_deflection_t, in_deflection_s, in.tex_coords);

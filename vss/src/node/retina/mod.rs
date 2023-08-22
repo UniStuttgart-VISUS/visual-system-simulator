@@ -5,7 +5,7 @@ use super::*;
 use cgmath::{Matrix4, Point3, SquareMatrix, Vector3};
 
 struct Uniforms {
-    proj: [[f32; 4]; 4],
+    gaze_inv_proj: [[f32; 4]; 4],
     resolution: [f32; 2],
     achromatopsia_blur_factor: f32,
     track_error: i32,
@@ -40,7 +40,7 @@ impl Retina {
         let uniforms = ShaderUniforms::new(
             device,
             Uniforms {
-                proj: [[0.0; 4]; 4],
+                gaze_inv_proj: [[0.0; 4]; 4],
                 resolution: [0.0; 2],
                 achromatopsia_blur_factor: 0.0,
                 track_error: 0,
@@ -272,9 +272,7 @@ impl Node for Retina {
     fn input(&mut self, eye: &EyeInput, _mouse: &MouseInput) -> EyeInput {
         let gaze_rotation =
             Matrix4::look_to_lh(Point3::new(0.0, 0.0, 0.0), eye.gaze, Vector3::unit_y());
-        //let gaze_rotation = Matrix4::from_scale(1.0);
-        self.uniforms.data.proj = (gaze_rotation * eye.proj.invert().unwrap()).into();
-        //self.pso_data.u_proj = (head.proj * (Matrix4::from_translation(-head.position) * head.view)).into();
+        self.uniforms.data.gaze_inv_proj = (gaze_rotation * eye.proj.invert().unwrap()).into();
 
         eye.clone()
     }
