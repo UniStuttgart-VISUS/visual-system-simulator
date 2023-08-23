@@ -1,5 +1,6 @@
-use cgmath::{Matrix4, SquareMatrix, Vector4, Vector3};
+use cgmath::Vector3;
 use vss::*;
+use std::iter;
 use winit::{
     dpi::*,
     event::*,
@@ -13,14 +14,11 @@ use crate::Varjo;
 pub struct WindowVRSurface {
     events_loop: Option<EventLoop<()>>,
     window: winit::window::Window,
-    flow_count: usize,
+    vr_flows: Vec<Flow>,
 
     active: bool,
     static_pos: Option<(f32, f32)>,
     mouse: MouseInput,
-
-    override_gaze: bool,
-    override_view: bool,
 
     varjo: Varjo,
 }
@@ -37,10 +35,14 @@ impl WindowVRSurface {
         let window = window_builder.build(&events_loop).unwrap();
         window.set_cursor_visible(true);
 
+        // Create vr flows.
+        let mut vr_flows = Vec::new();
+        vr_flows.resize_with(flow_count, Flow::new);
+
         Self {
             window,
+            vr_flows,
             events_loop: Some(events_loop),
-            flow_count,
             active: false,
             static_pos,
             mouse: MouseInput {
@@ -48,8 +50,6 @@ impl WindowVRSurface {
                 left_button: false,
                 right_button: false,
             },
-            override_view: static_pos.is_some(),
-            override_gaze: false,
             varjo,
         }
     }
@@ -60,7 +60,7 @@ impl WindowVRSurface {
 
     pub async fn run_and_exit<I, P>(mut self, mut init_fn: I, mut poll_fn: P)
     where
-        I: 'static + FnMut(&mut Surface),
+        I: 'static + FnMut(&mut WindowVRSurface, &mut Surface, Texture),
         P: 'static + FnMut() -> bool,
     {
         let window_size = self.window.inner_size();
@@ -87,7 +87,7 @@ impl WindowVRSurface {
         
                 Surface::with_existing(
                     [window_size.width, window_size.height],
-                    self.flow_count,
+                    1,
                     surface,
                     adapter,
                     device,
@@ -99,7 +99,7 @@ impl WindowVRSurface {
                 Surface::new(
                     [window_size.width, window_size.height],
                     &self.window,
-                    self.flow_count,
+                    1,
                 )
                 .await
             }
@@ -108,7 +108,8 @@ impl WindowVRSurface {
         Varjo::check_handles(&surface);
         self.varjo.create_render_targets(&surface);
 
-        init_fn(&mut surface);
+        let (vr_framebuffer_texture, _) = self.varjo.get_latest_render_target();
+        init_fn(&mut self, &mut surface, vr_framebuffer_texture.as_texture());
 
         let events_loop = self.events_loop.take().unwrap();
         let mut deferred_size = None;
@@ -144,22 +145,13 @@ impl WindowVRSurface {
                                 self.mouse.position = (position.x as f32, position.y as f32);
                             }
                         }
-                        WindowEvent::CursorLeft { .. } => {
-                            if self.active {
-                                self.override_view = false;
-                                self.override_gaze = false;
-                                //XXX: reset gaze?
-                            }
-                        }
                         WindowEvent::MouseInput { state, button, .. } => {
                             if self.active {
                                 match button {
                                     MouseButton::Left => {
-                                        self.override_view = *state == ElementState::Pressed;
                                         self.mouse.left_button = *state == ElementState::Pressed;
                                     }
                                     MouseButton::Right => {
-                                        self.override_gaze = *state == ElementState::Pressed;
                                         self.mouse.right_button = *state == ElementState::Pressed;
                                     }
                                     _ => {}
@@ -170,13 +162,12 @@ impl WindowVRSurface {
                     }
                 }
                 Event::RedrawRequested(window_id) if window_id == self.window.id() => {
-                    // TODO: somehow separate varjo drawing from the surface and only draw the final framebuffer onto the surface (if possible with gui node)
-                    surface.draw();
                     if self.varjo.begin_frame_sync() {
-                        self.set_varjo_data(&mut surface);
-                        self.varjo.draw(&surface);
+                        self.set_varjo_data();
+                        self.draw_varjo(&surface);
                         self.varjo.end_frame();
                     }
+                    surface.draw();
                 }
                 Event::RedrawEventsCleared => {
                     //*control_flow = ControlFlow::Exit;
@@ -187,6 +178,8 @@ impl WindowVRSurface {
 
                     self.update_input(&mut surface);
 
+                    self.update_vr_input();
+
                     if poll_fn() {
                         *control_flow = ControlFlow::Exit;
                     }
@@ -196,14 +189,14 @@ impl WindowVRSurface {
         });
     }
 
-    fn set_varjo_data(&self, surface: &mut Surface) {
+    fn set_varjo_data(&mut self) {
         let view_matrices = self.varjo.get_current_view_matrices();
         let proj_matrices = self.varjo.get_current_proj_matrices();
         // let head_position = 0.5 * (view_matrices[0].w.truncate() + view_matrices[1].w.truncate());
         let eye_position = Vector3::new(0.0, 0.0, 0.0);
         let (left_gaze, right_gaze, _focus_distance) = self.varjo.get_current_gaze();
 
-        for (i, flow) in surface.flows.iter_mut().enumerate(){
+        for (i, flow) in self.vr_flows.iter_mut().enumerate(){
             let mut eye = flow.eye_mut();
             eye.position = eye_position;
             eye.view = view_matrices[i];
@@ -212,29 +205,46 @@ impl WindowVRSurface {
         }
     }
 
+    pub fn draw_varjo(&mut self, surface: &Surface){
+        let mut encoder = surface.device()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Varjo Render Encoder"),
+            });
+
+        let (color_rt, _depth_rt) = self.varjo.get_current_render_target();
+
+        self.vr_flows
+            .iter()
+            .for_each(|f| f.render(surface, &mut encoder, &color_rt));
+
+        surface.queue().submit(iter::once(encoder.finish()));
+        self.vr_flows.iter().for_each(|f| f.post_render(surface));
+    }
+
+    pub fn inspect(&self, inspector: &mut dyn Inspector) {
+        for (i, flow) in self.vr_flows.iter().enumerate() {
+            inspector.flow(i, &flow);
+        }
+    }
+
+    pub fn add_node(&mut self, node: Box<dyn Node>, flow_index: usize) {
+        self.vr_flows[flow_index].add_node(node);
+    }
+
+    pub fn negociate_slots(&self, surface: &Surface) {
+        for flow in self.vr_flows.iter() {
+            flow.negociate_slots(surface);
+        }
+    }
+
     fn update_input(&self, surface: &mut Surface) {
         for f in surface.flows.iter() {
-            if self.override_view || self.override_gaze {
-                let view_pos = self.static_pos.unwrap_or(self.mouse.position);
-
-                let yaw = view_pos.0 / (surface.width() as f32) * std::f32::consts::PI * 2.0 - 0.5;
-                let pitch = view_pos.1 / (surface.height() as f32) * std::f32::consts::PI - 0.5; //50 mm lens
-                let view = Matrix4::from_angle_x(cgmath::Rad(pitch))
-                    * Matrix4::from_angle_y(cgmath::Rad(yaw));
-
-                let mut eye = f.eye_mut();
-
-                if self.override_view {
-                    if !self.override_gaze {
-                        eye.gaze =
-                            (view * eye.view.invert().unwrap() * eye.gaze.extend(1.0)).truncate();
-                    }
-                    eye.view = view;
-                }
-                if self.override_gaze {
-                    eye.gaze = (eye.view * view.invert().unwrap() * Vector4::unit_z()).truncate();
-                }
-            }
+            f.input(&self.mouse);
+        }
+    }
+    
+    fn update_vr_input(&self) {
+        for f in self.vr_flows.iter() {
             f.input(&self.mouse);
         }
     }

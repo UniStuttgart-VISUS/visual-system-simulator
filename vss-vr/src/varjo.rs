@@ -1,7 +1,6 @@
 use ash::vk::{self, Handle};
 use log::LevelFilter;
 
-use std::iter;
 use std::{
     os::raw::{c_char, c_void},
     rc::Rc, ffi::CStr,
@@ -116,6 +115,7 @@ pub struct Varjo {
     varjo: VarjoPtr,
     render_targets_color: Vec<RenderTexture>,
     render_targets_depth: Vec<RenderTexture>,
+    latest_swap_chain_index: usize,
     pub logging_enabled: bool,
     vulkan_data: VulkanData,
     //pub instance: Option<wgpu::Instance>,
@@ -125,23 +125,8 @@ impl Varjo {
     pub fn new() -> Self {
         simple_logging::log_to_file("vss_latest.log", LevelFilter::Info).unwrap();
 
-        //let instance = create_custom_vkInstance().unwrap();
-
-        /*let mut vulkan_data = unsafe {
-            surface.device().as_hal::<wgpu_hal::vulkan::Api, _, _>(
-                |vk_device: Option<&wgpu_hal::vulkan::Device>| -> VulkanData {
-                    let dev = vk_device.unwrap();
-                    VulkanData {
-                        instance: dev.shared_instance().raw_instance().handle(),
-                        device: dev.raw_device().handle(),
-                        queue_family_index: dev.queue_family_index(),
-                        queue_index: dev.queue_index(),
-                    }
-                },
-            )
-        };*/
         let mut vulkan_data = VulkanData {
-            instance: vk::Instance::from_raw(0),//instance.shared_instance().raw_instance().handle(),
+            instance: vk::Instance::from_raw(0),
             device: vk::Device::from_raw(0),
             queue_family_index: 0,
             queue_index: 0,
@@ -166,9 +151,7 @@ impl Varjo {
             render_targets_depth: Vec::new(),
             logging_enabled: true,
             vulkan_data,
-            // instance: Some(unsafe {
-            //     wgpu::Instance::from_hal::<wgpu_hal::api::Vulkan>(instance)
-            // })
+            latest_swap_chain_index: 0,
         }
     }
 
@@ -386,22 +369,6 @@ impl Varjo {
         )}.unwrap()
     }
 
-    pub fn draw(&mut self, surface: &Surface){
-        let mut encoder = surface.device()
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Varjo Render Encoder"),
-            });
-
-        let (color_rt, _depth_rt) = self.get_current_render_target();
-
-        surface.flows
-            .iter()
-            .for_each(|f| f.render(surface, &mut encoder, &color_rt));
-
-        surface.queue().submit(iter::once(encoder.finish()));
-        surface.flows.iter().for_each(|f| f.post_render(surface));
-    }
-
     pub fn get_viewports(&self) -> (Vec<VarjoViewport>, i32, i32) {
         let mut viewports = std::ptr::null_mut::<VarjoViewport>();
         let mut view_count = 0;
@@ -464,16 +431,21 @@ impl Varjo {
         }
     }
 
-    pub fn get_current_render_target(&self) -> (RenderTexture, RenderTexture) {
+    pub fn get_current_render_target(&mut self) -> (RenderTexture, RenderTexture) {
         let mut current_swap_chain_index = 0u32;
         try_fail(unsafe {
             varjo_current_swap_chain_index(self.varjo, &mut current_swap_chain_index as *mut _)
         })
         .unwrap();
-
+        self.latest_swap_chain_index = current_swap_chain_index as usize;
+        
+        self.get_latest_render_target()
+    }
+    
+    pub fn get_latest_render_target(&self) -> (RenderTexture, RenderTexture) {
         return (
-            self.render_targets_color[current_swap_chain_index as usize].clone(),
-            self.render_targets_depth[current_swap_chain_index as usize].clone(),
+            self.render_targets_color[self.latest_swap_chain_index].clone(),
+            self.render_targets_depth[self.latest_swap_chain_index].clone(),
         );
     }
 
@@ -660,7 +632,7 @@ pub fn create_render_texture_from_hal(
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: format,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 view_formats: &[format],
             },
         )

@@ -122,6 +122,7 @@ impl IoGenerator {
     }
 }
 
+#[cfg(not(any(feature = "varjo", feature = "openxr")))]
 fn build_flow(
     surface: &mut Surface,
     io_generator: &mut IoGenerator,
@@ -157,40 +158,25 @@ fn build_flow(
     let node = PeacockCB::new(surface);
     surface.add_node(Box::new(node), flow_index);
 
-    #[cfg(not(any(feature = "varjo", feature = "openxr")))]{
-        // Measurement Nodes for variance and error
-        let node = VarianceMeasure::new(surface);
-        surface.add_node(Box::new(node), flow_index);
-        let node = VisOverlay::new(surface);
-        surface.add_node(Box::new(node), flow_index);
-    
-        // Display node.
-        let mut node = Display::new(surface);
-        node.set_viewport(view_port);
-        node.set_output_scale(output_scale);
-        surface.add_node(Box::new(node), flow_index);
-    
-        // Add UI overlay.
-        let node = GuiOverlay::new(surface);
-        surface.add_node(Box::new(node), flow_index);
-    
-        // Add output node, if present.
-        if let Some(output_node) = output_node {
-            surface.add_node(output_node, flow_index);
-        }
-    }
+    // Measurement Nodes for variance and error
+    let node = VarianceMeasure::new(surface);
+    surface.add_node(Box::new(node), flow_index);
+    let node = VisOverlay::new(surface);
+    surface.add_node(Box::new(node), flow_index);
 
-    #[cfg(feature = "varjo")]{
-        // Display node.
-        let mut node = Display::new(surface);
-        node.set_viewport(view_port);
-        node.set_output_scale(output_scale);
-        surface.add_node(Box::new(node), flow_index);
+    // Display node.
+    let mut node = Display::new(surface);
+    node.set_viewport(view_port);
+    node.set_output_scale(output_scale);
+    surface.add_node(Box::new(node), flow_index);
 
-        // Add output node, if present.
-        if let Some(output_node) = output_node {
-            surface.add_node(output_node, flow_index);
-        }
+    // Add UI overlay.
+    let node = GuiOverlay::new(surface);
+    surface.add_node(Box::new(node), flow_index);
+
+    // Add output node, if present.
+    if let Some(output_node) = output_node {
+        surface.add_node(output_node, flow_index);
     }
 
     surface.negociate_slots();
@@ -437,6 +423,89 @@ pub fn main() {
 }
 
 #[cfg(feature = "varjo")]
+fn build_vr_flow(
+    vr_surface: &mut WindowVRSurface,
+    surface: &mut Surface,
+    io_generator: &mut IoGenerator,
+    flow_index: usize,
+    render_resolution: Option<(u32, u32)>,
+    view_port: ViewPort,
+) {
+    let render_res = if let Some(res) = render_resolution {
+        RenderResolution::Custom {
+            res: [res.0, res.1],
+        }
+    } else {
+        RenderResolution::Screen {
+            input_scale: 1.0, //TODO add input scaling
+            output_scale: OutputScale::Stretch,
+        }
+    };
+    let (input_node, output_node) = io_generator
+        .current(surface, render_res, flow_index)
+        .unwrap();
+
+    // Add input node.
+    vr_surface.add_node(input_node, flow_index);
+
+    // Visual system passes.
+    let node = Cataract::new(surface);
+    vr_surface.add_node(Box::new(node), flow_index);
+    let node = Lens::new(surface);
+    vr_surface.add_node(Box::new(node), flow_index);
+    let node = Retina::new(surface);
+    vr_surface.add_node(Box::new(node), flow_index);
+    let node = PeacockCB::new(surface);
+    vr_surface.add_node(Box::new(node), flow_index);
+
+    // Display node.
+    let mut node = Display::new(surface);
+    node.set_viewport(view_port);
+    node.set_output_scale(OutputScale::Stretch);
+    vr_surface.add_node(Box::new(node), flow_index);
+
+    // Add output node, if present.
+    if let Some(output_node) = output_node {
+        vr_surface.add_node(output_node, flow_index);
+    }
+
+    vr_surface.negociate_slots(&surface);
+}
+
+#[cfg(feature = "varjo")]
+fn build_window_flow(
+    surface: &mut Surface,
+    flow_index: usize,
+    input_texture: Texture,
+    view_port: ViewPort,
+    output_scale: OutputScale,
+) {
+    // Add input node.
+    let node = VrBuffer::new(surface, input_texture, None);
+    surface.add_node(Box::new(node), flow_index);
+
+    // Measurement Nodes for variance and error
+    let node = VarianceMeasure::new(surface);
+    surface.add_node(Box::new(node), flow_index);
+    // TODO: the VrBuffer node currently can't access these values.
+    // But if there is an interest in it, it should be possible to add these textures too.
+    // let node = VisOverlay::new(surface);
+    // surface.add_node(Box::new(node), flow_index);
+
+    // Display node.
+    let mut node = Display::new(surface);
+    node.set_viewport(view_port);
+    node.set_output_scale(output_scale);
+    surface.add_node(Box::new(node), flow_index);
+
+    // Add UI overlay.
+    let node = GuiOverlay::new(surface);
+    surface.add_node(Box::new(node), flow_index);
+
+    surface.negociate_slots();
+}
+
+#[cfg(feature = "varjo")]
 pub fn main() {
     let varjo = Varjo::new();
 
@@ -460,6 +529,14 @@ pub fn main() {
         }
     }).collect::<Vec<ViewPort>>();
 
+    let window_view_port = ViewPort {
+        x: 0.0,
+        y: 0.0,
+        width: 1.0,
+        height: 1.0,
+        absolute_viewport: false,
+    };
+
     let window = WindowVRSurface::new(
         config.visible,
         flow_count,
@@ -473,25 +550,34 @@ pub fn main() {
     let print_spacing = 60;
 
     pollster::block_on(window.run_and_exit(
-        move |surface| {
+        move |vr_surface, surface, vr_framebuffer_texture| {
+            
             for (index, flow_config) in config.flow_configs.iter().enumerate() {
                 let mut io_generator = IoGenerator::new(
                     config.inputs.clone(),
                     flow_config.name.clone(),
                     config.output.clone(),
                 );
-                build_flow(
+                build_vr_flow(
+                    vr_surface,
                     surface,
                     &mut io_generator,
                     index,
                     config.resolution,
                     view_ports[index],
-                    config.output_scale,
                 );
             }
 
+            build_window_flow(
+                surface,
+                0,
+                vr_framebuffer_texture,
+                window_view_port,
+                config.output_scale,
+            );
+
             let mut inspector = ConfigInspector::new(&config);
-            surface.inspect(&mut inspector);
+            vr_surface.inspect(&mut inspector);
             inspector.print_unused();
         },
         move || {
