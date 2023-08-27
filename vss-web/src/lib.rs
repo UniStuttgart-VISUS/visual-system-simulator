@@ -113,7 +113,7 @@ impl Simulator {
             move |surface| {
                 build_flow(surface, rx);
             },
-            || true,
+            || false,
         ));
 
         Simulator { frame_sender: tx }
