@@ -10,7 +10,10 @@ import("./pkg").then(m => {
         context.drawImage(image, 0, 0);
         let buffer = new Uint8Array(context.getImageData(0, 0, image.width, image.height).data.buffer);
         console.log("Posting frame", image.width, image.height, buffer);
-        let res = sim.post_frame(buffer, image.width, image.height);
+        sim.post_frame(buffer, image.width, image.height);
+    };
+    image.onerror = () => {
+        console.warn("Cannot load frame image", image.src);
     };
     image.src = "marketplace.png"
 
