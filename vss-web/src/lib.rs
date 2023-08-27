@@ -85,7 +85,6 @@ fn build_flow(surface: &mut Surface, frame_receiver: Receiver<RgbBuffer>) {
 
 #[wasm_bindgen]
 pub struct Simulator {
-    parent_id: String,
     frame_sender: SyncSender<RgbBuffer>,
 }
 
@@ -117,20 +116,23 @@ impl Simulator {
             || true,
         ));
 
-        Simulator {
-            parent_id: parent_id.to_string(),
-            frame_sender: tx,
-        }
+        Simulator { frame_sender: tx }
     }
 
     #[wasm_bindgen]
-    pub fn post_frame(&mut self, pixels: Vec<u8>, width: usize, height: usize) -> bool {
+    pub fn post_frame(
+        &mut self,
+        pixels: Vec<u8>,
+        width: usize,
+        height: usize,
+    ) -> Result<(), JsError> {
         let buffer = RgbBuffer {
             pixels_rgb: pixels.into_boxed_slice(),
             width: width as u32,
             height: height as u32,
         };
-        let res = self.frame_sender.try_send(buffer);
-        res.is_ok()
+        self.frame_sender
+            .try_send(buffer)
+            .map_err(|err| JsError::new(&err.to_string()))
     }
 }

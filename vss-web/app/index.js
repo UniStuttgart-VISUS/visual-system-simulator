@@ -9,9 +9,8 @@ import("./pkg").then(m => {
         context.height = image.height;
         context.drawImage(image, 0, 0);
         let buffer = new Uint8Array(context.getImageData(0, 0, image.width, image.height).data.buffer);
-        console.log("Posting", buffer, image.width, image.height);
+        console.log("Posting frame", image.width, image.height, buffer);
         let res = sim.post_frame(buffer, image.width, image.height);
-        console.log("Posting result:", res);
     };
     image.src = "marketplace.png"
 
