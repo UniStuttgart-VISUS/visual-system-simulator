@@ -1,6 +1,7 @@
 use crate::*;
 
 use std::cell::RefCell;
+use std::fmt::Display;
 
 use cgmath::Matrix4;
 
@@ -153,15 +154,17 @@ impl ToJsonInspector {
         }
     }
 
-    pub fn to_string(self) -> String {
-        serde_json::Value::Array(self.flows.borrow().clone()).to_string()
-    }
-
     fn insert_attribute(&self, name: &'static str, value: serde_json::Value) -> bool {
         self.current_node_attributes
             .borrow_mut()
             .insert(name.to_string(), value);
         false
+    }
+}
+
+impl Display for ToJsonInspector {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", serde_json::Value::Array(self.flows.borrow().clone()).to_string())
     }
 }
 
@@ -197,7 +200,7 @@ impl Inspector for ToJsonInspector {
     }
 
     fn mut_f64(&self, name: &'static str, value: &mut f64) -> bool {
-        self.insert_attribute(name, serde_json::Value::from(*value as f64))
+        self.insert_attribute(name, serde_json::Value::from(*value))
     }
 
     fn mut_f32(&self, name: &'static str, value: &mut f32) -> bool {

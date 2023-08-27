@@ -494,7 +494,6 @@ pub fn update_texture(
                     .format()
                     .block_size(None)
                     .expect("combined depth-stencil format requires specifying a TextureAspect")
-                    as u32
                     * size[0],
             ),
             rows_per_image: Some(size[1]),
@@ -550,7 +549,6 @@ pub fn load_texture_from_bytes(
                 format
                     .block_size(None)
                     .expect("combined depth-stencil format requires specifying a TextureAspect")
-                    as u32
                     * width,
             ),
             rows_per_image: Some(height),

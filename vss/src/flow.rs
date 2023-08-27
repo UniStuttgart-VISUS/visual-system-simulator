@@ -173,7 +173,7 @@ impl Flow {
                         .spacing([6.0, 4.0])
                         .striped(true)
                         .show(ui, |ui| {
-                            self.inspect(&mut UiInspector::new(ui));
+                            self.inspect(&UiInspector::new(ui));
                         });
                 });
             });

@@ -1,7 +1,11 @@
 use std::io::Cursor;
 use std::path::Path;
 
-// from https://stackoverflow.com/a/42186553
+/// Converts a struct to `&[u8]`.
+///
+/// # Safety
+/// The function is marked unsafe because any padding bytes in the type may be uninitialized memory (giving undefined behavior).
+/// It is safe (for sure) if the input argument is a struct with #[repr(packed)].
 pub unsafe fn any_as_u8_slice<T: Sized>(p: &T) -> &[u8] {
     ::std::slice::from_raw_parts((p as *const T) as *const u8, ::std::mem::size_of::<T>())
 }

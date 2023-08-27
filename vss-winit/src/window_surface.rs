@@ -50,7 +50,7 @@ impl WindowSurface {
     }
 
     pub fn window(&mut self) -> &mut winit::window::Window {
-        return &mut self.window;
+        &mut self.window
     }
 
     pub async fn run_and_exit<I, P>(mut self, init_fn: I, mut poll_fn: P)
