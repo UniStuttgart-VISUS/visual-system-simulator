@@ -3,7 +3,7 @@ use vss::*;
 use winit::{
     dpi::*,
     event::*,
-    event_loop::{ControlFlow, EventLoop},
+    event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget},
     window::WindowBuilder,
 };
 
@@ -72,7 +72,9 @@ impl WindowSurface {
         let events_loop = self.events_loop.take().unwrap();
         let mut deferred_size = None;
 
-        events_loop.run(move |event, _, control_flow| {
+        let event_handler = move |event: Event<'_, ()>,
+                                  _: &EventLoopWindowTarget<()>,
+                                  control_flow: &mut ControlFlow| {
             *control_flow = ControlFlow::Poll;
             match event {
                 Event::WindowEvent {
@@ -146,7 +148,15 @@ impl WindowSurface {
                 }
                 _ => {}
             }
-        });
+        };
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            use winit::platform::web::EventLoopExtWebSys;
+            events_loop.spawn(event_handler);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        events_loop.run(event_handler);
     }
 
     fn update_input(&self, surface: &mut Surface) {
