@@ -272,7 +272,7 @@ impl Node for Retina {
     fn input(&mut self, eye: &EyeInput, _mouse: &MouseInput) -> EyeInput {
         let gaze_rotation =
             Matrix4::look_to_lh(Point3::new(0.0, 0.0, 0.0), eye.gaze, Vector3::unit_y());
-        self.uniforms.data.gaze_inv_proj = (gaze_rotation * eye.proj.invert().unwrap()).into();
+        self.uniforms.data.gaze_inv_proj = (gaze_rotation.invert().unwrap() * eye.proj.invert().unwrap()).into();
 
         eye.clone()
     }

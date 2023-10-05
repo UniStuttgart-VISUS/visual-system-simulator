@@ -24,7 +24,7 @@ fn varjo_dirs() -> Result<(Vec<PathBuf>, Vec<PathBuf>), std::env::VarError> {
 
 fn vulkan_dirs() -> Result<(Vec<PathBuf>, Vec<PathBuf>), std::env::VarError> {
     let include_paths = {
-        let dir = std::path::PathBuf::from("D:/Coding/Libraries/Vulkan-SDK/Include");
+        let dir = std::path::PathBuf::from(std::env::var("VULKAN_INCLUDE_DIR")?);
         if dir.is_dir() {
             vec![dir]
         } else {
@@ -32,7 +32,7 @@ fn vulkan_dirs() -> Result<(Vec<PathBuf>, Vec<PathBuf>), std::env::VarError> {
         }
     };
     let link_paths = {
-        let dir = std::path::PathBuf::from("D:/Coding/Libraries/Vulkan-SDK/Lib");
+        let dir = std::path::PathBuf::from(std::env::var("VULKAN_LIB_DIR")?);
         if dir.is_dir() {
             vec![dir]
         } else {
