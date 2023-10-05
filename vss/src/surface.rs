@@ -158,6 +158,15 @@ impl Surface {
         self.flows.iter().map(|flow| flow.nodes_len()).collect()
     }
 
+    pub fn validate_slots(&self) -> bool {
+        let mut result = true;
+        for flow in self.flows.iter() {
+            // Test every flow (do not short-circuit).
+            result = result && flow.validate_slots()
+        }
+        result
+    }
+
     pub fn negociate_slots(&self) {
         for flow in self.flows.iter() {
             flow.negociate_slots(self);

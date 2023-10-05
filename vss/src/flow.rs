@@ -56,6 +56,15 @@ impl Flow {
         self.nodes.borrow().len()
     }
 
+    pub fn validate_slots(&self) -> bool {
+        let mut result = true;
+        for node in self.nodes.borrow_mut().iter_mut() {
+            // Test every node (do not short-circuit).
+            result = result && node.validate_slots()
+        }
+        result
+    }
+
     pub fn negociate_slots(&self, surface: &Surface) {
         let mut slot_a = NodeSlots::new();
         let mut slot_b = NodeSlots::new();

@@ -46,6 +46,9 @@ pub trait Node {
     // Returns the node name.
     fn name(&self) -> &'static str;
 
+    /// Tests if this node's slots are still valid. Return false to trigger re-negociation.
+    fn validate_slots(&mut self) -> bool { true }
+
     /// Negociates input and output for this node (source texture and render target),
     /// possibly re-using suggested `slots` (for efficiency).
     fn negociate_slots(
@@ -86,6 +89,8 @@ impl Node for Box<dyn Node> {
     fn name(&self) -> &'static str {
         self.as_ref().name()
     }
+
+    fn validate_slots(&mut self) -> bool { self.as_mut().validate_slots() }
 
     fn negociate_slots(
         &mut self,

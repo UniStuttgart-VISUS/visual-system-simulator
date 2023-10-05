@@ -23,6 +23,15 @@ impl Node for UploadStream {
         "UploadStream"
     }
 
+    fn validate_slots(&mut self) -> bool {
+        if let Ok(buffer) = self.frame_receiver.try_recv() {
+            self.upload.upload_buffer(&buffer);
+            false
+        } else {
+            self.upload.validate_slots()
+        }
+    }
+
     fn negociate_slots(
         &mut self,
         surface: &Surface,
@@ -37,10 +46,6 @@ impl Node for UploadStream {
     }
 
     fn input(&mut self, eye: &EyeInput, mouse: &MouseInput) -> EyeInput {
-        // Uploading the buffer here is a bit sketchy but works.
-        if let Ok(buffer) = self.frame_receiver.try_recv() {
-            self.upload.upload_buffer(&buffer);
-        }
         self.upload.input(eye, mouse)
     }
 
@@ -79,8 +84,6 @@ fn build_flow(surface: &mut Surface, frame_receiver: Receiver<RgbBuffer>) {
     let mut node = Display::new(surface);
     node.set_output_scale(OutputScale::Fill);
     surface.add_node(Box::new(node), 0);
-
-    surface.negociate_slots();
 }
 
 #[wasm_bindgen]

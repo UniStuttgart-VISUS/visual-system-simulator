@@ -249,7 +249,7 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDraw(
     for flow in bridge.surface.flows.iter() {
         flow.input(&MouseInput::default());
     }
-    //TODO replace this with some better way of triggering a node update
+    //TODO replace this with validate_slots() to triggering a content-related update
     //(it is neccessary to refresh node resolutions but for this we need
     //the upload node to have a buffer available to get the new resolution from)
     if (bridge.new_size[0] != bridge.current_size[0])

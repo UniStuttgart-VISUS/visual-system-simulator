@@ -69,6 +69,8 @@ impl WindowSurface {
 
         init_fn(&mut surface);
 
+        surface.negociate_slots();
+
         let events_loop = self.events_loop.take().unwrap();
         let mut deferred_size = None;
 
@@ -139,6 +141,11 @@ impl WindowSurface {
                 }
                 Event::MainEventsCleared => {
                     self.update_size(&mut surface, deferred_size);
+                    deferred_size = None;
+
+                    if !surface.validate_slots() {
+                        surface.negociate_slots();
+                    }
 
                     self.update_input(&mut surface);
 
@@ -183,29 +190,23 @@ impl WindowSurface {
     }
 
     fn update_size(&mut self, surface: &mut Surface, deferred_size: Option<PhysicalSize<u32>>) {
-        if self.static_pos.is_some() {
-            // Update flow IO.
-            let new_size = PhysicalSize::new(1920, 1080);
-            surface.resize([new_size.width, new_size.height]);
+        let new_size = if self.static_pos.is_some() {
+            Some(PhysicalSize::new(1920, 1080))
+        } else {
             // TODO-WGPU
-            // for (i, f) in self.flow.iter().enumerate(){
-            //     f.negociate_slots(&self);
-            //     f.last_perspective.borrow_mut().proj = cgmath::perspective(
-            //         cgmath::Deg(70.0), (size.width/size.height) as f32, 0.05, 1000.0);
-            // }
-        }
-
-        if let Some(new_size) = deferred_size {
-            // Update flow IO.
             // let dpi_factor = self.window.scale_factor();
             // let size = size.to_physical(dpi_factor);
+            deferred_size
+        };
+
+        if let Some(new_size) = new_size {
             surface.resize([new_size.width, new_size.height]);
-            // TODO-WGPU
-            // for (i, f) in self.flow.iter().enumerate(){
-            //     f.negociate_slots(&self);
-            //     f.last_perspective.borrow_mut().proj = cgmath::perspective(
-            //         cgmath::Deg(70.0), (size.width/size.height) as f32, 0.05, 1000.0);
-            // }
+            for flow in surface.flows.iter()  {
+                flow.negociate_slots(surface);
+                // TODO-WGPU
+                // flow.last_perspective.borrow_mut().proj = cgmath::perspective(
+                //    cgmath::Deg(70.0), (size.width/size.height) as f32, 0.05, 1000.0);
+            }
         }
     }
 }
