@@ -227,7 +227,12 @@ public:
             printf("    %s\n", ext);
         }
 
-        enabledInstanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+        // TODO: fix vulkan validation errors, enable these and ".setPEnabledLayerNames" for vulkan validation layers and debugging (currently off so vulkan sdk installation is not required to run)
+        // enabledInstanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+        // const std::vector<const char*> enabledLayers = {
+        //     "VK_LAYER_KHRONOS_validation"
+        // };
+
 
         // TODO: automatically adjust these to wgpu requirements
         enabledInstanceExtensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
@@ -240,13 +245,9 @@ public:
             printf("    %s\n", ext);
         }
 
-        const std::vector<const char*> enabledLayers = {
-            "VK_LAYER_KHRONOS_validation"
-        };
-
         const auto applicationInfo = vk::ApplicationInfo().setApiVersion(VK_MAKE_VERSION(1, 3, 0));
         const vk::InstanceCreateInfo info = vk::InstanceCreateInfo()
-                                                .setPEnabledLayerNames(enabledLayers)
+                                                // .setPEnabledLayerNames(enabledLayers)
                                                 .setPEnabledExtensionNames(enabledInstanceExtensions)
                                                 .setPApplicationInfo(&applicationInfo);
         vkInstance = vk::createInstance(info);

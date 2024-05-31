@@ -192,13 +192,13 @@ impl WindowVRSurface {
     fn set_varjo_data(&mut self) {
         let view_matrices = self.varjo.get_current_view_matrices();
         let proj_matrices = self.varjo.get_current_proj_matrices();
-        // let head_position = 0.5 * (view_matrices[0].w.truncate() + view_matrices[1].w.truncate());
-        let eye_position = Vector3::new(0.0, 0.0, 0.0);
+        let head_position = 0.5 * (view_matrices[0].w.truncate() + view_matrices[1].w.truncate());
+        // let eye_position = Vector3::new(0.0, 0.0, 0.0);
         let (left_gaze, right_gaze, _focus_distance) = self.varjo.get_current_gaze();
 
         for (i, flow) in self.vr_flows.iter_mut().enumerate(){
             let mut eye = flow.eye_mut();
-            eye.position = eye_position;
+            eye.position = head_position;
             eye.view = view_matrices[i];
             eye.proj = proj_matrices[i];
             eye.gaze = if i % 2 == 0 {left_gaze} else {right_gaze};
