@@ -6,8 +6,8 @@ use std::rc::Rc;
 use wgpu::{self, SurfaceError, SurfaceTexture};
 
 /// Represents a rendering surface and its associated [Flow].
-pub struct Surface {
-    surface: wgpu::Surface,
+pub struct Surface<'window> {
+    surface: wgpu::Surface<'window>,
     surface_size: [u32; 2],
     surface_config: wgpu::SurfaceConfiguration,
     device: wgpu::Device,
@@ -17,8 +17,8 @@ pub struct Surface {
     last_render_instant: Cell<Instant>,
 }
 
-impl Surface {
-    pub async fn with_existing(surface_size: [u32; 2], flow_count: usize, surface: wgpu::Surface, adapter: wgpu::Adapter, device: wgpu::Device, queue: wgpu::Queue) -> Self {
+impl<'window> Surface<'window> {
+    pub async fn with_existing(surface_size: [u32; 2], flow_count: usize, surface: wgpu::Surface<'static>, adapter: wgpu::Adapter, device: wgpu::Device, queue: wgpu::Queue) -> Self {
 
         // Query surface capablities, preferably with sRGB support.
         let swapchain_capabilities = surface.get_capabilities(&adapter);
@@ -35,6 +35,7 @@ impl Surface {
             present_mode: wgpu::PresentMode::Fifo,
             alpha_mode: swapchain_capabilities.alpha_modes[0],
             view_formats,
+            desired_maximum_frame_latency: 2,
         };
         surface.configure(&device, &surface_config);
 
@@ -53,22 +54,23 @@ impl Surface {
         }
     }
 
-    pub async fn new<W>(surface_size: [u32; 2], window_handle: W, flow_count: usize) -> Self
-    where
-        W: raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle,
+    pub   fn new(surface_size: [u32; 2], target: impl Into<wgpu::SurfaceTarget<'window>>, flow_count: usize) -> Self
     {
         let instance = if cfg!(target_os = "windows") {
             // Use Vulkan for consistency with Varjo/OpenXR builds on windows.
             wgpu::Instance::new(wgpu::InstanceDescriptor {
                 backends: wgpu::Backends::VULKAN,
                 dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
+                flags: wgpu::InstanceFlags::debugging().with_env(),
+                gles_minor_version: wgpu::util::gles_minor_version_from_env().unwrap_or_default(),
             })
         } else {
             wgpu::Instance::default()
         };
 
-        let surface = unsafe { instance.create_surface(&window_handle) }.unwrap();
-        let adapter = instance
+        let surface = instance.create_surface(target).unwrap();
+     let (adapter, device, queue) =   pollster::block_on( async {
+        let adapter =  instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: Some(&surface),
@@ -80,20 +82,21 @@ impl Surface {
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
-                    features: wgpu::Features::empty(),
-                    limits: if cfg!(target_arch = "wasm32") {
+                    label: None,
+                    required_features:  wgpu::Features::empty(),
+                    required_limits: if cfg!(target_arch = "wasm32") {
                         // WebGL does not support all features, thus disable some.
                         wgpu::Limits::downlevel_webgl2_defaults().using_resolution(adapter.limits())
                     } else {
                         wgpu::Limits::default()
                     },
-                    label: None,
                 },
                 None,
             )
             .await
             .expect("Cannot create device");
-
+        (adapter, device, queue)
+    }) ;
         // Query surface capablities, preferably with sRGB support.
         let swapchain_capabilities = surface.get_capabilities(&adapter);
         let view_formats = vec![];
@@ -116,6 +119,7 @@ impl Surface {
             present_mode: wgpu::PresentMode::Fifo,
             alpha_mode: swapchain_capabilities.alpha_modes[0],
             view_formats,
+            desired_maximum_frame_latency: 2,
         };
         surface.configure(&device, &surface_config);
 

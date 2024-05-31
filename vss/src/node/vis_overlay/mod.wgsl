@@ -110,8 +110,8 @@ fn deg_to_dist(deg: f32) -> f32{
                4                  nose                    4
 */
 
-fn watsons_params_x(x: f32) -> vec3<f32>{
-    var x = x;
+fn watsons_params_x(px: f32) -> vec3<f32>{
+    var x = px;
     // flip the x axis if we are in the left eye
     if( uniforms.flow_idx > 0 ){
         x *= -1.0;
@@ -144,9 +144,9 @@ fn weighted_density_meridian(x: f32, r_xy: f32, params: vec3<f32>) -> f32{
 }
 
 // calculate the spacing between RGCf
-fn spacing(pos: vec2<f32>) -> f32{
+fn spacing(ppos: vec2<f32>) -> f32{
     // fix the aspect ratio
-    var pos = vec2<f32>(pos.x * (uniforms.resolution_in.x/uniforms.resolution_in.y), pos.y);
+    var pos = vec2<f32>(ppos.x * (uniforms.resolution_in.x/uniforms.resolution_in.y), ppos.y);
 
     pos *= 2.0; //map to +/- 1.0 on the meridians
     // note that this does not create problems in the corners, 

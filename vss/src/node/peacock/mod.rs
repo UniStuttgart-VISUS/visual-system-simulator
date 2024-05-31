@@ -141,6 +141,8 @@ impl Node for PeacockCB {
             label: Some("Peacock render_pass"),
             color_attachments: &self.targets.color_attachments(screen),
             depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
         });
 
         render_pass.set_pipeline(&self.pipeline);

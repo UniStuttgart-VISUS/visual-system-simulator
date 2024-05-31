@@ -14,7 +14,7 @@ pub struct GuiOverlay {
     render_target: RenderTexture,
 
     gui_context: egui::Context,
-    screen_descriptor: egui_wgpu::renderer::ScreenDescriptor,
+    screen_descriptor: egui_wgpu::ScreenDescriptor,
     egui_input: Option<egui::RawInput>,
     egui_full_output: Option<egui::FullOutput>,
     egui_renderer: egui_wgpu::Renderer,
@@ -57,7 +57,7 @@ impl GuiOverlay {
         );
 
         let gui_context = egui::Context::default();
-        let screen_descriptor = egui_wgpu::renderer::ScreenDescriptor {
+        let screen_descriptor = egui_wgpu::ScreenDescriptor {
             size_in_pixels: [1, 1],
             pixels_per_point: 0.0,
         };
@@ -109,7 +109,7 @@ impl Node for GuiOverlay {
         self.uniforms.data.resolution_in = slots.input_size_f32();
         self.uniforms.data.resolution_out = output_size;
 
-        self.screen_descriptor = egui_wgpu::renderer::ScreenDescriptor {
+        self.screen_descriptor = egui_wgpu::ScreenDescriptor {
             size_in_pixels: [output_size[0] as u32, output_size[1] as u32],
             pixels_per_point: 1.0,
         };
@@ -149,7 +149,7 @@ impl Node for GuiOverlay {
 
         self.uniforms.upload(queue);
 
-        let paint_jobs = self.gui_context.tessellate(full_output.shapes);
+        let paint_jobs = self.gui_context.tessellate(full_output.shapes, full_output.pixels_per_point);
 
         for texture_delta_set in full_output.textures_delta.set.iter() {
             self.egui_renderer.update_texture(
@@ -174,6 +174,8 @@ impl Node for GuiOverlay {
                     .unwrap_or(&self.render_target)
                     .to_color_attachment(None)],
                 depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,    
             });
 
             render_pass.set_pipeline(&self.pipeline);

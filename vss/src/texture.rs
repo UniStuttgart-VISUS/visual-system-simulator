@@ -323,7 +323,7 @@ impl RenderTexture {
                 } else {
                     wgpu::LoadOp::Load
                 },
-                store: true,
+                store: wgpu::StoreOp::Store,
             },
         })
     }
@@ -340,7 +340,7 @@ impl RenderTexture {
                 } else {
                     wgpu::LoadOp::Load
                 },
-                store: true,
+                store: wgpu::StoreOp::Store,
             }),
             stencil_ops: None,
         })
@@ -492,7 +492,7 @@ pub fn update_texture(
                 texture
                     .texture
                     .format()
-                    .block_size(None)
+                    .block_copy_size(None)
                     .expect("combined depth-stencil format requires specifying a TextureAspect")
                     * size[0],
             ),
@@ -547,7 +547,7 @@ pub fn load_texture_from_bytes(
             offset: 0,
             bytes_per_row: Some(
                 format
-                    .block_size(None)
+                    .block_copy_size(None)
                     .expect("combined depth-stencil format requires specifying a TextureAspect")
                     * width,
             ),

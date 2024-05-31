@@ -24,13 +24,13 @@ use vss::*;
 
 struct AndroidHandle(RawWindowHandle);
 
-unsafe impl HasRawWindowHandle for AndroidHandle {
+unsafe impl HasWindowHandle for AndroidHandle {
     fn raw_window_handle(&self) -> RawWindowHandle {
         self.0
     }
 }
 
-unsafe impl HasRawDisplayHandle for AndroidHandle {
+unsafe impl HasDisplayHandle for AndroidHandle {
     fn raw_display_handle(&self) -> RawDisplayHandle {
         RawDisplayHandle::Android(AndroidDisplayHandle::empty())
     }

@@ -94,6 +94,8 @@ impl Node for VrBuffer {
             label: Some("VrBuffer render_pass"),
             color_attachments: &self.targets.color_attachments(screen),
             depth_stencil_attachment: self.targets.depth_attachment(),
+            timestamp_writes: None,
+            occlusion_query_set: None,
         });
 
         render_pass.set_pipeline(&self.pipeline);

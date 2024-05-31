@@ -211,12 +211,7 @@ pub fn main() {
 
     let flow_count = config.flow_configs.len();
 
-    let window = WindowSurface::new(
-        config.visible,
-        flow_count,
-        config.flow_configs[0].static_gaze,
-    );
-
+    
     let view_ports = match flow_count {
         1 => {
             vec![ViewPort {
@@ -255,7 +250,12 @@ pub fn main() {
     let mut previous_frame = Instant::now();
     let print_spacing = 60;
 
-    pollster::block_on(window.run_and_exit(
+    
+    let window = WindowSurface::new(
+        config.visible,
+        flow_count,
+        config.flow_configs[0].static_gaze,
+        
         move |surface| {
             for (index, flow_config) in config.flow_configs.iter().enumerate() {
                 let mut io_generator = IoGenerator::new(
@@ -276,7 +276,8 @@ pub fn main() {
             let mut inspector = ConfigInspector::new(&config);
             surface.inspect(&mut inspector);
             inspector.print_unused();
-        },
+        }
+        ,  
         move || {
             let mut done = false;
             frame_counter += 1;
@@ -333,8 +334,10 @@ pub fn main() {
             // }
 
             done
-        },
-    ));
+        }
+    );
+
+    window.run_app( );
 
     /*
 

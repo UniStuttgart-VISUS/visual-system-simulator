@@ -25,8 +25,7 @@ mustache = "0.9"
 ac_ffmpeg = { package = "ac-ffmpeg", version = "0.17.4", optional = true }
 log = "0.4"
 simple-logging = "2.0.2"
-ash = { version = "0.37.3", optional = true }
-pollster = "0.3"
+ash = { version = "0.38", optional = true }
 
 [features]
 default = []
