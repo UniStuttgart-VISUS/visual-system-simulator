@@ -1,5 +1,6 @@
 use std::io::Cursor;
 use std::path::Path;
+use std::ptr::addr_of;
 
 /// Converts a struct to `&[u8]`.
 ///
@@ -18,7 +19,7 @@ pub fn set_load(load_fn: LoadFn) {
 }
 
 pub fn load<P: AsRef<Path>>(path: P) -> Cursor<Vec<u8>> {
-    if let Some(load_fn) = unsafe { &LOAD_FN } {
+    if let Some(load_fn) = unsafe { addr_of!(LOAD_FN).as_ref().unwrap() } {
         load_fn(Path::new("").join(&path).to_str().unwrap())
     } else {
         panic!("load_fn not set");
