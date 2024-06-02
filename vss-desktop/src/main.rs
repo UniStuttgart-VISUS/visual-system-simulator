@@ -1,4 +1,5 @@
 mod cmd;
+mod io;
 mod node;
 
 #[cfg(feature = "openxr")]
@@ -7,120 +8,13 @@ mod openxr;
 use std::io::Cursor;
 use std::time::Instant;
 use vss::*;
-#[cfg(not(any(feature = "varjo", feature = "openxr")))]
-use vss_winit::*;
 #[cfg(feature = "varjo")]
 use vss_vr::*;
+#[cfg(not(any(feature = "varjo", feature = "openxr")))]
+use vss_winit::*;
 
 use crate::cmd::*;
-use crate::node::*;
-
-type IoNodePair = (Box<dyn Node>, Option<Box<dyn Node>>);
-
-struct IoGenerator {
-    inputs: Vec<String>,
-    config_name: String,
-    output: Option<mustache::Template>,
-    input_idx: usize,
-    input_processed: std::sync::Arc<std::sync::RwLock<bool>>,
-}
-
-impl IoGenerator {
-    fn new(inputs: Vec<String>, config_name: String, output: Option<mustache::Template>) -> Self {
-        Self {
-            inputs,
-            config_name,
-            output,
-            input_idx: 0,
-            input_processed: std::sync::Arc::new(std::sync::RwLock::new(false)),
-        }
-    }
-
-    fn _is_ready(&self) -> bool {
-        *self.input_processed.read().unwrap()
-    }
-
-    fn _next(
-        &mut self,
-        surface: &Surface,
-        render_resolution: Option<[u32; 2]>,
-    ) -> Option<IoNodePair> {
-        self.input_idx += 1;
-        let render_res = if let Some(res) = render_resolution {
-            RenderResolution::Custom { res }
-        } else {
-            RenderResolution::Buffer { input_scale: 1.0 } //TODO add input scaling
-        };
-        self.current(surface, render_res, 0)
-    }
-
-    fn current(
-        &mut self,
-        surface: &Surface,
-        render_resolution: RenderResolution,
-        flow_index: usize,
-    ) -> Option<IoNodePair> {
-        if self.input_idx >= self.inputs.len() {
-            None
-        } else {
-            let input = &self.inputs[self.input_idx];
-            if UploadRgbBuffer::has_image_extension(input) {
-                let input_path = std::path::Path::new(input);
-                let mut input_node = UploadRgbBuffer::new(surface);
-                input_node.upload_image(load(input_path));
-                input_node.set_flags(
-                    RgbInputFlags::from_extension(input) | RgbInputFlags::VERTICALLY_FLIPPED,
-                );
-                input_node.set_render_resolution(render_resolution);
-                let output_node = if let Some(output) = &self.output {
-                    let mut output_node = DownloadRgbBuffer::new(surface);
-                    let output_info = OutputInfo {
-                        configname: self.config_name.clone(),
-                        dirname: input_path
-                            .parent()
-                            .unwrap()
-                            .to_path_buf()
-                            .into_os_string()
-                            .into_string()
-                            .unwrap(),
-                        basename: input_path
-                            .file_name()
-                            .unwrap()
-                            .to_os_string()
-                            .into_string()
-                            .unwrap(),
-                        stem: input_path
-                            .file_stem()
-                            .unwrap()
-                            .to_os_string()
-                            .into_string()
-                            .unwrap()
-                            + &format!("_{}", flow_index),
-                        extension: input_path
-                            .extension()
-                            .unwrap()
-                            .to_os_string()
-                            .into_string()
-                            .unwrap(),
-                    };
-                    let output_path = output.render_to_string(&output_info).unwrap();
-                    output_node.set_image_path(output_path, self.input_processed.clone());
-                    Some(Box::new(output_node) as Box<dyn Node>)
-                } else {
-                    None
-                };
-                Some((Box::new(input_node), output_node))
-            } else if UploadVideo::has_video_extension(input) {
-                let mut input_node = UploadVideo::new(surface);
-                input_node.set_flags(RgbInputFlags::from_extension(input));
-                input_node.open(input).unwrap();
-                Some((Box::new(input_node), None))
-            } else {
-                panic!("Unknown file extension");
-            }
-        }
-    }
-}
+use crate::io::*;
 
 #[cfg(not(any(feature = "varjo", feature = "openxr")))]
 fn build_flow(
@@ -211,7 +105,6 @@ pub fn main() {
 
     let flow_count = config.flow_configs.len();
 
-    
     let view_ports = match flow_count {
         1 => {
             vec![ViewPort {
@@ -250,15 +143,13 @@ pub fn main() {
     let mut previous_frame = Instant::now();
     let print_spacing = 60;
 
-    
     let window = WindowSurface::new(
         config.visible,
         flow_count,
         config.flow_configs[0].static_gaze,
-        
         move |surface| {
             for (index, flow_config) in config.flow_configs.iter().enumerate() {
-                let mut io_generator = IoGenerator::new(
+                let mut io_generator = io::IoGenerator::new(
                     config.inputs.clone(),
                     flow_config.name.clone(),
                     config.output.clone(),
@@ -276,8 +167,7 @@ pub fn main() {
             let mut inspector = ConfigInspector::new(&config);
             surface.inspect(&mut inspector);
             inspector.print_unused();
-        }
-        ,  
+        },
         move || {
             let mut done = false;
             frame_counter += 1;
@@ -334,10 +224,10 @@ pub fn main() {
             // }
 
             done
-        }
+        },
     );
 
-    window.run_app( );
+    window.run_app();
 
     /*
 
@@ -401,7 +291,7 @@ pub fn main() {
     dbg!("Post init");
 
     for index in 0..flow_count {
-        let mut io_generator = IoGenerator::new(
+        let mut io_generator = io::IoGenerator::new(
             config.inputs.clone(),
             config.name.clone(),
             config.output.clone(),
@@ -429,7 +319,7 @@ pub fn main() {
 fn build_vr_flow(
     vr_surface: &mut WindowVRSurface,
     surface: &mut Surface,
-    io_generator: &mut IoGenerator,
+    io_generator: &mut io::IoGenerator,
     flow_index: usize,
     render_resolution: Option<(u32, u32)>,
     view_port: ViewPort,
@@ -520,17 +410,24 @@ pub fn main() {
     let config_poll = config.clone();
 
     let flow_count = varjo_viewports.len();
-    assert!(flow_count == config.flow_configs.len(), "Number of provided configs does not match viewport count of {}", flow_count);
+    assert!(
+        flow_count == config.flow_configs.len(),
+        "Number of provided configs does not match viewport count of {}",
+        flow_count
+    );
 
-    let view_ports = varjo_viewports.iter().map( |vp| {
-        ViewPort{
-            x: vp.x as f32 / varjo_texture_width as f32,
-            y: 1.0 - ((vp.y + vp.height) as f32 / varjo_texture_height as f32), // flip on the y axis
-            width: vp.width as f32 / varjo_texture_width as f32,
-            height: vp.height as f32 / varjo_texture_height as f32,
-            absolute_viewport: false,
-        }
-    }).collect::<Vec<ViewPort>>();
+    let view_ports = varjo_viewports
+        .iter()
+        .map(|vp| {
+            ViewPort {
+                x: vp.x as f32 / varjo_texture_width as f32,
+                y: 1.0 - ((vp.y + vp.height) as f32 / varjo_texture_height as f32), // flip on the y axis
+                width: vp.width as f32 / varjo_texture_width as f32,
+                height: vp.height as f32 / varjo_texture_height as f32,
+                absolute_viewport: false,
+            }
+        })
+        .collect::<Vec<ViewPort>>();
 
     let window_view_port = ViewPort {
         x: 0.0,
@@ -554,9 +451,8 @@ pub fn main() {
 
     pollster::block_on(window.run_and_exit(
         move |vr_surface, surface, vr_framebuffer_texture| {
-            
             for (index, flow_config) in config.flow_configs.iter().enumerate() {
-                let mut io_generator = IoGenerator::new(
+                let mut io_generator = io::IoGenerator::new(
                     config.inputs.clone(),
                     flow_config.name.clone(),
                     config.output.clone(),
@@ -639,5 +535,6 @@ pub fn main() {
             // }
 
             done
-        }));
+        },
+    ));
 }
