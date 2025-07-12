@@ -22,6 +22,7 @@ use wgpu::CommandEncoder;
 use wgpu::DepthStencilState;
 use wgpu::RenderPipeline;
 use wgpu::ShaderModule;
+use wgpu::PipelineCompilationOptions;
 
 use cgmath::Matrix4;
 
@@ -239,12 +240,14 @@ pub fn create_render_pipeline(
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
             module: modules[0],
-            entry_point: entry_points[0],
+            entry_point: Some(entry_points[0]),
+            compilation_options: PipelineCompilationOptions::default(),
             buffers: &[],
         },
         fragment: Some(wgpu::FragmentState {
             module: modules[1],
-            entry_point: entry_points[1],
+            entry_point: Some(entry_points[1]),
+            compilation_options: PipelineCompilationOptions::default(),
             targets: color_targets,
         }),
         primitive: wgpu::PrimitiveState {
@@ -269,5 +272,6 @@ pub fn create_render_pipeline(
         // If the pipeline will be used with a multiview render pass, this
         // indicates how many array layers the attachments will have.
         multiview: None,
+        cache: None,
     })
 }

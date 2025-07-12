@@ -61,7 +61,7 @@ impl GuiOverlay {
             size_in_pixels: [1, 1],
             pixels_per_point: 0.0,
         };
-        let egui_renderer = egui_wgpu::Renderer::new(device, COLOR_FORMAT, None, 1);
+        let egui_renderer = egui_wgpu::Renderer::new(device, COLOR_FORMAT, None, 1, true);
 
         GuiOverlay {
             pipeline,
@@ -183,8 +183,11 @@ impl Node for GuiOverlay {
             render_pass.set_bind_group(1, &self.source_bind_group, &[]);
             render_pass.draw(0..6, 0..1);
 
-            self.egui_renderer
-                .render(&mut render_pass, &paint_jobs, &self.screen_descriptor);
+            self.egui_renderer.render(
+                &mut render_pass.forget_lifetime(),
+                &paint_jobs,
+                &self.screen_descriptor,
+            );
         }
 
         for texture_delta_free in full_output.textures_delta.free.iter() {

@@ -6,7 +6,6 @@ authors = ["The Visual System Simulator Developers"]
 license = "Apache-2.0"
 
 [lib]
-name = "vss"
 crate-type = ["cdylib"]
 
 [dependencies]
@@ -19,9 +18,9 @@ futures = "0.3"
 
 [target.'cfg(target_os="android")'.dependencies]
 jni = "0.21"
-ndk = "0.7"
-ndk-sys = "0.4.1"
-android_logger = "0.13.1"
+ndk = "0.9.0"
+ndk-sys = "0.6.0"
+android_logger = "0.15.1"
 
 [package.metadata.android.sdk]
 min_sdk_version = 24

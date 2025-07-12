@@ -10,7 +10,7 @@ pub static COLOR_FORMAT: wgpu::TextureFormat = if cfg!(target_arch = "wasm32") {
 } else {
     wgpu::TextureFormat::Bgra8Unorm
 };
-pub static HIGHP_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
+pub static HIGHP_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float; //XXX: this was Rgba32Float to transport numerical data (uncertainty, covariance, etc.). 
 pub static DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
 pub static CLEAR_COLOR: wgpu::Color = wgpu::Color {
@@ -69,7 +69,7 @@ impl ColorDepthTargets {
     pub fn color_attachments<'a>(
         &'a self,
         screen: Option<&'a RenderTexture>,
-    ) -> [Option<RenderPassColorAttachment>; 5] {
+    ) -> [Option<RenderPassColorAttachment<'a>>; 5] {
         [
             screen
                 .unwrap_or(&self.rt_color)
@@ -130,7 +130,7 @@ impl ColorTargets {
     pub fn color_attachments<'a>(
         &'a self,
         screen: Option<&'a RenderTexture>,
-    ) -> [Option<RenderPassColorAttachment>; 5] {
+    ) -> [Option<RenderPassColorAttachment<'a>>; 5] {
         [
             screen
                 .unwrap_or(&self.rt_color)

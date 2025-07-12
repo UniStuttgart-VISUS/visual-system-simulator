@@ -124,7 +124,7 @@ impl VarianceMeasure {
             sender.send(v).unwrap();
         });
 
-        device.poll(wgpu::Maintain::Wait);
+        let _ = device.poll(wgpu::MaintainBase::Wait);
 
         let padded_buffer = buffer_slice.get_mapped_range();
 
@@ -313,9 +313,9 @@ impl Node for VarianceMeasure {
             // Schedule download.
             encoder.copy_texture_to_buffer(
                 self.target_measurement.as_texture().texture.as_image_copy(),
-                wgpu::ImageCopyBuffer {
+                wgpu::TexelCopyBufferInfo {
                     buffer: &self.download_buffer,
-                    layout: wgpu::ImageDataLayout {
+                    layout: wgpu::TexelCopyBufferLayout {
                         offset: 0,
                         bytes_per_row: Some(self.buffer_dimensions.padded_bytes_per_row as u32),
                         rows_per_image: None,

@@ -124,7 +124,7 @@ impl UploadRgbBuffer {
     }
 
     pub fn upload_image(&mut self, cursor: Cursor<Vec<u8>>) {
-        let reader = image::io::Reader::new(cursor)
+        let reader = image::ImageReader::new(cursor)
             .with_guessed_format()
             .expect("Cursor io never fails");
         let img = reader.decode().unwrap().flipv().to_rgba8();

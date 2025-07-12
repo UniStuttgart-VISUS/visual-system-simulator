@@ -58,11 +58,9 @@ impl<'window> Surface<'window> {
     {
         let instance = if cfg!(target_os = "windows") {
             // Use Vulkan for consistency with Varjo/OpenXR builds on windows.
-            wgpu::Instance::new(wgpu::InstanceDescriptor {
+            wgpu::Instance::new(& wgpu::InstanceDescriptor {
                 backends: wgpu::Backends::VULKAN,
-                dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
-                flags: wgpu::InstanceFlags::debugging().with_env(),
-                gles_minor_version: wgpu::util::gles_minor_version_from_env().unwrap_or_default(),
+                ..wgpu::InstanceDescriptor::from_env_or_default()
             })
         } else {
             wgpu::Instance::default()
@@ -90,8 +88,9 @@ impl<'window> Surface<'window> {
                     } else {
                         wgpu::Limits::default()
                     },
-                },
-                None,
+                    trace: wgpu::Trace::Off,
+                    memory_hints: wgpu::MemoryHints::Performance,
+                }
             )
             .await
             .expect("Cannot create device");

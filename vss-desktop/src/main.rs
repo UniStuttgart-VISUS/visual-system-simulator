@@ -227,7 +227,7 @@ pub fn main() {
         },
     );
 
-    window.run_app();
+    let _ = window.run_app();
 
     /*
 

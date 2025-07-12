@@ -25,7 +25,7 @@ apply plugin: 'org.mozilla.rust-android-gradle.rust-android'
 
 cargo {
     module = "../"
-    libname = "vss"
+    libname = "vss-mobile"
     targets = ["arm", "arm64", "x86", "x86_64"]
     targetDirectory = "../../target"
 }

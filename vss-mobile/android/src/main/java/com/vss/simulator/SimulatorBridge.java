@@ -14,7 +14,7 @@ public class SimulatorBridge {
     static {
         try {
             Log.d(LOG_TAG, "Loading native library...");
-            System.loadLibrary("vss");
+            System.loadLibrary("vss-mobile");
             LIBRARY_LOADED = true;
             Log.i(LOG_TAG, "Loading native library: successful");
         } catch (java.lang.UnsatisfiedLinkError e) {

@@ -10,15 +10,15 @@ resolver = "2"
 cgmath = { workspace = true }
 raw-window-handle = { workspace = true }
 wgpu = { workspace = true }
-egui = "0.27"
-egui-wgpu = "0.27"
+egui = "0.32"
+egui-wgpu = "0.32"
 image = "0.25"
-bitflags = "2.5"
+bitflags = "2.9"
 futures-intrusive = "0.5"
 serde_json = "*"
 serde = "1"
 instant = "0.1"
-pollster = "0.3"
+pollster = "0.4"
 
 [features]
 webgl = ["wgpu/webgl"]

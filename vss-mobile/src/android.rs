@@ -116,7 +116,7 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate<'loca
     android_logger::init_once(
         Config::default()
             .with_max_level(LevelFilter::Trace)
-            .with_tag("libvss"),
+            .with_tag("libvss-mobile"),
     );
 
     panic::set_hook(Box::new(|info| {

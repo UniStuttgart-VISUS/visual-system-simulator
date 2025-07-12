@@ -4,10 +4,10 @@ edition = "2018"
 version = "1.0.0"
 authors = ["The Visual System Simulator Developers"]
 license = "Apache-2.0"
-default-run = "vss"
+default-run = "vss-desktop"
 
 [[bin]]
-name = "vss"
+name = "vss-desktop"
 path = "src/main.rs"
 
 [dependencies]

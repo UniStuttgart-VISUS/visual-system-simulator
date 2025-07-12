@@ -479,14 +479,14 @@ pub fn update_texture(
     };
 
     queue.write_texture(
-        wgpu::ImageCopyTexture {
+        wgpu::TexelCopyTextureInfo {
             aspect: wgpu::TextureAspect::All,
             texture: texture.texture.as_ref(),
             mip_level: 0,
             origin: offset.unwrap_or(wgpu::Origin3d::ZERO),
         },
         raw_data,
-        wgpu::ImageDataLayout {
+        wgpu::TexelCopyBufferLayout {
             offset: data_offset,
             bytes_per_row: Some(
                 texture
@@ -536,14 +536,14 @@ pub fn load_texture_from_bytes(
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
     queue.write_texture(
-        wgpu::ImageCopyTexture {
+        wgpu::TexelCopyTextureInfo {
             aspect: wgpu::TextureAspect::All,
             texture: &texture,
             mip_level: 0,
             origin: wgpu::Origin3d::ZERO,
         },
         data,
-        wgpu::ImageDataLayout {
+        wgpu::TexelCopyBufferLayout {
             offset: 0,
             bytes_per_row: Some(
                 format
@@ -754,18 +754,19 @@ pub fn load_cubemap_from_bytes(
         mip_level_count: Some(1),
         base_array_layer: 0, // this is wrong; setting to 6 gets rid of some errors
         array_layer_count: Some(6),
+        usage: None,
         label,
     });
 
     queue.write_texture(
-        wgpu::ImageCopyTexture {
+        wgpu::TexelCopyTextureInfo {
             aspect: wgpu::TextureAspect::All,
             texture: &texture,
             mip_level: 0,
             origin: wgpu::Origin3d::ZERO,
         },
         data,
-        wgpu::ImageDataLayout {
+        wgpu::TexelCopyBufferLayout {
             offset: 0,
             bytes_per_row: Some(4 * width),
             rows_per_image: Some(width),

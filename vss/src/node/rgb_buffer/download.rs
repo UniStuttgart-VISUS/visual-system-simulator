@@ -145,9 +145,9 @@ impl Node for DownloadRgbBuffer {
         // Schedule download.
         encoder.copy_texture_to_buffer(
             self.input.texture.as_image_copy(),
-            wgpu::ImageCopyBuffer {
+            wgpu::TexelCopyBufferInfo {
                 buffer: &self.buffer,
-                layout: wgpu::ImageDataLayout {
+                layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(buffer_dimensions.padded_bytes_per_row as u32),
                     rows_per_image: None,
@@ -170,7 +170,7 @@ impl Node for DownloadRgbBuffer {
             println!("sender ok");
         });
 
-        device.poll(wgpu::Maintain::Wait);
+        let _ =  device.poll(wgpu::MaintainBase::Wait);
 
         let buffer_dimensions =
             BufferDimensions::new(self.res[0] as usize, self.res[1] as usize, size_of::<u32>());
