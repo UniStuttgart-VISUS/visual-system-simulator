@@ -1,20 +1,31 @@
-use cgmath::Vector3;
-use vss::*;
 use std::iter;
+use std::rc::Rc;
+use std::sync::Arc;
+
+use vss::*;
 use winit::{
+    application::ApplicationHandler,
     dpi::*,
+    error::EventLoopError,
     event::*,
-    event_loop::{ControlFlow, EventLoop},
-    window::WindowBuilder,
+    event_loop::{ActiveEventLoop, EventLoop},
+    keyboard::{Key, NamedKey},
+    window::Window,
 };
 
 use crate::Varjo;
 
 /// Represents a window along with its associated rendering context and [Flow].
 pub struct WindowVRSurface {
-    events_loop: Option<EventLoop<()>>,
-    window: winit::window::Window,
+    surface: Option<Rc<Surface<'static>>>,
+    window: Option<Arc<Window>>,
+    flow_count: usize,
     vr_flows: Vec<Flow>,
+
+    deferred_size: Option<PhysicalSize<u32>>,
+    visible: bool,
+    init_fn: Option<Box<InitFn>>,
+    poll_fn: Box<dyn FnMut() -> bool>,
 
     active: bool,
     static_pos: Option<(f32, f32)>,
@@ -23,26 +34,33 @@ pub struct WindowVRSurface {
     varjo: Varjo,
 }
 
+type InitFn = dyn FnMut(&mut WindowVRSurface, &mut Surface, Texture);
+
 impl WindowVRSurface {
-    pub fn new(visible: bool, flow_count: usize, static_pos: Option<(f32, f32)>, varjo: Varjo) -> Self {
-        let window_builder = WindowBuilder::new()
-            .with_title("Visual System Simulator")
-            .with_min_inner_size(LogicalSize::new(640.0, 360.0))
-            .with_inner_size(LogicalSize::new(1280.0, 720.0))
-            .with_visible(visible);
-
-        let events_loop = EventLoop::new();
-        let window = window_builder.build(&events_loop).unwrap();
-        window.set_cursor_visible(true);
-
-        // Create vr flows.
+    pub fn new<I, P>(
+        visible: bool,
+        flow_count: usize,
+        static_pos: Option<(f32, f32)>,
+        varjo: Varjo,
+        init_fn: I,
+        poll_fn: P,
+    ) -> Self
+    where
+        I: 'static + FnMut(&mut WindowVRSurface, &mut Surface, Texture),
+        P: 'static + FnMut() -> bool,
+    {
         let mut vr_flows = Vec::new();
         vr_flows.resize_with(flow_count, Flow::new);
 
         Self {
-            window,
+            surface: None,
+            window: None,
+            flow_count,
             vr_flows,
-            events_loop: Some(events_loop),
+            deferred_size: None,
+            visible,
+            init_fn: Some(Box::new(init_fn)),
+            poll_fn: Box::new(poll_fn),
             active: false,
             static_pos,
             mouse: MouseInput {
@@ -54,162 +72,33 @@ impl WindowVRSurface {
         }
     }
 
-    pub fn window(&mut self) -> &mut winit::window::Window {
-        return &mut self.window;
-    }
-
-    pub async fn run_and_exit<I, P>(mut self, mut init_fn: I, mut poll_fn: P)
-    where
-        I: 'static + FnMut(&mut WindowVRSurface, &mut Surface, Texture),
-        P: 'static + FnMut() -> bool,
-    {
-        let window_size = self.window.inner_size();
-
-        let instance = self.varjo.create_custom_vk_instance();
-
-        let mut surface = match instance {
-            Some(inst) => {
-                println!("Surface creation using Custom Instance");
-                let surface: wgpu::Surface = unsafe { inst.create_surface(&self.window) }.unwrap();
-                println!("Surface created");
-                let adapter: wgpu::Adapter = inst
-                    .request_adapter(&wgpu::RequestAdapterOptions {
-                        power_preference: wgpu::PowerPreference::HighPerformance,
-                        compatible_surface: Some(&surface),
-                        force_fallback_adapter: false,
-                    })
-                    .await
-                    .expect("Cannot create adapter");
-                println!("Adapter created");
-
-                let (device, queue) = self.varjo.create_custom_vk_device(&inst, &adapter);
-                println!("Device and Queue created");
-        
-                Surface::with_existing(
-                    [window_size.width, window_size.height],
-                    1,
-                    surface,
-                    adapter,
-                    device,
-                    queue,
-                )
-                .await
-            },
-            _ => {
-                Surface::new(
-                    [window_size.width, window_size.height],
-                    &self.window,
-                    1,
-                )
-                .await
-            }
-        };
-
-        Varjo::check_handles(&surface);
-        self.varjo.create_render_targets(&surface);
-
-        let (vr_framebuffer_texture, _) = self.varjo.get_latest_render_target();
-        init_fn(&mut self, &mut surface, vr_framebuffer_texture.as_texture());
-
-        let events_loop = self.events_loop.take().unwrap();
-        let mut deferred_size = None;
-
-        events_loop.run(move |event, _, control_flow| {
-            *control_flow = ControlFlow::Poll;
-            match event {
-                Event::WindowEvent {
-                    window_id,
-                    ref event,
-                } if window_id == self.window.id() => {
-                    match event {
-                        WindowEvent::KeyboardInput {
-                            input:
-                                KeyboardInput {
-                                    virtual_keycode: Some(VirtualKeyCode::Escape),
-                                    ..
-                                },
-                            ..
-                        }
-                        | WindowEvent::CloseRequested
-                        | WindowEvent::Destroyed => {
-                            *control_flow = ControlFlow::Exit;
-                        }
-                        WindowEvent::Focused(active) => {
-                            self.active = *active;
-                        }
-                        WindowEvent::Resized(size) => {
-                            deferred_size = Some(*size);
-                        }
-                        WindowEvent::CursorMoved { position, .. } => {
-                            if self.active {
-                                self.mouse.position = (position.x as f32, position.y as f32);
-                            }
-                        }
-                        WindowEvent::MouseInput { state, button, .. } => {
-                            if self.active {
-                                match button {
-                                    MouseButton::Left => {
-                                        self.mouse.left_button = *state == ElementState::Pressed;
-                                    }
-                                    MouseButton::Right => {
-                                        self.mouse.right_button = *state == ElementState::Pressed;
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
-                        _ => (),
-                    }
-                }
-                Event::RedrawRequested(window_id) if window_id == self.window.id() => {
-                    if self.varjo.begin_frame_sync() {
-                        self.set_varjo_data();
-                        self.draw_varjo(&surface);
-                        self.varjo.end_frame();
-                    }
-                    surface.draw();
-                }
-                Event::RedrawEventsCleared => {
-                    //*control_flow = ControlFlow::Exit;
-                    self.window.request_redraw();
-                }
-                Event::MainEventsCleared => {
-                    self.update_size(&mut surface, deferred_size);
-
-                    self.update_input(&mut surface);
-
-                    self.update_vr_input();
-
-                    if poll_fn() {
-                        *control_flow = ControlFlow::Exit;
-                    }
-                }
-                _ => {}
-            }
-        });
+    pub fn run_and_exit(mut self) -> Result<(), EventLoopError> {
+        let event_loop = EventLoop::new().unwrap();
+        event_loop.run_app(&mut self)
     }
 
     fn set_varjo_data(&mut self) {
         let view_matrices = self.varjo.get_current_view_matrices();
         let proj_matrices = self.varjo.get_current_proj_matrices();
         let head_position = 0.5 * (view_matrices[0].w.truncate() + view_matrices[1].w.truncate());
-        // let eye_position = Vector3::new(0.0, 0.0, 0.0);
         let (left_gaze, right_gaze, _focus_distance) = self.varjo.get_current_gaze();
 
-        for (i, flow) in self.vr_flows.iter_mut().enumerate(){
+        for (i, flow) in self.vr_flows.iter_mut().enumerate() {
             let mut eye = flow.eye_mut();
             eye.position = head_position;
             eye.view = view_matrices[i];
             eye.proj = proj_matrices[i];
-            eye.gaze = if i % 2 == 0 {left_gaze} else {right_gaze};
+            eye.gaze = if i % 2 == 0 { left_gaze } else { right_gaze };
         }
     }
 
-    pub fn draw_varjo(&mut self, surface: &Surface){
-        let mut encoder = surface.device()
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Varjo Render Encoder"),
-            });
+    pub fn draw_varjo(&mut self, surface: &Surface) {
+        let mut encoder =
+            surface
+                .device()
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Varjo Render Encoder"),
+                });
 
         let (color_rt, _depth_rt) = self.varjo.get_current_render_target();
 
@@ -237,42 +126,170 @@ impl WindowVRSurface {
         }
     }
 
-    fn update_input(&self, surface: &mut Surface) {
+    fn update_input(&self) {
+        let surface = self.surface.clone().unwrap();
         for f in surface.flows.iter() {
             f.input(&self.mouse);
         }
     }
-    
+
     fn update_vr_input(&self) {
         for f in self.vr_flows.iter() {
             f.input(&self.mouse);
         }
     }
 
-    fn update_size(&mut self, surface: &mut Surface, deferred_size: Option<PhysicalSize<u32>>) {
-        if self.static_pos.is_some() {
-            // Update flow IO.
-            let new_size = PhysicalSize::new(1920, 1080);
-            surface.resize([new_size.width, new_size.height]);
-            // TODO-WGPU
-            // for (i, f) in self.flow.iter().enumerate(){
-            //     f.negociate_slots(&self);
-            //     f.last_perspective.borrow_mut().proj = cgmath::perspective(
-            //         cgmath::Deg(70.0), (size.width/size.height) as f32, 0.05, 1000.0);
-            // }
+    fn update_size(&mut self, deferred_size: Option<PhysicalSize<u32>>) {
+        let new_size = if self.static_pos.is_some() {
+            Some(PhysicalSize::new(1920, 1080))
+        } else {
+            deferred_size
+        };
+
+        if let Some(new_size) = new_size {
+            if let Some(surface) = &mut self.surface {
+                let surface = Rc::get_mut(surface).unwrap();
+                surface.resize([new_size.width, new_size.height]);
+            }
+        }
+    }
+}
+
+impl ApplicationHandler for WindowVRSurface {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        let window_attributes = Window::default_attributes()
+            .with_title("Visual System Simulator")
+            .with_min_inner_size(LogicalSize::new(640.0, 360.0))
+            .with_inner_size(LogicalSize::new(1280.0, 720.0))
+            .with_visible(self.visible);
+
+        let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
+        window.set_cursor_visible(true);
+        let window_size = window.inner_size();
+
+        let mut surface = match self.varjo.create_custom_vk_instance() {
+            Some(instance) => {
+                let surface = instance.create_surface(window.clone()).unwrap();
+                let adapter =
+                    pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+                        power_preference: wgpu::PowerPreference::HighPerformance,
+                        compatible_surface: Some(&surface),
+                        force_fallback_adapter: false,
+                    }))
+                    .expect("Cannot create adapter");
+
+                let (device, queue) = self.varjo.create_custom_vk_device(&instance, &adapter);
+
+                pollster::block_on(Surface::with_existing(
+                    [window_size.width, window_size.height],
+                    self.flow_count,
+                    surface,
+                    adapter,
+                    device,
+                    queue,
+                ))
+            }
+            None => Surface::new(
+                [window_size.width, window_size.height],
+                window.clone(),
+                self.flow_count,
+            ),
+        };
+
+        Varjo::check_handles(&surface);
+        self.varjo.create_render_targets(&surface);
+
+        let (vr_framebuffer_texture, _) = self.varjo.get_latest_render_target();
+        let mut init_fn = self.init_fn.take().unwrap();
+        init_fn(self, &mut surface, vr_framebuffer_texture.as_texture());
+        self.init_fn = Some(init_fn);
+
+        window.request_redraw();
+        self.window = Some(window);
+        self.surface = Some(Rc::new(surface));
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        window_id: winit::window::WindowId,
+        event: WindowEvent,
+    ) {
+        if self.window.as_ref().map(|window| window.id()) != Some(window_id) {
+            return;
         }
 
-        if let Some(new_size) = deferred_size {
-            // Update flow IO.
-            // let dpi_factor = self.window.scale_factor();
-            // let size = size.to_physical(dpi_factor);
-            surface.resize([new_size.width, new_size.height]);
-            // TODO-WGPU
-            // for (i, f) in self.flow.iter().enumerate(){
-            //     f.negociate_slots(&self);
-            //     f.last_perspective.borrow_mut().proj = cgmath::perspective(
-            //         cgmath::Deg(70.0), (size.width/size.height) as f32, 0.05, 1000.0);
-            // }
+        match event {
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        logical_key: Key::Named(NamedKey::Escape),
+                        ..
+                    },
+                ..
+            }
+            | WindowEvent::CloseRequested
+            | WindowEvent::Destroyed => {
+                event_loop.exit();
+            }
+            WindowEvent::Focused(active) => {
+                self.active = active;
+            }
+            WindowEvent::Resized(size) => {
+                self.deferred_size = Some(size);
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                if self.active {
+                    self.mouse.position = (position.x as f32, position.y as f32);
+                }
+            }
+            WindowEvent::MouseInput { state, button, .. } => {
+                if self.active {
+                    match button {
+                        MouseButton::Left => {
+                            self.mouse.left_button = state == ElementState::Pressed;
+                        }
+                        MouseButton::Right => {
+                            self.mouse.right_button = state == ElementState::Pressed;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            WindowEvent::RedrawRequested => {
+                let surface = self.surface.clone().unwrap();
+                if self.varjo.begin_frame_sync() {
+                    self.set_varjo_data();
+                    self.draw_varjo(&surface);
+                    self.varjo.end_frame();
+                }
+                surface.draw();
+            }
+            _ => {}
+        }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        self.update_size(self.deferred_size);
+        self.deferred_size = None;
+
+        let surface = self.surface.clone().unwrap();
+        if !surface.validate_slots() {
+            surface.negociate_slots();
+        }
+
+        self.update_input();
+        self.update_vr_input();
+
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
+
+        if (self.poll_fn)() {
+            event_loop.exit();
         }
     }
 }

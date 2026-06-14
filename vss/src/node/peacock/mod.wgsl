@@ -21,14 +21,6 @@ struct Uniforms{
 @group(0) @binding(0)
 var<uniform> uniforms: Uniforms;
 
-struct FragmentOutput {
-    @location(0) color: vec4<f32>,
-    @location(1) deflection: vec4<f32>,
-    @location(2) color_change: vec4<f32>,
-    @location(3) color_uncertainty: vec4<f32>,
-    @location(4) covariances: vec4<f32>,
-};
-
 const rgb2xyz = mat3x3<f32>(vec3<f32>(0.430574, 0.341550, 0.178325), vec3<f32>(0.222015, 0.706655, 0.071330), vec3<f32>(0.020183, 0.129553, 0.939180));
 const xyz2rgb = mat3x3<f32>(vec3<f32>(3.063218,-1.393325,-0.475802), vec3<f32>(-0.969243, 1.875966, 0.041555), vec3<f32>(0.067871,-0.228834, 1.069251));
 
@@ -36,6 +28,41 @@ const gamma: f32 = 2.2;
 const wx: f32 = 0.312713;
 const wy: f32 = 0.329016;
 const wz: f32 = 0.358271;
+
+struct ColorOut {
+    @location(0) color: vec4<f32>,
+};
+
+struct MetricsAbOut {
+    @location(0) metrics_a: vec4<f32>,
+    @location(1) metrics_b: vec4<f32>,
+};
+
+struct MetricsCdOut {
+    @location(0) metrics_c: vec4<f32>,
+    @location(1) metrics_d: vec4<f32>,
+};
+
+@group(1) @binding(0)
+var in_color_s: sampler;
+@group(1) @binding(1)
+var in_color_t: texture_2d<f32>;
+@group(1) @binding(2)
+var in_metrics_a_s: sampler;
+@group(1) @binding(3)
+var in_metrics_a_t: texture_2d<f32>;
+@group(1) @binding(4)
+var in_metrics_b_s: sampler;
+@group(1) @binding(5)
+var in_metrics_b_t: texture_2d<f32>;
+@group(1) @binding(6)
+var in_metrics_c_s: sampler;
+@group(1) @binding(7)
+var in_metrics_c_t: texture_2d<f32>;
+@group(1) @binding(8)
+var in_metrics_d_s: sampler;
+@group(1) @binding(9)
+var in_metrics_d_t: texture_2d<f32>;
 
 fn invPow(x: f32) -> f32{
     return pow(clamp(x, 0.0, 1.0), 1.0/gamma);
@@ -93,46 +120,13 @@ fn convert_colorblind(color: vec3<f32>) -> vec3<f32>{
     return vec3<f32>(invPow(s.r), invPow(s.g), invPow(s.b));
 }
 
-//unused right now, only here for reference
-fn convert_anomylize(color: vec3<f32>, origin: vec3<f32>) -> vec3<f32>{
-    let v = 1.75;
-    let d = v + 1.0;
-    
-    return (v * color + origin) / d;
-}
-
 fn convert_monochrome(color: vec3<f32>) -> vec3<f32>{
     let g_new = (color.r * 0.299) + (color.g * 0.587) + (color.b * 0.114);
     return vec3<f32>(g_new, g_new, g_new);
 }
 
-// Fragment shader
-
-@group(1) @binding(0)
-var in_color_s: sampler;
-@group(1) @binding(1)
-var in_color_t: texture_2d<f32>;
-@group(1) @binding(2)
-var in_deflection_s: sampler;
-@group(1) @binding(3)
-var in_deflection_t: texture_2d<f32>;
-@group(1) @binding(4)
-var in_color_change_s: sampler;
-@group(1) @binding(5)
-var in_color_change_t: texture_2d<f32>;
-@group(1) @binding(6)
-var in_color_uncertainty_s: sampler;
-@group(1) @binding(7)
-var in_color_uncertainty_t: texture_2d<f32>;
-@group(1) @binding(8)
-var in_covariances_s: sampler;
-@group(1) @binding(9)
-var in_covariances_t: texture_2d<f32>;
-
-@fragment
-fn fs_main(in: VertexOutput) -> FragmentOutput {
-    var out: FragmentOutput;
-    let oldColor = textureSample(in_color_t, in_color_s, in.tex_coords);
+fn transformColor(tex_coords: vec2<f32>) -> vec4<f32> {
+    let oldColor = textureSample(in_color_t, in_color_s, tex_coords);
     var newColor = oldColor;
 
     if(uniforms.cb_strength > 0.0){
@@ -141,17 +135,42 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         }else{
             newColor = vec4<f32>(convert_colorblind(oldColor.rgb), newColor.a);
         }
-        //newColor.rgb = convert_anomylize(newColor.rgb, oldColor.rgb);
         newColor = vec4<f32>(mix(oldColor.rgb, newColor.rgb, uniforms.cb_strength), newColor.a);
     }
 
-    out.color = newColor;
+    return newColor;
+}
 
-    if(uniforms.track_error == 1){
-        out.deflection = textureSample(in_deflection_t, in_deflection_s, in.tex_coords);
-        out.color_change = textureSample(in_color_change_t, in_color_change_s, in.tex_coords);
-        out.color_uncertainty = textureSample(in_color_uncertainty_t, in_color_uncertainty_s, in.tex_coords);
-        out.covariances = textureSample(in_covariances_t, in_covariances_s, in.tex_coords);
-    }
+fn loadMetrics(tex_coords: vec2<f32>) -> PackedMetricsState {
+    return unpackMetrics(
+        textureSample(in_metrics_a_t, in_metrics_a_s, tex_coords),
+        textureSample(in_metrics_b_t, in_metrics_b_s, tex_coords),
+        textureSample(in_metrics_c_t, in_metrics_c_s, tex_coords),
+        textureSample(in_metrics_d_t, in_metrics_d_s, tex_coords)
+    );
+}
+
+@fragment
+fn fs_color(in: VertexOutput) -> ColorOut {
+    var out: ColorOut;
+    out.color = transformColor(in.tex_coords);
+    return out;
+}
+
+@fragment
+fn fs_metrics_ab(in: VertexOutput) -> MetricsAbOut {
+    var out: MetricsAbOut;
+    let metrics = loadMetrics(in.tex_coords);
+    out.metrics_a = packMetricsA(metrics);
+    out.metrics_b = packMetricsB(metrics);
+    return out;
+}
+
+@fragment
+fn fs_metrics_cd(in: VertexOutput) -> MetricsCdOut {
+    var out: MetricsCdOut;
+    let metrics = loadMetrics(in.tex_coords);
+    out.metrics_c = packMetricsC(metrics);
+    out.metrics_d = packMetricsD(metrics);
     return out;
 }

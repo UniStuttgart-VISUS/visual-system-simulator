@@ -58,7 +58,7 @@ impl NormalMapGenerator {
                 color_attachments: &[self.texture.to_color_attachment(Some(CLEAR_COLOR))],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
-                occlusion_query_set: None,    
+                occlusion_query_set: None,
             });
             render_pass.set_pipeline(&self.pipeline);
             render_pass.draw(0..6, 0..1);

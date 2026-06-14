@@ -20,9 +20,9 @@ use wgpu::BindGroupLayout;
 use wgpu::ColorTargetState;
 use wgpu::CommandEncoder;
 use wgpu::DepthStencilState;
+use wgpu::PipelineCompilationOptions;
 use wgpu::RenderPipeline;
 use wgpu::ShaderModule;
-use wgpu::PipelineCompilationOptions;
 
 use cgmath::Matrix4;
 
@@ -48,7 +48,9 @@ pub trait Node {
     fn name(&self) -> &'static str;
 
     /// Tests if this node's slots are still valid. Return false to trigger re-negociation.
-    fn validate_slots(&mut self) -> bool { true }
+    fn validate_slots(&mut self) -> bool {
+        true
+    }
 
     /// Negociates input and output for this node (source texture and render target),
     /// possibly re-using suggested `slots` (for efficiency).
@@ -91,7 +93,9 @@ impl Node for Box<dyn Node> {
         self.as_ref().name()
     }
 
-    fn validate_slots(&mut self) -> bool { self.as_mut().validate_slots() }
+    fn validate_slots(&mut self) -> bool {
+        self.as_mut().validate_slots()
+    }
 
     fn negociate_slots(
         &mut self,
@@ -203,10 +207,28 @@ pub fn blended_color_state(format: wgpu::TextureFormat) -> Option<ColorTargetSta
 pub fn all_color_states() -> [Option<ColorTargetState>; 5] {
     [
         simple_color_state(COLOR_FORMAT),
-        simple_color_state(HIGHP_FORMAT),
-        simple_color_state(HIGHP_FORMAT),
-        simple_color_state(HIGHP_FORMAT),
-        simple_color_state(HIGHP_FORMAT),
+        simple_color_state(METRICS_FORMAT),
+        simple_color_state(METRICS_FORMAT),
+        simple_color_state(METRICS_FORMAT),
+        simple_color_state(METRICS_FORMAT),
+    ]
+}
+
+pub fn single_color_state() -> [Option<ColorTargetState>; 1] {
+    [simple_color_state(COLOR_FORMAT)]
+}
+
+pub fn metrics_ab_color_states() -> [Option<ColorTargetState>; 2] {
+    [
+        simple_color_state(METRICS_FORMAT),
+        simple_color_state(METRICS_FORMAT),
+    ]
+}
+
+pub fn metrics_cd_color_states() -> [Option<ColorTargetState>; 2] {
+    [
+        simple_color_state(METRICS_FORMAT),
+        simple_color_state(METRICS_FORMAT),
     ]
 }
 

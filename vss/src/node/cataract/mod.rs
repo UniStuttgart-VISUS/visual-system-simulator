@@ -10,7 +10,9 @@ struct Uniforms {
 }
 
 pub struct Cataract {
-    pipeline: wgpu::RenderPipeline,
+    color_pipeline: wgpu::RenderPipeline,
+    metrics_ab_pipeline: wgpu::RenderPipeline,
+    metrics_cd_pipeline: wgpu::RenderPipeline,
     uniforms: ShaderUniforms<Uniforms>,
     sources_bind_group: wgpu::BindGroup,
     targets: ColorDepthTargets,
@@ -50,18 +52,40 @@ impl Cataract {
             ),
         });
 
-        let pipeline = create_render_pipeline(
+        let color_pipeline = create_render_pipeline(
             device,
             &[&shader, &shader],
-            &["vs_main", "fs_main"],
+            &["vs_main", "fs_color"],
             &[&uniforms.bind_group_layout, &sources_bind_group_layout],
-            &all_color_states(),
+            &single_color_state(),
             simple_depth_state(DEPTH_FORMAT),
-            Some("Cataract Render Pipeline"),
+            Some("Cataract Color Render Pipeline"),
+        );
+
+        let metrics_ab_pipeline = create_render_pipeline(
+            device,
+            &[&shader, &shader],
+            &["vs_main", "fs_metrics_ab"],
+            &[&uniforms.bind_group_layout, &sources_bind_group_layout],
+            &metrics_ab_color_states(),
+            None,
+            Some("Cataract Metrics AB Render Pipeline"),
+        );
+
+        let metrics_cd_pipeline = create_render_pipeline(
+            device,
+            &[&shader, &shader],
+            &["vs_main", "fs_metrics_cd"],
+            &[&uniforms.bind_group_layout, &sources_bind_group_layout],
+            &metrics_cd_color_states(),
+            None,
+            Some("Cataract Metrics CD Render Pipeline"),
         );
 
         Cataract {
-            pipeline,
+            color_pipeline,
+            metrics_ab_pipeline,
+            metrics_cd_pipeline,
             uniforms,
             sources_bind_group,
             targets: ColorDepthTargets::new(device, "Cataract"),
@@ -82,13 +106,14 @@ impl Node for Cataract {
         _original_image: &mut Option<Texture>,
     ) -> NodeSlots {
         let slots = slots
-            .to_color_depth_input(surface)
-            .to_color_depth_output(surface, "CataractNode");
+            .to_color_depth_metrics_input(surface)
+            .to_color_depth_metrics_output(surface, "CataractNode");
         self.uniforms.data.resolution = slots.output_size_f32();
 
         let device = surface.device();
+        let queue = surface.queue();
 
-        self.sources_bind_group = slots.as_all_source(device);
+        self.sources_bind_group = slots.as_all_source(device, queue);
         self.targets = slots.as_all_target();
 
         slots
@@ -129,17 +154,63 @@ impl Node for Cataract {
 
         self.uniforms.upload(surface.queue());
 
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Cataract render_pass"),
-            color_attachments: &self.targets.color_attachments(screen),
-            depth_stencil_attachment: self.targets.depth_attachment(),
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Cataract color_pass"),
+                color_attachments: &self.targets.color_attachments(screen),
+                depth_stencil_attachment: self.targets.depth_attachment(),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
 
-        render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_bind_group(0, &self.uniforms.bind_group, &[]);
-        render_pass.set_bind_group(1, &self.sources_bind_group, &[]);
-        render_pass.draw(0..6, 0..1);
+            render_pass.set_pipeline(&self.color_pipeline);
+            render_pass.set_bind_group(0, &self.uniforms.bind_group, &[]);
+            render_pass.set_bind_group(1, &self.sources_bind_group, &[]);
+            render_pass.draw(0..6, 0..1);
+        }
+
+        if self.track_error {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Cataract metrics_ab_pass"),
+                color_attachments: &[
+                    self.targets
+                        .rt_deflection
+                        .to_color_attachment(Some(CLEAR_COLOR)),
+                    self.targets
+                        .rt_color_change
+                        .to_color_attachment(Some(CLEAR_COLOR)),
+                ],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            render_pass.set_pipeline(&self.metrics_ab_pipeline);
+            render_pass.set_bind_group(0, &self.uniforms.bind_group, &[]);
+            render_pass.set_bind_group(1, &self.sources_bind_group, &[]);
+            render_pass.draw(0..6, 0..1);
+        }
+
+        if self.track_error {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Cataract metrics_cd_pass"),
+                color_attachments: &[
+                    self.targets
+                        .rt_color_uncertainty
+                        .to_color_attachment(Some(CLEAR_COLOR)),
+                    self.targets
+                        .rt_covariances
+                        .to_color_attachment(Some(CLEAR_COLOR)),
+                ],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            render_pass.set_pipeline(&self.metrics_cd_pipeline);
+            render_pass.set_bind_group(0, &self.uniforms.bind_group, &[]);
+            render_pass.set_bind_group(1, &self.sources_bind_group, &[]);
+            render_pass.draw(0..6, 0..1);
+        }
     }
 }

@@ -11,12 +11,26 @@ struct Uniforms{
 @group(0) @binding(0)
 var<uniform> uniforms: Uniforms;
 
-struct FragmentOutput {
+struct SimulationOutput {
+    color: vec4<f32>,
+    deflection: vec4<f32>,
+    color_change: vec4<f32>,
+    color_uncertainty: vec4<f32>,
+    covariances: vec4<f32>,
+};
+
+struct ColorOutput {
     @location(0) color: vec4<f32>,
-    @location(1) deflection: vec4<f32>,
-    @location(2) color_change: vec4<f32>,
-    @location(3) color_uncertainty: vec4<f32>,
-    @location(4) covariances: vec4<f32>,
+};
+
+struct MetricsAbOutput {
+    @location(0) metrics_a: vec4<f32>,
+    @location(1) metrics_b: vec4<f32>,
+};
+
+struct MetricsCdOutput {
+    @location(0) metrics_c: vec4<f32>,
+    @location(1) metrics_d: vec4<f32>,
 };
 
 @group(1) @binding(0)
@@ -219,9 +233,8 @@ fn glaucoma(color: vec4<f32>, retina: vec4<f32>, ev: ptr<function, ErrorValues>)
     return newColor;
 }
 
-@fragment
-fn fs_main(in: VertexOutput) -> FragmentOutput {
-    var out: FragmentOutput;
+fn simulate(in: VertexOutput) -> SimulationOutput {
+    var out: SimulationOutput;
 
     let ndc = vec4<f32>(vec2(in.tex_coords.x, 1.0 - in.tex_coords.y) * 2.0 - 1.0, 0.9, 1.0);
     let frag_dir = uniforms.gaze_inv_proj * ndc;
@@ -280,5 +293,43 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         }
     }
 
+    return out;
+}
+
+@fragment
+fn fs_color(in: VertexOutput) -> ColorOutput {
+    let simulated = simulate(in);
+    var out: ColorOutput;
+    out.color = simulated.color;
+    return out;
+}
+
+@fragment
+fn fs_metrics_ab(in: VertexOutput) -> MetricsAbOutput {
+    let simulated = simulate(in);
+    let packed = unpackMetrics(
+        simulated.deflection,
+        simulated.color_change,
+        simulated.color_uncertainty,
+        simulated.covariances
+    );
+    var out: MetricsAbOutput;
+    out.metrics_a = packMetricsA(packed);
+    out.metrics_b = packMetricsB(packed);
+    return out;
+}
+
+@fragment
+fn fs_metrics_cd(in: VertexOutput) -> MetricsCdOutput {
+    let simulated = simulate(in);
+    let packed = unpackMetrics(
+        simulated.deflection,
+        simulated.color_change,
+        simulated.color_uncertainty,
+        simulated.covariances
+    );
+    var out: MetricsCdOutput;
+    out.metrics_c = packMetricsC(packed);
+    out.metrics_d = packMetricsD(packed);
     return out;
 }

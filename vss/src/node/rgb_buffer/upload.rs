@@ -98,7 +98,7 @@ impl UploadRgbBuffer {
             &[&shader, &shader],
             &["vs_main", "fs_main"],
             &[&source_bind_group_layout, &uniforms.bind_group_layout],
-            &all_color_states(),
+            &single_color_state(),
             simple_depth_state(DEPTH_FORMAT),
             Some("UploadNode Render Pipeline"),
         );
@@ -257,7 +257,7 @@ impl Node for UploadRgbBuffer {
         };
 
         let slots = slots.emplace_color_depth_output(surface, width, height, "UploadNode");
-        self.targets = slots.as_all_target();
+        self.targets = slots.as_color_depth_targets();
 
         let (color_out, _) = slots.as_color_depth_target();
         original_image.replace(color_out.as_texture());

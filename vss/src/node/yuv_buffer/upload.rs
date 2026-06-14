@@ -80,7 +80,7 @@ impl UploadYuvBuffer {
             &[&shader, &shader],
             &["vs_main", "fs_main"],
             &[&uniforms.bind_group_layout, &sources_bind_group_layout],
-            &all_color_states(),
+            &single_color_state(),
             None,
             Some("UploadYuvBuffer Render Pipeline"),
         );
@@ -203,7 +203,7 @@ impl Node for UploadYuvBuffer {
         }
 
         let slots = slots.emplace_color_depth_output(surface, height, width, "UploadYuvBuffer");
-        self.targets = slots.as_all_target();
+        self.targets = slots.as_color_depth_targets();
 
         let (color_out, _) = slots.as_color_depth_target();
         original_image.replace(color_out.as_texture());

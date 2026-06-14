@@ -219,6 +219,22 @@ impl RenderTexture {
         )
     }
 
+    pub fn create_metrics(
+        device: &wgpu::Device,
+        width: u32,
+        height: u32,
+        label: Option<&str>,
+    ) -> RenderTexture {
+        Self::create(
+            device,
+            width,
+            height,
+            METRICS_FORMAT,
+            create_sampler_nearest(device),
+            label,
+        )
+    }
+
     pub fn empty_depth(device: &wgpu::Device, label: Option<&str>) -> RenderTexture {
         Self::create(
             device,
@@ -247,6 +263,17 @@ impl RenderTexture {
             1,
             1,
             HIGHP_FORMAT,
+            create_sampler_nearest(device),
+            label,
+        )
+    }
+
+    pub fn empty_metrics(device: &wgpu::Device, label: Option<&str>) -> RenderTexture {
+        Self::create(
+            device,
+            1,
+            1,
+            METRICS_FORMAT,
             create_sampler_nearest(device),
             label,
         )
@@ -313,7 +340,7 @@ impl RenderTexture {
     pub fn to_color_attachment(
         &self,
         clear: Option<wgpu::Color>,
-    ) -> Option<wgpu::RenderPassColorAttachment> {
+    ) -> Option<wgpu::RenderPassColorAttachment<'_>> {
         Some(wgpu::RenderPassColorAttachment {
             view: self.view.as_ref(),
             resolve_target: None,
@@ -331,7 +358,7 @@ impl RenderTexture {
     pub fn to_depth_attachment(
         &self,
         clear: Option<f32>,
-    ) -> Option<wgpu::RenderPassDepthStencilAttachment> {
+    ) -> Option<wgpu::RenderPassDepthStencilAttachment<'_>> {
         Some(wgpu::RenderPassDepthStencilAttachment {
             view: self.view.as_ref(),
             depth_ops: Some(wgpu::Operations {
@@ -388,25 +415,25 @@ pub fn create_color_sources_bind_group(
             Some(format!("{}{}", node_name, " s_color (placeholder)").as_str()),
         )
         .unwrap(),
-        &placeholder_highp_texture(
+        &placeholder_metrics_texture(
             device,
             queue,
             Some(format!("{}{}", node_name, " s_deflection (placeholder)").as_str()),
         )
         .unwrap(),
-        &placeholder_highp_texture(
+        &placeholder_metrics_texture(
             device,
             queue,
             Some(format!("{}{}", node_name, " s_color_change (placeholder)").as_str()),
         )
         .unwrap(),
-        &placeholder_highp_texture(
+        &placeholder_metrics_texture(
             device,
             queue,
             Some(format!("{}{}", node_name, " s_color_uncertainty (placeholder)").as_str()),
         )
         .unwrap(),
-        &placeholder_highp_texture(
+        &placeholder_metrics_texture(
             device,
             queue,
             Some(format!("{}{}", node_name, " s_covariances (placeholder)").as_str()),
@@ -433,25 +460,25 @@ pub fn create_color_depth_sources_bind_group(
             Some(format!("{}{}", node_name, " s_depth (placeholder)").as_str()),
         )
         .unwrap(),
-        &placeholder_highp_texture(
+        &placeholder_metrics_texture(
             device,
             queue,
             Some(format!("{}{}", node_name, " s_deflection (placeholder)").as_str()),
         )
         .unwrap(),
-        &placeholder_highp_texture(
+        &placeholder_metrics_texture(
             device,
             queue,
             Some(format!("{}{}", node_name, " s_color_change (placeholder)").as_str()),
         )
         .unwrap(),
-        &placeholder_highp_texture(
+        &placeholder_metrics_texture(
             device,
             queue,
             Some(format!("{}{}", node_name, " s_color_uncertainty (placeholder)").as_str()),
         )
         .unwrap(),
-        &placeholder_highp_texture(
+        &placeholder_metrics_texture(
             device,
             queue,
             Some(format!("{}{}", node_name, " s_covariances (placeholder)").as_str()),
@@ -615,6 +642,15 @@ pub fn placeholder_highp_texture(
 ) -> Result<Texture, String> {
     let sampler = create_sampler_nearest(device);
     load_texture_from_bytes(device, queue, &[0; 16], 1, 1, sampler, HIGHP_FORMAT, label)
+}
+
+pub fn placeholder_metrics_texture(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    label: Option<&str>,
+) -> Result<Texture, String> {
+    let sampler = create_sampler_nearest(device);
+    load_texture_from_bytes(device, queue, &[0; 8], 1, 1, sampler, METRICS_FORMAT, label)
 }
 
 pub fn placeholder_single_channel_texture(

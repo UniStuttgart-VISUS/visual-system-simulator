@@ -164,7 +164,11 @@ impl ToJsonInspector {
 
 impl Display for ToJsonInspector {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", serde_json::Value::Array(self.flows.borrow().clone()))
+        write!(
+            f,
+            "{}",
+            serde_json::Value::Array(self.flows.borrow().clone())
+        )
     }
 }
 

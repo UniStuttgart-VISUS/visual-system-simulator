@@ -170,7 +170,7 @@ impl Node for DownloadRgbBuffer {
             println!("sender ok");
         });
 
-        let _ =  device.poll(wgpu::MaintainBase::Wait);
+        let _ = device.poll(wgpu::MaintainBase::Wait);
 
         let buffer_dimensions =
             BufferDimensions::new(self.res[0] as usize, self.res[1] as usize, size_of::<u32>());

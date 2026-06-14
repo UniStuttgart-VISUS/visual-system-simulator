@@ -12,7 +12,9 @@ struct Uniforms {
 }
 
 pub struct Retina {
-    pipeline: wgpu::RenderPipeline,
+    color_pipeline: wgpu::RenderPipeline,
+    metrics_ab_pipeline: wgpu::RenderPipeline,
+    metrics_cd_pipeline: wgpu::RenderPipeline,
     uniforms: ShaderUniforms<Uniforms>,
     sources_bind_group: wgpu::BindGroup,
     retina_bind_group: wgpu::BindGroup,
@@ -74,22 +76,52 @@ impl Retina {
         let (sources_bind_group_layout, sources_bind_group) =
             create_color_sources_bind_group(device, queue, "Cataract");
 
-        let pipeline = create_render_pipeline(
+        let color_pipeline = create_render_pipeline(
             device,
             &[&shader, &shader],
-            &["vs_main", "fs_main"],
+            &["vs_main", "fs_color"],
             &[
                 &uniforms.bind_group_layout,
                 &sources_bind_group_layout,
                 &retina_layout,
             ],
-            &all_color_states(),
+            &single_color_state(),
             None,
-            Some("Retina Render Pipeline"),
+            Some("Retina Color Render Pipeline"),
+        );
+
+        let metrics_ab_pipeline = create_render_pipeline(
+            device,
+            &[&shader, &shader],
+            &["vs_main", "fs_metrics_ab"],
+            &[
+                &uniforms.bind_group_layout,
+                &sources_bind_group_layout,
+                &retina_layout,
+            ],
+            &metrics_ab_color_states(),
+            None,
+            Some("Retina Metrics AB Render Pipeline"),
+        );
+
+        let metrics_cd_pipeline = create_render_pipeline(
+            device,
+            &[&shader, &shader],
+            &["vs_main", "fs_metrics_cd"],
+            &[
+                &uniforms.bind_group_layout,
+                &sources_bind_group_layout,
+                &retina_layout,
+            ],
+            &metrics_cd_color_states(),
+            None,
+            Some("Retina Metrics CD Render Pipeline"),
         );
 
         Retina {
-            pipeline,
+            color_pipeline,
+            metrics_ab_pipeline,
+            metrics_cd_pipeline,
             uniforms,
             sources_bind_group,
             retina_bind_group,
@@ -228,13 +260,14 @@ impl Node for Retina {
         _original_image: &mut Option<Texture>,
     ) -> NodeSlots {
         let slots = slots
-            .to_color_input(surface)
-            .to_color_output(surface, "RetinaNode");
+            .to_color_metrics_input(surface)
+            .to_color_metrics_output(surface, "RetinaNode");
         self.uniforms.data.resolution = slots.output_size_f32();
 
         let device = surface.device();
+        let queue = surface.queue();
 
-        self.sources_bind_group = slots.as_all_colors_source(device);
+        self.sources_bind_group = slots.as_all_colors_source(device, queue);
         self.targets = slots.as_all_colors_target();
         slots
     }
@@ -272,7 +305,8 @@ impl Node for Retina {
     fn input(&mut self, eye: &EyeInput, _mouse: &MouseInput) -> EyeInput {
         let gaze_rotation =
             Matrix4::look_to_lh(Point3::new(0.0, 0.0, 0.0), eye.gaze, Vector3::unit_y());
-        self.uniforms.data.gaze_inv_proj = (gaze_rotation.invert().unwrap() * eye.proj.invert().unwrap()).into();
+        self.uniforms.data.gaze_inv_proj =
+            (gaze_rotation.invert().unwrap() * eye.proj.invert().unwrap()).into();
 
         eye.clone()
     }
@@ -287,18 +321,66 @@ impl Node for Retina {
         self.uniforms.upload(surface.queue());
         self.validate_map(surface);
 
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Retina render_pass"),
-            color_attachments: &self.targets.color_attachments(screen),
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Retina color_pass"),
+                color_attachments: &self.targets.color_attachments(screen),
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
 
-        render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_bind_group(0, &self.uniforms.bind_group, &[]);
-        render_pass.set_bind_group(1, &self.sources_bind_group, &[]);
-        render_pass.set_bind_group(2, &self.retina_bind_group, &[]);
-        render_pass.draw(0..6, 0..1);
+            render_pass.set_pipeline(&self.color_pipeline);
+            render_pass.set_bind_group(0, &self.uniforms.bind_group, &[]);
+            render_pass.set_bind_group(1, &self.sources_bind_group, &[]);
+            render_pass.set_bind_group(2, &self.retina_bind_group, &[]);
+            render_pass.draw(0..6, 0..1);
+        }
+
+        if self.track_error {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Retina metrics_ab_pass"),
+                color_attachments: &[
+                    self.targets
+                        .rt_deflection
+                        .to_color_attachment(Some(CLEAR_COLOR)),
+                    self.targets
+                        .rt_color_change
+                        .to_color_attachment(Some(CLEAR_COLOR)),
+                ],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            render_pass.set_pipeline(&self.metrics_ab_pipeline);
+            render_pass.set_bind_group(0, &self.uniforms.bind_group, &[]);
+            render_pass.set_bind_group(1, &self.sources_bind_group, &[]);
+            render_pass.set_bind_group(2, &self.retina_bind_group, &[]);
+            render_pass.draw(0..6, 0..1);
+        }
+
+        if self.track_error {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Retina metrics_cd_pass"),
+                color_attachments: &[
+                    self.targets
+                        .rt_color_uncertainty
+                        .to_color_attachment(Some(CLEAR_COLOR)),
+                    self.targets
+                        .rt_covariances
+                        .to_color_attachment(Some(CLEAR_COLOR)),
+                ],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            render_pass.set_pipeline(&self.metrics_cd_pipeline);
+            render_pass.set_bind_group(0, &self.uniforms.bind_group, &[]);
+            render_pass.set_bind_group(1, &self.sources_bind_group, &[]);
+            render_pass.set_bind_group(2, &self.retina_bind_group, &[]);
+            render_pass.draw(0..6, 0..1);
+        }
     }
 }

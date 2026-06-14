@@ -3,7 +3,7 @@ use wgpu::CommandEncoder;
 
 /// A node to use existing Textures as input for a flow. Mainly used for vr framebuffers.
 pub struct VrBuffer {
-    buffer_size: (u32, u32), 
+    buffer_size: (u32, u32),
     pipeline: wgpu::RenderPipeline,
     sources_bind_group: wgpu::BindGroup,
     targets: ColorDepthTargets,
@@ -16,7 +16,7 @@ impl VrBuffer {
         let (sources_bind_group_layout, sources_bind_group) = [
             &color,
             &depth.unwrap_or(
-                placeholder_depth_texture(device, Some("VrBuffer s_depth (placeholder)")).unwrap()
+                placeholder_depth_texture(device, Some("VrBuffer s_depth (placeholder)")).unwrap(),
             ),
         ]
         .create_bind_group(device);
@@ -24,7 +24,11 @@ impl VrBuffer {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("VrBuffer Shader"),
             source: wgpu::ShaderSource::Wgsl(
-                concat!(include_str!("../../../vss/src/node/vert.wgsl"), include_str!("vr_buffer.wgsl")).into(),
+                concat!(
+                    include_str!("../../../vss/src/node/vert.wgsl"),
+                    include_str!("vr_buffer.wgsl")
+                )
+                .into(),
             ),
         });
 
@@ -33,7 +37,7 @@ impl VrBuffer {
             &[&shader, &shader],
             &["vs_main", "fs_main"],
             &[&sources_bind_group_layout],
-            &all_color_states(),
+            &single_color_state(),
             simple_depth_state(DEPTH_FORMAT),
             Some("VrBuffer Render Pipeline"),
         );
@@ -46,19 +50,23 @@ impl VrBuffer {
         }
     }
 
-    pub fn set_input_textures(&mut self, surface: &Surface, color: Texture, depth: Option<Texture>) {
+    pub fn set_input_textures(
+        &mut self,
+        surface: &Surface,
+        color: Texture,
+        depth: Option<Texture>,
+    ) {
         self.buffer_size = (color.width(), color.height());
         let device = surface.device();
         let (_, sources_bind_group) = [
             &color,
             &depth.unwrap_or(
-                placeholder_depth_texture(device, Some("VrBuffer s_depth (placeholder)")).unwrap()
+                placeholder_depth_texture(device, Some("VrBuffer s_depth (placeholder)")).unwrap(),
             ),
         ]
         .create_bind_group(device);
 
         self.sources_bind_group = sources_bind_group;
-
     }
 }
 
@@ -76,7 +84,7 @@ impl Node for VrBuffer {
         let (width, height) = self.buffer_size;
 
         let slots = slots.emplace_color_depth_output(surface, width, height, "VrBuffer");
-        self.targets = slots.as_all_target();
+        self.targets = slots.as_color_depth_targets();
 
         let (color_out, _) = slots.as_color_depth_target();
         original_image.replace(color_out.as_texture());

@@ -180,3 +180,50 @@ fn applyBloom(color: vec3<f32>, blur_factor: f32, S: ptr<function, mat3x3<f32>>)
     let bloom_factor = 1. + brightness *  c;
     return color * bloom_factor;
 }
+
+struct PackedMetricsState {
+    deflection: vec2<f32>,
+    dir_var: vec2<f32>,
+    dir_covar: f32,
+    color_change: vec3<f32>,
+    color_var: vec3<f32>,
+    color_covar: vec3<f32>,
+};
+
+fn zeroPackedMetricsState() -> PackedMetricsState {
+    return PackedMetricsState(
+        vec2<f32>(0.0),
+        vec2<f32>(0.0),
+        0.0,
+        vec3<f32>(0.0),
+        vec3<f32>(0.0),
+        vec3<f32>(0.0)
+    );
+}
+
+fn unpackMetrics(metrics_a: vec4<f32>, metrics_b: vec4<f32>, metrics_c: vec4<f32>, metrics_d: vec4<f32>) -> PackedMetricsState {
+    return PackedMetricsState(
+        metrics_a.xy,
+        metrics_a.zw,
+        metrics_c.a,
+        metrics_b.rgb,
+        metrics_c.rgb,
+        metrics_d.rgb
+    );
+}
+
+fn packMetricsA(metrics: PackedMetricsState) -> vec4<f32> {
+    return vec4<f32>(metrics.deflection, metrics.dir_var);
+}
+
+fn packMetricsB(metrics: PackedMetricsState) -> vec4<f32> {
+    return vec4<f32>(metrics.color_change, 0.0);
+}
+
+fn packMetricsC(metrics: PackedMetricsState) -> vec4<f32> {
+    return vec4<f32>(metrics.color_var, metrics.dir_covar);
+}
+
+fn packMetricsD(metrics: PackedMetricsState) -> vec4<f32> {
+    return vec4<f32>(metrics.color_covar, metrics.dir_covar);
+}

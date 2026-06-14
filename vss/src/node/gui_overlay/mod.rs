@@ -122,6 +122,18 @@ impl Node for GuiOverlay {
 
     fn input(&mut self, eye: &EyeInput, mouse: &MouseInput) -> EyeInput {
         let mut egui_input = egui::RawInput::default();
+        egui_input.screen_rect = Some(egui::Rect::from_min_size(
+            egui::Pos2::ZERO,
+            egui::vec2(
+                self.screen_descriptor.size_in_pixels[0] as f32,
+                self.screen_descriptor.size_in_pixels[1] as f32,
+            ),
+        ));
+        egui_input.predicted_dt = 1.0 / 60.0;
+        egui_input.events.push(egui::Event::PointerMoved(egui::pos2(
+            mouse.position.0,
+            mouse.position.1,
+        )));
         egui_input.events.push(egui::Event::PointerButton {
             pos: egui::pos2(mouse.position.0, mouse.position.1),
             button: egui::PointerButton::Primary,
@@ -149,7 +161,9 @@ impl Node for GuiOverlay {
 
         self.uniforms.upload(queue);
 
-        let paint_jobs = self.gui_context.tessellate(full_output.shapes, full_output.pixels_per_point);
+        let paint_jobs = self
+            .gui_context
+            .tessellate(full_output.shapes, full_output.pixels_per_point);
 
         for texture_delta_set in full_output.textures_delta.set.iter() {
             self.egui_renderer.update_texture(
@@ -175,7 +189,7 @@ impl Node for GuiOverlay {
                     .to_color_attachment(None)],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
-                occlusion_query_set: None,    
+                occlusion_query_set: None,
             });
 
             render_pass.set_pipeline(&self.pipeline);

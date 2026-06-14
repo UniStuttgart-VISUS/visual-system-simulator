@@ -1,14 +1,22 @@
 use std::rc::Rc;
+use std::sync::Arc;
 
 use cgmath::{Matrix4, SquareMatrix, Vector4};
 use vss::*;
 use winit::{
-    application::ApplicationHandler, dpi::*, error::EventLoopError, event::*, event_loop::{ActiveEventLoop, EventLoop}, keyboard::{Key, NamedKey}, window::Window
+    application::ApplicationHandler,
+    dpi::*,
+    error::EventLoopError,
+    event::*,
+    event_loop::{ActiveEventLoop, EventLoop},
+    keyboard::{Key, NamedKey},
+    window::Window,
 };
 
 /// Represents a window along with its associated rendering context and [Flow].
 pub struct WindowSurface {
     surface: Option<Rc<Surface<'static>>>,
+    window: Option<Arc<Window>>,
     flow_count: usize,
 
     deferred_size: Option<PhysicalSize<u32>>,
@@ -38,6 +46,7 @@ impl WindowSurface {
     {
         Self {
             surface: None,
+            window: None,
             flow_count,
             deferred_size: None,
             visible: visible,
@@ -57,7 +66,7 @@ impl WindowSurface {
 
     pub fn run_app(mut self) -> Result<(), EventLoopError> {
         let event_loop = EventLoop::new().unwrap();
-    
+
         #[cfg(target_arch = "wasm32")]
         {
             use winit::platform::web::EventLoopExtWebSys;
@@ -66,7 +75,6 @@ impl WindowSurface {
         #[cfg(not(target_arch = "wasm32"))]
         event_loop.run_app(&mut self)
     }
-    
 
     fn update_input(&self) {
         let surface = self.surface.clone().unwrap();
@@ -127,19 +135,21 @@ impl ApplicationHandler for WindowSurface {
             .with_inner_size(LogicalSize::new(1280.0, 720.0))
             .with_visible(self.visible);
 
-        let window = event_loop.create_window(window_attributes).unwrap();
+        let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
         window.set_cursor_visible(true);
         let window_size = window.inner_size();
 
         let mut surface = Surface::new(
             [window_size.width, window_size.height],
-            window,
+            window.clone(),
             self.flow_count,
         );
 
         (self.init_fn)(&mut surface);
 
         surface.negociate_slots();
+        window.request_redraw();
+        self.window = Some(window);
         self.surface = Some(Rc::new(surface));
     }
 
@@ -167,6 +177,9 @@ impl ApplicationHandler for WindowSurface {
             }
             WindowEvent::Resized(size) => {
                 self.deferred_size = Some(size);
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
             }
             WindowEvent::CursorMoved { position, .. } => {
                 if self.active {
@@ -212,6 +225,10 @@ impl ApplicationHandler for WindowSurface {
         }
 
         self.update_input();
+
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
 
         if (self.poll_fn)() {
             event_loop.exit();

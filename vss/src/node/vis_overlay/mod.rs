@@ -176,13 +176,14 @@ impl Node for VisOverlay {
         original_image: &mut Option<Texture>,
     ) -> NodeSlots {
         let slots = slots
-            .to_color_input(surface)
+            .to_color_metrics_input(surface)
             .to_color_output(surface, "VisOverlayNode");
         let device = surface.device();
+        let queue = surface.queue();
 
         self.uniforms.data.resolution_in = slots.input_size_f32();
 
-        self.sources_bind_group = slots.as_all_colors_source(device);
+        self.sources_bind_group = slots.as_all_colors_source(device, queue);
         self.render_target = slots.as_color_target();
         if let Some(tex) = original_image.borrow_mut() {
             (_, self.original_bind_group) = tex.create_bind_group(device);

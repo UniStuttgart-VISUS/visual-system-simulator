@@ -21,4 +21,5 @@ log = "0.4"
 cc = "^1.2.29"
 
 [features]
+openxr = []
 varjo = ["wgpu-hal", "ash"]

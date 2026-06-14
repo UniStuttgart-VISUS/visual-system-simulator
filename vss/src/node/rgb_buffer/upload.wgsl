@@ -13,10 +13,6 @@ var<uniform> uniforms: Uniforms;
 struct FragmentOutput {
     @builtin(frag_depth) depth: f32,
     @location(0) color: vec4<f32>,
-    @location(1) deflection: vec4<f32>,
-    @location(2) color_change: vec4<f32>,
-    @location(3) color_uncertainty: vec4<f32>,
-    @location(4) covariances: vec4<f32>,
 };
 
 // Fragment shader
@@ -56,11 +52,5 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
 
     out.color = vec4<f32>(textureSample(in_color_t, in_color_s, tex).rgb, 1.0);
     out.depth = depth;
-
-    out.deflection =         vec4<f32>(0.0);
-    out.color_change =       vec4<f32>(0.0);
-    out.color_uncertainty =  vec4<f32>(0.0);
-    out.covariances =        vec4<f32>(0.0);
-
     return out;
 }

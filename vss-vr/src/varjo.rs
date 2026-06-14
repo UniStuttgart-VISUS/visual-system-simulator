@@ -2,8 +2,9 @@ use ash::vk::{self, Handle};
 use log::LevelFilter;
 
 use std::{
+    ffi::CStr,
     os::raw::{c_char, c_void},
-    rc::Rc, ffi::CStr,
+    rc::Rc,
 };
 use wgpu_hal::InstanceFlags;
 
@@ -138,8 +139,9 @@ impl Varjo {
         );
 
         let mut varjo = std::ptr::null_mut();
-        try_fail(unsafe { varjo_new(&mut varjo as *mut *mut _, &mut vulkan_data as *mut _) }).unwrap();
-        
+        try_fail(unsafe { varjo_new(&mut varjo as *mut *mut _, &mut vulkan_data as *mut _) })
+            .unwrap();
+
         println!(
             "rust-side(after): instance: {:?}, device: {:?}",
             vulkan_data.instance, vulkan_data.device
@@ -155,7 +157,7 @@ impl Varjo {
         }
     }
 
-    pub fn check_handles(surface: &Surface){
+    pub fn check_handles(surface: &Surface) {
         let vulkan_data = unsafe {
             surface.device().as_hal::<wgpu_hal::vulkan::Api, _, _>(
                 |vk_device: Option<&wgpu_hal::vulkan::Device>| -> VulkanData {
@@ -174,13 +176,9 @@ impl Varjo {
             vulkan_data.instance, vulkan_data.device
         );
     }
-    
-    pub fn create_custom_vk_instance(&self) -> Option<wgpu::Instance>{
-        let desc = wgpu_hal::InstanceDescriptor {
-            name: "CustomVkInstance",
-            flags: InstanceFlags::empty(),
-            dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
-        };
+
+    pub fn create_custom_vk_instance(&self) -> Option<wgpu::Instance> {
+        let flags = InstanceFlags::empty();
 
         let entry = match unsafe { ash::Entry::load() } {
             Ok(entry) => entry,
@@ -222,14 +220,23 @@ impl Varjo {
                 },
             );*/
 
-        let extensions = wgpu_hal::vulkan::Instance::required_extensions(&entry, driver_api_version, desc.flags).unwrap();
-        //extensions.push(khr::ExternalFenceFd::name());
-        //extensions.push(khr::ExternalMemoryFd::name());
+        let extensions =
+            match wgpu_hal::vulkan::Instance::desired_extensions(&entry, driver_api_version, flags)
+            {
+                Ok(extensions) => extensions,
+                Err(err) => {
+                    log::warn!("desired_extensions: {:?}", err);
+                    return None;
+                }
+            };
 
-        let instance_layers = entry.enumerate_instance_layer_properties().map_err(|e| {
-            log::info!("enumerate_instance_layer_properties: {:?}", e);
-            wgpu_hal::InstanceError
-        }).unwrap();
+        let instance_layers = match unsafe { entry.enumerate_instance_layer_properties() } {
+            Ok(layers) => layers,
+            Err(err) => {
+                log::info!("enumerate_instance_layer_properties: {:?}", err);
+                return None;
+            }
+        };
 
         let nv_optimus_layer = CStr::from_bytes_with_nul(b"VK_LAYER_NV_optimus\0").unwrap();
         let has_nv_optimus = instance_layers.iter().any(|inst_layer| {
@@ -279,94 +286,77 @@ impl Varjo {
             })
         }.unwrap();*/
 
-        let vk_instance = unsafe { ash::Instance::load(entry.static_fn(), self.vulkan_data.instance) };
+        let vk_instance =
+            unsafe { ash::Instance::load(entry.static_fn(), self.vulkan_data.instance) };
 
         let wgpu_vk_instance = unsafe {
-        //unsafe {
             wgpu_hal::vulkan::Instance::from_raw(
                 entry,
                 vk_instance,
                 driver_api_version,
                 0,
+                None,
                 extensions,
-                desc.flags,
+                flags,
                 has_nv_optimus,
-                Some(Box::new(())), // `Some` signals that wgpu-hal is in charge of destroying vk_instance
+                Some(Box::new(|| {})),
             )
-        }.unwrap();
+        }
+        .unwrap();
 
-        Some(unsafe {
-            wgpu::Instance::from_hal::<wgpu_hal::api::Vulkan>(wgpu_vk_instance)
-        })
+        Some(unsafe { wgpu::Instance::from_hal::<wgpu_hal::api::Vulkan>(wgpu_vk_instance) })
     }
 
-    pub fn create_custom_vk_device(&self, instance: &wgpu::Instance, adapter: &wgpu::Adapter) -> (wgpu::Device, wgpu::Queue){
+    pub fn create_custom_vk_device(
+        &self,
+        instance: &wgpu::Instance,
+        adapter: &wgpu::Adapter,
+    ) -> (wgpu::Device, wgpu::Queue) {
         let hal_device = unsafe {
             adapter.as_hal::<wgpu_hal::vulkan::Api, _, _>(
                 |vk_adapter: Option<&wgpu_hal::vulkan::Adapter>| -> wgpu_hal::OpenDevice<wgpu_hal::vulkan::Api> {
                     let adapter = vk_adapter.unwrap();
                     let features = wgpu::Features::empty();
                     let enabled_extensions = adapter.required_device_extensions(features);
-                    //let mut enabled_phd_features = adapter.physical_device_features(&enabled_extensions, features);
 
-                    println!("features: {:b}", features);
-            
+                    println!("features: {:?}", features);
+
                     for e in &enabled_extensions{
                         println!("enabled extensions: {:?}", e);
                     }
 
-                    //println!("enabled extensions: {:?}", enabled_phd_features);
-            
-                    let family_index = 0; //TODO
-                    let family_info = vk::DeviceQueueCreateInfo::builder()
-                        .queue_family_index(family_index)
-                        .queue_priorities(&[1.0])
-                        .build();
-                    /*let family_infos = [family_info];
-            
-                    let str_pointers = enabled_extensions
-                        .iter()
-                        .map(|&s| {
-                            // Safe because `enabled_extensions` entries have static lifetime.
-                            s.as_ptr()
-                        })
-                        .collect::<Vec<_>>();
-            
-                    let pre_info = vk::DeviceCreateInfo::builder()
-                        .queue_create_infos(&family_infos)
-                        .enabled_extension_names(&str_pointers);
-                    let info = enabled_phd_features
-                        .add_to_device_create_builder(pre_info)
-                        .build();*/
+                    let family_index = self.vulkan_data.queue_family_index;
                     let raw_device = ash::Device::load(
                         instance.as_hal::<wgpu_hal::vulkan::Api>().unwrap().shared_instance().raw_instance().fp_v1_0(),
                         self.vulkan_data.device
                     );
-                    /*let raw_device = {
-                        adapter.shared_instance().raw_instance().create_device(adapter.raw_physical_device(), &info, None)
-                    }.unwrap();*/
-            
+
                     adapter.device_from_raw(
                         raw_device,
-                        true,
+                        Some(Box::new(|| {})),
                         &enabled_extensions,
                         features,
-                        family_info.queue_family_index,
-                        0,
+                        &wgpu::MemoryHints::Performance,
+                        family_index,
+                        self.vulkan_data.queue_index,
                     ).unwrap()
                 },
             )
         };
 
-        unsafe { adapter.create_device_from_hal(
-            hal_device,
-            &wgpu::DeviceDescriptor {
-                features: wgpu::Features::empty(),
-                limits: wgpu::Limits::default(),
-                label: None,
-            },
-            None,
-        )}.unwrap()
+        unsafe {
+            adapter.create_device_from_hal(
+                hal_device,
+                &wgpu::DeviceDescriptor {
+                    label: None,
+                    required_features: wgpu::Features::empty(),
+                    required_limits: wgpu::Limits::default(),
+                    memory_hints: wgpu::MemoryHints::Performance,
+                    trace: wgpu::Trace::Off,
+                },
+            )
+        }
+        .unwrap()
     }
 
     pub fn get_viewports(&self) -> (Vec<VarjoViewport>, i32, i32) {
@@ -385,8 +375,7 @@ impl Varjo {
         })
         .unwrap();
         println!("varjo_viewports done");
-        let viewports =
-            unsafe { std::slice::from_raw_parts(viewports, view_count as usize) };
+        let viewports = unsafe { std::slice::from_raw_parts(viewports, view_count as usize) };
         (viewports.to_vec(), texture_width, texture_height)
     }
 
@@ -409,23 +398,23 @@ impl Varjo {
         for render_target in render_targets {
             println!("create_render_texture_from_hal");
             let color_texture = create_render_texture_from_hal(
-                    &device,
-                    render_target.color_image,
-                    render_target.width,
-                    render_target.height,
-                    wgpu::TextureFormat::Bgra8Unorm,
-                    create_sampler_nearest(&device),
-                    Some("Varjo RenderTexture Color"),
-                );
+                &device,
+                render_target.color_image,
+                render_target.width,
+                render_target.height,
+                wgpu::TextureFormat::Bgra8Unorm,
+                create_sampler_nearest(&device),
+                Some("Varjo RenderTexture Color"),
+            );
             let depth_texture = create_render_texture_from_hal(
-                    &device,
-                    render_target.depth_image,
-                    render_target.width,
-                    render_target.height,
-                    wgpu::TextureFormat::Depth24PlusStencil8,
-                    create_sampler_nearest(&device),
-                    Some("Varjo RenderTexture Depth"),
-                );
+                &device,
+                render_target.depth_image,
+                render_target.width,
+                render_target.height,
+                wgpu::TextureFormat::Depth24PlusStencil8,
+                create_sampler_nearest(&device),
+                Some("Varjo RenderTexture Depth"),
+            );
             self.render_targets_color.push(color_texture);
             self.render_targets_depth.push(depth_texture);
         }
@@ -438,10 +427,10 @@ impl Varjo {
         })
         .unwrap();
         self.latest_swap_chain_index = current_swap_chain_index as usize;
-        
+
         self.get_latest_render_target()
     }
-    
+
     pub fn get_latest_render_target(&self) -> (RenderTexture, RenderTexture) {
         return (
             self.render_targets_color[self.latest_swap_chain_index].clone(),
@@ -603,21 +592,26 @@ pub fn create_render_texture_from_hal(
     println!("vk::Image: {:?}", raw_image.as_raw());
 
     println!("create_render_texture_from_hal - create hal_texture");
+    let hal_usage = if format.is_depth_stencil_format() {
+        wgpu::TextureUses::DEPTH_STENCIL_ATTACHMENT
+    } else {
+        wgpu::TextureUses::COLOR_TARGET
+    };
     let hal_texture = unsafe {
         wgpu_hal::vulkan::Device::texture_from_raw(
             raw_image,
             &wgpu_hal::TextureDescriptor {
                 label,
-                size: size,
+                size,
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
-                format: format,
-                usage: wgpu_hal::TextureUses::COLOR_TARGET,
-                memory_flags: wgpu_hal::MemoryFlags::TRANSIENT,
+                format,
+                usage: hal_usage,
+                memory_flags: wgpu_hal::MemoryFlags::empty(),
                 view_formats: vec![format],
             },
-            Some(Box::new(())),
+            Some(Box::new(|| {})),
         )
     };
 
@@ -631,8 +625,10 @@ pub fn create_render_texture_from_hal(
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
-                format: format,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                format,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::COPY_DST,
                 view_formats: &[format],
             },
         )

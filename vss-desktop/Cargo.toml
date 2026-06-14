@@ -16,7 +16,8 @@ wgpu-hal = { workspace = true, optional = true }
 cgmath = { workspace = true }
 vss = { path = "../vss" }
 vss-winit = { path = "../vss-winit" }
-vss-vr = { path = "../vss-vr", optional = true}
+vss-vr = { path = "../vss-vr", optional = true, features = ["varjo"] }
+pollster = "0.4"
 clap = "4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "*"

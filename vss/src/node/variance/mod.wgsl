@@ -242,13 +242,28 @@ fn viridis_quintic(x_in: f32) -> vec3<f32>{
 		dot( x1.xyzw, vec4<f32>(  0.300805501,  2.614650302, -12.019139090, 28.933559110 ) ) + dot( x2.xy, vec2<f32>( -33.491294770,  13.762053843 ) ) );
 }
 
-struct FragmentOutput {
+struct SimulationOutput {
+    color: vec4<f32>,
+    deflection: vec4<f32>,
+    color_change: vec4<f32>,
+    color_uncertainty: vec4<f32>,
+    covariances: vec4<f32>,
+    measurement: vec4<f32>,
+};
+
+struct ColorMeasurementOutput {
     @location(0) color: vec4<f32>,
-    @location(1) deflection: vec4<f32>,
-    @location(2) color_change: vec4<f32>,
-    @location(3) color_uncertainty: vec4<f32>,
-    @location(4) covariances: vec4<f32>,
-    @location(5) measurement: vec4<f32>,
+    @location(1) measurement: vec4<f32>,
+};
+
+struct MetricsAbOutput {
+    @location(0) metrics_a: vec4<f32>,
+    @location(1) metrics_b: vec4<f32>,
+};
+
+struct MetricsCdOutput {
+    @location(0) metrics_c: vec4<f32>,
+    @location(1) metrics_d: vec4<f32>,
 };
 
 @group(1) @binding(0)
@@ -277,9 +292,8 @@ var in_original_t: texture_2d<f32>;
 @group(2) @binding(1)
 var in_original_s: sampler;
 
-@fragment
-fn fs_main(in: VertexOutput) -> FragmentOutput {
-    var out: FragmentOutput;
+fn simulate(in: VertexOutput) -> SimulationOutput {
+    var out: SimulationOutput;
     if(uniforms.variance_metric == VARIANCE_METRIC_HISTOGRAM){
         if(uniforms.show_variance == SHOW_VARIANCE_PRE){
             out.measurement = vec4<f32>(sampleColor(in_original_t, in_original_s, in.tex_coords), 1.0);
@@ -316,5 +330,44 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         out.deflection =        textureSample(in_deflection_t, in_deflection_s, in.tex_coords);
         out.covariances =       textureSample(in_covariances_t, in_covariances_s, in.tex_coords);
     }
+    return out;
+}
+
+@fragment
+fn fs_color_measurement(in: VertexOutput) -> ColorMeasurementOutput {
+    let simulated = simulate(in);
+    var out: ColorMeasurementOutput;
+    out.color = simulated.color;
+    out.measurement = simulated.measurement;
+    return out;
+}
+
+@fragment
+fn fs_metrics_ab(in: VertexOutput) -> MetricsAbOutput {
+    let simulated = simulate(in);
+    let packed = unpackMetrics(
+        simulated.deflection,
+        simulated.color_change,
+        simulated.color_uncertainty,
+        simulated.covariances
+    );
+    var out: MetricsAbOutput;
+    out.metrics_a = packMetricsA(packed);
+    out.metrics_b = packMetricsB(packed);
+    return out;
+}
+
+@fragment
+fn fs_metrics_cd(in: VertexOutput) -> MetricsCdOutput {
+    let simulated = simulate(in);
+    let packed = unpackMetrics(
+        simulated.deflection,
+        simulated.color_change,
+        simulated.color_uncertainty,
+        simulated.covariances
+    );
+    var out: MetricsCdOutput;
+    out.metrics_c = packMetricsC(packed);
+    out.metrics_d = packMetricsD(packed);
     return out;
 }

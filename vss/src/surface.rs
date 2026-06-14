@@ -18,8 +18,14 @@ pub struct Surface<'window> {
 }
 
 impl<'window> Surface<'window> {
-    pub async fn with_existing(surface_size: [u32; 2], flow_count: usize, surface: wgpu::Surface<'static>, adapter: wgpu::Adapter, device: wgpu::Device, queue: wgpu::Queue) -> Self {
-
+    pub async fn with_existing(
+        surface_size: [u32; 2],
+        flow_count: usize,
+        surface: wgpu::Surface<'static>,
+        adapter: wgpu::Adapter,
+        device: wgpu::Device,
+        queue: wgpu::Queue,
+    ) -> Self {
         // Query surface capablities, preferably with sRGB support.
         let swapchain_capabilities = surface.get_capabilities(&adapter);
         let view_formats = vec![];
@@ -54,11 +60,14 @@ impl<'window> Surface<'window> {
         }
     }
 
-    pub   fn new(surface_size: [u32; 2], target: impl Into<wgpu::SurfaceTarget<'window>>, flow_count: usize) -> Self
-    {
+    pub fn new(
+        surface_size: [u32; 2],
+        target: impl Into<wgpu::SurfaceTarget<'window>>,
+        flow_count: usize,
+    ) -> Self {
         let instance = if cfg!(target_os = "windows") {
             // Use Vulkan for consistency with Varjo/OpenXR builds on windows.
-            wgpu::Instance::new(& wgpu::InstanceDescriptor {
+            wgpu::Instance::new(&wgpu::InstanceDescriptor {
                 backends: wgpu::Backends::VULKAN,
                 ..wgpu::InstanceDescriptor::from_env_or_default()
             })
@@ -67,21 +76,20 @@ impl<'window> Surface<'window> {
         };
 
         let surface = instance.create_surface(target).unwrap();
-     let (adapter, device, queue) =   pollster::block_on( async {
-        let adapter =  instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                compatible_surface: Some(&surface),
-                force_fallback_adapter: false,
-            })
-            .await
-            .expect("Cannot create adapter");
+        let (adapter, device, queue) = pollster::block_on(async {
+            let adapter = instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::HighPerformance,
+                    compatible_surface: Some(&surface),
+                    force_fallback_adapter: false,
+                })
+                .await
+                .expect("Cannot create adapter");
 
-        let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
+            let (device, queue) = adapter
+                .request_device(&wgpu::DeviceDescriptor {
                     label: None,
-                    required_features:  wgpu::Features::empty(),
+                    required_features: wgpu::Features::empty(),
                     required_limits: if cfg!(target_arch = "wasm32") {
                         // WebGL does not support all features, thus disable some.
                         wgpu::Limits::downlevel_webgl2_defaults().using_resolution(adapter.limits())
@@ -90,12 +98,11 @@ impl<'window> Surface<'window> {
                     },
                     trace: wgpu::Trace::Off,
                     memory_hints: wgpu::MemoryHints::Performance,
-                }
-            )
-            .await
-            .expect("Cannot create device");
-        (adapter, device, queue)
-    }) ;
+                })
+                .await
+                .expect("Cannot create device");
+            (adapter, device, queue)
+        });
         // Query surface capablities, preferably with sRGB support.
         let swapchain_capabilities = surface.get_capabilities(&adapter);
         let view_formats = vec![];

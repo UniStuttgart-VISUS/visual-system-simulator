@@ -442,14 +442,6 @@ pub fn main() {
         flow_count,
         config.flow_configs[0].static_gaze,
         varjo,
-    );
-
-    let mut frame_counter = 0;
-    let mut frame_perfs: Vec<(u128, u128)> = vec![];
-    let mut previous_frame = Instant::now();
-    let print_spacing = 60;
-
-    pollster::block_on(window.run_and_exit(
         move |vr_surface, surface, vr_framebuffer_texture| {
             for (index, flow_config) in config.flow_configs.iter().enumerate() {
                 let mut io_generator = io::IoGenerator::new(
@@ -536,5 +528,7 @@ pub fn main() {
 
             done
         },
-    ));
+    );
+
+    let _ = window.run_and_exit();
 }

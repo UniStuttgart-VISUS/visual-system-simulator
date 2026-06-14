@@ -40,7 +40,7 @@ impl Flow {
         }
     }
 
-    pub fn eye_mut(&self) -> RefMut<EyeInput> {
+    pub fn eye_mut(&self) -> RefMut<'_, EyeInput> {
         self.eye.borrow_mut()
     }
 
@@ -84,42 +84,10 @@ impl Flow {
                     height,
                     Some("flow_negociate_slots color"),
                 );
-                let deflection_target = RenderTexture::create_highp(
-                    device,
-                    width,
-                    height,
-                    Some("flow_negociate_slots deflection"),
-                );
-                let color_change_target = RenderTexture::create_highp(
-                    device,
-                    width,
-                    height,
-                    Some("flow_negociate_slots color_change"),
-                );
-                let color_uncertainty_target = RenderTexture::create_highp(
-                    device,
-                    width,
-                    height,
-                    Some("flow_negociate_slots color_uncertainty"),
-                );
-                let covariances_target = RenderTexture::create_highp(
-                    device,
-                    width,
-                    height,
-                    Some("flow_negociate_slots covariances"),
-                );
 
-                let output_slot = Slot::Rgb {
+                let output_slot = Slot::Color {
                     color_source: color_target.as_texture(),
                     color_target,
-                    deflection_source: deflection_target.as_texture(),
-                    deflection_target,
-                    color_change_source: color_change_target.as_texture(),
-                    color_change_target,
-                    color_uncertainty_source: color_uncertainty_target.as_texture(),
-                    color_uncertainty_target,
-                    covariances_source: covariances_target.as_texture(),
-                    covariances_target,
                 };
 
                 NodeSlots::new_io(slot_b.take_output(), output_slot)
