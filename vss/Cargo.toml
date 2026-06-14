@@ -10,10 +10,10 @@ resolver = "2"
 cgmath = { workspace = true }
 raw-window-handle = { workspace = true }
 wgpu = { workspace = true }
-egui = "0.32"
-egui-wgpu = "0.32"
+egui = "0.34"
+egui-wgpu = "0.34"
 image = "0.25"
-bitflags = "2.9"
+bitflags = "2.13"
 futures-intrusive = "0.5"
 serde_json = "*"
 serde = "1"

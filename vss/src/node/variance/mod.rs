@@ -157,7 +157,7 @@ impl VarianceMeasure {
             sender.send(v).unwrap();
         });
 
-        let _ = device.poll(wgpu::MaintainBase::Wait);
+        let _ = device.poll(wgpu::PollType::wait_indefinitely());
 
         let padded_buffer = buffer_slice.get_mapped_range();
 
@@ -318,6 +318,7 @@ impl Node for VarianceMeasure {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             render_pass.set_pipeline(&self.color_measurement_pipeline);
@@ -341,6 +342,7 @@ impl Node for VarianceMeasure {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             render_pass.set_pipeline(&self.metrics_ab_pipeline);
@@ -364,6 +366,7 @@ impl Node for VarianceMeasure {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             render_pass.set_pipeline(&self.metrics_cd_pipeline);

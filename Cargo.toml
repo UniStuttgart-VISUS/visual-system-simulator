@@ -12,6 +12,6 @@ members = [
 [workspace.dependencies]
 cgmath = "0.18"
 raw-window-handle = "0.6"
-wgpu = "25"
-wgpu-hal = "25"
+wgpu = "29"
+wgpu-hal = "29"
 winit = "0.30"

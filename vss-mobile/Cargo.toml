@@ -12,12 +12,12 @@ crate-type = ["cdylib"]
 wgpu = { workspace = true }
 raw-window-handle = { workspace = true }
 vss = { path = "../vss" }
-lazy_static = "1.4.0"
+lazy_static = "1.5.0"
 log = "0.4"
 futures = "0.3"
 
 [target.'cfg(target_os="android")'.dependencies]
-jni = "0.21"
+jni = "0.22"
 ndk = "0.9.0"
 ndk-sys = "0.6.0"
 android_logger = "0.15.1"

@@ -143,7 +143,7 @@ impl Flow {
             .find_map(|node| node.as_ui_mut().map(|ui_node| ui_node.begin_run()));
 
         if let Some((context, input)) = ui_tuple {
-            let full_output = context.run(input, |ctx| {
+            let full_output = context.run_ui(input, |ctx| {
                 egui::Window::new("Inspector").show(ctx, |ui| {
                     egui::Grid::new("inspector_grid")
                         .num_columns(2)

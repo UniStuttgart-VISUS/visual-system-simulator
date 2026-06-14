@@ -3,7 +3,7 @@ use instant::Instant;
 use std::cell::Cell;
 use std::iter;
 use std::rc::Rc;
-use wgpu::{self, SurfaceError, SurfaceTexture};
+use wgpu::{self, CurrentSurfaceTexture};
 
 /// Represents a rendering surface and its associated [Flow].
 pub struct Surface<'window> {
@@ -67,9 +67,9 @@ impl<'window> Surface<'window> {
     ) -> Self {
         let instance = if cfg!(target_os = "windows") {
             // Use Vulkan for consistency with Varjo/OpenXR builds on windows.
-            wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            wgpu::Instance::new(wgpu::InstanceDescriptor {
                 backends: wgpu::Backends::VULKAN,
-                ..wgpu::InstanceDescriptor::from_env_or_default()
+                ..wgpu::InstanceDescriptor::new_without_display_handle_from_env()
             })
         } else {
             wgpu::Instance::default()
@@ -96,6 +96,7 @@ impl<'window> Surface<'window> {
                     } else {
                         wgpu::Limits::default()
                     },
+                    experimental_features: wgpu::ExperimentalFeatures::disabled(),
                     trace: wgpu::Trace::Off,
                     memory_hints: wgpu::MemoryHints::Performance,
                 })
@@ -205,12 +206,16 @@ impl<'window> Surface<'window> {
         self.surface_size[1]
     }
 
-    pub fn get_current_texture(&self) -> Result<SurfaceTexture, SurfaceError> {
+    pub fn get_current_texture(&self) -> CurrentSurfaceTexture {
         self.surface.get_current_texture()
     }
 
     pub fn draw(&self) {
-        let output = self.get_current_texture().unwrap();
+        let output = match self.get_current_texture() {
+            CurrentSurfaceTexture::Success(output)
+            | CurrentSurfaceTexture::Suboptimal(output) => output,
+            other => panic!("Failed to acquire surface texture: {other:?}"),
+        };
 
         let view = output
             .texture

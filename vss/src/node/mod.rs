@@ -235,8 +235,8 @@ pub fn metrics_cd_color_states() -> [Option<ColorTargetState>; 2] {
 pub fn simple_depth_state(format: wgpu::TextureFormat) -> Option<DepthStencilState> {
     Some(DepthStencilState {
         format,
-        depth_write_enabled: true,
-        depth_compare: wgpu::CompareFunction::Less,
+        depth_write_enabled: Some(true),
+        depth_compare: Some(wgpu::CompareFunction::Less),
         stencil: wgpu::StencilState::default(),
         bias: wgpu::DepthBiasState::default(),
     })
@@ -251,10 +251,12 @@ pub fn create_render_pipeline(
     depth_tagret: Option<DepthStencilState>,
     label: Option<&str>,
 ) -> RenderPipeline {
+    let bind_group_layouts: Vec<Option<&BindGroupLayout>> =
+        bind_group_layouts.iter().copied().map(Some).collect();
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label,
-        bind_group_layouts,
-        push_constant_ranges: &[],
+        bind_group_layouts: &bind_group_layouts,
+        immediate_size: 0,
     });
 
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -291,9 +293,7 @@ pub fn create_render_pipeline(
             mask: !0,
             alpha_to_coverage_enabled: false,
         },
-        // If the pipeline will be used with a multiview render pass, this
-        // indicates how many array layers the attachments will have.
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     })
 }

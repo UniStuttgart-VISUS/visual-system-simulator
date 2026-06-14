@@ -174,6 +174,7 @@ impl Node for PeacockCB {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             render_pass.set_pipeline(&self.color_pipeline);
@@ -196,6 +197,7 @@ impl Node for PeacockCB {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             render_pass.set_pipeline(&self.metrics_ab_pipeline);
@@ -218,6 +220,7 @@ impl Node for PeacockCB {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             render_pass.set_pipeline(&self.metrics_cd_pipeline);

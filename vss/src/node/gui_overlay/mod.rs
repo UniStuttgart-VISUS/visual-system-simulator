@@ -61,7 +61,11 @@ impl GuiOverlay {
             size_in_pixels: [1, 1],
             pixels_per_point: 0.0,
         };
-        let egui_renderer = egui_wgpu::Renderer::new(device, COLOR_FORMAT, None, 1, true);
+        let egui_renderer = egui_wgpu::Renderer::new(
+            device,
+            COLOR_FORMAT,
+            egui_wgpu::RendererOptions::default(),
+        );
 
         GuiOverlay {
             pipeline,
@@ -190,6 +194,7 @@ impl Node for GuiOverlay {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             render_pass.set_pipeline(&self.pipeline);

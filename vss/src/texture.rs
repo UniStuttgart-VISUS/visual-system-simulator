@@ -343,6 +343,7 @@ impl RenderTexture {
     ) -> Option<wgpu::RenderPassColorAttachment<'_>> {
         Some(wgpu::RenderPassColorAttachment {
             view: self.view.as_ref(),
+            depth_slice: None,
             resolve_target: None,
             ops: wgpu::Operations {
                 load: if let Some(clear_color) = clear {
@@ -678,7 +679,7 @@ pub fn create_sampler_linear(device: &wgpu::Device) -> Sampler {
         address_mode_w: wgpu::AddressMode::ClampToEdge,
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Linear,
-        mipmap_filter: wgpu::FilterMode::Linear,
+        mipmap_filter: wgpu::MipmapFilterMode::Linear,
         ..Default::default()
     });
 
@@ -696,7 +697,7 @@ pub fn create_sampler_nearest(device: &wgpu::Device) -> Sampler {
         address_mode_w: wgpu::AddressMode::ClampToEdge,
         mag_filter: wgpu::FilterMode::Nearest,
         min_filter: wgpu::FilterMode::Nearest,
-        mipmap_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::MipmapFilterMode::Nearest,
         ..Default::default()
     });
 

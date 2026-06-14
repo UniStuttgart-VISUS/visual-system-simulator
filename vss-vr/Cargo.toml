@@ -18,7 +18,7 @@ simple-logging = "2.0.2"
 log = "0.4"
 
 [build-dependencies]
-cc = "^1.2.29"
+cc = "^1.2.64"
 
 [features]
 openxr = []
