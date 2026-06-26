@@ -457,7 +457,7 @@ impl Runtime {
         let mut session_running = false;
         let mut frame = 0usize;
 
-        for _ in 0..600 {
+        loop {
             while let Some(event) = instance
                 .poll_event(&mut event_storage)
                 .map_err(RuntimeError::OpenXr)?
@@ -558,8 +558,6 @@ impl Runtime {
                 .map_err(RuntimeError::OpenXr)?;
             frame = (frame + 1) % PIPELINE_DEPTH as usize;
         }
-
-        Ok(())
     }
 
     #[cfg(target_vendor = "apple")]
@@ -680,7 +678,7 @@ impl Runtime {
         let mut session_running = false;
         let mut frame = 0usize;
 
-        for _ in 0..600 {
+        'frames: loop {
             while let Some(event) = instance
                 .poll_event(&mut event_storage)
                 .map_err(RuntimeError::OpenXr)?
@@ -695,28 +693,10 @@ impl Runtime {
                             session.end().map_err(RuntimeError::OpenXr)?;
                             session_running = false;
                         }
-                        xr::SessionState::EXITING | xr::SessionState::LOSS_PENDING => {
-                            self.destroy_vulkan_frame_resources(
-                                vulkan,
-                                render_pass,
-                                command_pool,
-                                fences,
-                                swapchain,
-                            );
-                            return Ok(());
-                        }
+                        xr::SessionState::EXITING | xr::SessionState::LOSS_PENDING => break 'frames,
                         _ => {}
                     },
-                    xr::Event::InstanceLossPending(_) => {
-                        self.destroy_vulkan_frame_resources(
-                            vulkan,
-                            render_pass,
-                            command_pool,
-                            fences,
-                            swapchain,
-                        );
-                        return Ok(());
-                    }
+                    xr::Event::InstanceLossPending(_) => break 'frames,
                     _ => {}
                 }
             }
