@@ -301,7 +301,7 @@ impl NodeSlots {
         }
     }
 
-    pub fn to_color_input(self, _surface: &Surface) -> Self {
+    pub fn to_color_input(self, _context: &RenderContext) -> Self {
         match self.input {
             Slot::Empty => panic!("Input expected"),
             Slot::Color { .. } | Slot::ColorMetrics { .. } => self,
@@ -324,7 +324,7 @@ impl NodeSlots {
         }
     }
 
-    pub fn to_color_depth_input(self, _surface: &Surface) -> Self {
+    pub fn to_color_depth_input(self, _context: &RenderContext) -> Self {
         match self.input {
             Slot::ColorDepth { .. } | Slot::ColorDepthMetrics { .. } => self,
             Slot::Empty | Slot::Color { .. } | Slot::ColorMetrics { .. } => {
@@ -333,7 +333,7 @@ impl NodeSlots {
         }
     }
 
-    pub fn to_color_metrics_input(self, _surface: &Surface) -> Self {
+    pub fn to_color_metrics_input(self, _context: &RenderContext) -> Self {
         match self.input {
             Slot::Empty => panic!("Input expected"),
             Slot::Color { .. } | Slot::ColorMetrics { .. } => self,
@@ -378,7 +378,7 @@ impl NodeSlots {
         }
     }
 
-    pub fn to_color_depth_metrics_input(self, _surface: &Surface) -> Self {
+    pub fn to_color_depth_metrics_input(self, _context: &RenderContext) -> Self {
         match self.input {
             Slot::ColorDepth { .. } | Slot::ColorDepthMetrics { .. } => self,
             Slot::Empty | Slot::Color { .. } | Slot::ColorMetrics { .. } => {
@@ -387,11 +387,11 @@ impl NodeSlots {
         }
     }
 
-    pub fn to_color_output(self, surface: &Surface, node_name: &str) -> Self {
+    pub fn to_color_output(self, context: &RenderContext, node_name: &str) -> Self {
         match self.output {
             Slot::Empty => {
                 let (width, height) = self.input_dimensions();
-                let device = surface.device();
+                let device = context.device();
                 let color_target = RenderTexture::create_color(
                     device,
                     width,
@@ -431,11 +431,11 @@ impl NodeSlots {
         }
     }
 
-    pub fn to_color_depth_output(self, surface: &Surface, node_name: &str) -> Self {
+    pub fn to_color_depth_output(self, context: &RenderContext, node_name: &str) -> Self {
         match self.output {
             Slot::Empty => {
                 let (width, height) = self.input_dimensions();
-                let device = surface.device();
+                let device = context.device();
                 let color_target = RenderTexture::create_color(
                     device,
                     width,
@@ -473,7 +473,7 @@ impl NodeSlots {
                 color_target,
                 ..
             } => {
-                let device = surface.device();
+                let device = context.device();
                 let depth_target = RenderTexture::create_depth(
                     device,
                     color_target.width,
@@ -493,7 +493,7 @@ impl NodeSlots {
         }
     }
 
-    pub fn to_color_metrics_output(self, surface: &Surface, node_name: &str) -> Self {
+    pub fn to_color_metrics_output(self, context: &RenderContext, node_name: &str) -> Self {
         match self.output {
             Slot::ColorMetrics { .. } => self,
             Slot::ColorDepthMetrics {
@@ -525,7 +525,7 @@ impl NodeSlots {
             },
             _ => {
                 let (width, height) = self.input_dimensions();
-                let device = surface.device();
+                let device = context.device();
                 let color_target = RenderTexture::create_color(
                     device,
                     width,
@@ -558,12 +558,12 @@ impl NodeSlots {
         }
     }
 
-    pub fn to_color_depth_metrics_output(self, surface: &Surface, node_name: &str) -> Self {
+    pub fn to_color_depth_metrics_output(self, context: &RenderContext, node_name: &str) -> Self {
         match self.output {
             Slot::ColorDepthMetrics { .. } => self,
             _ => {
                 let (width, height) = self.input_dimensions();
-                let device = surface.device();
+                let device = context.device();
                 let color_target = RenderTexture::create_color(
                     device,
                     width,
@@ -610,12 +610,12 @@ impl NodeSlots {
 
     pub fn emplace_color_output(
         self,
-        surface: &Surface,
+        context: &RenderContext,
         width: u32,
         height: u32,
         node_name: &str,
     ) -> Self {
-        let device = surface.device();
+        let device = context.device();
         let color_target = RenderTexture::create_color(
             device,
             width,
@@ -633,12 +633,12 @@ impl NodeSlots {
 
     pub fn emplace_color_depth_output(
         self,
-        surface: &Surface,
+        context: &RenderContext,
         width: u32,
         height: u32,
         node_name: &str,
     ) -> Self {
-        let device = surface.device();
+        let device = context.device();
         let color_target = RenderTexture::create_color(
             device,
             width,

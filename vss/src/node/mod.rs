@@ -56,7 +56,7 @@ pub trait Node {
     /// possibly re-using suggested `slots` (for efficiency).
     fn negociate_slots(
         &mut self,
-        surface: &Surface,
+        context: &RenderContext,
         slots: NodeSlots,
         original_image: &mut Option<Texture>,
     ) -> NodeSlots;
@@ -74,14 +74,14 @@ pub trait Node {
     /// Issue render commands for the node.
     fn render(
         &mut self,
-        surface: &Surface,
+        context: &RenderContext,
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     );
 
     /// Invoked after all rendering commands have completed. (TODO: rename to on_frame_complete)
     #[allow(unused_variables)]
-    fn post_render(&mut self, surface: &Surface) {}
+    fn post_render(&mut self, context: &RenderContext) {}
 
     fn as_ui_mut(&mut self) -> Option<&'_ mut GuiOverlay> {
         None
@@ -99,12 +99,12 @@ impl Node for Box<dyn Node> {
 
     fn negociate_slots(
         &mut self,
-        surface: &Surface,
+        context: &RenderContext,
         slots: NodeSlots,
         original_image: &mut Option<Texture>,
     ) -> NodeSlots {
         self.as_mut()
-            .negociate_slots(surface, slots, original_image)
+            .negociate_slots(context, slots, original_image)
     }
 
     fn inspect(&mut self, inspector: &dyn Inspector) {
@@ -116,17 +116,17 @@ impl Node for Box<dyn Node> {
     }
     fn render(
         &mut self,
-        surface: &Surface,
+        context: &RenderContext,
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        self.as_mut().render(surface, encoder, screen);
+        self.as_mut().render(context, encoder, screen);
     }
 
     /// Invoked after all rendering commands have completed. (TODO: rename to on_frame_complete)
     #[allow(unused_variables)]
-    fn post_render(&mut self, surface: &Surface) {
-        self.as_mut().post_render(surface);
+    fn post_render(&mut self, context: &RenderContext) {
+        self.as_mut().post_render(context);
     }
 
     fn as_ui_mut(&mut self) -> Option<&'_ mut GuiOverlay> {

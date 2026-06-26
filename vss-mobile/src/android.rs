@@ -42,8 +42,8 @@ struct CameraStream {
 }
 
 impl CameraStream {
-    fn new(surface: &Surface, frame_receiver: Receiver<YuvBuffer>) -> Self {
-        let mut upload = UploadYuvBuffer::new(surface);
+    fn new(context: &RenderContext, frame_receiver: Receiver<YuvBuffer>) -> Self {
+        let mut upload = UploadYuvBuffer::new(context);
         upload.set_format(YuvFormat::_420888);
         CameraStream {
             upload,
@@ -59,11 +59,11 @@ impl Node for CameraStream {
 
     fn negociate_slots(
         &mut self,
-        surface: &Surface,
+        context: &RenderContext,
         slots: NodeSlots,
         original_image: &mut Option<Texture>,
     ) -> NodeSlots {
-        self.upload.negociate_slots(surface, slots, original_image)
+        self.upload.negociate_slots(context, slots, original_image)
     }
 
     fn inspect(&mut self, inspector: &dyn Inspector) {
@@ -81,15 +81,15 @@ impl Node for CameraStream {
 
     fn render(
         &mut self,
-        surface: &Surface,
+        context: &RenderContext,
         encoder: &mut wgpu::CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        self.upload.render(surface, encoder, screen);
+        self.upload.render(context, encoder, screen);
     }
 
-    fn post_render(&mut self, surface: &Surface) {
-        self.upload.post_render(surface);
+    fn post_render(&mut self, context: &RenderContext) {
+        self.upload.post_render(context);
     }
 }
 

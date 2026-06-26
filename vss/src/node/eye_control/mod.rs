@@ -13,7 +13,7 @@ pub struct EyeControl {
 }
 
 impl EyeControl {
-    pub fn new(_surface: &Surface) -> Self {
+    pub fn new(_context: &RenderContext) -> Self {
         EyeControl {
             configured_view: Matrix4::from_scale(1.0),
             eye_axis_rot_x: 0.0,
@@ -30,7 +30,7 @@ impl Node for EyeControl {
 
     fn negociate_slots(
         &mut self,
-        _surface: &Surface,
+        _context: &RenderContext,
         slots: NodeSlots,
         _original_image: &mut Option<Texture>,
     ) -> NodeSlots {
@@ -74,7 +74,7 @@ impl Node for EyeControl {
 
     fn render(
         &mut self,
-        _surface: &Surface,
+        _context: &RenderContext,
         _encoder: &mut CommandEncoder,
         _screen: Option<&RenderTexture>,
     ) {

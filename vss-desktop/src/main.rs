@@ -2,8 +2,8 @@ mod cmd;
 mod io;
 mod node;
 
-#[cfg(feature = "openxr")]
-mod openxr;
+//#[cfg(feature = "openxr")]
+//mod openxr;
 
 use std::io::Cursor;
 use std::time::Instant;

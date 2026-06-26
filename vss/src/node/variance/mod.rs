@@ -35,9 +35,9 @@ pub struct VarianceMeasure {
 }
 
 impl VarianceMeasure {
-    pub fn new(surface: &Surface) -> Self {
-        let device = surface.device();
-        let queue = surface.queue();
+    pub fn new(context: &RenderContext) -> Self {
+        let device = context.device();
+        let queue = context.queue();
 
         let uniforms = ShaderUniforms::new(
             device,
@@ -146,8 +146,8 @@ impl VarianceMeasure {
         }
     }
 
-    fn measure_variance(&mut self, surface: &Surface) -> (f32, f32) {
-        let device = surface.device();
+    fn measure_variance(&mut self, context: &RenderContext) -> (f32, f32) {
+        let device = context.device();
 
         // Note that we're not calling `.await` here.
         let buffer_slice = self.download_buffer.slice(..);
@@ -245,17 +245,17 @@ impl Node for VarianceMeasure {
 
     fn negociate_slots(
         &mut self,
-        surface: &Surface,
+        context: &RenderContext,
         slots: NodeSlots,
         _original_image: &mut Option<Texture>,
     ) -> NodeSlots {
         let slots = slots
-            .to_color_metrics_input(surface)
-            .to_color_metrics_output(surface, "VarianceNode");
+            .to_color_metrics_input(context)
+            .to_color_metrics_output(context, "VarianceNode");
         self.uniforms.data.resolution = slots.output_size_f32();
 
-        let device = surface.device();
-        let queue = surface.queue();
+        let device = context.device();
+        let queue = context.queue();
 
         self.sources_bind_group = slots.as_all_colors_source(device, queue);
         self.targets = slots.as_all_colors_target();
@@ -294,11 +294,11 @@ impl Node for VarianceMeasure {
 
     fn render(
         &mut self,
-        surface: &surface::Surface,
+        context: &RenderContext,
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        self.uniforms.upload(surface.queue());
+        self.uniforms.upload(context.queue());
 
         self.uniforms.data.track_error = self.track_error as i32;
         self.uniforms.data.show_variance = self.measure_variance;
@@ -402,9 +402,9 @@ impl Node for VarianceMeasure {
         }
     }
 
-    fn post_render(&mut self, surface: &Surface) {
+    fn post_render(&mut self, context: &RenderContext) {
         if self.should_download {
-            let (sum, avg) = self.measure_variance(surface);
+            let (sum, avg) = self.measure_variance(context);
             self.download_buffer.unmap();
             self.should_download = false;
             if self.uniforms.data.variance_metric == 6 {

@@ -33,8 +33,8 @@ pub struct UploadVideo {
 }
 
 impl UploadVideo {
-    pub fn new(surface: &Surface) -> Self {
-        let mut uploader = UploadRgbBuffer::new(surface);
+    pub fn new(context: &RenderContext) -> Self {
+        let mut uploader = UploadRgbBuffer::new(context);
         uploader.set_flags(RgbInputFlags::VERTICALLY_FLIPPED);
         Self {
             upload_start: None,
@@ -228,13 +228,13 @@ impl Node for UploadVideo {
 
     fn negociate_slots(
         &mut self,
-        surface: &Surface,
+        context: &RenderContext,
         slots: NodeSlots,
         original_image: &mut Option<Texture>,
     ) -> NodeSlots {
         self.validate_data();
         self.uploader
-            .negociate_slots(surface, slots, original_image)
+            .negociate_slots(context, slots, original_image)
     }
 
     fn inspect(&mut self, inspector: &dyn Inspector) {
@@ -247,11 +247,11 @@ impl Node for UploadVideo {
 
     fn render(
         &mut self,
-        surface: &Surface,
+        context: &RenderContext,
         encoder: &mut wgpu::CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
         self.validate_data();
-        self.uploader.render(surface, encoder, screen)
+        self.uploader.render(context, encoder, screen)
     }
 }

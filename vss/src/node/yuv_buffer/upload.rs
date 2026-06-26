@@ -37,9 +37,9 @@ pub struct UploadYuvBuffer {
 }
 
 impl UploadYuvBuffer {
-    pub fn new(surface: &Surface) -> Self {
-        let device = surface.device();
-        let queue = surface.queue();
+    pub fn new(context: &RenderContext) -> Self {
+        let device = context.device();
+        let queue = context.queue();
 
         let uniforms = ShaderUniforms::new(
             device,
@@ -143,13 +143,13 @@ impl Node for UploadYuvBuffer {
 
     fn negociate_slots(
         &mut self,
-        surface: &Surface,
+        context: &RenderContext,
         slots: NodeSlots,
         original_image: &mut Option<Texture>,
     ) -> NodeSlots {
         if let Some(buffer) = &self.buffer_next {
-            let device = surface.device();
-            let queue = surface.queue();
+            let device = context.device();
+            let queue = context.queue();
             let (size_y, size_u, size_v) =
                 UploadYuvBuffer::get_formatted_sizes(self.format, buffer.width, buffer.height);
 
@@ -202,7 +202,7 @@ impl Node for UploadYuvBuffer {
             height = texture_y.height();
         }
 
-        let slots = slots.emplace_color_depth_output(surface, height, width, "UploadYuvBuffer");
+        let slots = slots.emplace_color_depth_output(context, height, width, "UploadYuvBuffer");
         self.targets = slots.as_color_depth_targets();
 
         let (color_out, _) = slots.as_color_depth_target();
@@ -213,11 +213,11 @@ impl Node for UploadYuvBuffer {
 
     fn render(
         &mut self,
-        surface: &Surface,
+        context: &RenderContext,
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        let queue = surface.queue();
+        let queue = context.queue();
         self.uniforms.upload(queue);
 
         if let (Some(texture_y), Some(texture_u), Some(texture_v)) =

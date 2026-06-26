@@ -4,7 +4,7 @@ use super::*;
 pub struct Passthrough;
 
 impl Passthrough {
-    pub fn new(_surface: &Surface) -> Self {
+    pub fn new(_context: &RenderContext) -> Self {
         Passthrough {}
     }
 }
@@ -16,7 +16,7 @@ impl Node for Passthrough {
 
     fn negociate_slots(
         &mut self,
-        _surface: &Surface,
+        _context: &RenderContext,
         slots: NodeSlots,
         _original_image: &mut Option<Texture>,
     ) -> NodeSlots {
@@ -25,7 +25,7 @@ impl Node for Passthrough {
 
     fn render(
         &mut self,
-        _surface: &Surface,
+        _context: &RenderContext,
         _encoder: &mut CommandEncoder,
         _screen: Option<&RenderTexture>,
     ) {

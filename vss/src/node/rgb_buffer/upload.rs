@@ -68,9 +68,9 @@ pub struct UploadRgbBuffer {
 }
 
 impl UploadRgbBuffer {
-    pub fn new(surface: &Surface) -> Self {
-        let device = surface.device();
-        let queue = surface.queue();
+    pub fn new(context: &RenderContext) -> Self {
+        let device = context.device();
+        let queue = context.queue();
 
         let uniforms = ShaderUniforms::new(
             device,
@@ -184,13 +184,13 @@ impl Node for UploadRgbBuffer {
 
     fn negociate_slots(
         &mut self,
-        surface: &Surface,
+        context: &RenderContext,
         slots: NodeSlots,
         original_image: &mut Option<Texture>,
     ) -> NodeSlots {
         if self.buffer_upload {
-            let device = surface.device();
-            let queue = surface.queue();
+            let device = context.device();
+            let queue = context.queue();
             let sampler = create_sampler_linear(device);
             let texture = load_texture_from_bytes(
                 device,
@@ -219,8 +219,8 @@ impl Node for UploadRgbBuffer {
                     output_scale,
                     input_scale,
                 } => {
-                    let mut screen_w = surface.width() as f32;
-                    let mut screen_h = surface.height() as f32;
+                    let mut screen_w = context.width() as f32;
+                    let mut screen_h = context.height() as f32;
                     let tex_aspect_ratio = tex_w / tex_h;
                     let screen_aspect_ratio = screen_w / screen_h;
                     match output_scale {
@@ -256,7 +256,7 @@ impl Node for UploadRgbBuffer {
             (1, 1)
         };
 
-        let slots = slots.emplace_color_depth_output(surface, width, height, "UploadNode");
+        let slots = slots.emplace_color_depth_output(context, width, height, "UploadNode");
         self.targets = slots.as_color_depth_targets();
 
         let (color_out, _) = slots.as_color_depth_target();
@@ -276,11 +276,11 @@ impl Node for UploadRgbBuffer {
 
     fn render(
         &mut self,
-        surface: &Surface,
+        context: &RenderContext,
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        let queue = surface.queue();
+        let queue = context.queue();
         self.uniforms.upload(queue);
 
         if let Some(texture) = &self.texture {

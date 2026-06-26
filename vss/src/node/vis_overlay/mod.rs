@@ -85,9 +85,9 @@ pub struct VisOverlay {
 }
 
 impl VisOverlay {
-    pub fn new(surface: &Surface) -> Self {
-        let device = surface.device();
-        let queue = surface.queue();
+    pub fn new(context: &RenderContext) -> Self {
+        let device = context.device();
+        let queue = context.queue();
 
         let uniforms = ShaderUniforms::new(
             device,
@@ -171,15 +171,15 @@ impl Node for VisOverlay {
 
     fn negociate_slots(
         &mut self,
-        surface: &Surface,
+        context: &RenderContext,
         slots: NodeSlots,
         original_image: &mut Option<Texture>,
     ) -> NodeSlots {
         let slots = slots
-            .to_color_metrics_input(surface)
-            .to_color_output(surface, "VisOverlayNode");
-        let device = surface.device();
-        let queue = surface.queue();
+            .to_color_metrics_input(context)
+            .to_color_output(context, "VisOverlayNode");
+        let device = context.device();
+        let queue = context.queue();
 
         self.uniforms.data.resolution_in = slots.input_size_f32();
 
@@ -242,7 +242,7 @@ impl Node for VisOverlay {
 
     fn render(
         &mut self,
-        surface: &Surface,
+        context: &RenderContext,
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
@@ -260,15 +260,15 @@ impl Node for VisOverlay {
         self.uniforms.data.colormap_type = self.vis_type.color_map_type as i32;
 
         self.hive_rot =
-            self.hive_rot * Matrix4::from_angle_x(Rad(speed * surface.delta_t() / 1_000_000.0));
+            self.hive_rot * Matrix4::from_angle_x(Rad(speed * context.delta_t() / 1_000_000.0));
         self.hive_rot = self.hive_rot
-            * Matrix4::from_angle_y(Rad(0.7 * speed * surface.delta_t() / 1_000_000.0));
+            * Matrix4::from_angle_y(Rad(0.7 * speed * context.delta_t() / 1_000_000.0));
         self.hive_rot = self.hive_rot
-            * Matrix4::from_angle_z(Rad(0.2 * speed * surface.delta_t() / 1_000_000.0));
+            * Matrix4::from_angle_z(Rad(0.2 * speed * context.delta_t() / 1_000_000.0));
 
         self.uniforms.data.hive_rotation = self.hive_rot.into();
 
-        self.uniforms.upload(surface.queue());
+        self.uniforms.upload(context.queue());
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("VisOverlayNode render_pass"),

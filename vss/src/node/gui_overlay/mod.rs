@@ -21,9 +21,9 @@ pub struct GuiOverlay {
 }
 
 impl GuiOverlay {
-    pub fn new(surface: &Surface) -> Self {
-        let device = surface.device();
-        let queue = surface.queue();
+    pub fn new(context: &RenderContext) -> Self {
+        let device = context.device();
+        let queue = context.queue();
 
         let uniforms = ShaderUniforms::new(
             device,
@@ -61,11 +61,8 @@ impl GuiOverlay {
             size_in_pixels: [1, 1],
             pixels_per_point: 0.0,
         };
-        let egui_renderer = egui_wgpu::Renderer::new(
-            device,
-            COLOR_FORMAT,
-            egui_wgpu::RendererOptions::default(),
-        );
+        let egui_renderer =
+            egui_wgpu::Renderer::new(device, COLOR_FORMAT, egui_wgpu::RendererOptions::default());
 
         GuiOverlay {
             pipeline,
@@ -100,14 +97,14 @@ impl Node for GuiOverlay {
 
     fn negociate_slots(
         &mut self,
-        surface: &Surface,
+        context: &RenderContext,
         slots: NodeSlots,
         _original_image: &mut Option<Texture>,
     ) -> NodeSlots {
         let slots = slots
-            .to_color_input(surface)
-            .to_color_output(surface, "GuiOverlay");
-        let device = surface.device();
+            .to_color_input(context)
+            .to_color_output(context, "GuiOverlay");
+        let device = context.device();
 
         let output_size = slots.output_size_f32();
         self.uniforms.data.resolution_in = slots.input_size_f32();
@@ -152,7 +149,7 @@ impl Node for GuiOverlay {
 
     fn render(
         &mut self,
-        surface: &Surface,
+        context: &RenderContext,
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
@@ -160,8 +157,8 @@ impl Node for GuiOverlay {
             .egui_full_output
             .take()
             .expect("Run begin_run/end_run before render");
-        let device = surface.device();
-        let queue = surface.queue();
+        let device = context.device();
+        let queue = context.queue();
 
         self.uniforms.upload(queue);
 

@@ -32,7 +32,7 @@ impl IoGenerator {
 
     pub fn _next(
         &mut self,
-        surface: &Surface,
+        context: &RenderContext,
         render_resolution: Option<[u32; 2]>,
     ) -> Option<IoNodePair> {
         self.input_idx += 1;
@@ -41,12 +41,12 @@ impl IoGenerator {
         } else {
             RenderResolution::Buffer { input_scale: 1.0 } //TODO add input scaling
         };
-        self.current(surface, render_res, 0)
+        self.current(context, render_res, 0)
     }
 
     pub fn current(
         &mut self,
-        surface: &Surface,
+        context: &RenderContext,
         render_resolution: RenderResolution,
         flow_index: usize,
     ) -> Option<IoNodePair> {
@@ -56,14 +56,14 @@ impl IoGenerator {
             let input = &self.inputs[self.input_idx];
             if UploadRgbBuffer::has_image_extension(input) {
                 let input_path = std::path::Path::new(input);
-                let mut input_node = UploadRgbBuffer::new(surface);
+                let mut input_node = UploadRgbBuffer::new(context);
                 input_node.upload_image(load(input_path));
                 input_node.set_flags(
                     RgbInputFlags::from_extension(input) | RgbInputFlags::VERTICALLY_FLIPPED,
                 );
                 input_node.set_render_resolution(render_resolution);
                 let output_node = if let Some(output) = &self.output {
-                    let mut output_node = DownloadRgbBuffer::new(surface);
+                    let mut output_node = DownloadRgbBuffer::new(context);
                     let output_info = OutputInfo {
                         configname: self.config_name.clone(),
                         dirname: input_path
@@ -101,7 +101,7 @@ impl IoGenerator {
                 };
                 Some((Box::new(input_node), output_node))
             } else if UploadVideo::has_video_extension(input) {
-                let mut input_node = UploadVideo::new(surface);
+                let mut input_node = UploadVideo::new(context);
                 input_node.set_flags(RgbInputFlags::from_extension(input));
                 input_node.open(input).unwrap();
                 Some((Box::new(input_node), None))

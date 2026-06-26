@@ -1,20 +1,14 @@
 use crate::*;
-use instant::Instant;
-use std::cell::Cell;
 use std::iter;
+use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use wgpu::{self, CurrentSurfaceTexture};
 
-/// Represents a rendering surface and its associated [Flow].
+/// Represents a presentation surface and its associated [RenderContext].
 pub struct Surface<'window> {
     surface: wgpu::Surface<'window>,
-    surface_size: [u32; 2],
     surface_config: wgpu::SurfaceConfiguration,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-
-    pub flows: Vec<Flow>,
-    last_render_instant: Cell<Instant>,
+    render_context: RenderContext,
 }
 
 impl<'window> Surface<'window> {
@@ -45,18 +39,10 @@ impl<'window> Surface<'window> {
         };
         surface.configure(&device, &surface_config);
 
-        // Create flows.
-        let mut flows = Vec::new();
-        flows.resize_with(flow_count, Flow::new);
-
         Surface {
             surface,
-            surface_size,
             surface_config,
-            device,
-            queue,
-            flows,
-            last_render_instant: Cell::new(Instant::now()),
+            render_context: RenderContext::new(surface_size, flow_count, device, queue),
         }
     }
 
@@ -130,80 +116,19 @@ impl<'window> Surface<'window> {
         };
         surface.configure(&device, &surface_config);
 
-        // Create flows.
-        let mut flows = Vec::new();
-        flows.resize_with(flow_count, Flow::new);
-
         Surface {
             surface,
-            surface_size,
             surface_config,
-            device,
-            queue,
-            flows,
-            last_render_instant: Cell::new(Instant::now()),
+            render_context: RenderContext::new(surface_size, flow_count, device, queue),
         }
-    }
-
-    pub fn add_node(&mut self, node: Box<dyn Node>, flow_index: usize) {
-        self.flows[flow_index].add_node(node);
-    }
-
-    pub fn replace_node(&mut self, index: usize, node: Box<dyn Node>, flow_index: usize) {
-        self.flows[flow_index].replace_node(index, node);
     }
 
     pub fn resize(&mut self, new_size: [u32; 2]) {
-        assert!(new_size[0] > 0 && new_size[1] > 0, "Non-positive size");
-        self.surface_size = [new_size[0], new_size[1]];
+        self.render_context.resize(new_size);
         self.surface_config.width = new_size[0];
         self.surface_config.height = new_size[1];
-        self.surface.configure(&self.device, &self.surface_config);
-    }
-
-    pub fn delta_t(&self) -> f32 {
-        self.last_render_instant.get().elapsed().as_micros() as f32
-    }
-
-    pub fn nodes_lens(&self) -> Vec<usize> {
-        self.flows.iter().map(|flow| flow.nodes_len()).collect()
-    }
-
-    pub fn validate_slots(&self) -> bool {
-        let mut result = true;
-        for flow in self.flows.iter() {
-            // Test every flow (do not short-circuit).
-            result = result && flow.validate_slots()
-        }
-        result
-    }
-
-    pub fn negociate_slots(&self) {
-        for flow in self.flows.iter() {
-            flow.negociate_slots(self);
-        }
-    }
-
-    pub fn inspect(&self, inspector: &mut dyn Inspector) {
-        for (i, flow) in self.flows.iter().enumerate() {
-            inspector.flow(i, flow);
-        }
-    }
-
-    pub fn device(&self) -> &wgpu::Device {
-        &self.device
-    }
-
-    pub fn queue(&self) -> &wgpu::Queue {
-        &self.queue
-    }
-
-    pub fn width(&self) -> u32 {
-        self.surface_size[0]
-    }
-
-    pub fn height(&self) -> u32 {
-        self.surface_size[1]
+        self.surface
+            .configure(self.render_context.device(), &self.surface_config);
     }
 
     pub fn get_current_texture(&self) -> CurrentSurfaceTexture {
@@ -212,8 +137,9 @@ impl<'window> Surface<'window> {
 
     pub fn draw(&self) {
         let output = match self.get_current_texture() {
-            CurrentSurfaceTexture::Success(output)
-            | CurrentSurfaceTexture::Suboptimal(output) => output,
+            CurrentSurfaceTexture::Success(output) | CurrentSurfaceTexture::Suboptimal(output) => {
+                output
+            }
             other => panic!("Failed to acquire surface texture: {other:?}"),
         };
 
@@ -221,31 +147,45 @@ impl<'window> Surface<'window> {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        let sampler = create_sampler_linear(&(self.device));
+        let sampler = create_sampler_linear(self.render_context.device());
 
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
-            });
+        let mut encoder =
+            self.render_context
+                .device()
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Render Encoder"),
+                });
 
         let render_texture = RenderTexture {
             texture: None,
             view: Rc::new(view),
             sampler: Rc::new(sampler),
             view_dimension: wgpu::TextureViewDimension::D2,
-            width: self.width(),
-            height: self.height(),
+            width: self.render_context.width(),
+            height: self.render_context.height(),
             label: "surface render texture".to_string(),
         };
 
-        self.flows
-            .iter()
-            .for_each(|f| f.render(self, &mut encoder, &render_texture));
+        self.render_context.render(&mut encoder, &render_texture);
 
-        self.queue.submit(iter::once(encoder.finish()));
+        self.render_context
+            .queue()
+            .submit(iter::once(encoder.finish()));
         output.present();
-        self.flows.iter().for_each(|f| f.post_render(self));
-        self.last_render_instant.replace(Instant::now());
+        self.render_context.post_render();
+    }
+}
+
+impl Deref for Surface<'_> {
+    type Target = RenderContext;
+
+    fn deref(&self) -> &Self::Target {
+        &self.render_context
+    }
+}
+
+impl DerefMut for Surface<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.render_context
     }
 }

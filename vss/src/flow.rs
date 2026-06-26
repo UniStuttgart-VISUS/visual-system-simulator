@@ -65,7 +65,7 @@ impl Flow {
         result
     }
 
-    pub fn negociate_slots(&self, surface: &Surface) {
+    pub fn negociate_slots(&self, context: &RenderContext) {
         let mut slot_a = NodeSlots::new();
         let mut slot_b = NodeSlots::new();
         let mut original_image: Option<Texture> = None;
@@ -73,10 +73,10 @@ impl Flow {
         for (idx, node) in self.nodes.borrow_mut().iter_mut().enumerate() {
             let suggested_slot = if idx + 1 == nodes_len {
                 // Suggest window as final output.
-                let device = surface.device();
+                let device = context.device();
 
-                let width = surface.width();
-                let height = surface.height();
+                let width = context.width();
+                let height = context.height();
 
                 let color_target = RenderTexture::create_color(
                     device,
@@ -96,7 +96,7 @@ impl Flow {
                 NodeSlots::new_io(slot_b.take_output(), slot_a.take_output())
             };
             // Negociate and swap.
-            slot_a = node.negociate_slots(surface, suggested_slot, &mut original_image);
+            slot_a = node.negociate_slots(context, suggested_slot, &mut original_image);
             std::mem::swap(&mut slot_a, &mut slot_b);
         }
     }
@@ -116,7 +116,12 @@ impl Flow {
         }
     }
 
-    pub fn render(&self, surface: &Surface, encoder: &mut CommandEncoder, screen: &RenderTexture) {
+    pub fn render(
+        &self,
+        context: &RenderContext,
+        encoder: &mut CommandEncoder,
+        screen: &RenderTexture,
+    ) {
         // Update UI if present.
         self.update_ui();
 
@@ -124,7 +129,7 @@ impl Flow {
         let last_index = self.nodes.borrow_mut().len() - 1;
         for (idx, node) in self.nodes.borrow_mut().iter_mut().enumerate() {
             node.render(
-                surface,
+                context,
                 encoder,
                 if idx == last_index {
                     Some(screen)
@@ -166,9 +171,9 @@ impl Flow {
         }
     }
 
-    pub fn post_render(&self, surface: &Surface) {
+    pub fn post_render(&self, context: &RenderContext) {
         for node in self.nodes.borrow_mut().iter_mut() {
-            node.post_render(surface);
+            node.post_render(context);
         }
     }
 }

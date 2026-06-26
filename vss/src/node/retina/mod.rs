@@ -35,9 +35,9 @@ pub struct Retina {
 }
 
 impl Retina {
-    pub fn new(surface: &Surface) -> Self {
-        let device = surface.device();
-        let queue = surface.queue();
+    pub fn new(context: &RenderContext) -> Self {
+        let device = context.device();
+        let queue = context.queue();
 
         let uniforms = ShaderUniforms::new(
             device,
@@ -141,13 +141,13 @@ impl Retina {
         }
     }
 
-    fn validate_map(&mut self, surface: &Surface) {
+    fn validate_map(&mut self, context: &RenderContext) {
         if self.map_valid {
             return;
         }
 
-        let device = surface.device();
-        let queue = surface.queue();
+        let device = context.device();
+        let queue = context.queue();
 
         let mut image_data = Vec::new();
         if !self.retina_map_pos_x_path.is_empty() {
@@ -255,17 +255,17 @@ impl Node for Retina {
 
     fn negociate_slots(
         &mut self,
-        surface: &Surface,
+        context: &RenderContext,
         slots: NodeSlots,
         _original_image: &mut Option<Texture>,
     ) -> NodeSlots {
         let slots = slots
-            .to_color_metrics_input(surface)
-            .to_color_metrics_output(surface, "RetinaNode");
+            .to_color_metrics_input(context)
+            .to_color_metrics_output(context, "RetinaNode");
         self.uniforms.data.resolution = slots.output_size_f32();
 
-        let device = surface.device();
-        let queue = surface.queue();
+        let device = context.device();
+        let queue = context.queue();
 
         self.sources_bind_group = slots.as_all_colors_source(device, queue);
         self.targets = slots.as_all_colors_target();
@@ -313,13 +313,13 @@ impl Node for Retina {
 
     fn render(
         &mut self,
-        surface: &Surface,
+        context: &RenderContext,
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
         self.uniforms.data.track_error = self.track_error as i32;
-        self.uniforms.upload(surface.queue());
-        self.validate_map(surface);
+        self.uniforms.upload(context.queue());
+        self.validate_map(context);
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

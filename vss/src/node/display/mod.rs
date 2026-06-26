@@ -51,9 +51,9 @@ pub struct Display {
 }
 
 impl Display {
-    pub fn new(surface: &Surface) -> Self {
-        let device = surface.device();
-        let queue = surface.queue();
+    pub fn new(context: &RenderContext) -> Self {
+        let device = context.device();
+        let queue = context.queue();
 
         let uniforms = ShaderUniforms::new(
             device,
@@ -114,14 +114,14 @@ impl Node for Display {
 
     fn negociate_slots(
         &mut self,
-        surface: &Surface,
+        context: &RenderContext,
         slots: NodeSlots,
         _original_image: &mut Option<Texture>,
     ) -> NodeSlots {
         let slots = slots
-            .to_color_input(surface)
-            .to_color_output(surface, "DisplayNode");
-        let device = surface.device();
+            .to_color_input(context)
+            .to_color_output(context, "DisplayNode");
+        let device = context.device();
 
         self.uniforms.data.resolution_in = slots.input_size_f32();
         self.uniforms.data.resolution_out = slots.output_size_f32();
@@ -134,11 +134,11 @@ impl Node for Display {
 
     fn render(
         &mut self,
-        surface: &Surface,
+        context: &RenderContext,
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        self.uniforms.upload(surface.queue());
+        self.uniforms.upload(context.queue());
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("DisplayNode render_pass"),

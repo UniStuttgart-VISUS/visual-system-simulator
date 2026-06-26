@@ -18,7 +18,7 @@ pub struct DownloadRgbBuffer {
 }
 
 impl DownloadRgbBuffer {
-    pub fn new(surface: &Surface) -> Self {
+    pub fn new(context: &RenderContext) -> Self {
         let (tx, rx) = std::sync::mpsc::channel::<Message>();
         std::thread::spawn(move || {
             let mut callback: Option<RgbBufferCb> = None;
@@ -36,8 +36,8 @@ impl DownloadRgbBuffer {
             }
         });
 
-        let device = surface.device();
-        let queue = surface.queue();
+        let device = context.device();
+        let queue = context.queue();
 
         let buffer_dimensions = BufferDimensions::new(1, 1, size_of::<u32>());
 
@@ -95,13 +95,13 @@ impl Node for DownloadRgbBuffer {
 
     fn negociate_slots(
         &mut self,
-        surface: &Surface,
+        context: &RenderContext,
         slots: NodeSlots,
         _original_image: &mut Option<Texture>,
     ) -> NodeSlots {
-        let slots = slots.to_color_input(surface);
+        let slots = slots.to_color_input(context);
         self.res = slots.input_size_f32();
-        let device = surface.device();
+        let device = context.device();
 
         (self.input, _) = slots.as_color_source(device);
 
@@ -125,7 +125,7 @@ impl Node for DownloadRgbBuffer {
 
     fn render(
         &mut self,
-        _surface: &Surface,
+        _context: &RenderContext,
         encoder: &mut CommandEncoder,
         _screen: Option<&RenderTexture>,
     ) {
@@ -157,9 +157,9 @@ impl Node for DownloadRgbBuffer {
         );
     }
 
-    fn post_render(&mut self, surface: &Surface) {
+    fn post_render(&mut self, context: &RenderContext) {
         println!("download post_render");
-        let device = surface.device();
+        let device = context.device();
 
         // Note that we're not calling `.await` here.
         let buffer_slice = self.buffer.slice(..);

@@ -7,8 +7,8 @@ pub struct NormalMapGenerator {
 }
 
 impl NormalMapGenerator {
-    pub fn new(surface: &Surface) -> Self {
-        let device = surface.device();
+    pub fn new(context: &RenderContext) -> Self {
+        let device = context.device();
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Generator Shader"),
