@@ -3,17 +3,15 @@ use ash::{
     vk::{self, Handle},
     Entry as VulkanEntry,
 };
+use cgmath::{Matrix4, Quaternion, SquareMatrix, Vector3};
 use openxr as xr;
-use std::{env, fmt, mem, path::PathBuf, thread, time::Duration};
-use vss::RenderContext;
+use std::{env, ffi::CStr, fmt, iter, mem, path::PathBuf, rc::Rc, thread, time::Duration};
+use vss::{create_sampler_linear, MouseInput, RenderContext, RenderTexture};
 
 #[cfg(target_vendor = "apple")]
 use objc2::{rc::Retained, runtime::ProtocolObject};
 #[cfg(target_vendor = "apple")]
-use objc2_metal::{
-    MTLClearColor, MTLCommandBuffer, MTLCommandEncoder, MTLCommandQueue, MTLDevice, MTLLoadAction,
-    MTLPixelFormat, MTLRenderPassDescriptor, MTLStoreAction, MTLTexture,
-};
+use objc2_metal::{MTLCommandQueue, MTLDevice, MTLPixelFormat, MTLTexture};
 
 pub const LOADER_PATH_ENV: &str = "VSS_OPENXR_LOADER";
 pub const VULKAN_LOADER_PATH_ENV: &str = "VSS_VULKAN_LOADER";
@@ -26,7 +24,6 @@ const VIEW_TYPE: xr::ViewConfigurationType = xr::ViewConfigurationType::PRIMARY_
 const COLOR_FORMAT: vk::Format = vk::Format::R8G8B8A8_SRGB;
 #[cfg(target_vendor = "apple")]
 const METAL_COLOR_FORMAT: MTLPixelFormat = MTLPixelFormat::RGBA8Unorm_sRGB;
-const PIPELINE_DEPTH: u32 = 2;
 
 #[derive(Clone, Debug)]
 pub struct RuntimeOptions {
@@ -188,9 +185,21 @@ impl Runtime {
                 .application_version(0)
                 .engine_version(0)
                 .api_version(target_version);
+            let instance_flags = wgpu::InstanceFlags::empty();
+            let instance_extensions = wgpu_hal::vulkan::Instance::desired_extensions(
+                &entry,
+                target_version,
+                instance_flags,
+            )
+            .map_err(|err| RuntimeError::Vulkan(err.to_string()))?;
+            let instance_extension_names = instance_extensions
+                .iter()
+                .map(|extension| extension.as_ptr())
+                .collect::<Vec<_>>();
 
             let instance_create_info = vk::InstanceCreateInfo::default()
                 .application_info(&app_info)
+                .enabled_extension_names(&instance_extension_names)
                 .flags(vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR);
             let raw_instance = instance
                 .create_vulkan_instance(
@@ -238,13 +247,50 @@ impl Runtime {
             let queue_create_infos = [vk::DeviceQueueCreateInfo::default()
                 .queue_family_index(queue_family_index)
                 .queue_priorities(&queue_priorities)];
-            let mut multiview_features = vk::PhysicalDeviceMultiviewFeatures {
-                multiview: vk::TRUE,
-                ..Default::default()
-            };
-            let device_create_info = vk::DeviceCreateInfo::default()
-                .queue_create_infos(&queue_create_infos)
-                .push_next(&mut multiview_features);
+            let adapter_entry = self.load_vulkan_entry()?;
+            let adapter_instance =
+                ash::Instance::load(adapter_entry.static_fn(), vulkan_instance.handle());
+            let hal_instance = wgpu_hal::vulkan::Instance::from_raw(
+                adapter_entry,
+                adapter_instance,
+                target_version,
+                0,
+                None,
+                instance_extensions.clone(),
+                instance_flags,
+                wgpu::MemoryBudgetThresholds::default(),
+                false,
+                Some(Box::new(|| {})),
+            )
+            .map_err(|err| RuntimeError::Vulkan(err.to_string()))?;
+            let wgpu_instance = wgpu::Instance::from_hal::<wgpu_hal::api::Vulkan>(hal_instance);
+            let wgpu_adapter =
+                pollster::block_on(wgpu_instance.request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::HighPerformance,
+                    compatible_surface: None,
+                    force_fallback_adapter: false,
+                }))
+                .map_err(|err| RuntimeError::Vulkan(err.to_string()))?;
+            let hal_adapter = wgpu_adapter
+                .as_hal::<wgpu_hal::api::Vulkan>()
+                .ok_or_else(|| RuntimeError::Vulkan("wgpu returned no Vulkan adapter".into()))?;
+            if hal_adapter.raw_physical_device() != physical_device {
+                return Err(RuntimeError::Vulkan(
+                    "wgpu selected a different Vulkan physical device than OpenXR".into(),
+                ));
+            }
+            let device_extensions = hal_adapter.required_device_extensions(wgpu::Features::empty());
+            let device_extension_names = device_extensions
+                .iter()
+                .map(|extension| extension.as_ptr())
+                .collect::<Vec<_>>();
+            let mut device_features =
+                hal_adapter.physical_device_features(&device_extensions, wgpu::Features::empty());
+            let device_create_info = device_features.add_to_device_create(
+                vk::DeviceCreateInfo::default()
+                    .queue_create_infos(&queue_create_infos)
+                    .enabled_extension_names(&device_extension_names),
+            );
 
             let raw_device = instance
                 .create_vulkan_device(
@@ -261,20 +307,18 @@ impl Runtime {
                 vk::Device::from_raw(raw_device as _),
             );
 
-            let queue = vulkan_device.get_device_queue(queue_family_index, 0);
-
             Ok(VulkanRuntime {
                 _entry: entry,
                 instance: vulkan_instance,
                 physical_device,
                 device: vulkan_device,
-                queue,
                 queue_family_index,
+                instance_extensions,
             })
         }
     }
 
-    fn run_vulkan<F>(&self, _build_pipeline: F) -> Result<(), RuntimeError>
+    fn run_vulkan<F>(&self, build_pipeline: F) -> Result<(), RuntimeError>
     where
         F: FnOnce(&mut RenderContext, &[View]),
     {
@@ -324,6 +368,21 @@ impl Runtime {
             .graphics_requirements::<xr::Vulkan>(system)
             .map_err(RuntimeError::OpenXr)?;
         let vulkan = self.create_vulkan_session(&instance, system, &requirements)?;
+        let (wgpu_device, wgpu_queue) = self.create_vulkan_wgpu(&vulkan)?;
+        let first_view = view_configs
+            .first()
+            .ok_or_else(|| RuntimeError::Vulkan("OpenXR runtime returned no views".to_string()))?;
+        let mut context = RenderContext::new(
+            [
+                first_view.recommended_image_rect_width,
+                first_view.recommended_image_rect_height,
+            ],
+            view_configs.len(),
+            wgpu_device,
+            wgpu_queue,
+        );
+        let initial_views = self.initial_views(&view_configs)?;
+        build_pipeline(&mut context, &initial_views);
         let (session, mut frame_waiter, mut frame_stream) = unsafe {
             instance.create_session::<xr::Vulkan>(
                 system,
@@ -351,8 +410,10 @@ impl Runtime {
                 environment_blend_mode,
                 &view_configs,
                 &vulkan,
+                &mut context,
             )?;
 
+            drop(context);
             drop((space, session, frame_waiter, frame_stream));
             vulkan.device.device_wait_idle().map_err(|err| {
                 RuntimeError::Vulkan(format!("Failed to wait for Vulkan device idle: {err}"))
@@ -364,8 +425,70 @@ impl Runtime {
         Ok(())
     }
 
+    fn create_vulkan_wgpu(
+        &self,
+        vulkan: &VulkanRuntime,
+    ) -> Result<(wgpu::Device, wgpu::Queue), RuntimeError> {
+        let entry = unsafe { self.load_vulkan_entry()? };
+        let raw_instance =
+            unsafe { ash::Instance::load(entry.static_fn(), vulkan.instance.handle()) };
+        let hal_instance = unsafe {
+            wgpu_hal::vulkan::Instance::from_raw(
+                entry,
+                raw_instance,
+                vk::API_VERSION_1_1,
+                0,
+                None,
+                vulkan.instance_extensions.clone(),
+                wgpu::InstanceFlags::empty(),
+                wgpu::MemoryBudgetThresholds::default(),
+                false,
+                Some(Box::new(|| {})),
+            )
+        }
+        .map_err(|err| RuntimeError::Vulkan(format!("Unable to adopt Vulkan instance: {err}")))?;
+        let instance = unsafe { wgpu::Instance::from_hal::<wgpu_hal::api::Vulkan>(hal_instance) };
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }))
+        .map_err(|err| RuntimeError::Vulkan(format!("Unable to find Vulkan adapter: {err}")))?;
+        let hal_adapter = unsafe { adapter.as_hal::<wgpu_hal::api::Vulkan>() }
+            .ok_or_else(|| RuntimeError::Vulkan("wgpu returned no Vulkan adapter".to_string()))?;
+        if hal_adapter.raw_physical_device() != vulkan.physical_device {
+            return Err(RuntimeError::Vulkan(
+                "wgpu selected a different Vulkan physical device than OpenXR".to_string(),
+            ));
+        }
+        let enabled_extensions = hal_adapter.required_device_extensions(wgpu::Features::empty());
+        let raw_device =
+            unsafe { ash::Device::load(vulkan.instance.fp_v1_0(), vulkan.device.handle()) };
+        let hal_device = unsafe {
+            hal_adapter.device_from_raw(
+                raw_device,
+                Some(Box::new(|| {})),
+                &enabled_extensions,
+                wgpu::Features::empty(),
+                &wgpu::Limits::default(),
+                &wgpu::MemoryHints::Performance,
+                vulkan.queue_family_index,
+                0,
+            )
+        }
+        .map_err(|err| RuntimeError::Vulkan(format!("Unable to adopt Vulkan device: {err}")))?;
+        drop(hal_adapter);
+        unsafe {
+            adapter.create_device_from_hal::<wgpu_hal::api::Vulkan>(
+                hal_device,
+                &Self::wgpu_device_descriptor(),
+            )
+        }
+        .map_err(|err| RuntimeError::Vulkan(format!("Unable to create wgpu device: {err}")))
+    }
+
     #[cfg(target_vendor = "apple")]
-    fn run_metal<F>(&self, _build_pipeline: F) -> Result<(), RuntimeError>
+    fn run_metal<F>(&self, build_pipeline: F) -> Result<(), RuntimeError>
     where
         F: FnOnce(&mut RenderContext, &[View]),
     {
@@ -414,6 +537,21 @@ impl Runtime {
         let command_queue = device.newCommandQueue().ok_or_else(|| {
             RuntimeError::Metal("OpenXR-selected Metal device has no command queue".to_string())
         })?;
+        let (wgpu_device, wgpu_queue) = self.create_metal_wgpu(device, &command_queue)?;
+        let first_view = view_configs
+            .first()
+            .ok_or_else(|| RuntimeError::Metal("OpenXR runtime returned no views".to_string()))?;
+        let mut context = RenderContext::new(
+            [
+                first_view.recommended_image_rect_width,
+                first_view.recommended_image_rect_height,
+            ],
+            view_configs.len(),
+            wgpu_device,
+            wgpu_queue,
+        );
+        let initial_views = self.initial_views(&view_configs)?;
+        build_pipeline(&mut context, &initial_views);
         let (session, mut frame_waiter, mut frame_stream) = unsafe {
             instance.create_session::<xr::Metal>(
                 system,
@@ -435,8 +573,45 @@ impl Runtime {
             &space,
             environment_blend_mode,
             &view_configs,
-            &command_queue,
+            &mut context,
         )
+    }
+
+    #[cfg(target_vendor = "apple")]
+    fn create_metal_wgpu(
+        &self,
+        device: &ProtocolObject<dyn MTLDevice>,
+        command_queue: &Retained<ProtocolObject<dyn MTLCommandQueue>>,
+    ) -> Result<(wgpu::Device, wgpu::Queue), RuntimeError> {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::METAL,
+            ..wgpu::InstanceDescriptor::new_without_display_handle_from_env()
+        });
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }))
+        .map_err(|err| RuntimeError::Metal(format!("Unable to find Metal adapter: {err}")))?;
+        let raw_device = unsafe {
+            Retained::retain(device as *const _ as *mut ProtocolObject<dyn MTLDevice>)
+                .ok_or_else(|| RuntimeError::Metal("Unable to retain Metal device".to_string()))?
+        };
+        let hal_device = unsafe {
+            wgpu_hal::metal::Device::device_from_raw(raw_device, wgpu::Features::empty())
+        };
+        let hal_queue =
+            unsafe { wgpu_hal::metal::Queue::queue_from_raw(command_queue.clone(), 1.0) };
+        unsafe {
+            adapter.create_device_from_hal::<wgpu_hal::api::Metal>(
+                wgpu_hal::OpenDevice {
+                    device: hal_device,
+                    queue: hal_queue,
+                },
+                &Self::wgpu_device_descriptor(),
+            )
+        }
+        .map_err(|err| RuntimeError::Metal(format!("Unable to adopt Metal device: {err}")))
     }
 
     #[cfg(target_vendor = "apple")]
@@ -450,12 +625,11 @@ impl Runtime {
         space: &xr::Space,
         environment_blend_mode: xr::EnvironmentBlendMode,
         view_configs: &[xr::ViewConfigurationView],
-        command_queue: &ProtocolObject<dyn MTLCommandQueue>,
+        context: &mut RenderContext,
     ) -> Result<(), RuntimeError> {
         let mut swapchain: Option<MetalSwapchain> = None;
         let mut event_storage = xr::EventDataBuffer::new();
         let mut session_running = false;
-        let mut frame = 0usize;
 
         loop {
             while let Some(event) = instance
@@ -499,7 +673,7 @@ impl Runtime {
             }
 
             if swapchain.is_none() {
-                swapchain = Some(self.create_metal_swapchain(session, view_configs)?);
+                swapchain = Some(self.create_metal_swapchain(session, view_configs, context)?);
             }
             let swapchain = swapchain.as_mut().unwrap();
             let image_index = swapchain
@@ -510,19 +684,13 @@ impl Runtime {
                 .handle
                 .wait_image(xr::Duration::INFINITE)
                 .map_err(RuntimeError::OpenXr)?;
-            self.record_metal_clear(
-                command_queue,
-                swapchain.images[image_index as usize],
-                view_configs.len(),
-                frame,
-            )?;
+            let (_, views) = session
+                .locate_views(VIEW_TYPE, frame_state.predicted_display_time, space)
+                .map_err(RuntimeError::OpenXr)?;
+            self.render_views(context, &views, &swapchain.targets[image_index as usize])?;
             swapchain
                 .handle
                 .release_image()
-                .map_err(RuntimeError::OpenXr)?;
-
-            let (_, views) = session
-                .locate_views(VIEW_TYPE, frame_state.predicted_display_time, space)
                 .map_err(RuntimeError::OpenXr)?;
             let rect = xr::Rect2Di {
                 offset: xr::Offset2Di { x: 0, y: 0 },
@@ -556,7 +724,6 @@ impl Runtime {
                     &[&projection_layer],
                 )
                 .map_err(RuntimeError::OpenXr)?;
-            frame = (frame + 1) % PIPELINE_DEPTH as usize;
         }
     }
 
@@ -565,6 +732,7 @@ impl Runtime {
         &self,
         session: &xr::Session<xr::Metal>,
         view_configs: &[xr::ViewConfigurationView],
+        context: &RenderContext,
     ) -> Result<MetalSwapchain, RuntimeError> {
         let first_view = view_configs
             .first()
@@ -584,48 +752,45 @@ impl Runtime {
             })
             .map_err(RuntimeError::OpenXr)?;
         let images = handle.enumerate_images().map_err(RuntimeError::OpenXr)?;
+        let targets = images
+            .iter()
+            .map(|&image| unsafe {
+                let raw = Retained::retain(image.cast::<ProtocolObject<dyn MTLTexture>>())
+                    .ok_or_else(|| {
+                        RuntimeError::Metal("Unable to retain OpenXR Metal texture".to_string())
+                    })?;
+                let hal_texture = wgpu_hal::metal::Device::texture_from_raw(
+                    raw,
+                    wgpu::TextureFormat::Rgba8UnormSrgb,
+                    objc2_metal::MTLTextureType::Type2DArray,
+                    view_configs.len() as u32,
+                    1,
+                    wgpu_hal::CopyExtent {
+                        width: first_view.recommended_image_rect_width,
+                        height: first_view.recommended_image_rect_height,
+                        depth: 1,
+                    },
+                );
+                let texture = context
+                    .device()
+                    .create_texture_from_hal::<wgpu_hal::api::Metal>(
+                        hal_texture,
+                        &Self::xr_texture_descriptor(
+                            first_view.recommended_image_rect_width,
+                            first_view.recommended_image_rect_height,
+                            view_configs.len() as u32,
+                        ),
+                    );
+                Ok(self.create_layer_targets(context, texture, view_configs.len()))
+            })
+            .collect::<Result<Vec<_>, RuntimeError>>()?;
         Ok(MetalSwapchain {
             handle,
-            images,
+            _images: images,
+            targets,
             width: first_view.recommended_image_rect_width,
             height: first_view.recommended_image_rect_height,
         })
-    }
-
-    #[cfg(target_vendor = "apple")]
-    fn record_metal_clear(
-        &self,
-        command_queue: &ProtocolObject<dyn MTLCommandQueue>,
-        image: *mut std::ffi::c_void,
-        view_count: usize,
-        frame: usize,
-    ) -> Result<(), RuntimeError> {
-        let texture = unsafe { &*image.cast::<ProtocolObject<dyn MTLTexture>>() };
-        let descriptor = MTLRenderPassDescriptor::new();
-        descriptor.setRenderTargetArrayLength(view_count as _);
-        let attachment = unsafe { descriptor.colorAttachments().objectAtIndexedSubscript(0) };
-        let t = (frame as f64 * 0.17).sin().abs();
-        attachment.setTexture(Some(texture));
-        attachment.setLoadAction(MTLLoadAction::Clear);
-        attachment.setStoreAction(MTLStoreAction::Store);
-        attachment.setClearColor(MTLClearColor {
-            red: 0.05 + 0.25 * t,
-            green: 0.1,
-            blue: 0.35 + 0.35 * (1.0 - t),
-            alpha: 1.0,
-        });
-        let command_buffer = command_queue.commandBuffer().ok_or_else(|| {
-            RuntimeError::Metal("Metal failed to allocate a command buffer".to_string())
-        })?;
-        let encoder = command_buffer
-            .renderCommandEncoderWithDescriptor(&descriptor)
-            .ok_or_else(|| {
-                RuntimeError::Metal("Metal failed to create a render encoder".to_string())
-            })?;
-        encoder.endEncoding();
-        command_buffer.commit();
-        command_buffer.waitUntilCompleted();
-        Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -639,6 +804,7 @@ impl Runtime {
         environment_blend_mode: xr::EnvironmentBlendMode,
         view_configs: &[xr::ViewConfigurationView],
         vulkan: &VulkanRuntime,
+        context: &mut RenderContext,
     ) -> Result<(), RuntimeError> {
         let render_pass = self.create_vulkan_render_pass(vulkan)?;
         let command_pool = vulkan
@@ -653,17 +819,7 @@ impl Runtime {
                 None,
             )
             .map_err(|err| RuntimeError::Vulkan(format!("Failed to create command pool: {err}")))?;
-        let command_buffers = vulkan
-            .device
-            .allocate_command_buffers(
-                &vk::CommandBufferAllocateInfo::default()
-                    .command_pool(command_pool)
-                    .command_buffer_count(PIPELINE_DEPTH),
-            )
-            .map_err(|err| {
-                RuntimeError::Vulkan(format!("Failed to allocate command buffers: {err}"))
-            })?;
-        let fences = (0..PIPELINE_DEPTH)
+        let fences = (0..2)
             .map(|_| {
                 vulkan.device.create_fence(
                     &vk::FenceCreateInfo::default().flags(vk::FenceCreateFlags::SIGNALED),
@@ -676,7 +832,6 @@ impl Runtime {
         let mut swapchain: Option<VulkanSwapchain> = None;
         let mut event_storage = xr::EventDataBuffer::new();
         let mut session_running = false;
-        let mut frame = 0usize;
 
         'frames: loop {
             while let Some(event) = instance
@@ -726,6 +881,7 @@ impl Runtime {
                     vulkan,
                     render_pass,
                     view_configs,
+                    context,
                 )?);
             }
             let swapchain = swapchain.as_mut().unwrap();
@@ -733,25 +889,6 @@ impl Runtime {
                 .handle
                 .acquire_image()
                 .map_err(RuntimeError::OpenXr)?;
-            let fence = fences[frame];
-            vulkan
-                .device
-                .wait_for_fences(&[fence], true, u64::MAX)
-                .map_err(|err| RuntimeError::Vulkan(format!("Failed to wait for fence: {err}")))?;
-            vulkan
-                .device
-                .reset_fences(&[fence])
-                .map_err(|err| RuntimeError::Vulkan(format!("Failed to reset fence: {err}")))?;
-
-            let command_buffer = command_buffers[frame];
-            self.record_vulkan_clear(
-                vulkan,
-                command_buffer,
-                render_pass,
-                swapchain,
-                image_index as usize,
-                frame,
-            )?;
             let (_, views) = session
                 .locate_views(VIEW_TYPE, frame_state.predicted_display_time, space)
                 .map_err(RuntimeError::OpenXr)?;
@@ -760,14 +897,7 @@ impl Runtime {
                 .handle
                 .wait_image(xr::Duration::INFINITE)
                 .map_err(RuntimeError::OpenXr)?;
-            vulkan
-                .device
-                .queue_submit(
-                    vulkan.queue,
-                    &[vk::SubmitInfo::default().command_buffers(&[command_buffer])],
-                    fence,
-                )
-                .map_err(|err| RuntimeError::Vulkan(format!("Failed to submit queue: {err}")))?;
+            self.render_views(context, &views, &swapchain.targets[image_index as usize])?;
             swapchain
                 .handle
                 .release_image()
@@ -804,7 +934,6 @@ impl Runtime {
                     &[&projection_layer],
                 )
                 .map_err(RuntimeError::OpenXr)?;
-            frame = (frame + 1) % PIPELINE_DEPTH as usize;
         }
 
         self.destroy_vulkan_frame_resources(vulkan, render_pass, command_pool, fences, swapchain);
@@ -859,6 +988,7 @@ impl Runtime {
         vulkan: &VulkanRuntime,
         render_pass: vk::RenderPass,
         view_configs: &[xr::ViewConfigurationView],
+        context: &RenderContext,
     ) -> Result<VulkanSwapchain, RuntimeError> {
         let first_view = view_configs
             .first()
@@ -883,6 +1013,49 @@ impl Runtime {
             .map_err(RuntimeError::OpenXr)?;
 
         let images = handle.enumerate_images().map_err(RuntimeError::OpenXr)?;
+        let targets = images
+            .iter()
+            .map(|&image| unsafe {
+                let hal_device = context
+                    .device()
+                    .as_hal::<wgpu_hal::api::Vulkan>()
+                    .ok_or_else(|| {
+                        RuntimeError::Vulkan("wgpu returned no Vulkan device".to_string())
+                    })?;
+                let hal_texture = hal_device.texture_from_raw(
+                    vk::Image::from_raw(image),
+                    &wgpu_hal::TextureDescriptor {
+                        label: Some("OpenXR swapchain texture"),
+                        size: wgpu::Extent3d {
+                            width: resolution.width,
+                            height: resolution.height,
+                            depth_or_array_layers: view_configs.len() as u32,
+                        },
+                        mip_level_count: 1,
+                        sample_count: 1,
+                        dimension: wgpu::TextureDimension::D2,
+                        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                        usage: wgpu::TextureUses::COLOR_TARGET,
+                        memory_flags: wgpu_hal::MemoryFlags::empty(),
+                        view_formats: vec![],
+                    },
+                    Some(Box::new(|| {})),
+                    wgpu_hal::vulkan::TextureMemory::External,
+                );
+                drop(hal_device);
+                let texture = context
+                    .device()
+                    .create_texture_from_hal::<wgpu_hal::api::Vulkan>(
+                        hal_texture,
+                        &Self::xr_texture_descriptor(
+                            resolution.width,
+                            resolution.height,
+                            view_configs.len() as u32,
+                        ),
+                    );
+                Ok(self.create_layer_targets(context, texture, view_configs.len()))
+            })
+            .collect::<Result<Vec<_>, RuntimeError>>()?;
         let buffers = images
             .into_iter()
             .map(|image| {
@@ -927,51 +1100,9 @@ impl Runtime {
         Ok(VulkanSwapchain {
             handle,
             buffers,
+            targets,
             resolution,
         })
-    }
-
-    unsafe fn record_vulkan_clear(
-        &self,
-        vulkan: &VulkanRuntime,
-        command_buffer: vk::CommandBuffer,
-        render_pass: vk::RenderPass,
-        swapchain: &VulkanSwapchain,
-        image_index: usize,
-        frame_index: usize,
-    ) -> Result<(), RuntimeError> {
-        vulkan
-            .device
-            .begin_command_buffer(
-                command_buffer,
-                &vk::CommandBufferBeginInfo::default()
-                    .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
-            )
-            .map_err(|err| {
-                RuntimeError::Vulkan(format!("Failed to begin command buffer: {err}"))
-            })?;
-        let t = (frame_index as f32 * 0.17).sin().abs();
-        vulkan.device.cmd_begin_render_pass(
-            command_buffer,
-            &vk::RenderPassBeginInfo::default()
-                .render_pass(render_pass)
-                .framebuffer(swapchain.buffers[image_index].framebuffer)
-                .render_area(vk::Rect2D {
-                    offset: vk::Offset2D { x: 0, y: 0 },
-                    extent: swapchain.resolution,
-                })
-                .clear_values(&[vk::ClearValue {
-                    color: vk::ClearColorValue {
-                        float32: [0.05 + 0.25 * t, 0.1, 0.35 + 0.35 * (1.0 - t), 1.0],
-                    },
-                }]),
-            vk::SubpassContents::INLINE,
-        );
-        vulkan.device.cmd_end_render_pass(command_buffer);
-        vulkan
-            .device
-            .end_command_buffer(command_buffer)
-            .map_err(|err| RuntimeError::Vulkan(format!("Failed to end command buffer: {err}")))
     }
 
     unsafe fn destroy_vulkan_frame_resources(
@@ -1055,6 +1186,200 @@ impl Runtime {
         }
     }
 
+    fn wgpu_device_descriptor() -> wgpu::DeviceDescriptor<'static> {
+        wgpu::DeviceDescriptor {
+            label: Some("OpenXR device"),
+            required_features: wgpu::Features::empty(),
+            required_limits: wgpu::Limits::default(),
+            experimental_features: wgpu::ExperimentalFeatures::disabled(),
+            memory_hints: wgpu::MemoryHints::Performance,
+            trace: wgpu::Trace::Off,
+        }
+    }
+
+    fn xr_texture_descriptor(
+        width: u32,
+        height: u32,
+        view_count: u32,
+    ) -> wgpu::TextureDescriptor<'static> {
+        wgpu::TextureDescriptor {
+            label: Some("OpenXR swapchain texture"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: view_count,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        }
+    }
+
+    fn create_layer_targets(
+        &self,
+        context: &RenderContext,
+        texture: wgpu::Texture,
+        view_count: usize,
+    ) -> Vec<RenderTexture> {
+        let texture = Rc::new(texture);
+        (0..view_count)
+            .map(|layer| RenderTexture {
+                texture: Some(texture.clone()),
+                view: Rc::new(texture.create_view(&wgpu::TextureViewDescriptor {
+                    label: Some("OpenXR view target"),
+                    format: None,
+                    dimension: Some(wgpu::TextureViewDimension::D2),
+                    usage: Some(wgpu::TextureUsages::RENDER_ATTACHMENT),
+                    aspect: wgpu::TextureAspect::All,
+                    base_mip_level: 0,
+                    mip_level_count: Some(1),
+                    base_array_layer: layer as u32,
+                    array_layer_count: Some(1),
+                })),
+                sampler: Rc::new(create_sampler_linear(context.device())),
+                view_dimension: wgpu::TextureViewDimension::D2,
+                width: context.width(),
+                height: context.height(),
+                label: format!("OpenXR view {layer}"),
+            })
+            .collect()
+    }
+
+    fn initial_views(
+        &self,
+        view_configs: &[xr::ViewConfigurationView],
+    ) -> Result<Vec<View>, RuntimeError> {
+        if view_configs.is_empty() {
+            return Err(RuntimeError::View(
+                "OpenXR runtime returned no views".to_string(),
+            ));
+        }
+        Ok(view_configs
+            .iter()
+            .enumerate()
+            .map(|(index, config)| View {
+                view_index: index,
+                eye_index: index.min(1),
+                viewport: crate::Viewport {
+                    x: 0,
+                    y: 0,
+                    width: config.recommended_image_rect_width,
+                    height: config.recommended_image_rect_height,
+                },
+                position: Vector3::new(0.0, 0.0, 0.0),
+                view: Matrix4::from_scale(1.0),
+                projection: cgmath::perspective(cgmath::Deg(70.0), 1.0, 0.05, 1000.0),
+            })
+            .collect())
+    }
+
+    fn render_views(
+        &self,
+        context: &mut RenderContext,
+        located: &[xr::View],
+        targets: &[RenderTexture],
+    ) -> Result<(), RuntimeError> {
+        if located.len() != context.flows.len() || targets.len() != context.flows.len() {
+            return Err(RuntimeError::View(format!(
+                "OpenXR returned {} views for {} VSS flows and {} render targets",
+                located.len(),
+                context.flows.len(),
+                targets.len()
+            )));
+        }
+
+        let mut encoder =
+            context
+                .device()
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("OpenXR VSS render encoder"),
+                });
+        for (index, (located, target)) in located.iter().zip(targets).enumerate() {
+            let view = Self::view_from_openxr(index, located, target.width, target.height)?;
+            {
+                let mut eye = context.flows[index].eye_mut();
+                eye.position = view.position;
+                eye.view = view.view;
+                eye.proj = view.projection;
+            }
+            context.flows[index].input(&MouseInput::default());
+            context.render_flow(index, &mut encoder, target);
+        }
+        context.queue().submit(iter::once(encoder.finish()));
+        context
+            .device()
+            .poll(wgpu::PollType::wait_indefinitely())
+            .map_err(|err| RuntimeError::View(format!("OpenXR render wait failed: {err}")))?;
+        context.post_render();
+        Ok(())
+    }
+
+    fn view_from_openxr(
+        index: usize,
+        view: &xr::View,
+        width: u32,
+        height: u32,
+    ) -> Result<View, RuntimeError> {
+        let position = Vector3::new(
+            view.pose.position.x,
+            view.pose.position.y,
+            view.pose.position.z,
+        );
+        let orientation = Quaternion::new(
+            view.pose.orientation.w,
+            view.pose.orientation.x,
+            view.pose.orientation.y,
+            view.pose.orientation.z,
+        );
+        let world_from_view = Matrix4::from_translation(position) * Matrix4::from(orientation);
+        let view_matrix = world_from_view.invert().ok_or_else(|| {
+            RuntimeError::View("OpenXR returned a singular view pose".to_string())
+        })?;
+        Ok(View {
+            view_index: index,
+            eye_index: index.min(1),
+            viewport: crate::Viewport {
+                x: 0,
+                y: 0,
+                width,
+                height,
+            },
+            position,
+            view: view_matrix,
+            projection: Self::projection_from_fov(view.fov, 0.05, 1000.0),
+        })
+    }
+
+    fn projection_from_fov(fov: xr::Fovf, near: f32, far: f32) -> Matrix4<f32> {
+        let left = fov.angle_left.tan();
+        let right = fov.angle_right.tan();
+        let down = fov.angle_down.tan();
+        let up = fov.angle_up.tan();
+        let width = right - left;
+        let height = up - down;
+        Matrix4::new(
+            2.0 / width,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            2.0 / height,
+            0.0,
+            0.0,
+            (right + left) / width,
+            (up + down) / height,
+            -far / (far - near),
+            -1.0,
+            0.0,
+            0.0,
+            -(far * near) / (far - near),
+            0.0,
+        )
+    }
+
     fn enabled_extensions(&self, backend: Backend) -> xr::ExtensionSet {
         let mut extensions = xr::ExtensionSet::default();
 
@@ -1114,13 +1439,14 @@ struct VulkanRuntime {
     instance: ash::Instance,
     physical_device: vk::PhysicalDevice,
     device: ash::Device,
-    queue: vk::Queue,
     queue_family_index: u32,
+    instance_extensions: Vec<&'static CStr>,
 }
 
 struct VulkanSwapchain {
     handle: xr::Swapchain<xr::Vulkan>,
     buffers: Vec<VulkanFramebuffer>,
+    targets: Vec<Vec<RenderTexture>>,
     resolution: vk::Extent2D,
 }
 
@@ -1132,7 +1458,8 @@ struct VulkanFramebuffer {
 #[cfg(target_vendor = "apple")]
 struct MetalSwapchain {
     handle: xr::Swapchain<xr::Metal>,
-    images: Vec<*mut std::ffi::c_void>,
+    _images: Vec<*mut std::ffi::c_void>,
+    targets: Vec<Vec<RenderTexture>>,
     width: u32,
     height: u32,
 }
@@ -1159,6 +1486,7 @@ pub enum RuntimeError {
     OpenXr(xr::sys::Result),
     Vulkan(String),
     Metal(String),
+    View(String),
     UnsupportedBackend {
         requested: Backend,
         vulkan_available: bool,
@@ -1195,6 +1523,7 @@ impl fmt::Display for RuntimeError {
             RuntimeError::OpenXr(result) => write!(f, "OpenXR runtime error: {result:?}"),
             RuntimeError::Vulkan(message) => write!(f, "Vulkan initialization error: {message}"),
             RuntimeError::Metal(message) => write!(f, "Metal initialization error: {message}"),
+            RuntimeError::View(message) => write!(f, "OpenXR view error: {message}"),
             RuntimeError::UnsupportedBackend {
                 requested,
                 vulkan_available,

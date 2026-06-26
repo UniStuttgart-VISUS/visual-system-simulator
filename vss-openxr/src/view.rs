@@ -3,6 +3,7 @@ pub struct View {
     pub view_index: usize,
     pub eye_index: usize,
     pub viewport: Viewport,
+    pub position: cgmath::Vector3<f32>,
     pub view: cgmath::Matrix4<f32>,
     pub projection: cgmath::Matrix4<f32>,
 }

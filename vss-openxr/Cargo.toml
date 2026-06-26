@@ -9,7 +9,10 @@ license = "Apache-2.0"
 ash = "0.38"
 cgmath = { workspace = true }
 openxr = { git = "https://github.com/schulzch/openxrs", branch = "metal", features = ["static"] }
+pollster = "0.4"
 vss = { path = "../vss" }
+wgpu = { workspace = true }
+wgpu-hal = { workspace = true, features = ["vulkan"] }
 
 [target.'cfg(target_vendor = "apple")'.dependencies]
 objc2 = "0.6.4"

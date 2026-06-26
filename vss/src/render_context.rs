@@ -95,6 +95,15 @@ impl RenderContext {
             .for_each(|flow| flow.render(self, encoder, render_texture));
     }
 
+    pub fn render_flow(
+        &self,
+        flow_index: usize,
+        encoder: &mut wgpu::CommandEncoder,
+        render_texture: &RenderTexture,
+    ) {
+        self.flows[flow_index].render(self, encoder, render_texture);
+    }
+
     pub fn post_render(&self) {
         self.flows.iter().for_each(|flow| flow.post_render(self));
         self.last_render_instant.replace(Instant::now());
