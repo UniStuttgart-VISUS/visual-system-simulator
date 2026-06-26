@@ -6,6 +6,7 @@ authors = ["The Visual System Simulator Developers"]
 license = "Apache-2.0"
 
 [dependencies]
+ash = "0.38"
 cgmath = { workspace = true }
 openxr = { version = "0.21.1", features = ["static"] }
 vss = { path = "../vss" }
