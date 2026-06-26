@@ -8,7 +8,7 @@ use winit::{
     dpi::*,
     error::EventLoopError,
     event::*,
-    event_loop::{ActiveEventLoop, EventLoop},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     keyboard::{Key, NamedKey},
     window::Window,
 };
@@ -66,6 +66,7 @@ impl WindowSurface {
 
     pub fn run_app(mut self) -> Result<(), EventLoopError> {
         let event_loop = EventLoop::new().unwrap();
+        event_loop.set_control_flow(ControlFlow::Poll);
 
         #[cfg(target_arch = "wasm32")]
         {
@@ -129,11 +130,14 @@ impl WindowSurface {
 
 impl ApplicationHandler for WindowSurface {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        // On macOS, wgpu cannot acquire textures for hidden windows: the surface
+        // reports `Occluded` forever, so batch renders never produce output.
+        let native_window_visible = self.visible || cfg!(target_os = "macos");
         let window_attributes = Window::default_attributes()
             .with_title("Visual System Simulator")
             .with_min_inner_size(LogicalSize::new(640.0, 360.0))
             .with_inner_size(LogicalSize::new(1280.0, 720.0))
-            .with_visible(self.visible);
+            .with_visible(native_window_visible);
 
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
         window.set_cursor_visible(true);
@@ -209,29 +213,30 @@ impl ApplicationHandler for WindowSurface {
                 }
             }
             WindowEvent::RedrawRequested => {
-                self.surface.clone().unwrap().draw();
+                self.update_size(self.deferred_size);
+                self.deferred_size = None;
+
+                let surface = self.surface.clone().unwrap();
+                if !surface.validate_slots() {
+                    surface.negociate_slots();
+                }
+
+                self.update_input();
+                let drawn = self.surface.clone().unwrap().draw();
+
+                if drawn && (self.poll_fn)() {
+                    event_loop.exit();
+                } else if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
             }
             _ => (),
         }
     }
 
-    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        self.update_size(self.deferred_size);
-        self.deferred_size = None;
-
-        let surface = self.surface.clone().unwrap();
-        if !surface.validate_slots() {
-            surface.negociate_slots();
-        }
-
-        self.update_input();
-
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
         if let Some(window) = &self.window {
             window.request_redraw();
-        }
-
-        if (self.poll_fn)() {
-            event_loop.exit();
         }
     }
 }

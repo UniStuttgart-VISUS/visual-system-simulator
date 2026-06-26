@@ -135,10 +135,13 @@ impl<'window> Surface<'window> {
         self.surface.get_current_texture()
     }
 
-    pub fn draw(&self) {
+    pub fn draw(&self) -> bool {
         let output = match self.get_current_texture() {
             CurrentSurfaceTexture::Success(output) | CurrentSurfaceTexture::Suboptimal(output) => {
                 output
+            }
+            CurrentSurfaceTexture::Timeout | CurrentSurfaceTexture::Occluded => {
+                return false;
             }
             other => panic!("Failed to acquire surface texture: {other:?}"),
         };
@@ -173,6 +176,7 @@ impl<'window> Surface<'window> {
             .submit(iter::once(encoder.finish()));
         output.present();
         self.render_context.post_render();
+        true
     }
 }
 

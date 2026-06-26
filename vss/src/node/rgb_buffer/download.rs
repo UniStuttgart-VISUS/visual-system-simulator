@@ -196,6 +196,8 @@ impl Node for DownloadRgbBuffer {
             width: buffer_dimensions.width as u32,
             height: buffer_dimensions.height as u32,
         };
+        drop(padded_buffer);
+        self.buffer.unmap();
         self.tx.send(Message::Buffer(rgb_buffer)).unwrap();
     }
 }

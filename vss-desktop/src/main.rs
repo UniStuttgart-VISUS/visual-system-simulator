@@ -6,6 +6,7 @@ mod node;
 //mod openxr;
 
 use std::io::Cursor;
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
 use vss::*;
 #[cfg(feature = "varjo")]
@@ -142,6 +143,9 @@ pub fn main() {
     let mut frame_perfs: Vec<(u128, u128)> = vec![];
     let mut previous_frame = Instant::now();
     let print_spacing = 60;
+    let output_processed: Arc<Mutex<Vec<Arc<RwLock<bool>>>>> = Arc::new(Mutex::new(Vec::new()));
+    let output_processed_init = output_processed.clone();
+    let output_processed_poll = output_processed.clone();
 
     let window = WindowSurface::new(
         config.visible,
@@ -154,6 +158,12 @@ pub fn main() {
                     flow_config.name.clone(),
                     config.output.clone(),
                 );
+                if config.output.is_some() {
+                    output_processed_init
+                        .lock()
+                        .unwrap()
+                        .push(io_generator.input_processed.clone());
+                }
                 build_flow(
                     surface,
                     &mut io_generator,
@@ -173,8 +183,11 @@ pub fn main() {
             frame_counter += 1;
 
             // Batch output and automatic exit should happen after ~3 frames to ensure proper/stable results.
-            if !config_poll.visible || config_poll.output.is_some() && frame_counter == 3 {
-                // Exit once all inputs have been processed, unless visible.
+            if config_poll.output.is_some() {
+                let processed = output_processed_poll.lock().unwrap();
+                done = !processed.is_empty()
+                    && processed.iter().all(|processed| *processed.read().unwrap());
+            } else if !config_poll.visible {
                 done = true;
             }
 

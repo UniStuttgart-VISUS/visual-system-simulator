@@ -254,6 +254,8 @@ pub fn cmd_parse() -> Config {
                 .long("output")
                 .short('o')
                 .value_name("MUSTACHE_PATTERN?")
+                .num_args(0..=1)
+                .default_missing_value("{{dirname}}/{{stem}}_{{configname}}.{{extension}}")
                 .help(
                     "Enables output with optional mustache-style pattern, e.g.:\n\
                     \x20\x20\"{{dirname}}/{{stem}}_{{configname}}.{{extension}}\"  (default)\n\
@@ -335,11 +337,9 @@ pub fn cmd_parse() -> Config {
     }
 
     if matches.contains_id("output") {
-        let output = if let Some(output) = matches.get_one::<String>("output") {
-            output
-        } else {
-            "{{dirname}}/{{stem}}_{{configname}}.{{extension}}"
-        };
+        let output = matches
+            .get_one::<String>("output")
+            .expect("output has a default when present");
         config.output = Some(mustache::compile_str(output).unwrap());
     } else {
         config.visible = true;
