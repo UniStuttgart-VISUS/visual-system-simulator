@@ -4,8 +4,16 @@ use ash::{
     Entry as VulkanEntry,
 };
 use openxr as xr;
-use std::{env, fmt, mem, path::PathBuf};
+use std::{env, fmt, mem, path::PathBuf, thread, time::Duration};
 use vss::RenderContext;
+
+#[cfg(target_vendor = "apple")]
+use objc2::{rc::Retained, runtime::ProtocolObject};
+#[cfg(target_vendor = "apple")]
+use objc2_metal::{
+    MTLClearColor, MTLCommandBuffer, MTLCommandEncoder, MTLCommandQueue, MTLDevice, MTLLoadAction,
+    MTLPixelFormat, MTLRenderPassDescriptor, MTLStoreAction, MTLTexture,
+};
 
 pub const LOADER_PATH_ENV: &str = "VSS_OPENXR_LOADER";
 pub const VULKAN_LOADER_PATH_ENV: &str = "VSS_VULKAN_LOADER";
@@ -14,6 +22,11 @@ const META_XR_SIMULATOR_VULKAN_LOADER: &str =
     "/Applications/MetaXRSimulator.app/Contents/Frameworks/libvulkan.dylib";
 const META_XR_SIMULATOR_VULKAN_ICD: &str =
     "/Applications/MetaXRSimulator.app/Contents/Resources/vulkan/icd.d/MoltenVK_icd.json";
+const VIEW_TYPE: xr::ViewConfigurationType = xr::ViewConfigurationType::PRIMARY_STEREO;
+const COLOR_FORMAT: vk::Format = vk::Format::R8G8B8A8_SRGB;
+#[cfg(target_vendor = "apple")]
+const METAL_COLOR_FORMAT: MTLPixelFormat = MTLPixelFormat::RGBA8Unorm_sRGB;
+const PIPELINE_DEPTH: u32 = 2;
 
 #[derive(Clone, Debug)]
 pub struct RuntimeOptions {
@@ -30,15 +43,30 @@ impl Runtime {
         Self { options }
     }
 
-    pub fn run<F>(&self, _build_pipeline: F) -> Result<(), RuntimeError>
+    pub fn run<F>(&self, build_pipeline: F) -> Result<(), RuntimeError>
     where
         F: FnOnce(&mut RenderContext, &[View]),
     {
-        let info = self.probe()?;
-        Err(RuntimeError::NotImplemented {
-            backend: info.backend,
-            runtime_name: info.runtime_name,
-        })
+        let entry = self.load_entry()?;
+
+        #[cfg(target_os = "android")]
+        entry
+            .initialize_android_loader()
+            .map_err(RuntimeError::OpenXr)?;
+
+        let available_extensions = entry.enumerate_extensions().map_err(RuntimeError::OpenXr)?;
+        let backend = self.select_backend(&available_extensions)?;
+        match backend {
+            Backend::Vulkan => self.run_vulkan(build_pipeline),
+            #[cfg(target_vendor = "apple")]
+            Backend::Metal => self.run_metal(build_pipeline),
+            #[cfg(not(target_vendor = "apple"))]
+            Backend::Metal => Err(RuntimeError::NotImplemented {
+                backend: Backend::Metal,
+                runtime_name: "this platform".to_string(),
+            }),
+            Backend::Auto => unreachable!("auto must be resolved before running"),
+        }
     }
 
     pub fn probe(&self) -> Result<RuntimeInfo, RuntimeError> {
@@ -62,6 +90,7 @@ impl Runtime {
                 },
                 &enabled_extensions,
                 &[],
+                &(),
             )
             .map_err(RuntimeError::OpenXr)?;
 
@@ -134,13 +163,12 @@ impl Runtime {
         }
     }
 
-    #[allow(dead_code)]
     fn create_vulkan_session(
         &self,
         instance: &xr::Instance,
         system: xr::SystemId,
         requirements: &xr::vulkan::Requirements,
-    ) -> Result<VulkanSessionInfo, RuntimeError> {
+    ) -> Result<VulkanRuntime, RuntimeError> {
         let target_version = vk::make_api_version(0, 1, 1, 0);
         let target_version_xr = xr::Version::new(1, 1, 0);
 
@@ -233,28 +261,759 @@ impl Runtime {
                 vk::Device::from_raw(raw_device as _),
             );
 
-            let session_info = xr::vulkan::SessionCreateInfo {
-                instance: vulkan_instance.handle().as_raw() as _,
-                physical_device: physical_device.as_raw() as _,
-                device: vulkan_device.handle().as_raw() as _,
-                queue_family_index,
-                queue_index: 0,
-            };
-            let (session, _frame_waiter, _frame_stream) = instance
-                .create_session::<xr::Vulkan>(system, &session_info)
-                .map_err(RuntimeError::OpenXr)?;
-            let swapchain_formats = session
-                .enumerate_swapchain_formats()
-                .map_err(RuntimeError::OpenXr)?
-                .into_iter()
-                .map(|format| format as i64)
-                .collect();
+            let queue = vulkan_device.get_device_queue(queue_family_index, 0);
 
-            Ok(VulkanSessionInfo {
+            Ok(VulkanRuntime {
+                _entry: entry,
+                instance: vulkan_instance,
+                physical_device,
+                device: vulkan_device,
+                queue,
                 queue_family_index,
-                swapchain_formats,
             })
         }
+    }
+
+    fn run_vulkan<F>(&self, _build_pipeline: F) -> Result<(), RuntimeError>
+    where
+        F: FnOnce(&mut RenderContext, &[View]),
+    {
+        let entry = self.load_entry()?;
+
+        #[cfg(target_os = "android")]
+        entry
+            .initialize_android_loader()
+            .map_err(RuntimeError::OpenXr)?;
+
+        let available_extensions = entry.enumerate_extensions().map_err(RuntimeError::OpenXr)?;
+        let backend = self.select_backend(&available_extensions)?;
+        if backend != Backend::Vulkan {
+            return Err(RuntimeError::UnsupportedBackend {
+                requested: Backend::Vulkan,
+                vulkan_available: available_extensions.khr_vulkan_enable2,
+                metal_available: available_extensions.khr_metal_enable,
+            });
+        }
+
+        let instance = entry
+            .create_instance(
+                &xr::ApplicationInfo {
+                    application_name: "Visual System Simulator",
+                    engine_name: "vss-openxr",
+                    ..Default::default()
+                },
+                &self.enabled_extensions(Backend::Vulkan),
+                &[],
+                &(),
+            )
+            .map_err(RuntimeError::OpenXr)?;
+
+        let system = instance
+            .system(xr::FormFactor::HEAD_MOUNTED_DISPLAY)
+            .map_err(RuntimeError::OpenXr)?;
+        let environment_blend_mode = instance
+            .enumerate_environment_blend_modes(system, VIEW_TYPE)
+            .map_err(RuntimeError::OpenXr)?
+            .into_iter()
+            .next()
+            .unwrap_or(xr::EnvironmentBlendMode::OPAQUE);
+        let view_configs = instance
+            .enumerate_view_configuration_views(system, VIEW_TYPE)
+            .map_err(RuntimeError::OpenXr)?;
+        let requirements = instance
+            .graphics_requirements::<xr::Vulkan>(system)
+            .map_err(RuntimeError::OpenXr)?;
+        let vulkan = self.create_vulkan_session(&instance, system, &requirements)?;
+        let (session, mut frame_waiter, mut frame_stream) = unsafe {
+            instance.create_session::<xr::Vulkan>(
+                system,
+                &xr::vulkan::SessionCreateInfo {
+                    instance: vulkan.instance.handle().as_raw() as _,
+                    physical_device: vulkan.physical_device.as_raw() as _,
+                    device: vulkan.device.handle().as_raw() as _,
+                    queue_family_index: vulkan.queue_family_index,
+                    queue_index: 0,
+                },
+            )
+        }
+        .map_err(RuntimeError::OpenXr)?;
+        let space = session
+            .create_reference_space(xr::ReferenceSpaceType::LOCAL, xr::Posef::IDENTITY)
+            .map_err(RuntimeError::OpenXr)?;
+
+        unsafe {
+            self.run_vulkan_frames(
+                &instance,
+                &session,
+                &mut frame_waiter,
+                &mut frame_stream,
+                &space,
+                environment_blend_mode,
+                &view_configs,
+                &vulkan,
+            )?;
+
+            drop((space, session, frame_waiter, frame_stream));
+            vulkan.device.device_wait_idle().map_err(|err| {
+                RuntimeError::Vulkan(format!("Failed to wait for Vulkan device idle: {err}"))
+            })?;
+            vulkan.device.destroy_device(None);
+            vulkan.instance.destroy_instance(None);
+        }
+
+        Ok(())
+    }
+
+    #[cfg(target_vendor = "apple")]
+    fn run_metal<F>(&self, _build_pipeline: F) -> Result<(), RuntimeError>
+    where
+        F: FnOnce(&mut RenderContext, &[View]),
+    {
+        let entry = self.load_entry()?;
+        let available_extensions = entry.enumerate_extensions().map_err(RuntimeError::OpenXr)?;
+        if self.select_backend(&available_extensions)? != Backend::Metal {
+            return Err(RuntimeError::UnsupportedBackend {
+                requested: Backend::Metal,
+                vulkan_available: available_extensions.khr_vulkan_enable2,
+                metal_available: available_extensions.khr_metal_enable,
+            });
+        }
+
+        let instance = entry
+            .create_instance(
+                &xr::ApplicationInfo {
+                    application_name: "Visual System Simulator",
+                    engine_name: "vss-openxr",
+                    ..Default::default()
+                },
+                &self.enabled_extensions(Backend::Metal),
+                &[],
+                &(),
+            )
+            .map_err(RuntimeError::OpenXr)?;
+        let system = instance
+            .system(xr::FormFactor::HEAD_MOUNTED_DISPLAY)
+            .map_err(RuntimeError::OpenXr)?;
+        let environment_blend_mode = instance
+            .enumerate_environment_blend_modes(system, VIEW_TYPE)
+            .map_err(RuntimeError::OpenXr)?
+            .into_iter()
+            .next()
+            .unwrap_or(xr::EnvironmentBlendMode::OPAQUE);
+        let view_configs = instance
+            .enumerate_view_configuration_views(system, VIEW_TYPE)
+            .map_err(RuntimeError::OpenXr)?;
+        let requirements = instance
+            .graphics_requirements::<xr::Metal>(system)
+            .map_err(RuntimeError::OpenXr)?;
+        let device = unsafe {
+            &*requirements
+                .metal_device
+                .cast::<ProtocolObject<dyn MTLDevice>>()
+        };
+        let command_queue = device.newCommandQueue().ok_or_else(|| {
+            RuntimeError::Metal("OpenXR-selected Metal device has no command queue".to_string())
+        })?;
+        let (session, mut frame_waiter, mut frame_stream) = unsafe {
+            instance.create_session::<xr::Metal>(
+                system,
+                &xr::metal::SessionCreateInfo {
+                    command_queue: Retained::as_ptr(&command_queue).cast_mut().cast(),
+                },
+            )
+        }
+        .map_err(RuntimeError::OpenXr)?;
+        let space = session
+            .create_reference_space(xr::ReferenceSpaceType::LOCAL, xr::Posef::IDENTITY)
+            .map_err(RuntimeError::OpenXr)?;
+
+        self.run_metal_frames(
+            &instance,
+            &session,
+            &mut frame_waiter,
+            &mut frame_stream,
+            &space,
+            environment_blend_mode,
+            &view_configs,
+            &command_queue,
+        )
+    }
+
+    #[cfg(target_vendor = "apple")]
+    #[allow(clippy::too_many_arguments)]
+    fn run_metal_frames(
+        &self,
+        instance: &xr::Instance,
+        session: &xr::Session<xr::Metal>,
+        frame_waiter: &mut xr::FrameWaiter,
+        frame_stream: &mut xr::FrameStream<xr::Metal>,
+        space: &xr::Space,
+        environment_blend_mode: xr::EnvironmentBlendMode,
+        view_configs: &[xr::ViewConfigurationView],
+        command_queue: &ProtocolObject<dyn MTLCommandQueue>,
+    ) -> Result<(), RuntimeError> {
+        let mut swapchain: Option<MetalSwapchain> = None;
+        let mut event_storage = xr::EventDataBuffer::new();
+        let mut session_running = false;
+        let mut frame = 0usize;
+
+        for _ in 0..600 {
+            while let Some(event) = instance
+                .poll_event(&mut event_storage)
+                .map_err(RuntimeError::OpenXr)?
+            {
+                match event {
+                    xr::Event::SessionStateChanged(event) => match event.state() {
+                        xr::SessionState::READY => {
+                            session.begin(VIEW_TYPE).map_err(RuntimeError::OpenXr)?;
+                            session_running = true;
+                        }
+                        xr::SessionState::STOPPING => {
+                            session.end().map_err(RuntimeError::OpenXr)?;
+                            session_running = false;
+                        }
+                        xr::SessionState::EXITING | xr::SessionState::LOSS_PENDING => return Ok(()),
+                        _ => {}
+                    },
+                    xr::Event::InstanceLossPending(_) => return Ok(()),
+                    _ => {}
+                }
+            }
+
+            if !session_running {
+                thread::sleep(Duration::from_millis(100));
+                continue;
+            }
+
+            let frame_state = frame_waiter.wait().map_err(RuntimeError::OpenXr)?;
+            frame_stream.begin().map_err(RuntimeError::OpenXr)?;
+            if !frame_state.should_render {
+                frame_stream
+                    .end(
+                        frame_state.predicted_display_time,
+                        environment_blend_mode,
+                        &[],
+                    )
+                    .map_err(RuntimeError::OpenXr)?;
+                continue;
+            }
+
+            if swapchain.is_none() {
+                swapchain = Some(self.create_metal_swapchain(session, view_configs)?);
+            }
+            let swapchain = swapchain.as_mut().unwrap();
+            let image_index = swapchain
+                .handle
+                .acquire_image()
+                .map_err(RuntimeError::OpenXr)?;
+            swapchain
+                .handle
+                .wait_image(xr::Duration::INFINITE)
+                .map_err(RuntimeError::OpenXr)?;
+            self.record_metal_clear(
+                command_queue,
+                swapchain.images[image_index as usize],
+                view_configs.len(),
+                frame,
+            )?;
+            swapchain
+                .handle
+                .release_image()
+                .map_err(RuntimeError::OpenXr)?;
+
+            let (_, views) = session
+                .locate_views(VIEW_TYPE, frame_state.predicted_display_time, space)
+                .map_err(RuntimeError::OpenXr)?;
+            let rect = xr::Rect2Di {
+                offset: xr::Offset2Di { x: 0, y: 0 },
+                extent: xr::Extent2Di {
+                    width: swapchain.width as i32,
+                    height: swapchain.height as i32,
+                },
+            };
+            let projection_views = views
+                .iter()
+                .enumerate()
+                .map(|(index, view)| {
+                    xr::CompositionLayerProjectionView::new()
+                        .pose(view.pose)
+                        .fov(view.fov)
+                        .sub_image(
+                            xr::SwapchainSubImage::new()
+                                .swapchain(&swapchain.handle)
+                                .image_array_index(index as u32)
+                                .image_rect(rect),
+                        )
+                })
+                .collect::<Vec<_>>();
+            let projection_layer = xr::CompositionLayerProjection::new()
+                .space(space)
+                .views(&projection_views);
+            frame_stream
+                .end(
+                    frame_state.predicted_display_time,
+                    environment_blend_mode,
+                    &[&projection_layer],
+                )
+                .map_err(RuntimeError::OpenXr)?;
+            frame = (frame + 1) % PIPELINE_DEPTH as usize;
+        }
+
+        Ok(())
+    }
+
+    #[cfg(target_vendor = "apple")]
+    fn create_metal_swapchain(
+        &self,
+        session: &xr::Session<xr::Metal>,
+        view_configs: &[xr::ViewConfigurationView],
+    ) -> Result<MetalSwapchain, RuntimeError> {
+        let first_view = view_configs
+            .first()
+            .ok_or_else(|| RuntimeError::Metal("OpenXR runtime returned no views".to_string()))?;
+        let handle = session
+            .create_swapchain(&xr::SwapchainCreateInfo {
+                create_flags: xr::SwapchainCreateFlags::EMPTY,
+                usage_flags: xr::SwapchainUsageFlags::COLOR_ATTACHMENT
+                    | xr::SwapchainUsageFlags::SAMPLED,
+                format: METAL_COLOR_FORMAT.0 as u64,
+                sample_count: 1,
+                width: first_view.recommended_image_rect_width,
+                height: first_view.recommended_image_rect_height,
+                face_count: 1,
+                array_size: view_configs.len() as u32,
+                mip_count: 1,
+            })
+            .map_err(RuntimeError::OpenXr)?;
+        let images = handle.enumerate_images().map_err(RuntimeError::OpenXr)?;
+        Ok(MetalSwapchain {
+            handle,
+            images,
+            width: first_view.recommended_image_rect_width,
+            height: first_view.recommended_image_rect_height,
+        })
+    }
+
+    #[cfg(target_vendor = "apple")]
+    fn record_metal_clear(
+        &self,
+        command_queue: &ProtocolObject<dyn MTLCommandQueue>,
+        image: *mut std::ffi::c_void,
+        view_count: usize,
+        frame: usize,
+    ) -> Result<(), RuntimeError> {
+        let texture = unsafe { &*image.cast::<ProtocolObject<dyn MTLTexture>>() };
+        let descriptor = MTLRenderPassDescriptor::new();
+        descriptor.setRenderTargetArrayLength(view_count as _);
+        let attachment = unsafe { descriptor.colorAttachments().objectAtIndexedSubscript(0) };
+        let t = (frame as f64 * 0.17).sin().abs();
+        attachment.setTexture(Some(texture));
+        attachment.setLoadAction(MTLLoadAction::Clear);
+        attachment.setStoreAction(MTLStoreAction::Store);
+        attachment.setClearColor(MTLClearColor {
+            red: 0.05 + 0.25 * t,
+            green: 0.1,
+            blue: 0.35 + 0.35 * (1.0 - t),
+            alpha: 1.0,
+        });
+        let command_buffer = command_queue.commandBuffer().ok_or_else(|| {
+            RuntimeError::Metal("Metal failed to allocate a command buffer".to_string())
+        })?;
+        let encoder = command_buffer
+            .renderCommandEncoderWithDescriptor(&descriptor)
+            .ok_or_else(|| {
+                RuntimeError::Metal("Metal failed to create a render encoder".to_string())
+            })?;
+        encoder.endEncoding();
+        command_buffer.commit();
+        command_buffer.waitUntilCompleted();
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn run_vulkan_frames(
+        &self,
+        instance: &xr::Instance,
+        session: &xr::Session<xr::Vulkan>,
+        frame_waiter: &mut xr::FrameWaiter,
+        frame_stream: &mut xr::FrameStream<xr::Vulkan>,
+        space: &xr::Space,
+        environment_blend_mode: xr::EnvironmentBlendMode,
+        view_configs: &[xr::ViewConfigurationView],
+        vulkan: &VulkanRuntime,
+    ) -> Result<(), RuntimeError> {
+        let render_pass = self.create_vulkan_render_pass(vulkan)?;
+        let command_pool = vulkan
+            .device
+            .create_command_pool(
+                &vk::CommandPoolCreateInfo::default()
+                    .queue_family_index(vulkan.queue_family_index)
+                    .flags(
+                        vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER
+                            | vk::CommandPoolCreateFlags::TRANSIENT,
+                    ),
+                None,
+            )
+            .map_err(|err| RuntimeError::Vulkan(format!("Failed to create command pool: {err}")))?;
+        let command_buffers = vulkan
+            .device
+            .allocate_command_buffers(
+                &vk::CommandBufferAllocateInfo::default()
+                    .command_pool(command_pool)
+                    .command_buffer_count(PIPELINE_DEPTH),
+            )
+            .map_err(|err| {
+                RuntimeError::Vulkan(format!("Failed to allocate command buffers: {err}"))
+            })?;
+        let fences = (0..PIPELINE_DEPTH)
+            .map(|_| {
+                vulkan.device.create_fence(
+                    &vk::FenceCreateInfo::default().flags(vk::FenceCreateFlags::SIGNALED),
+                    None,
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|err| RuntimeError::Vulkan(format!("Failed to create fences: {err}")))?;
+
+        let mut swapchain: Option<VulkanSwapchain> = None;
+        let mut event_storage = xr::EventDataBuffer::new();
+        let mut session_running = false;
+        let mut frame = 0usize;
+
+        for _ in 0..600 {
+            while let Some(event) = instance
+                .poll_event(&mut event_storage)
+                .map_err(RuntimeError::OpenXr)?
+            {
+                match event {
+                    xr::Event::SessionStateChanged(event) => match event.state() {
+                        xr::SessionState::READY => {
+                            session.begin(VIEW_TYPE).map_err(RuntimeError::OpenXr)?;
+                            session_running = true;
+                        }
+                        xr::SessionState::STOPPING => {
+                            session.end().map_err(RuntimeError::OpenXr)?;
+                            session_running = false;
+                        }
+                        xr::SessionState::EXITING | xr::SessionState::LOSS_PENDING => {
+                            self.destroy_vulkan_frame_resources(
+                                vulkan,
+                                render_pass,
+                                command_pool,
+                                fences,
+                                swapchain,
+                            );
+                            return Ok(());
+                        }
+                        _ => {}
+                    },
+                    xr::Event::InstanceLossPending(_) => {
+                        self.destroy_vulkan_frame_resources(
+                            vulkan,
+                            render_pass,
+                            command_pool,
+                            fences,
+                            swapchain,
+                        );
+                        return Ok(());
+                    }
+                    _ => {}
+                }
+            }
+
+            if !session_running {
+                thread::sleep(Duration::from_millis(100));
+                continue;
+            }
+
+            let frame_state = frame_waiter.wait().map_err(RuntimeError::OpenXr)?;
+            frame_stream.begin().map_err(RuntimeError::OpenXr)?;
+
+            if !frame_state.should_render {
+                frame_stream
+                    .end(
+                        frame_state.predicted_display_time,
+                        environment_blend_mode,
+                        &[],
+                    )
+                    .map_err(RuntimeError::OpenXr)?;
+                continue;
+            }
+
+            if swapchain.is_none() {
+                swapchain = Some(self.create_vulkan_swapchain(
+                    session,
+                    vulkan,
+                    render_pass,
+                    view_configs,
+                )?);
+            }
+            let swapchain = swapchain.as_mut().unwrap();
+            let image_index = swapchain
+                .handle
+                .acquire_image()
+                .map_err(RuntimeError::OpenXr)?;
+            let fence = fences[frame];
+            vulkan
+                .device
+                .wait_for_fences(&[fence], true, u64::MAX)
+                .map_err(|err| RuntimeError::Vulkan(format!("Failed to wait for fence: {err}")))?;
+            vulkan
+                .device
+                .reset_fences(&[fence])
+                .map_err(|err| RuntimeError::Vulkan(format!("Failed to reset fence: {err}")))?;
+
+            let command_buffer = command_buffers[frame];
+            self.record_vulkan_clear(
+                vulkan,
+                command_buffer,
+                render_pass,
+                swapchain,
+                image_index as usize,
+                frame,
+            )?;
+            let (_, views) = session
+                .locate_views(VIEW_TYPE, frame_state.predicted_display_time, space)
+                .map_err(RuntimeError::OpenXr)?;
+
+            swapchain
+                .handle
+                .wait_image(xr::Duration::INFINITE)
+                .map_err(RuntimeError::OpenXr)?;
+            vulkan
+                .device
+                .queue_submit(
+                    vulkan.queue,
+                    &[vk::SubmitInfo::default().command_buffers(&[command_buffer])],
+                    fence,
+                )
+                .map_err(|err| RuntimeError::Vulkan(format!("Failed to submit queue: {err}")))?;
+            swapchain
+                .handle
+                .release_image()
+                .map_err(RuntimeError::OpenXr)?;
+
+            let rect = xr::Rect2Di {
+                offset: xr::Offset2Di { x: 0, y: 0 },
+                extent: xr::Extent2Di {
+                    width: swapchain.resolution.width as _,
+                    height: swapchain.resolution.height as _,
+                },
+            };
+            let mut projection_views = Vec::with_capacity(views.len());
+            for (index, view) in views.iter().enumerate() {
+                projection_views.push(
+                    xr::CompositionLayerProjectionView::new()
+                        .pose(view.pose)
+                        .fov(view.fov)
+                        .sub_image(
+                            xr::SwapchainSubImage::new()
+                                .swapchain(&swapchain.handle)
+                                .image_array_index(index as u32)
+                                .image_rect(rect),
+                        ),
+                );
+            }
+            let projection_layer = xr::CompositionLayerProjection::new()
+                .space(space)
+                .views(&projection_views);
+            frame_stream
+                .end(
+                    frame_state.predicted_display_time,
+                    environment_blend_mode,
+                    &[&projection_layer],
+                )
+                .map_err(RuntimeError::OpenXr)?;
+            frame = (frame + 1) % PIPELINE_DEPTH as usize;
+        }
+
+        self.destroy_vulkan_frame_resources(vulkan, render_pass, command_pool, fences, swapchain);
+        Ok(())
+    }
+
+    unsafe fn create_vulkan_render_pass(
+        &self,
+        vulkan: &VulkanRuntime,
+    ) -> Result<vk::RenderPass, RuntimeError> {
+        let view_mask = !(!0 << 2);
+        vulkan
+            .device
+            .create_render_pass(
+                &vk::RenderPassCreateInfo::default()
+                    .attachments(&[vk::AttachmentDescription {
+                        format: COLOR_FORMAT,
+                        samples: vk::SampleCountFlags::TYPE_1,
+                        load_op: vk::AttachmentLoadOp::CLEAR,
+                        store_op: vk::AttachmentStoreOp::STORE,
+                        initial_layout: vk::ImageLayout::UNDEFINED,
+                        final_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                        ..Default::default()
+                    }])
+                    .subpasses(&[vk::SubpassDescription::default()
+                        .color_attachments(&[vk::AttachmentReference {
+                            attachment: 0,
+                            layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                        }])
+                        .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)])
+                    .dependencies(&[vk::SubpassDependency {
+                        src_subpass: vk::SUBPASS_EXTERNAL,
+                        dst_subpass: 0,
+                        src_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                        dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                        dst_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+                        ..Default::default()
+                    }])
+                    .push_next(
+                        &mut vk::RenderPassMultiviewCreateInfo::default()
+                            .view_masks(&[view_mask])
+                            .correlation_masks(&[view_mask]),
+                    ),
+                None,
+            )
+            .map_err(|err| RuntimeError::Vulkan(format!("Failed to create render pass: {err}")))
+    }
+
+    unsafe fn create_vulkan_swapchain(
+        &self,
+        session: &xr::Session<xr::Vulkan>,
+        vulkan: &VulkanRuntime,
+        render_pass: vk::RenderPass,
+        view_configs: &[xr::ViewConfigurationView],
+    ) -> Result<VulkanSwapchain, RuntimeError> {
+        let first_view = view_configs
+            .first()
+            .ok_or_else(|| RuntimeError::Vulkan("OpenXR runtime returned no views".to_string()))?;
+        let resolution = vk::Extent2D {
+            width: first_view.recommended_image_rect_width,
+            height: first_view.recommended_image_rect_height,
+        };
+        let handle = session
+            .create_swapchain(&xr::SwapchainCreateInfo {
+                create_flags: xr::SwapchainCreateFlags::EMPTY,
+                usage_flags: xr::SwapchainUsageFlags::COLOR_ATTACHMENT
+                    | xr::SwapchainUsageFlags::SAMPLED,
+                format: COLOR_FORMAT.as_raw() as _,
+                sample_count: 1,
+                width: resolution.width,
+                height: resolution.height,
+                face_count: 1,
+                array_size: view_configs.len() as u32,
+                mip_count: 1,
+            })
+            .map_err(RuntimeError::OpenXr)?;
+
+        let images = handle.enumerate_images().map_err(RuntimeError::OpenXr)?;
+        let buffers = images
+            .into_iter()
+            .map(|image| {
+                let color_image = vk::Image::from_raw(image);
+                let color = vulkan
+                    .device
+                    .create_image_view(
+                        &vk::ImageViewCreateInfo::default()
+                            .image(color_image)
+                            .view_type(vk::ImageViewType::TYPE_2D_ARRAY)
+                            .format(COLOR_FORMAT)
+                            .subresource_range(vk::ImageSubresourceRange {
+                                aspect_mask: vk::ImageAspectFlags::COLOR,
+                                base_mip_level: 0,
+                                level_count: 1,
+                                base_array_layer: 0,
+                                layer_count: view_configs.len() as u32,
+                            }),
+                        None,
+                    )
+                    .map_err(|err| {
+                        RuntimeError::Vulkan(format!("Failed to create image view: {err}"))
+                    })?;
+                let framebuffer = vulkan
+                    .device
+                    .create_framebuffer(
+                        &vk::FramebufferCreateInfo::default()
+                            .render_pass(render_pass)
+                            .width(resolution.width)
+                            .height(resolution.height)
+                            .attachments(&[color])
+                            .layers(1),
+                        None,
+                    )
+                    .map_err(|err| {
+                        RuntimeError::Vulkan(format!("Failed to create framebuffer: {err}"))
+                    })?;
+                Ok(VulkanFramebuffer { framebuffer, color })
+            })
+            .collect::<Result<Vec<_>, RuntimeError>>()?;
+
+        Ok(VulkanSwapchain {
+            handle,
+            buffers,
+            resolution,
+        })
+    }
+
+    unsafe fn record_vulkan_clear(
+        &self,
+        vulkan: &VulkanRuntime,
+        command_buffer: vk::CommandBuffer,
+        render_pass: vk::RenderPass,
+        swapchain: &VulkanSwapchain,
+        image_index: usize,
+        frame_index: usize,
+    ) -> Result<(), RuntimeError> {
+        vulkan
+            .device
+            .begin_command_buffer(
+                command_buffer,
+                &vk::CommandBufferBeginInfo::default()
+                    .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
+            )
+            .map_err(|err| {
+                RuntimeError::Vulkan(format!("Failed to begin command buffer: {err}"))
+            })?;
+        let t = (frame_index as f32 * 0.17).sin().abs();
+        vulkan.device.cmd_begin_render_pass(
+            command_buffer,
+            &vk::RenderPassBeginInfo::default()
+                .render_pass(render_pass)
+                .framebuffer(swapchain.buffers[image_index].framebuffer)
+                .render_area(vk::Rect2D {
+                    offset: vk::Offset2D { x: 0, y: 0 },
+                    extent: swapchain.resolution,
+                })
+                .clear_values(&[vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [0.05 + 0.25 * t, 0.1, 0.35 + 0.35 * (1.0 - t), 1.0],
+                    },
+                }]),
+            vk::SubpassContents::INLINE,
+        );
+        vulkan.device.cmd_end_render_pass(command_buffer);
+        vulkan
+            .device
+            .end_command_buffer(command_buffer)
+            .map_err(|err| RuntimeError::Vulkan(format!("Failed to end command buffer: {err}")))
+    }
+
+    unsafe fn destroy_vulkan_frame_resources(
+        &self,
+        vulkan: &VulkanRuntime,
+        render_pass: vk::RenderPass,
+        command_pool: vk::CommandPool,
+        fences: Vec<vk::Fence>,
+        swapchain: Option<VulkanSwapchain>,
+    ) {
+        let _ = vulkan.device.wait_for_fences(&fences, true, u64::MAX);
+        if let Some(swapchain) = swapchain {
+            for buffer in swapchain.buffers {
+                vulkan.device.destroy_framebuffer(buffer.framebuffer, None);
+                vulkan.device.destroy_image_view(buffer.color, None);
+            }
+        }
+        for fence in fences {
+            vulkan.device.destroy_fence(fence, None);
+        }
+        vulkan.device.destroy_command_pool(command_pool, None);
+        vulkan.device.destroy_render_pass(render_pass, None);
     }
 
     unsafe fn load_vulkan_entry(&self) -> Result<VulkanEntry, RuntimeError> {
@@ -341,12 +1100,12 @@ impl Runtime {
             .or_else(|| env::var_os(LOADER_PATH_ENV).map(PathBuf::from));
 
         if let Some(path) = loader_path {
-            unsafe { xr::Entry::load_from(&path) }.map_err(|err| RuntimeError::Loader {
+            unsafe { xr::Entry::load_from(&path, &()) }.map_err(|err| RuntimeError::Loader {
                 message: err.to_string(),
                 loader_path: Some(path),
             })
         } else {
-            Ok(xr::Entry::linked())
+            xr::Entry::linked(&()).map_err(RuntimeError::OpenXr)
         }
     }
 }
@@ -370,10 +1129,32 @@ pub enum GraphicsInfo {
     Metal,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct VulkanSessionInfo {
+struct VulkanRuntime {
+    _entry: VulkanEntry,
+    instance: ash::Instance,
+    physical_device: vk::PhysicalDevice,
+    device: ash::Device,
+    queue: vk::Queue,
     queue_family_index: u32,
-    swapchain_formats: Vec<i64>,
+}
+
+struct VulkanSwapchain {
+    handle: xr::Swapchain<xr::Vulkan>,
+    buffers: Vec<VulkanFramebuffer>,
+    resolution: vk::Extent2D,
+}
+
+struct VulkanFramebuffer {
+    framebuffer: vk::Framebuffer,
+    color: vk::ImageView,
+}
+
+#[cfg(target_vendor = "apple")]
+struct MetalSwapchain {
+    handle: xr::Swapchain<xr::Metal>,
+    images: Vec<*mut std::ffi::c_void>,
+    width: u32,
+    height: u32,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -397,6 +1178,7 @@ pub enum RuntimeError {
     },
     OpenXr(xr::sys::Result),
     Vulkan(String),
+    Metal(String),
     UnsupportedBackend {
         requested: Backend,
         vulkan_available: bool,
@@ -432,6 +1214,7 @@ impl fmt::Display for RuntimeError {
             }
             RuntimeError::OpenXr(result) => write!(f, "OpenXR runtime error: {result:?}"),
             RuntimeError::Vulkan(message) => write!(f, "Vulkan initialization error: {message}"),
+            RuntimeError::Metal(message) => write!(f, "Metal initialization error: {message}"),
             RuntimeError::UnsupportedBackend {
                 requested,
                 vulkan_available,

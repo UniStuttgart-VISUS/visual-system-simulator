@@ -8,5 +8,21 @@ license = "Apache-2.0"
 [dependencies]
 ash = "0.38"
 cgmath = { workspace = true }
-openxr = { version = "0.21.1", features = ["static"] }
+openxr = { git = "https://github.com/schulzch/openxrs", branch = "metal", features = ["static"] }
 vss = { path = "../vss" }
+
+[target.'cfg(target_vendor = "apple")'.dependencies]
+objc2 = "0.6.4"
+objc2-metal = { version = "0.3.2", default-features = false, features = [
+  "std",
+  "MTLAllocation",
+  "MTLCommandBuffer",
+  "MTLCommandEncoder",
+  "MTLCommandQueue",
+  "MTLDevice",
+  "MTLPixelFormat",
+  "MTLRenderCommandEncoder",
+  "MTLRenderPass",
+  "MTLResource",
+  "MTLTexture",
+] }
