@@ -4,6 +4,7 @@ members = [
   "vss",
   "vss-desktop",
   "vss-mobile",
+  "vss-openxr",
   "vss-web",
   "vss-winit",
   "vss-vr"

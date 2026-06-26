@@ -7,6 +7,24 @@ use std::fs::File;
 use std::io::prelude::*;
 use vss::*;
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum OpenXrBackend {
+    Auto,
+    Vulkan,
+    Metal,
+}
+
+impl OpenXrBackend {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "auto" => Some(Self::Auto),
+            "vulkan" => Some(Self::Vulkan),
+            "metal" => Some(Self::Metal),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Serialize)]
 pub struct OutputInfo {
     // Name of the configuration (e.g., `astigmatism`)
@@ -38,6 +56,7 @@ pub struct Config {
     pub output: Option<mustache::Template>,
     pub output_scale: OutputScale,
     pub inputs: Vec<String>,
+    pub openxr: Option<OpenXrBackend>,
 }
 
 impl Default for Config {
@@ -47,6 +66,7 @@ impl Default for Config {
             resolution: None,
             output: None,
             inputs: Vec::new(),
+            openxr: None,
             flow_configs: vec![FlowConfig {
                 name: "Default".to_string(),
                 values: HashMap::new(),
@@ -272,6 +292,16 @@ pub fn cmd_parse() -> Config {
                 ),
         )
         .arg(
+            Arg::new("openxr")
+                .long("openxr")
+                .value_name("BACKEND")
+                .num_args(0..=1)
+                .require_equals(true)
+                .default_missing_value("auto")
+                .value_parser(["auto", "vulkan", "metal"])
+                .help("Runs with OpenXR using optional backend: auto, vulkan, or metal"),
+        )
+        .arg(
             Arg::new("input")
                 .value_name("INPUT|GLOB_PATTERN")
                 .help(
@@ -350,6 +380,13 @@ pub fn cmd_parse() -> Config {
     } else {
         OutputScale::default()
     };
+
+    if matches.contains_id("openxr") {
+        let backend = matches
+            .get_one::<String>("openxr")
+            .expect("openxr has a default when present");
+        config.openxr = OpenXrBackend::parse(backend);
+    }
 
     config.inputs = matches
         .get_many::<String>("input")

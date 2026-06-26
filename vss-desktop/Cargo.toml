@@ -16,6 +16,7 @@ wgpu-hal = { workspace = true, optional = true }
 cgmath = { workspace = true }
 vss = { path = "../vss" }
 vss-winit = { path = "../vss-winit" }
+vss-openxr = { path = "../vss-openxr", optional = true }
 vss-vr = { path = "../vss-vr", optional = true, features = ["varjo"] }
 pollster = "0.4"
 clap = "4"
@@ -32,4 +33,4 @@ ash = { version = "0.38", optional = true }
 default = []
 video = ["ac_ffmpeg"]
 varjo = ["wgpu-hal", "ash", "vss-vr"]
-openxr = []
+openxr = ["vss-openxr"]

@@ -2,24 +2,21 @@ mod cmd;
 mod io;
 mod node;
 
-//#[cfg(feature = "openxr")]
-//mod openxr;
-
 use std::io::Cursor;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
 use vss::*;
 #[cfg(feature = "varjo")]
 use vss_vr::*;
-#[cfg(not(any(feature = "varjo", feature = "openxr")))]
+#[cfg(not(feature = "varjo"))]
 use vss_winit::*;
 
 use crate::cmd::*;
 use crate::io::*;
 
-#[cfg(not(any(feature = "varjo", feature = "openxr")))]
+#[cfg(not(feature = "varjo"))]
 fn build_flow(
-    surface: &mut Surface,
+    context: &mut RenderContext,
     io_generator: &mut IoGenerator,
     flow_index: usize,
     render_resolution: Option<(u32, u32)>,
@@ -37,44 +34,44 @@ fn build_flow(
         }
     };
     let (input_node, output_node) = io_generator
-        .current(surface, render_res, flow_index)
+        .current(context, render_res, flow_index)
         .unwrap();
 
     // Add input node.
-    surface.add_node(input_node, flow_index);
+    context.add_node(input_node, flow_index);
 
     // Visual system passes.
-    let node = Cataract::new(surface);
-    surface.add_node(Box::new(node), flow_index);
-    let node = Lens::new(surface);
-    surface.add_node(Box::new(node), flow_index);
-    let node = Retina::new(surface);
-    surface.add_node(Box::new(node), flow_index);
-    let node = PeacockCB::new(surface);
-    surface.add_node(Box::new(node), flow_index);
+    let node = Cataract::new(context);
+    context.add_node(Box::new(node), flow_index);
+    let node = Lens::new(context);
+    context.add_node(Box::new(node), flow_index);
+    let node = Retina::new(context);
+    context.add_node(Box::new(node), flow_index);
+    let node = PeacockCB::new(context);
+    context.add_node(Box::new(node), flow_index);
 
     // Measurement Nodes for variance and error
-    let node = VarianceMeasure::new(surface);
-    surface.add_node(Box::new(node), flow_index);
-    let node = VisOverlay::new(surface);
-    surface.add_node(Box::new(node), flow_index);
+    let node = VarianceMeasure::new(context);
+    context.add_node(Box::new(node), flow_index);
+    let node = VisOverlay::new(context);
+    context.add_node(Box::new(node), flow_index);
 
     // Display node.
-    let mut node = Display::new(surface);
+    let mut node = Display::new(context);
     node.set_viewport(view_port);
     node.set_output_scale(output_scale);
-    surface.add_node(Box::new(node), flow_index);
+    context.add_node(Box::new(node), flow_index);
 
     // Add UI overlay.
-    let node = GuiOverlay::new(surface);
-    surface.add_node(Box::new(node), flow_index);
+    let node = GuiOverlay::new(context);
+    context.add_node(Box::new(node), flow_index);
 
     // Add output node, if present.
     if let Some(output_node) = output_node {
-        surface.add_node(output_node, flow_index);
+        context.add_node(output_node, flow_index);
     }
 
-    surface.negociate_slots();
+    context.negociate_slots();
 }
 
 pub fn load_fn(full_path: &str) -> Cursor<Vec<u8>> {
@@ -97,11 +94,16 @@ pub fn load_fn(full_path: &str) -> Cursor<Vec<u8>> {
 }
 
 // "Default" main
-#[cfg(not(any(feature = "varjo", feature = "openxr")))]
+#[cfg(not(feature = "varjo"))]
 pub fn main() {
     set_load(Box::new(load_fn));
 
     let config = cmd_parse();
+    if let Some(backend) = config.openxr {
+        run_openxr(config, backend);
+        return;
+    }
+
     let config_poll = config.clone();
 
     let flow_count = config.flow_configs.len();
@@ -263,69 +265,61 @@ pub fn main() {
     */
 }
 
-//TODO: this one is super unfinished.
 #[cfg(feature = "openxr")]
-pub fn main() {
-    let mut oxr = openxr::OpenXR::new();
-    let config = cmd_parse();
+fn run_openxr(config: Config, backend: OpenXrBackend) {
+    if config.flow_configs.len() > 2 {
+        eprintln!("OpenXR accepts at most two eye-based flow configs.");
+        std::process::exit(1);
+    }
 
-    let remote = if let Some(port) = config.port {
-        Some(Remote::new(port))
-    } else {
-        None
+    let backend = match backend {
+        OpenXrBackend::Auto => vss_openxr::Backend::Auto,
+        OpenXrBackend::Vulkan => vss_openxr::Backend::Vulkan,
+        OpenXrBackend::Metal => vss_openxr::Backend::Metal,
     };
-
-    let flow_count = 2;
-
-    let mut parameters = Vec::new();
-    for idx in 0..flow_count {
-        let mut value_map = ValueMap::new();
-        let iter = match (config.parameters_r.clone(), config.parameters_l.clone()) {
-            (Some(param_r), Some(param_l)) => {
-                if idx == 0 {
-                    param_r.into_iter()
-                } else {
-                    param_l.into_iter()
-                }
-            }
-            _ => config.parameters.clone().into_iter(),
-        };
-        for (key, val) in iter {
-            value_map.insert((key).clone(), (val).clone());
+    let runtime = vss_openxr::Runtime::new(vss_openxr::RuntimeOptions {
+        backend,
+        loader_path: None,
+    });
+    if let Err(err) = runtime.run(move |context, views| {
+        for view in views {
+            let flow_config = config
+                .flow_configs
+                .get(view.eye_index)
+                .unwrap_or(&config.flow_configs[0]);
+            let mut io_generator = io::IoGenerator::new(
+                config.inputs.clone(),
+                flow_config.name.clone(),
+                config.output.clone(),
+            );
+            let viewport = ViewPort {
+                x: view.viewport.x as f32,
+                y: view.viewport.y as f32,
+                width: view.viewport.width as f32,
+                height: view.viewport.height as f32,
+                absolute_viewport: true,
+            };
+            build_flow(
+                context,
+                &mut io_generator,
+                view.view_index,
+                config.resolution,
+                viewport,
+                config.output_scale,
+            );
         }
-        value_map.insert("flow_id".into(), Value::Number(idx as f64));
-        parameters.push(RefCell::new(value_map));
+    }) {
+        eprintln!("{err}");
+        std::process::exit(1);
     }
+}
 
-    let mut window = Window::new(config.visible, remote, parameters, flow_count);
-
-    dbg!("Pre init");
-    oxr.initialize();
-    dbg!("Post init");
-
-    for index in 0..flow_count {
-        let mut io_generator = io::IoGenerator::new(
-            config.inputs.clone(),
-            config.name.clone(),
-            config.output.clone(),
-        );
-
-        build_flow(
-            &mut window.surface,
-            &mut io_generator,
-            index,
-            config.resolution,
-        );
-    }
-
-    let mut done = false;
-
-    oxr.create_session(&window);
-    oxr.create_render_targets(&window);
-
-    while !done {
-        done = window.poll_events();
-    }
+#[cfg(not(feature = "openxr"))]
+fn run_openxr(_config: Config, _backend: OpenXrBackend) {
+    eprintln!(
+        "OpenXR support is not enabled. Rebuild with: cargo run -p vss-desktop --features openxr -- --openxr ..."
+    );
+    std::process::exit(1);
 }
 
 #[cfg(feature = "varjo")]

@@ -1,0 +1,11 @@
+[package]
+name = "vss-openxr"
+edition = "2018"
+version = "0.1.0"
+authors = ["The Visual System Simulator Developers"]
+license = "Apache-2.0"
+
+[dependencies]
+cgmath = { workspace = true }
+openxr = "0.21.1"
+vss = { path = "../vss" }
