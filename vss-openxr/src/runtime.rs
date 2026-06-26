@@ -90,10 +90,7 @@ impl Runtime {
                 loader_path: Some(path),
             })
         } else {
-            unsafe { xr::Entry::load() }.map_err(|err| RuntimeError::Loader {
-                message: err.to_string(),
-                loader_path: None,
-            })
+            Ok(xr::Entry::linked())
         }
     }
 }

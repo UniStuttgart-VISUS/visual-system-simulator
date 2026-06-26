@@ -7,5 +7,5 @@ license = "Apache-2.0"
 
 [dependencies]
 cgmath = { workspace = true }
-openxr = "0.21.1"
+openxr = { version = "0.21.1", features = ["static"] }
 vss = { path = "../vss" }
