@@ -2,9 +2,9 @@ mod cmd;
 mod io;
 mod node;
 
+use cgmath::{InnerSpace, Matrix4, Rad, SquareMatrix, Vector3, Vector4};
 use std::io::Cursor;
 use std::sync::{Arc, Mutex, RwLock};
-use std::time::Instant;
 use vss::*;
 use vss_winit::*;
 
@@ -135,10 +135,6 @@ pub fn main() {
         }
     };
 
-    let mut frame_counter = 0;
-    let mut frame_perfs: Vec<(u128, u128)> = vec![];
-    let mut previous_frame = Instant::now();
-    let print_spacing = 60;
     let output_processed: Arc<Mutex<Vec<Arc<RwLock<bool>>>>> = Arc::new(Mutex::new(Vec::new()));
     let output_processed_init = output_processed.clone();
     let output_processed_poll = output_processed.clone();
@@ -176,7 +172,6 @@ pub fn main() {
         },
         move || {
             let mut done = false;
-            frame_counter += 1;
 
             // Batch output and automatic exit should happen after ~3 frames to ensure proper/stable results.
             if config_poll.output.is_some() {
@@ -185,27 +180,6 @@ pub fn main() {
                     && processed.iter().all(|processed| *processed.read().unwrap());
             } else if !config_poll.visible {
                 done = true;
-            }
-
-            if config_poll.measure_frames > 0 {
-                let time_diff = previous_frame.elapsed().as_micros();
-                let frame_perf = (frame_counter, time_diff);
-                frame_perfs.push(frame_perf);
-
-                if frame_counter > 0 && frame_counter % print_spacing == 0 {
-                    let avg_fps: i32 = frame_perfs
-                        [(frame_counter - print_spacing) as usize..frame_counter as usize]
-                        .iter()
-                        .map(|t| t.1 as i32)
-                        .sum::<i32>()
-                        / (print_spacing as i32);
-
-                    println!("{:?} ≙ {}fps", frame_perf, 1_000_000 / (avg_fps));
-                }
-                previous_frame = Instant::now();
-                if frame_counter > config_poll.measure_frames {
-                    done = true;
-                }
             }
 
             /*
@@ -281,11 +255,36 @@ fn run_openxr(config: Config, backend: OpenXrBackend) {
                 viewport,
                 config.output_scale,
             );
+
+            if let Some((x, y)) = flow_config.static_gaze {
+                let gaze = fallback_gaze_from_view(view, x, y);
+                context.flows[view.view_index].eye_mut().gaze = gaze;
+            }
         }
     }) {
         eprintln!("{err}");
         std::process::exit(1);
     }
+}
+
+#[cfg(feature = "openxr")]
+fn fallback_gaze_from_view(view: &vss_openxr::View, x: f32, y: f32) -> Vector3<f32> {
+    let width = view.viewport.width.max(1) as f32;
+    let height = view.viewport.height.max(1) as f32;
+    let yaw = (x / width - 0.5) * std::f32::consts::PI * 2.0;
+    let pitch = (y / height - 0.5) * std::f32::consts::PI;
+    let gaze_view = Matrix4::from_angle_x(Rad(pitch)) * Matrix4::from_angle_y(Rad(yaw));
+    let gaze = (view.view * gaze_view.invert().unwrap() * Vector4::unit_z()).truncate();
+    if gaze.magnitude2() > 0.0 {
+        gaze.normalize()
+    } else {
+        Vector3::unit_z()
+    }
+}
+
+#[cfg(not(feature = "openxr"))]
+fn fallback_gaze_from_view(_view: &(), _x: f32, _y: f32) -> Vector3<f32> {
+    Vector3::unit_z()
 }
 
 #[cfg(not(feature = "openxr"))]

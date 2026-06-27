@@ -35,7 +35,7 @@ where
                 engine_name: "vss-openxr",
                 ..Default::default()
             },
-            &runtime.enabled_extensions(Backend::Metal),
+            &runtime.enabled_extensions(Backend::Metal, &available_extensions),
             &[],
             &(),
         )
@@ -43,15 +43,15 @@ where
     let system = instance
         .system(xr::FormFactor::HEAD_MOUNTED_DISPLAY)
         .map_err(RuntimeError::OpenXr)?;
+    let view_configuration = runtime.select_view_configuration(&instance, system)?;
+    let view_configuration_type = view_configuration.ty;
+    let view_configs = view_configuration.views;
     let environment_blend_mode = instance
-        .enumerate_environment_blend_modes(system, VIEW_TYPE)
+        .enumerate_environment_blend_modes(system, view_configuration_type)
         .map_err(RuntimeError::OpenXr)?
         .into_iter()
         .next()
         .unwrap_or(xr::EnvironmentBlendMode::OPAQUE);
-    let view_configs = instance
-        .enumerate_view_configuration_views(system, VIEW_TYPE)
-        .map_err(RuntimeError::OpenXr)?;
     let requirements = instance
         .graphics_requirements::<xr::Metal>(system)
         .map_err(RuntimeError::OpenXr)?;
@@ -78,7 +78,7 @@ where
         wgpu_queue,
         output_format,
     );
-    let initial_views = runtime.initial_views(&view_configs)?;
+    let initial_views = runtime.initial_views(&view_configs, view_configuration_type)?;
     build_pipeline(&mut context, &initial_views);
     let (session, mut frame_waiter, mut frame_stream) = unsafe {
         instance.create_session::<xr::Metal>(
@@ -89,6 +89,14 @@ where
         )
     }
     .map_err(RuntimeError::OpenXr)?;
+    let eye_tracking =
+        match runtime.create_eye_tracking(&instance, &session, system, &available_extensions) {
+            Ok(eye_tracking) => eye_tracking,
+            Err(err) => {
+                eprintln!("{err}");
+                None
+            }
+        };
     let space = session
         .create_reference_space(xr::ReferenceSpaceType::LOCAL, xr::Posef::IDENTITY)
         .map_err(RuntimeError::OpenXr)?;
@@ -101,7 +109,9 @@ where
         &mut frame_stream,
         &space,
         environment_blend_mode,
+        view_configuration_type,
         &view_configs,
+        eye_tracking.as_ref(),
         &mut context,
     )
 }
@@ -149,7 +159,9 @@ fn run_metal_frames(
     frame_stream: &mut xr::FrameStream<xr::Metal>,
     space: &xr::Space,
     environment_blend_mode: xr::EnvironmentBlendMode,
+    view_configuration_type: xr::ViewConfigurationType,
     view_configs: &[xr::ViewConfigurationView],
+    eye_tracking: Option<&EyeTracking>,
     context: &mut RenderContext,
 ) -> Result<(), RuntimeError> {
     let mut swapchain: Option<MetalSwapchain> = None;
@@ -164,7 +176,9 @@ fn run_metal_frames(
             match event {
                 xr::Event::SessionStateChanged(event) => match event.state() {
                     xr::SessionState::READY => {
-                        session.begin(VIEW_TYPE).map_err(RuntimeError::OpenXr)?;
+                        session
+                            .begin(view_configuration_type)
+                            .map_err(RuntimeError::OpenXr)?;
                         session_running = true;
                     }
                     xr::SessionState::STOPPING => {
@@ -215,9 +229,21 @@ fn run_metal_frames(
             .wait_image(xr::Duration::INFINITE)
             .map_err(RuntimeError::OpenXr)?;
         let (_, views) = session
-            .locate_views(VIEW_TYPE, frame_state.predicted_display_time, space)
+            .locate_views(
+                view_configuration_type,
+                frame_state.predicted_display_time,
+                space,
+            )
             .map_err(RuntimeError::OpenXr)?;
-        runtime.render_views(context, &views, &swapchain.targets[image_index as usize])?;
+        runtime.render_views(
+            session,
+            eye_tracking,
+            context,
+            &views,
+            &swapchain.targets[image_index as usize],
+            frame_state.predicted_display_time,
+            space,
+        )?;
         swapchain
             .handle
             .release_image()

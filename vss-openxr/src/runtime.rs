@@ -3,9 +3,10 @@ mod metal;
 mod vulkan;
 
 use crate::{Backend, View};
-use cgmath::{Matrix4, Quaternion, SquareMatrix, Vector3};
+use cgmath::{InnerSpace, Matrix3, Matrix4, Quaternion, SquareMatrix, Vector3};
 use openxr as xr;
-use std::{env, fmt, iter, path::PathBuf, rc::Rc};
+use openxr::sys as xrsys;
+use std::{env, fmt, iter, path::PathBuf, ptr, rc::Rc};
 use vss::{create_sampler_linear, MouseInput, RenderContext, RenderTexture};
 
 pub const LOADER_PATH_ENV: &str = "VSS_OPENXR_LOADER";
@@ -15,7 +16,18 @@ const META_XR_SIMULATOR_VULKAN_LOADER: &str =
     "/Applications/MetaXRSimulator.app/Contents/Frameworks/libvulkan.dylib";
 const META_XR_SIMULATOR_VULKAN_ICD: &str =
     "/Applications/MetaXRSimulator.app/Contents/Resources/vulkan/icd.d/MoltenVK_icd.json";
-const VIEW_TYPE: xr::ViewConfigurationType = xr::ViewConfigurationType::PRIMARY_STEREO;
+const DEFAULT_VIEW_TYPE: xr::ViewConfigurationType = xr::ViewConfigurationType::PRIMARY_STEREO;
+
+#[derive(Clone, Debug)]
+struct SelectedViewConfiguration {
+    ty: xr::ViewConfigurationType,
+    views: Vec<xr::ViewConfigurationView>,
+}
+
+struct EyeTracking {
+    action_set: xr::ActionSet,
+    gaze_space: xr::Space,
+}
 
 #[derive(Clone, Debug)]
 pub struct RuntimeOptions {
@@ -68,7 +80,7 @@ impl Runtime {
 
         let available_extensions = entry.enumerate_extensions().map_err(RuntimeError::OpenXr)?;
         let backend = self.select_backend(&available_extensions)?;
-        let enabled_extensions = self.enabled_extensions(backend);
+        let enabled_extensions = self.enabled_extensions(backend, &available_extensions);
 
         let instance = entry
             .create_instance(
@@ -87,12 +99,12 @@ impl Runtime {
         let system = instance
             .system(xr::FormFactor::HEAD_MOUNTED_DISPLAY)
             .map_err(RuntimeError::OpenXr)?;
+        let view_configuration = self.select_view_configuration(&instance, system)?;
         let system_properties = instance
             .system_properties(system)
             .map_err(RuntimeError::OpenXr)?;
-        let views = instance
-            .enumerate_view_configuration_views(system, xr::ViewConfigurationType::PRIMARY_STEREO)
-            .map_err(RuntimeError::OpenXr)?
+        let views = view_configuration
+            .views
             .into_iter()
             .map(|view| ViewConfigurationView {
                 recommended_image_rect_width: view.recommended_image_rect_width,
@@ -261,9 +273,53 @@ impl Runtime {
             .collect()
     }
 
+    fn select_view_configuration(
+        &self,
+        instance: &xr::Instance,
+        system: xr::SystemId,
+    ) -> Result<SelectedViewConfiguration, RuntimeError> {
+        let supported = instance
+            .enumerate_view_configurations(system)
+            .map_err(RuntimeError::OpenXr)?;
+        let view_type = [
+            xr::ViewConfigurationType::PRIMARY_QUAD_VARJO,
+            DEFAULT_VIEW_TYPE,
+            xr::ViewConfigurationType::PRIMARY_MONO,
+        ]
+        .iter()
+        .copied()
+        .find(|ty| supported.contains(ty))
+        .ok_or_else(|| {
+            RuntimeError::View(
+                "OpenXR runtime returned no supported primary view configuration".to_string(),
+            )
+        })?;
+        let views = instance
+            .enumerate_view_configuration_views(system, view_type)
+            .map_err(RuntimeError::OpenXr)?;
+        let first = views
+            .first()
+            .ok_or_else(|| RuntimeError::View("OpenXR runtime returned no views".to_string()))?;
+        if views.iter().any(|view| {
+            view.recommended_image_rect_width != first.recommended_image_rect_width
+                || view.recommended_image_rect_height != first.recommended_image_rect_height
+                || view.recommended_swapchain_sample_count
+                    != first.recommended_swapchain_sample_count
+        }) {
+            return Err(RuntimeError::View(
+                "OpenXR runtime returned mismatched per-view recommendations".to_string(),
+            ));
+        }
+        Ok(SelectedViewConfiguration {
+            ty: view_type,
+            views,
+        })
+    }
+
     fn initial_views(
         &self,
         view_configs: &[xr::ViewConfigurationView],
+        view_configuration_type: xr::ViewConfigurationType,
     ) -> Result<Vec<View>, RuntimeError> {
         if view_configs.is_empty() {
             return Err(RuntimeError::View(
@@ -275,7 +331,7 @@ impl Runtime {
             .enumerate()
             .map(|(index, config)| View {
                 view_index: index,
-                eye_index: index.min(1),
+                eye_index: Self::eye_index_for_view(view_configuration_type, index),
                 viewport: crate::Viewport {
                     x: 0,
                     y: 0,
@@ -289,11 +345,112 @@ impl Runtime {
             .collect())
     }
 
-    fn render_views(
+    fn eye_index_for_view(
+        view_configuration_type: xr::ViewConfigurationType,
+        view_index: usize,
+    ) -> usize {
+        match view_configuration_type {
+            xr::ViewConfigurationType::PRIMARY_QUAD_VARJO => match view_index {
+                0 | 1 => 0,
+                _ => 1,
+            },
+            xr::ViewConfigurationType::PRIMARY_MONO => 0,
+            _ => match view_index {
+                0 => 0,
+                1 => 1,
+                _ => 1,
+            },
+        }
+    }
+
+    fn eye_index_for_view_count(view_count: usize, view_index: usize) -> usize {
+        match view_count {
+            4 => match view_index {
+                0 | 1 => 0,
+                _ => 1,
+            },
+            2 => match view_index {
+                0 => 0,
+                _ => 1,
+            },
+            _ => 0,
+        }
+    }
+
+    fn create_eye_tracking<G>(
         &self,
+        instance: &xr::Instance,
+        session: &xr::Session<G>,
+        system: xr::SystemId,
+        available_extensions: &xr::ExtensionSet,
+    ) -> Result<Option<EyeTracking>, RuntimeError> {
+        if !available_extensions.ext_eye_gaze_interaction {
+            return Ok(None);
+        }
+
+        let mut eye_gaze_props = xrsys::SystemEyeGazeInteractionPropertiesEXT::out(ptr::null_mut());
+        let mut system_props = xrsys::SystemProperties::out(
+            eye_gaze_props.as_mut_ptr() as *mut xrsys::BaseOutStructure
+        );
+        let result = unsafe {
+            (instance.fp().get_system_properties)(
+                instance.as_raw(),
+                system,
+                system_props.as_mut_ptr(),
+            )
+        };
+        if result != xrsys::Result::SUCCESS {
+            return Err(RuntimeError::OpenXr(result));
+        }
+        let eye_gaze_props = unsafe { eye_gaze_props.assume_init() };
+        if !bool::from(eye_gaze_props.supports_eye_gaze_interaction) {
+            return Ok(None);
+        }
+
+        let action_set = match instance.create_action_set("eye_gaze", "Eye gaze", 0) {
+            Ok(action_set) => action_set,
+            Err(err) => return Err(RuntimeError::OpenXr(err)),
+        };
+        let eyes_path = instance
+            .string_to_path("/user/eyes_ext")
+            .map_err(RuntimeError::OpenXr)?;
+        let gaze_action = action_set
+            .create_action::<xr::Posef>("gaze_pose", "Gaze pose", &[eyes_path])
+            .map_err(RuntimeError::OpenXr)?;
+        let interaction_profile = instance
+            .string_to_path("/interaction_profiles/ext/eye_gaze_interaction")
+            .map_err(RuntimeError::OpenXr)?;
+        let gaze_path = instance
+            .string_to_path("/user/eyes_ext/input/gaze_ext/pose")
+            .map_err(RuntimeError::OpenXr)?;
+        instance
+            .suggest_interaction_profile_bindings(
+                interaction_profile,
+                &[xr::Binding::new(&gaze_action, gaze_path)],
+            )
+            .map_err(RuntimeError::OpenXr)?;
+        session
+            .attach_action_sets(&[&action_set])
+            .map_err(RuntimeError::OpenXr)?;
+        let gaze_space = gaze_action
+            .create_space(session, eyes_path, xr::Posef::IDENTITY)
+            .map_err(RuntimeError::OpenXr)?;
+
+        Ok(Some(EyeTracking {
+            action_set,
+            gaze_space,
+        }))
+    }
+
+    fn render_views<G>(
+        &self,
+        session: &xr::Session<G>,
+        eye_tracking: Option<&EyeTracking>,
         context: &mut RenderContext,
         located: &[xr::View],
         targets: &[RenderTexture],
+        predicted_display_time: xr::Time,
+        base_space: &xr::Space,
     ) -> Result<(), RuntimeError> {
         if located.len() != context.flows.len() || targets.len() != context.flows.len() {
             return Err(RuntimeError::View(format!(
@@ -304,19 +461,47 @@ impl Runtime {
             )));
         }
 
+        if let Some(eye_tracking) = eye_tracking {
+            session
+                .sync_actions(&[xr::ActiveActionSet::new(&eye_tracking.action_set)])
+                .map_err(RuntimeError::OpenXr)?;
+        }
+
+        let gaze_vectors = if let Some(eye_tracking) = eye_tracking {
+            self.locate_gaze_vectors(
+                session,
+                eye_tracking,
+                predicted_display_time,
+                base_space,
+                located,
+            )?
+        } else {
+            vec![None; located.len()]
+        };
+
         let mut encoder =
             context
                 .device()
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                     label: Some("OpenXR VSS render encoder"),
                 });
-        for (index, (located, target)) in located.iter().zip(targets).enumerate() {
-            let view = Self::view_from_openxr(index, located, target.width, target.height)?;
+        let view_count = located.len();
+        for (index, (openxr_view, target)) in located.iter().zip(targets).enumerate() {
+            let view = Self::view_from_openxr(
+                index,
+                view_count,
+                openxr_view,
+                target.width,
+                target.height,
+            )?;
             {
                 let mut eye = context.flows[index].eye_mut();
                 eye.position = view.position;
                 eye.view = view.view;
                 eye.proj = view.projection;
+                if let Some(gaze) = gaze_vectors[index] {
+                    eye.gaze = gaze;
+                }
             }
             context.flows[index].input(&MouseInput::default());
             context.render_flow(index, &mut encoder, target);
@@ -330,8 +515,70 @@ impl Runtime {
         Ok(())
     }
 
+    fn locate_gaze_vectors<G>(
+        &self,
+        session: &xr::Session<G>,
+        eye_tracking: &EyeTracking,
+        predicted_display_time: xr::Time,
+        base_space: &xr::Space,
+        located: &[xr::View],
+    ) -> Result<Vec<Option<Vector3<f32>>>, RuntimeError> {
+        let mut sample_time = xrsys::EyeGazeSampleTimeEXT::out(ptr::null_mut());
+        let mut location =
+            xrsys::SpaceLocation::out(sample_time.as_mut_ptr() as *mut xrsys::BaseOutStructure);
+        let result = unsafe {
+            (session.instance().fp().locate_space)(
+                eye_tracking.gaze_space.as_raw(),
+                base_space.as_raw(),
+                predicted_display_time,
+                location.as_mut_ptr(),
+            )
+        };
+        if result != xrsys::Result::SUCCESS {
+            return Ok(vec![None; located.len()]);
+        }
+
+        let location = unsafe { location.assume_init() };
+        let _sample_time = unsafe { sample_time.assume_init() };
+        if !location
+            .location_flags
+            .contains(xrsys::SpaceLocationFlags::ORIENTATION_VALID)
+        {
+            return Ok(vec![None; located.len()]);
+        }
+
+        let gaze_orientation = Quaternion::new(
+            location.pose.orientation.w,
+            location.pose.orientation.x,
+            location.pose.orientation.y,
+            location.pose.orientation.z,
+        );
+        let world_gaze = Matrix3::from(gaze_orientation) * Vector3::unit_z();
+
+        let mut gaze_vectors = Vec::with_capacity(located.len());
+        for view in located {
+            let view_orientation = Quaternion::new(
+                view.pose.orientation.w,
+                view.pose.orientation.x,
+                view.pose.orientation.y,
+                view.pose.orientation.z,
+            );
+            let eye_gaze = Matrix3::from(view_orientation).invert().ok_or_else(|| {
+                RuntimeError::View("OpenXR returned a singular eye pose".to_string())
+            })? * world_gaze;
+            gaze_vectors.push(Some(if eye_gaze.magnitude2() > 0.0 {
+                eye_gaze.normalize()
+            } else {
+                Vector3::unit_z()
+            }));
+        }
+
+        Ok(gaze_vectors)
+    }
+
     fn view_from_openxr(
         index: usize,
+        view_count: usize,
         view: &xr::View,
         width: u32,
         height: u32,
@@ -353,7 +600,7 @@ impl Runtime {
         })?;
         Ok(View {
             view_index: index,
-            eye_index: index.min(1),
+            eye_index: Self::eye_index_for_view_count(view_count, index),
             viewport: crate::Viewport {
                 x: 0,
                 y: 0,
@@ -393,7 +640,11 @@ impl Runtime {
         )
     }
 
-    fn enabled_extensions(&self, backend: Backend) -> xr::ExtensionSet {
+    fn enabled_extensions(
+        &self,
+        backend: Backend,
+        available_extensions: &xr::ExtensionSet,
+    ) -> xr::ExtensionSet {
         let mut extensions = xr::ExtensionSet::default();
 
         match backend {
@@ -408,6 +659,16 @@ impl Runtime {
         #[cfg(target_os = "android")]
         {
             extensions.khr_android_create_instance = true;
+        }
+
+        if available_extensions.ext_eye_gaze_interaction {
+            extensions.ext_eye_gaze_interaction = true;
+        }
+        if available_extensions.varjo_quad_views {
+            extensions.varjo_quad_views = true;
+        }
+        if available_extensions.varjo_foveated_rendering && extensions.varjo_quad_views {
+            extensions.varjo_foveated_rendering = true;
         }
 
         extensions

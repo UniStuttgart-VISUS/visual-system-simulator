@@ -51,7 +51,6 @@ pub struct FlowConfig {
 pub struct Config {
     pub visible: bool,
     pub resolution: Option<(u32, u32)>,
-    pub measure_frames: u128,
     pub flow_configs: Vec<FlowConfig>,
     pub output: Option<mustache::Template>,
     pub output_scale: OutputScale,
@@ -73,7 +72,6 @@ impl Default for Config {
                 static_gaze: None,
                 static_view: None,
             }],
-            measure_frames: 0,
             output_scale: OutputScale::default(),
         }
     }
@@ -240,12 +238,6 @@ pub fn cmd_parse() -> Config {
                 .help("Sets the internal render resolution"),
         )
         .arg(
-            Arg::new("measure_frames")
-                .long("measure_frames")
-                .num_args(1)
-                .help("Tracks performance metrics for N frames"),
-        )
-        .arg(
             Arg::new("flow_configs")
                 .long("flow_configs")
                 .short('c')
@@ -328,12 +320,6 @@ pub fn cmd_parse() -> Config {
     if res.len() == 2 {
         config.resolution = Some((res[0], res[1]));
     }
-
-    config.measure_frames = matches
-        .get_one::<String>("measure_frames")
-        .map_or(config.measure_frames, |v| {
-            v.parse::<u128>().unwrap_or(0u128)
-        });
 
     let flow_configs = matches
         .get_many::<String>("flow_configs")
