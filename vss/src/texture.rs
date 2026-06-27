@@ -265,14 +265,7 @@ impl RenderTexture {
         format: wgpu::TextureFormat,
         label: Option<&str>,
     ) -> RenderTexture {
-        Self::create(
-            device,
-            1,
-            1,
-            format,
-            create_sampler_linear(device),
-            label,
-        )
+        Self::create(device, 1, 1, format, create_sampler_linear(device), label)
     }
 
     pub fn empty_highp(device: &wgpu::Device, label: Option<&str>) -> RenderTexture {

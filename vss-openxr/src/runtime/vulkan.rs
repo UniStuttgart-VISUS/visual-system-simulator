@@ -18,14 +18,8 @@ struct VulkanRuntime {
 
 struct VulkanSwapchain {
     handle: xr::Swapchain<xr::Vulkan>,
-    buffers: Vec<VulkanFramebuffer>,
     targets: Vec<Vec<RenderTexture>>,
     resolution: vk::Extent2D,
-}
-
-struct VulkanFramebuffer {
-    framebuffer: vk::Framebuffer,
-    color: vk::ImageView,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -373,29 +367,6 @@ unsafe fn run_vulkan_frames(
     vulkan: &VulkanRuntime,
     context: &mut RenderContext,
 ) -> Result<(), RuntimeError> {
-    let render_pass = create_vulkan_render_pass(runtime, vulkan)?;
-    let command_pool = vulkan
-        .device
-        .create_command_pool(
-            &vk::CommandPoolCreateInfo::default()
-                .queue_family_index(vulkan.queue_family_index)
-                .flags(
-                    vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER
-                        | vk::CommandPoolCreateFlags::TRANSIENT,
-                ),
-            None,
-        )
-        .map_err(|err| RuntimeError::Vulkan(format!("Failed to create command pool: {err}")))?;
-    let fences = (0..2)
-        .map(|_| {
-            vulkan.device.create_fence(
-                &vk::FenceCreateInfo::default().flags(vk::FenceCreateFlags::SIGNALED),
-                None,
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|err| RuntimeError::Vulkan(format!("Failed to create fences: {err}")))?;
-
     let mut swapchain: Option<VulkanSwapchain> = None;
     let mut event_storage = xr::EventDataBuffer::new();
     let mut session_running = false;
@@ -447,7 +418,6 @@ unsafe fn run_vulkan_frames(
                 runtime,
                 session,
                 vulkan,
-                render_pass,
                 view_configs,
                 context,
             )?);
@@ -503,65 +473,13 @@ unsafe fn run_vulkan_frames(
             )
             .map_err(RuntimeError::OpenXr)?;
     }
-
-    destroy_vulkan_frame_resources(
-        runtime,
-        vulkan,
-        render_pass,
-        command_pool,
-        fences,
-        swapchain,
-    );
     Ok(())
-}
-
-unsafe fn create_vulkan_render_pass(
-    _runtime: &Runtime,
-    vulkan: &VulkanRuntime,
-) -> Result<vk::RenderPass, RuntimeError> {
-    let view_mask = !(!0 << 2);
-    vulkan
-        .device
-        .create_render_pass(
-            &vk::RenderPassCreateInfo::default()
-                .attachments(&[vk::AttachmentDescription {
-                    format: COLOR_FORMAT,
-                    samples: vk::SampleCountFlags::TYPE_1,
-                    load_op: vk::AttachmentLoadOp::CLEAR,
-                    store_op: vk::AttachmentStoreOp::STORE,
-                    initial_layout: vk::ImageLayout::UNDEFINED,
-                    final_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-                    ..Default::default()
-                }])
-                .subpasses(&[vk::SubpassDescription::default()
-                    .color_attachments(&[vk::AttachmentReference {
-                        attachment: 0,
-                        layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-                    }])
-                    .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)])
-                .dependencies(&[vk::SubpassDependency {
-                    src_subpass: vk::SUBPASS_EXTERNAL,
-                    dst_subpass: 0,
-                    src_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-                    dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-                    dst_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-                    ..Default::default()
-                }])
-                .push_next(
-                    &mut vk::RenderPassMultiviewCreateInfo::default()
-                        .view_masks(&[view_mask])
-                        .correlation_masks(&[view_mask]),
-                ),
-            None,
-        )
-        .map_err(|err| RuntimeError::Vulkan(format!("Failed to create render pass: {err}")))
 }
 
 unsafe fn create_vulkan_swapchain(
     runtime: &Runtime,
     session: &xr::Session<xr::Vulkan>,
-    vulkan: &VulkanRuntime,
-    render_pass: vk::RenderPass,
+    _vulkan: &VulkanRuntime,
     view_configs: &[xr::ViewConfigurationView],
     context: &RenderContext,
 ) -> Result<VulkanSwapchain, RuntimeError> {
@@ -631,75 +549,11 @@ unsafe fn create_vulkan_swapchain(
             Ok(runtime.create_layer_targets(context, texture, view_configs.len()))
         })
         .collect::<Result<Vec<_>, RuntimeError>>()?;
-    let buffers = images
-        .into_iter()
-        .map(|image| {
-            let color_image = vk::Image::from_raw(image);
-            let color = vulkan
-                .device
-                .create_image_view(
-                    &vk::ImageViewCreateInfo::default()
-                        .image(color_image)
-                        .view_type(vk::ImageViewType::TYPE_2D_ARRAY)
-                        .format(COLOR_FORMAT)
-                        .subresource_range(vk::ImageSubresourceRange {
-                            aspect_mask: vk::ImageAspectFlags::COLOR,
-                            base_mip_level: 0,
-                            level_count: 1,
-                            base_array_layer: 0,
-                            layer_count: view_configs.len() as u32,
-                        }),
-                    None,
-                )
-                .map_err(|err| {
-                    RuntimeError::Vulkan(format!("Failed to create image view: {err}"))
-                })?;
-            let framebuffer = vulkan
-                .device
-                .create_framebuffer(
-                    &vk::FramebufferCreateInfo::default()
-                        .render_pass(render_pass)
-                        .width(resolution.width)
-                        .height(resolution.height)
-                        .attachments(&[color])
-                        .layers(1),
-                    None,
-                )
-                .map_err(|err| {
-                    RuntimeError::Vulkan(format!("Failed to create framebuffer: {err}"))
-                })?;
-            Ok(VulkanFramebuffer { framebuffer, color })
-        })
-        .collect::<Result<Vec<_>, RuntimeError>>()?;
-
     Ok(VulkanSwapchain {
         handle,
-        buffers,
         targets,
         resolution,
     })
-}
-
-unsafe fn destroy_vulkan_frame_resources(
-    _runtime: &Runtime,
-    vulkan: &VulkanRuntime,
-    render_pass: vk::RenderPass,
-    command_pool: vk::CommandPool,
-    fences: Vec<vk::Fence>,
-    swapchain: Option<VulkanSwapchain>,
-) {
-    let _ = vulkan.device.wait_for_fences(&fences, true, u64::MAX);
-    if let Some(swapchain) = swapchain {
-        for buffer in swapchain.buffers {
-            vulkan.device.destroy_framebuffer(buffer.framebuffer, None);
-            vulkan.device.destroy_image_view(buffer.color, None);
-        }
-    }
-    for fence in fences {
-        vulkan.device.destroy_fence(fence, None);
-    }
-    vulkan.device.destroy_command_pool(command_pool, None);
-    vulkan.device.destroy_render_pass(render_pass, None);
 }
 
 unsafe fn load_vulkan_entry(runtime: &Runtime) -> Result<VulkanEntry, RuntimeError> {

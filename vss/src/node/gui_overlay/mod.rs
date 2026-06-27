@@ -65,12 +65,11 @@ impl GuiOverlay {
             size_in_pixels: [1, 1],
             pixels_per_point: 0.0,
         };
-        let egui_renderer =
-            egui_wgpu::Renderer::new(
-                device,
-                context.output_format(),
-                egui_wgpu::RendererOptions::default(),
-            );
+        let egui_renderer = egui_wgpu::Renderer::new(
+            device,
+            context.output_format(),
+            egui_wgpu::RendererOptions::default(),
+        );
 
         GuiOverlay {
             pipeline,
