@@ -65,7 +65,7 @@ impl PeacockCB {
             &[&shader, &shader],
             &["vs_main", "fs_color"],
             &[&uniforms.bind_group_layout, &sources_bind_group_layout],
-            &single_color_state(),
+            &single_color_state(context.output_format()),
             None,
             Some("Peacock Color Render Pipeline"),
         );

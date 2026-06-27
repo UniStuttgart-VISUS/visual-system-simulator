@@ -85,7 +85,7 @@ impl Retina {
                 &sources_bind_group_layout,
                 &retina_layout,
             ],
-            &single_color_state(),
+            &single_color_state(context.output_format()),
             None,
             Some("Retina Color Render Pipeline"),
         );

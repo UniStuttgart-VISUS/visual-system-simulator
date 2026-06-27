@@ -214,8 +214,8 @@ pub fn all_color_states() -> [Option<ColorTargetState>; 5] {
     ]
 }
 
-pub fn single_color_state() -> [Option<ColorTargetState>; 1] {
-    [simple_color_state(COLOR_FORMAT)]
+pub fn single_color_state(format: wgpu::TextureFormat) -> [Option<ColorTargetState>; 1] {
+    [simple_color_state(format)]
 }
 
 pub fn metrics_ab_color_states() -> [Option<ColorTargetState>; 2] {

@@ -7,6 +7,7 @@ pub struct RenderContext {
     device: wgpu::Device,
     queue: wgpu::Queue,
     size: [u32; 2],
+    output_format: wgpu::TextureFormat,
 
     pub flows: Vec<Flow>,
     last_render_instant: Cell<Instant>,
@@ -18,6 +19,7 @@ impl RenderContext {
         flow_count: usize,
         device: wgpu::Device,
         queue: wgpu::Queue,
+        output_format: wgpu::TextureFormat,
     ) -> Self {
         let mut flows = Vec::new();
         flows.resize_with(flow_count, Flow::new);
@@ -26,6 +28,7 @@ impl RenderContext {
             device,
             queue,
             size,
+            output_format,
             flows,
             last_render_instant: Cell::new(Instant::now()),
         }
@@ -79,6 +82,10 @@ impl RenderContext {
 
     pub fn queue(&self) -> &wgpu::Queue {
         &self.queue
+    }
+
+    pub fn output_format(&self) -> wgpu::TextureFormat {
+        self.output_format
     }
 
     pub fn width(&self) -> u32 {

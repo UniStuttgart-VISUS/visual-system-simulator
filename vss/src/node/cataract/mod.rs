@@ -57,7 +57,7 @@ impl Cataract {
             &[&shader, &shader],
             &["vs_main", "fs_color"],
             &[&uniforms.bind_group_layout, &sources_bind_group_layout],
-            &single_color_state(),
+            &single_color_state(context.output_format()),
             simple_depth_state(DEPTH_FORMAT),
             Some("Cataract Color Render Pipeline"),
         );

@@ -98,7 +98,7 @@ impl UploadRgbBuffer {
             &[&shader, &shader],
             &["vs_main", "fs_main"],
             &[&source_bind_group_layout, &uniforms.bind_group_layout],
-            &single_color_state(),
+            &single_color_state(context.output_format()),
             simple_depth_state(DEPTH_FORMAT),
             Some("UploadNode Render Pipeline"),
         );

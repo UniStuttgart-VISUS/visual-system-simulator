@@ -372,6 +372,7 @@ impl Runtime {
         let first_view = view_configs
             .first()
             .ok_or_else(|| RuntimeError::Vulkan("OpenXR runtime returned no views".to_string()))?;
+        let output_format = wgpu::TextureFormat::Rgba8UnormSrgb;
         let mut context = RenderContext::new(
             [
                 first_view.recommended_image_rect_width,
@@ -380,6 +381,7 @@ impl Runtime {
             view_configs.len(),
             wgpu_device,
             wgpu_queue,
+            output_format,
         );
         let initial_views = self.initial_views(&view_configs)?;
         build_pipeline(&mut context, &initial_views);
@@ -541,6 +543,7 @@ impl Runtime {
         let first_view = view_configs
             .first()
             .ok_or_else(|| RuntimeError::Metal("OpenXR runtime returned no views".to_string()))?;
+        let output_format = wgpu::TextureFormat::Rgba8UnormSrgb;
         let mut context = RenderContext::new(
             [
                 first_view.recommended_image_rect_width,
@@ -549,6 +552,7 @@ impl Runtime {
             view_configs.len(),
             wgpu_device,
             wgpu_queue,
+            output_format,
         );
         let initial_views = self.initial_views(&view_configs)?;
         build_pipeline(&mut context, &initial_views);

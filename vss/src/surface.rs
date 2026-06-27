@@ -37,12 +37,19 @@ impl<'window> Surface<'window> {
             view_formats,
             desired_maximum_frame_latency: 2,
         };
+        let output_format = surface_config.format;
         surface.configure(&device, &surface_config);
 
         Surface {
             surface,
             surface_config,
-            render_context: RenderContext::new(surface_size, flow_count, device, queue),
+            render_context: RenderContext::new(
+                surface_size,
+                flow_count,
+                device,
+                queue,
+                output_format,
+            ),
         }
     }
 
@@ -114,12 +121,19 @@ impl<'window> Surface<'window> {
             view_formats,
             desired_maximum_frame_latency: 2,
         };
+        let output_format = surface_config.format;
         surface.configure(&device, &surface_config);
 
         Surface {
             surface,
             surface_config,
-            render_context: RenderContext::new(surface_size, flow_count, device, queue),
+            render_context: RenderContext::new(
+                surface_size,
+                flow_count,
+                device,
+                queue,
+                output_format,
+            ),
         }
     }
 

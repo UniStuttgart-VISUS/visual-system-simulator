@@ -392,10 +392,11 @@ impl NodeSlots {
             Slot::Empty => {
                 let (width, height) = self.input_dimensions();
                 let device = context.device();
-                let color_target = RenderTexture::create_color(
+                let color_target = RenderTexture::create_color_with_format(
                     device,
                     width,
                     height,
+                    context.output_format(),
                     Some(format!("{}{}", node_name, " to_color_output color").as_str()),
                 );
                 Self {
@@ -436,10 +437,11 @@ impl NodeSlots {
             Slot::Empty => {
                 let (width, height) = self.input_dimensions();
                 let device = context.device();
-                let color_target = RenderTexture::create_color(
+                let color_target = RenderTexture::create_color_with_format(
                     device,
                     width,
                     height,
+                    context.output_format(),
                     Some(format!("{}{}", node_name, " to_color_depth_output color").as_str()),
                 );
                 let depth_target = RenderTexture::create_depth(
@@ -526,10 +528,11 @@ impl NodeSlots {
             _ => {
                 let (width, height) = self.input_dimensions();
                 let device = context.device();
-                let color_target = RenderTexture::create_color(
+                let color_target = RenderTexture::create_color_with_format(
                     device,
                     width,
                     height,
+                    context.output_format(),
                     Some(format!("{}{}", node_name, " to_color_metrics_output color").as_str()),
                 );
                 let metrics = create_metrics_targets(
@@ -564,10 +567,11 @@ impl NodeSlots {
             _ => {
                 let (width, height) = self.input_dimensions();
                 let device = context.device();
-                let color_target = RenderTexture::create_color(
+                let color_target = RenderTexture::create_color_with_format(
                     device,
                     width,
                     height,
+                    context.output_format(),
                     Some(
                         format!("{}{}", node_name, " to_color_depth_metrics_output color").as_str(),
                     ),
@@ -616,10 +620,11 @@ impl NodeSlots {
         node_name: &str,
     ) -> Self {
         let device = context.device();
-        let color_target = RenderTexture::create_color(
+        let color_target = RenderTexture::create_color_with_format(
             device,
             width,
             height,
+            context.output_format(),
             Some(format!("{}{}", node_name, " emplace_color_output color").as_str()),
         );
         Self {
@@ -639,10 +644,11 @@ impl NodeSlots {
         node_name: &str,
     ) -> Self {
         let device = context.device();
-        let color_target = RenderTexture::create_color(
+        let color_target = RenderTexture::create_color_with_format(
             device,
             width,
             height,
+            context.output_format(),
             Some(format!("{}{}", node_name, " emplace_color_depth_output color").as_str()),
         );
         let depth_target = RenderTexture::create_depth(

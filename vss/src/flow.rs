@@ -78,10 +78,11 @@ impl Flow {
                 let width = context.width();
                 let height = context.height();
 
-                let color_target = RenderTexture::create_color(
+                let color_target = RenderTexture::create_color_with_format(
                     device,
                     width,
                     height,
+                    context.output_format(),
                     Some("flow_negociate_slots color"),
                 );
 

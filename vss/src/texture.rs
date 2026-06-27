@@ -193,11 +193,21 @@ impl RenderTexture {
         height: u32,
         label: Option<&str>,
     ) -> RenderTexture {
+        Self::create_color_with_format(device, width, height, COLOR_FORMAT, label)
+    }
+
+    pub fn create_color_with_format(
+        device: &wgpu::Device,
+        width: u32,
+        height: u32,
+        format: wgpu::TextureFormat,
+        label: Option<&str>,
+    ) -> RenderTexture {
         Self::create(
             device,
             width,
             height,
-            COLOR_FORMAT,
+            format,
             create_sampler_linear(device),
             label,
         )
@@ -247,11 +257,19 @@ impl RenderTexture {
     }
 
     pub fn empty_color(device: &wgpu::Device, label: Option<&str>) -> RenderTexture {
+        Self::empty_color_with_format(device, COLOR_FORMAT, label)
+    }
+
+    pub fn empty_color_with_format(
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+        label: Option<&str>,
+    ) -> RenderTexture {
         Self::create(
             device,
             1,
             1,
-            COLOR_FORMAT,
+            format,
             create_sampler_linear(device),
             label,
         )

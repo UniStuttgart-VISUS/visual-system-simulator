@@ -122,7 +122,7 @@ impl Lens {
                 &normal_layout,
                 &cornea_layout,
             ],
-            &single_color_state(),
+            &single_color_state(context.output_format()),
             None,
             Some("Lens Color Render Pipeline"),
         );

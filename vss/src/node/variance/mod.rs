@@ -80,7 +80,7 @@ impl VarianceMeasure {
                 &original_bind_group_layout,
             ],
             &[
-                blended_color_state(COLOR_FORMAT),
+                blended_color_state(context.output_format()),
                 simple_color_state(HIGHP_FORMAT),
             ],
             None,

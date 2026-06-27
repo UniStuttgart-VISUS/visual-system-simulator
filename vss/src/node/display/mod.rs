@@ -72,7 +72,11 @@ impl Display {
             placeholder_texture(device, queue, Some("DisplayNode s_color (placeholder)"))
                 .unwrap()
                 .create_bind_group(device);
-        let render_target = RenderTexture::empty_color(device, Some("DisplayNode render_target"));
+        let render_target = RenderTexture::empty_color_with_format(
+            device,
+            context.output_format(),
+            Some("DisplayNode render_target"),
+        );
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("DisplayNode Shader"),
@@ -84,7 +88,7 @@ impl Display {
             &[&shader, &shader],
             &["vs_main", "fs_main"],
             &[&uniforms.bind_group_layout, &source_bind_group_layout],
-            &[simple_color_state(COLOR_FORMAT)],
+            &[simple_color_state(context.output_format())],
             None,
             Some("DisplayNode Render Pipeline"),
         );
