@@ -1,4 +1,4 @@
-#[cfg(all(target_vendor = "apple"))]
+#[cfg(target_vendor = "apple")]
 mod metal;
 mod vulkan;
 
@@ -47,9 +47,9 @@ impl Runtime {
         let backend = self.select_backend(&available_extensions)?;
         match backend {
             Backend::Vulkan => self.run_vulkan(build_pipeline),
-            #[cfg(all(target_vendor = "apple"))]
+            #[cfg(target_vendor = "apple")]
             Backend::Metal => self.run_metal(build_pipeline),
-            #[cfg(not(all(target_vendor = "apple")))]
+            #[cfg(not(target_vendor = "apple"))]
             Backend::Metal => Err(RuntimeError::NotImplemented {
                 backend: Backend::Metal,
                 runtime_name: "this platform".to_string(),
@@ -132,34 +132,44 @@ impl Runtime {
             Backend::Auto => {
                 if available_extensions.khr_vulkan_enable2 {
                     Ok(Backend::Vulkan)
-                } else if Self::metal_backend_supported() && available_extensions.khr_metal_enable {
+                } else if Self::metal_backend_available(available_extensions) {
                     Ok(Backend::Metal)
                 } else {
                     Err(RuntimeError::UnsupportedBackend {
                         requested: Backend::Auto,
                         vulkan_available: available_extensions.khr_vulkan_enable2,
-                        metal_available: Self::metal_backend_supported()
-                            && available_extensions.khr_metal_enable,
+                        metal_available: Self::metal_backend_available(available_extensions),
                     })
                 }
             }
             Backend::Vulkan if available_extensions.khr_vulkan_enable2 => Ok(Backend::Vulkan),
-            Backend::Metal
-                if Self::metal_backend_supported() && available_extensions.khr_metal_enable =>
-            {
+            Backend::Metal if Self::metal_backend_available(available_extensions) => {
                 Ok(Backend::Metal)
             }
             requested => Err(RuntimeError::UnsupportedBackend {
                 requested,
                 vulkan_available: available_extensions.khr_vulkan_enable2,
-                metal_available: Self::metal_backend_supported()
-                    && available_extensions.khr_metal_enable,
+                metal_available: Self::metal_backend_available(available_extensions),
             }),
         }
     }
 
+    #[cfg(target_vendor = "apple")]
     pub(super) fn metal_backend_supported() -> bool {
-        cfg!(all(target_vendor = "apple"))
+        cfg!(target_vendor = "apple")
+    }
+
+    pub(super) fn metal_backend_available(available_extensions: &xr::ExtensionSet) -> bool {
+        #[cfg(target_vendor = "apple")]
+        {
+            Self::metal_backend_supported() && available_extensions.khr_metal_enable
+        }
+
+        #[cfg(not(target_vendor = "apple"))]
+        {
+            let _ = available_extensions;
+            false
+        }
     }
 
     fn run_vulkan<F>(&self, build_pipeline: F) -> Result<(), RuntimeError>
@@ -388,7 +398,10 @@ impl Runtime {
 
         match backend {
             Backend::Vulkan => extensions.khr_vulkan_enable2 = true,
+            #[cfg(target_vendor = "apple")]
             Backend::Metal => extensions.khr_metal_enable = true,
+            #[cfg(not(target_vendor = "apple"))]
+            Backend::Metal => {}
             Backend::Auto => {}
         }
 

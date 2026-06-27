@@ -51,8 +51,7 @@ where
         return Err(RuntimeError::UnsupportedBackend {
             requested: Backend::Vulkan,
             vulkan_available: available_extensions.khr_vulkan_enable2,
-            metal_available: Runtime::metal_backend_supported()
-                && available_extensions.khr_metal_enable,
+            metal_available: Runtime::metal_backend_available(&available_extensions),
         });
     }
 
