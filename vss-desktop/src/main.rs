@@ -6,15 +6,11 @@ use std::io::Cursor;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
 use vss::*;
-#[cfg(feature = "varjo")]
-use vss_vr::*;
-#[cfg(not(feature = "varjo"))]
 use vss_winit::*;
 
 use crate::cmd::*;
 use crate::io::*;
 
-#[cfg(not(feature = "varjo"))]
 fn build_flow(
     context: &mut RenderContext,
     io_generator: &mut IoGenerator,
@@ -50,7 +46,7 @@ fn build_flow(
     let node = PeacockCB::new(context);
     context.add_node(Box::new(node), flow_index);
 
-    // Measurement Nodes for variance and error
+    // Measurement Nodes for variance and error.
     let node = VarianceMeasure::new(context);
     context.add_node(Box::new(node), flow_index);
     let node = VisOverlay::new(context);
@@ -93,8 +89,6 @@ pub fn load_fn(full_path: &str) -> Cursor<Vec<u8>> {
     }
 }
 
-// "Default" main
-#[cfg(not(feature = "varjo"))]
 pub fn main() {
     set_load(Box::new(load_fn));
 
@@ -215,7 +209,7 @@ pub fn main() {
             }
 
             /*
-                The above hack works only with still images
+                The above hack works only with still images.
                 The original solution below has several problems:
                 - it is only used for video
                 - There needs to be an io generator for each eye to provide them with independent input
@@ -243,26 +237,6 @@ pub fn main() {
     );
 
     let _ = window.run_app();
-
-    /*
-
-    if config.measure_frames > 0 {
-        if let Err(e) = fs::write(
-            "vss_perf_data.csv",
-            frame_perfs
-                .iter()
-                .map(|t| format!("{},{}\n", t.0, t.1))
-                .collect::<Vec<String>>()
-                .join(""),
-        ) {
-            println!("dump_perf_data error {:?}", e);
-        }
-    }
-
-    // writing the image to file might not be done yet, so we wait a second
-    // this async behaviour stems from the callback used in the download buffer
-    std::thread::sleep(std::time::Duration::from_secs(1));
-    */
 }
 
 #[cfg(feature = "openxr")]
@@ -320,222 +294,4 @@ fn run_openxr(_config: Config, _backend: OpenXrBackend) {
         "OpenXR support is not enabled. Rebuild with: cargo run -p vss-desktop --features openxr -- --openxr ..."
     );
     std::process::exit(1);
-}
-
-#[cfg(feature = "varjo")]
-fn build_vr_flow(
-    vr_surface: &mut WindowVRSurface,
-    surface: &mut Surface,
-    io_generator: &mut io::IoGenerator,
-    flow_index: usize,
-    render_resolution: Option<(u32, u32)>,
-    view_port: ViewPort,
-) {
-    let render_res = if let Some(res) = render_resolution {
-        RenderResolution::Custom {
-            res: [res.0, res.1],
-        }
-    } else {
-        RenderResolution::Screen {
-            input_scale: 1.0, //TODO add input scaling
-            output_scale: OutputScale::Stretch,
-        }
-    };
-    let (input_node, output_node) = io_generator
-        .current(surface, render_res, flow_index)
-        .unwrap();
-
-    // Add input node.
-    vr_surface.add_node(input_node, flow_index);
-
-    // Visual system passes.
-    let node = Cataract::new(surface);
-    vr_surface.add_node(Box::new(node), flow_index);
-    let node = Lens::new(surface);
-    vr_surface.add_node(Box::new(node), flow_index);
-    let node = Retina::new(surface);
-    vr_surface.add_node(Box::new(node), flow_index);
-    let node = PeacockCB::new(surface);
-    vr_surface.add_node(Box::new(node), flow_index);
-
-    // Display node.
-    let mut node = Display::new(surface);
-    node.set_viewport(view_port);
-    node.set_output_scale(OutputScale::Stretch);
-    vr_surface.add_node(Box::new(node), flow_index);
-
-    // Add output node, if present.
-    if let Some(output_node) = output_node {
-        vr_surface.add_node(output_node, flow_index);
-    }
-
-    vr_surface.negociate_slots(&surface);
-}
-
-#[cfg(feature = "varjo")]
-fn build_window_flow(
-    surface: &mut Surface,
-    flow_index: usize,
-    input_texture: Texture,
-    view_port: ViewPort,
-    output_scale: OutputScale,
-) {
-    // Add input node.
-    let node = VrBuffer::new(surface, input_texture, None);
-    surface.add_node(Box::new(node), flow_index);
-
-    // Measurement Nodes for variance and error
-    let node = VarianceMeasure::new(surface);
-    surface.add_node(Box::new(node), flow_index);
-    // TODO: the VrBuffer node currently can't access these values.
-    // But if there is an interest in it, it should be possible to add these textures too.
-    // let node = VisOverlay::new(surface);
-    // surface.add_node(Box::new(node), flow_index);
-
-    // Display node.
-    let mut node = Display::new(surface);
-    node.set_viewport(view_port);
-    node.set_output_scale(output_scale);
-    surface.add_node(Box::new(node), flow_index);
-
-    // Add UI overlay.
-    let node = GuiOverlay::new(surface);
-    surface.add_node(Box::new(node), flow_index);
-
-    surface.negociate_slots();
-}
-
-#[cfg(feature = "varjo")]
-pub fn main() {
-    let varjo = Varjo::new();
-
-    let (varjo_viewports, varjo_texture_width, varjo_texture_height) = varjo.get_viewports();
-
-    set_load(Box::new(load_fn));
-
-    let config = cmd_parse();
-    let config_poll = config.clone();
-
-    let flow_count = varjo_viewports.len();
-    assert!(
-        flow_count == config.flow_configs.len(),
-        "Number of provided configs does not match viewport count of {}",
-        flow_count
-    );
-
-    let view_ports = varjo_viewports
-        .iter()
-        .map(|vp| {
-            ViewPort {
-                x: vp.x as f32 / varjo_texture_width as f32,
-                y: 1.0 - ((vp.y + vp.height) as f32 / varjo_texture_height as f32), // flip on the y axis
-                width: vp.width as f32 / varjo_texture_width as f32,
-                height: vp.height as f32 / varjo_texture_height as f32,
-                absolute_viewport: false,
-            }
-        })
-        .collect::<Vec<ViewPort>>();
-
-    let window_view_port = ViewPort {
-        x: 0.0,
-        y: 0.0,
-        width: 1.0,
-        height: 1.0,
-        absolute_viewport: false,
-    };
-
-    let window = WindowVRSurface::new(
-        config.visible,
-        flow_count,
-        config.flow_configs[0].static_gaze,
-        varjo,
-        move |vr_surface, surface, vr_framebuffer_texture| {
-            for (index, flow_config) in config.flow_configs.iter().enumerate() {
-                let mut io_generator = io::IoGenerator::new(
-                    config.inputs.clone(),
-                    flow_config.name.clone(),
-                    config.output.clone(),
-                );
-                build_vr_flow(
-                    vr_surface,
-                    surface,
-                    &mut io_generator,
-                    index,
-                    config.resolution,
-                    view_ports[index],
-                );
-            }
-
-            build_window_flow(
-                surface,
-                0,
-                vr_framebuffer_texture,
-                window_view_port,
-                config.output_scale,
-            );
-
-            let mut inspector = ConfigInspector::new(&config);
-            vr_surface.inspect(&mut inspector);
-            inspector.print_unused();
-        },
-        move || {
-            let mut done = false;
-            frame_counter += 1;
-
-            // Batch output and automatic exit should happen after ~3 frames to ensure proper/stable results.
-            if !config_poll.visible || config_poll.output.is_some() && frame_counter == 3 {
-                // Exit once all inputs have been processed, unless visible.
-                done = true;
-            }
-
-            if config_poll.measure_frames > 0 {
-                let time_diff = previous_frame.elapsed().as_micros();
-                let frame_perf = (frame_counter, time_diff);
-                frame_perfs.push(frame_perf);
-
-                if frame_counter > 0 && frame_counter % print_spacing == 0 {
-                    let avg_fps: i32 = frame_perfs
-                        [(frame_counter - print_spacing) as usize..frame_counter as usize]
-                        .iter()
-                        .map(|t| t.1 as i32)
-                        .sum::<i32>()
-                        / (print_spacing as i32);
-
-                    println!("{:?} ≙ {}fps", frame_perf, 1_000_000 / (avg_fps));
-                }
-                previous_frame = Instant::now();
-                if frame_counter > config_poll.measure_frames {
-                    done = true;
-                }
-            }
-
-            /*
-                The above hack works only with still images
-                The original solution below has several problems:
-                - it is only used for video
-                - There needs to be an io generator for each eye to provide them with independent input
-                - one io generator shoult be able to multtiplex its output to both eyes
-                - if one generator is ready, to we already trigger the render step or do we wait for both?
-            */
-
-            // if io_generator.is_ready() {
-            //     if let Some((input_node, output_node)) = io_generator.next(&window, None) {
-            //         window.replace_node(0, input_node, 0);
-            //         let output_node = if let Some(output_node) = output_node {
-            //             output_node
-            //         } else {
-            //             Box::new(Passthrough::new(&window))
-            //         };
-            //         window.replace_node(window.nodes_len() - 2, output_node, 0);
-            //         window.update_nodes();
-            //     } else {
-            // ...
-            //     }
-            // }
-
-            done
-        },
-    );
-
-    let _ = window.run_and_exit();
 }

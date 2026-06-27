@@ -6,8 +6,7 @@ members = [
   "vss-mobile",
   "vss-openxr",
   "vss-web",
-  "vss-winit",
-  "vss-vr"
+  "vss-winit"
 ]
 
 [workspace.dependencies]
