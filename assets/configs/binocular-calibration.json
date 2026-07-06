@@ -3,11 +3,20 @@
     "simulator": {
       "myopiahyperopia_onoff": true,
       "myopiahyperopia_mnh": 17,
-      "eye_distance_center": -10,
       "eye_axis_rot_x": 0,
       "eye_axis_rot_y": 0,
       "astigmatism_dpt": 0,
       "astigmatism_angle_deg": 0
+    }
+  },
+  "left": {
+    "simulator": {
+      "eye_distance_center": -10
+    }
+  },
+  "right": {
+    "simulator": {
+      "eye_distance_center": 10
     }
   }
 }
