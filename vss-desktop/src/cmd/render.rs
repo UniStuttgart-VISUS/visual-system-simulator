@@ -3,7 +3,6 @@ use crate::flow::{build_flow, finalize_flows, FlowError, FlowRequest, FlowStage}
 use std::collections::HashSet;
 use std::error::Error;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock};
 use vss::*;
 
 struct OutputInfo {
@@ -26,23 +25,21 @@ struct PlannedInput {
 
 struct PendingImageOutput {
     input: String,
-    processed: Arc<RwLock<bool>>,
-    failure: Arc<RwLock<Option<String>>>,
+    completion: std::sync::mpsc::Receiver<Result<(), String>>,
 }
 
 impl PendingImageOutput {
     fn wait(self) -> Result<(), FlowError> {
-        while self.failure.read().unwrap().is_none() && !*self.processed.read().unwrap() {
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-        if let Some(message) = self.failure.read().unwrap().clone() {
-            return Err(FlowError {
-                input: self.input,
-                stage: FlowStage::Encode,
-                message,
-            });
-        }
-        Ok(())
+        let result = self.completion.recv().map_err(|err| FlowError {
+            input: self.input.clone(),
+            stage: FlowStage::Encode,
+            message: format!("image encoder stopped before reporting completion: {err}"),
+        })?;
+        result.map_err(|message| FlowError {
+            input: self.input,
+            stage: FlowStage::Encode,
+            message,
+        })
     }
 }
 
@@ -231,8 +228,9 @@ fn run_headless_render_with_renderer(
     if built.render_once {
         return Ok(Some(PendingImageOutput {
             input: first_input,
-            processed: built.output_processed,
-            failure: built.output_failure,
+            completion: built
+                .output_completion
+                .expect("image output must have a completion receiver"),
         }));
     }
 
@@ -247,7 +245,6 @@ fn run_headless_render_with_renderer(
         context.render(&mut encoder, &dummy_screen);
         context.queue().submit(std::iter::once(encoder.finish()));
         context.post_render();
-        std::thread::sleep(std::time::Duration::from_millis(10));
     }
 
     if let Some(message) = built.output_failure.read().unwrap().clone() {

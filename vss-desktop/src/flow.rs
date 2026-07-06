@@ -47,6 +47,7 @@ struct Endpoints {
     nodes: EndpointNodes,
     input_size: Option<[u32; 2]>,
     render_once: bool,
+    output_completion: Option<std::sync::mpsc::Receiver<Result<(), String>>>,
     output_processed: Arc<RwLock<bool>>,
     output_failure: Arc<RwLock<Option<String>>>,
 }
@@ -78,10 +79,11 @@ fn create_endpoints(
             .set_flags(RgbInputFlags::from_extension(input) | RgbInputFlags::VERTICALLY_FLIPPED);
         input_node.set_render_resolution(render_resolution);
         let input_size = input_node.input_size();
-        let output_node = if let Some(output_path) = output {
+        let (output_node, output_completion) = if let Some(output_path) = output {
             let mut output_node = DownloadRgbBuffer::new(context);
             let processed = input_processed.clone();
             let failure = output_failure.clone();
+            let (completion_tx, completion_rx) = std::sync::mpsc::channel();
             let format = ImageFormat::from_path(&output_path).map_err(|err| FlowError {
                 input: input.to_string(),
                 stage: FlowStage::Encode,
@@ -95,15 +97,20 @@ fn create_endpoints(
                 move |encoded| save_bytes_atomically(&output_path, &encoded, force),
                 processed,
                 failure,
+                completion_tx,
             );
-            Some(Box::new(output_node) as Box<dyn Node>)
+            (
+                Some(Box::new(output_node) as Box<dyn Node>),
+                Some(completion_rx),
+            )
         } else {
-            None
+            (None, None)
         };
         Ok(Endpoints {
             nodes: (Box::new(input_node), output_node),
             input_size,
             render_once: true,
+            output_completion,
             output_processed: input_processed,
             output_failure,
         })
@@ -149,6 +156,7 @@ fn create_endpoints(
             nodes: (Box::new(input_node), output_node),
             input_size,
             render_once: false,
+            output_completion: None,
             output_processed: input_processed,
             output_failure,
         })
@@ -228,6 +236,7 @@ pub(crate) struct FlowRequest {
 pub(crate) struct BuiltFlow {
     pub(crate) input_size: Option<[u32; 2]>,
     pub(crate) render_once: bool,
+    pub(crate) output_completion: Option<std::sync::mpsc::Receiver<Result<(), String>>>,
     pub(crate) output_processed: Arc<RwLock<bool>>,
     pub(crate) output_failure: Arc<RwLock<Option<String>>>,
 }
@@ -248,6 +257,7 @@ pub(crate) fn build_flow(
         nodes: (input_node, output_node),
         input_size,
         render_once,
+        output_completion,
         output_processed,
         output_failure,
     } = endpoints;
@@ -275,6 +285,7 @@ pub(crate) fn build_flow(
     Ok(BuiltFlow {
         input_size,
         render_once,
+        output_completion,
         output_processed,
         output_failure,
     })

@@ -83,34 +83,31 @@ impl DownloadRgbBuffer {
         write_output: F,
         processed: Arc<RwLock<bool>>,
         failure: Arc<RwLock<Option<String>>>,
+        completion: mpsc::Sender<Result<(), String>>,
     ) where
         F: FnOnce(Vec<u8>) -> Result<(), String> + Send + 'static,
     {
         let cb = Box::new(move |rgb_buffer: RgbBuffer| {
             enqueue_encode(Box::new(move || {
-                let Some(img) = image::RgbImage::from_raw(
-                    rgb_buffer.width,
-                    rgb_buffer.height,
-                    rgb_buffer.pixels_rgb.into_vec(),
-                ) else {
-                    *failure.write().unwrap() =
-                        Some("failed to create RGB image buffer".to_string());
-                    return;
-                };
+                let result = (|| {
+                    let img = image::RgbImage::from_raw(
+                        rgb_buffer.width,
+                        rgb_buffer.height,
+                        rgb_buffer.pixels_rgb.into_vec(),
+                    )
+                    .ok_or_else(|| "failed to create RGB image buffer".to_string())?;
+                    let mut encoded = Cursor::new(Vec::new());
+                    image::DynamicImage::ImageRgb8(img)
+                        .write_to(&mut encoded, format)
+                        .map_err(|err| format!("failed to encode image: {err}"))?;
+                    write_output(encoded.into_inner())
+                })();
 
-                let mut encoded = Cursor::new(Vec::new());
-                if let Err(err) = image::DynamicImage::ImageRgb8(img).write_to(&mut encoded, format)
-                {
-                    *failure.write().unwrap() = Some(format!("failed to encode image: {err}"));
-                    return;
+                match &result {
+                    Ok(()) => *processed.write().unwrap() = true,
+                    Err(message) => *failure.write().unwrap() = Some(message.clone()),
                 }
-
-                if let Err(err) = write_output(encoded.into_inner()) {
-                    *failure.write().unwrap() = Some(err);
-                    return;
-                }
-
-                *processed.write().unwrap() = true;
+                let _ = completion.send(result);
             }));
         });
         self.set_buffer_cb(Some(cb));
@@ -136,10 +133,6 @@ impl Node for DownloadRgbBuffer {
 
         let buffer_dimensions =
             BufferDimensions::new(self.res[0] as usize, self.res[1] as usize, size_of::<u32>());
-        println!(
-            "negociate_slots {}, {}",
-            buffer_dimensions.width, buffer_dimensions.height
-        );
         let download_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Download Node Buffer"),
             size: (buffer_dimensions.padded_bytes_per_row * buffer_dimensions.height) as u64,
@@ -160,11 +153,6 @@ impl Node for DownloadRgbBuffer {
     ) {
         let buffer_dimensions =
             BufferDimensions::new(self.res[0] as usize, self.res[1] as usize, size_of::<u32>());
-        println!(
-            "render {}, {}",
-            buffer_dimensions.width, buffer_dimensions.height
-        );
-
         let texture_extent = wgpu::Extent3d {
             width: buffer_dimensions.width as u32,
             height: buffer_dimensions.height as u32,
@@ -187,26 +175,17 @@ impl Node for DownloadRgbBuffer {
     }
 
     fn post_render(&mut self, context: &RenderContext) {
-        println!("download post_render");
         let device = context.device();
 
         // Note that we're not calling `.await` here.
         let buffer_slice = self.buffer.slice(..);
 
-        let (sender, _receiver) = futures_intrusive::channel::shared::oneshot_channel();
-        buffer_slice.map_async(wgpu::MapMode::Read, move |v| {
-            sender.send(v).unwrap();
-            println!("sender ok");
-        });
+        buffer_slice.map_async(wgpu::MapMode::Read, |_| {});
 
         let _ = device.poll(wgpu::PollType::wait_indefinitely());
 
         let buffer_dimensions =
             BufferDimensions::new(self.res[0] as usize, self.res[1] as usize, size_of::<u32>());
-        println!(
-            "post_render {}, {}",
-            buffer_dimensions.width, buffer_dimensions.height
-        );
         let padded_buffer = buffer_slice.get_mapped_range();
 
         let mut pixels_rgb =
