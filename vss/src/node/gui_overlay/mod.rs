@@ -302,6 +302,18 @@ impl<'open> Inspector for UiInspector<'open> {
         changed
     }
 
+    fn mut_asset(&self, name: &'static str, value: &mut AssetId) -> bool {
+        let mut ui = self.ui.borrow_mut();
+        ui.label(name);
+        let mut text = value.raw().to_string();
+        let changed = ui.text_edit_singleline(&mut text).changed();
+        if changed {
+            *value = AssetId::from_str(text);
+        }
+        ui.end_row();
+        changed
+    }
+
     fn mut_matrix(&self, _name: &'static str, _value: &mut Matrix4<f32>) -> bool {
         false
     }

@@ -123,11 +123,15 @@ impl UploadRgbBuffer {
         image::ImageFormat::from_path(path).is_ok()
     }
 
-    pub fn upload_image(&mut self, cursor: Cursor<Vec<u8>>) {
+    pub fn upload_image(&mut self, cursor: Cursor<Vec<u8>>) -> Result<(), String> {
         let reader = image::ImageReader::new(cursor)
             .with_guessed_format()
-            .expect("Cursor io never fails");
-        let img = reader.decode().unwrap().flipv().to_rgba8();
+            .map_err(|err| format!("failed to detect image format: {err}"))?;
+        let img = reader
+            .decode()
+            .map_err(|err| format!("failed to decode image: {err}"))?
+            .flipv()
+            .to_rgba8();
         let (width, height) = img.dimensions();
 
         self.upload_buffer(&RgbBuffer {
@@ -135,6 +139,7 @@ impl UploadRgbBuffer {
             width,
             height,
         });
+        Ok(())
     }
 
     pub fn upload_buffer(&mut self, buffer: &RgbBuffer) {
@@ -174,6 +179,16 @@ impl UploadRgbBuffer {
 
     pub fn set_flags(&mut self, flags: RgbInputFlags) {
         self.uniforms.data.flags = flags.bits();
+    }
+
+    pub fn input_size(&self) -> Option<[u32; 2]> {
+        if self.buffer_next.width != 0 && self.buffer_next.height != 0 {
+            Some([self.buffer_next.width, self.buffer_next.height])
+        } else {
+            self.texture
+                .as_ref()
+                .map(|texture| [texture.width(), texture.height()])
+        }
     }
 }
 

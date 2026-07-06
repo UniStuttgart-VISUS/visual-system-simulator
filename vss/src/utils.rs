@@ -1,5 +1,4 @@
 use std::io::Cursor;
-use std::path::Path;
 use std::ptr::addr_of;
 
 /// Converts a struct to `&[u8]`.
@@ -11,17 +10,17 @@ pub unsafe fn any_as_u8_slice<T: Sized>(p: &T) -> &[u8] {
     ::std::slice::from_raw_parts((p as *const T) as *const u8, ::std::mem::size_of::<T>())
 }
 
-pub type LoadFn = Box<dyn Fn(&str) -> Cursor<Vec<u8>>>;
+pub type LoadFn = Box<dyn Fn(&str) -> Result<Cursor<Vec<u8>>, String>>;
 static mut LOAD_FN: Option<LoadFn> = None;
 
 pub fn set_load(load_fn: LoadFn) {
     unsafe { LOAD_FN = Some(load_fn) };
 }
 
-pub fn load<P: AsRef<Path>>(path: P) -> Cursor<Vec<u8>> {
+pub fn load(path: &str) -> Result<Cursor<Vec<u8>>, String> {
     if let Some(load_fn) = unsafe { addr_of!(LOAD_FN).as_ref().unwrap() } {
-        load_fn(Path::new("").join(&path).to_str().unwrap())
+        load_fn(path)
     } else {
-        panic!("load_fn not set");
+        Err("load_fn not set".into())
     }
 }

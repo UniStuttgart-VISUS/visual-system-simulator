@@ -23,12 +23,12 @@ pub struct Retina {
     retina_map_builder: RetinaMapBuilder,
 
     map_valid: bool,
-    retina_map_pos_x_path: String,
-    retina_map_neg_x_path: String,
-    retina_map_pos_y_path: String,
-    retina_map_neg_y_path: String,
-    retina_map_pos_z_path: String,
-    retina_map_neg_z_path: String,
+    retina_map_pos_x_path: AssetId,
+    retina_map_neg_x_path: AssetId,
+    retina_map_pos_y_path: AssetId,
+    retina_map_neg_y_path: AssetId,
+    retina_map_pos_z_path: AssetId,
+    retina_map_neg_z_path: AssetId,
     proj_matrix: Matrix4<f32>,
     cubemap_scale: f64,
     track_error: bool,
@@ -128,12 +128,12 @@ impl Retina {
             targets: ColorTargets::new(device, "Retina"),
 
             map_valid: false,
-            retina_map_pos_x_path: String::new(),
-            retina_map_neg_x_path: String::new(),
-            retina_map_pos_y_path: String::new(),
-            retina_map_neg_y_path: String::new(),
-            retina_map_pos_z_path: String::new(),
-            retina_map_neg_z_path: String::new(),
+            retina_map_pos_x_path: AssetId::new(),
+            retina_map_neg_x_path: AssetId::new(),
+            retina_map_pos_y_path: AssetId::new(),
+            retina_map_neg_y_path: AssetId::new(),
+            retina_map_pos_z_path: AssetId::new(),
+            retina_map_neg_z_path: AssetId::new(),
             proj_matrix: Matrix4::from_scale(1.0),
             cubemap_scale: 1.0,
             retina_map_builder: RetinaMapBuilder::new(),
@@ -150,24 +150,21 @@ impl Retina {
         let queue = context.queue();
 
         let mut image_data = Vec::new();
-        if !self.retina_map_pos_x_path.is_empty() {
-            image_data.push(load(&self.retina_map_pos_x_path));
-        }
-        if !self.retina_map_neg_x_path.is_empty() {
-            image_data.push(load(&self.retina_map_neg_x_path));
-        }
-        if !self.retina_map_pos_y_path.is_empty() {
-            image_data.push(load(&self.retina_map_pos_y_path));
-        }
-        if !self.retina_map_neg_y_path.is_empty() {
-            image_data.push(load(&self.retina_map_neg_y_path));
-        }
-        if !self.retina_map_pos_z_path.is_empty() {
-            image_data.push(load(&self.retina_map_pos_z_path));
-        }
-        if !self.retina_map_neg_z_path.is_empty() {
-            image_data.push(load(&self.retina_map_neg_z_path));
-        }
+        let mut load_map = |path: &AssetId| {
+            if path.is_empty() {
+                return;
+            }
+            match load(path.raw()) {
+                Ok(data) => image_data.push(data),
+                Err(err) => panic!("failed to load retina map {}: {err}", path),
+            }
+        };
+        load_map(&self.retina_map_pos_x_path);
+        load_map(&self.retina_map_neg_x_path);
+        load_map(&self.retina_map_pos_y_path);
+        load_map(&self.retina_map_neg_y_path);
+        load_map(&self.retina_map_pos_z_path);
+        load_map(&self.retina_map_neg_z_path);
 
         if image_data.len() == 6 {
             (_, self.retina_bind_group) = load_cubemap(
@@ -273,22 +270,22 @@ impl Node for Retina {
     }
 
     fn inspect(&mut self, inspector: &dyn Inspector) {
-        if inspector.mut_img("retina_map_pos_x_path", &mut self.retina_map_pos_x_path) {
+        if inspector.mut_asset("retina_map_pos_x_path", &mut self.retina_map_pos_x_path) {
             self.map_valid = false;
         }
-        if inspector.mut_img("retina_map_neg_x_path", &mut self.retina_map_neg_x_path) {
+        if inspector.mut_asset("retina_map_neg_x_path", &mut self.retina_map_neg_x_path) {
             self.map_valid = false;
         }
-        if inspector.mut_img("retina_map_pos_y_path", &mut self.retina_map_pos_y_path) {
+        if inspector.mut_asset("retina_map_pos_y_path", &mut self.retina_map_pos_y_path) {
             self.map_valid = false;
         }
-        if inspector.mut_img("retina_map_neg_y_path", &mut self.retina_map_neg_y_path) {
+        if inspector.mut_asset("retina_map_neg_y_path", &mut self.retina_map_neg_y_path) {
             self.map_valid = false;
         }
-        if inspector.mut_img("retina_map_pos_z_path", &mut self.retina_map_pos_z_path) {
+        if inspector.mut_asset("retina_map_pos_z_path", &mut self.retina_map_pos_z_path) {
             self.map_valid = false;
         }
-        if inspector.mut_img("retina_map_neg_z_path", &mut self.retina_map_neg_z_path) {
+        if inspector.mut_asset("retina_map_neg_z_path", &mut self.retina_map_neg_z_path) {
             self.map_valid = false;
         }
         inspector.mut_f32(

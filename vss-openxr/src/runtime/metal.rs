@@ -15,7 +15,7 @@ struct MetalSwapchain {
 
 pub(super) fn run_metal<F>(runtime: &Runtime, build_pipeline: F) -> Result<(), RuntimeError>
 where
-    F: FnOnce(&mut RenderContext, &[View]),
+    F: FnOnce(&mut RenderContext, &[View]) -> Result<(), String>,
 {
     let entry = runtime.load_entry()?;
     let available_extensions = entry.enumerate_extensions().map_err(RuntimeError::OpenXr)?;
@@ -79,7 +79,7 @@ where
         output_format,
     );
     let initial_views = runtime.initial_views(&view_configs, view_configuration_type)?;
-    build_pipeline(&mut context, &initial_views);
+    build_pipeline(&mut context, &initial_views).map_err(RuntimeError::View)?;
     let (session, mut frame_waiter, mut frame_stream) = unsafe {
         instance.create_session::<xr::Metal>(
             system,
@@ -228,7 +228,7 @@ fn run_metal_frames(
             .handle
             .wait_image(xr::Duration::INFINITE)
             .map_err(RuntimeError::OpenXr)?;
-        let (_, views) = session
+        let (view_state_flags, views) = session
             .locate_views(
                 view_configuration_type,
                 frame_state.predicted_display_time,
@@ -239,6 +239,7 @@ fn run_metal_frames(
             session,
             eye_tracking,
             context,
+            view_state_flags,
             &views,
             &swapchain.targets[image_index as usize],
             frame_state.predicted_display_time,

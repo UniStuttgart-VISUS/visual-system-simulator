@@ -17,6 +17,7 @@ pub trait Inspector {
     fn mut_i32(&self, name: &'static str, value: &mut i32) -> bool;
     fn mut_u32(&self, name: &'static str, value: &mut u32) -> bool;
     fn mut_img(&self, name: &'static str, value: &mut String) -> bool;
+    fn mut_asset(&self, name: &'static str, value: &mut AssetId) -> bool;
     fn mut_matrix(&self, name: &'static str, value: &mut Matrix4<f32>) -> bool;
 }
 
@@ -134,6 +135,15 @@ impl Inspector for FromJsonInspector {
         }
     }
 
+    fn mut_asset(&self, name: &'static str, value: &mut AssetId) -> bool {
+        if let Some(serde_json::value::Value::String(json_value)) = self.node_attribute(name) {
+            *value = AssetId::from_str(json_value.to_string());
+            true
+        } else {
+            false
+        }
+    }
+
     fn mut_matrix(&self, _name: &'static str, _value: &mut cgmath::Matrix4<f32>) -> bool {
         false //TODO: implement this as needed.
     }
@@ -221,6 +231,10 @@ impl Inspector for ToJsonInspector {
 
     fn mut_img(&self, name: &'static str, value: &mut String) -> bool {
         self.insert_attribute(name, serde_json::Value::String(value.clone()))
+    }
+
+    fn mut_asset(&self, name: &'static str, value: &mut AssetId) -> bool {
+        self.insert_attribute(name, serde_json::Value::String(value.raw().to_string()))
     }
 
     fn mut_matrix(&self, _name: &'static str, _value: &mut cgmath::Matrix4<f32>) -> bool {

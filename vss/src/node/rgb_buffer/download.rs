@@ -1,7 +1,9 @@
 use wgpu::Buffer;
 
 use super::*;
-use std::{mem::size_of, path::Path};
+use std::io::Cursor;
+use std::mem::size_of;
+use std::sync::{Arc, RwLock};
 
 pub type RgbBufferCb = Box<dyn FnOnce(RgbBuffer) + Send>;
 
@@ -63,26 +65,37 @@ impl DownloadRgbBuffer {
         self.tx.send(Message::Callback(cb)).unwrap();
     }
 
-    pub fn set_image_path<P>(&mut self, path: P, processed: std::sync::Arc<std::sync::RwLock<bool>>)
-    where
-        P: 'static + std::fmt::Debug + Send + AsRef<Path>,
+    pub fn set_image_encoder<F>(
+        &mut self,
+        format: crate::ImageFormat,
+        write_output: F,
+        processed: Arc<RwLock<bool>>,
+        failure: Arc<RwLock<Option<String>>>,
+    ) where
+        F: FnOnce(Vec<u8>) -> Result<(), String> + Send + 'static,
     {
         let cb = Box::new(move |rgb_buffer: RgbBuffer| {
-            let dir = path.as_ref().parent().unwrap();
-            std::fs::create_dir_all(dir).expect("Unable to create directory");
-            image::save_buffer(
-                &path,
-                &rgb_buffer.pixels_rgb,
+            let Some(img) = image::RgbImage::from_raw(
                 rgb_buffer.width,
                 rgb_buffer.height,
-                image::ColorType::Rgb8,
-            )
-            .expect("Unable to create file");
-            {
-                let mut processed = processed.write().unwrap();
-                *processed = true;
+                rgb_buffer.pixels_rgb.into_vec(),
+            ) else {
+                *failure.write().unwrap() = Some("failed to create RGB image buffer".to_string());
+                return;
+            };
+
+            let mut encoded = Cursor::new(Vec::new());
+            if let Err(err) = image::DynamicImage::ImageRgb8(img).write_to(&mut encoded, format) {
+                *failure.write().unwrap() = Some(format!("failed to encode image: {err}"));
+                return;
             }
-            println!("[image] written to {:?}", path);
+
+            if let Err(err) = write_output(encoded.into_inner()) {
+                *failure.write().unwrap() = Some(err);
+                return;
+            }
+
+            *processed.write().unwrap() = true;
         });
         self.set_buffer_cb(Some(cb));
     }

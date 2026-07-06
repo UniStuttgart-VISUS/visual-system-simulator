@@ -142,11 +142,12 @@ impl Flow {
     }
 
     fn update_ui(&self) {
-        let ui_tuple = self
-            .nodes
-            .borrow_mut()
-            .iter_mut()
-            .find_map(|node| node.as_ui_mut().map(|ui_node| ui_node.begin_run()));
+        let ui_tuple = {
+            let mut nodes = self.nodes.borrow_mut();
+            nodes
+                .iter_mut()
+                .find_map(|node| node.as_ui_mut().map(|ui_node| ui_node.begin_run()))
+        };
 
         if let Some((context, input)) = ui_tuple {
             let full_output = context.run_ui(input, |ctx| {
@@ -161,8 +162,8 @@ impl Flow {
                 });
             });
 
-            self.nodes
-                .borrow_mut()
+            let mut nodes = self.nodes.borrow_mut();
+            nodes
                 .iter_mut()
                 .find_map(|node| {
                     node.as_ui_mut()

@@ -34,13 +34,12 @@ The simulation models physical aspects of light (scattering, refraction, etc.) a
 ## <a name="Installation"></a>Installation
 
 ### Option 1: binary builds (easier)
-- Android: install from [Google Play Store](), TODO: add link
 - Desktop: download and install a package from the [release page](https://github.com/UniStuttgart-VISUS/visual-system-simulator/releases)
 
 ### Option 2: source builds
 - Clone this repository
 - Make sure you have Rust installed (e.g. using [rustup](https://rustup.rs/))
-- For the impatient `cargo run -- --config assets/configs/macular-degeneration-medium.json image assets/cube.color.png`
+- For the impatient: `cargo run` (see `Desktop App` below)
 - Optional: [Desktop build](#Desktop_Build)
 - Optional: [Android build](#Android_Build)
 - Optional: [Web build](#Web_Build)
@@ -55,8 +54,18 @@ API level 25+ | Linux/macOS/Windows
 
 ## <a name="Desktop"></a>Desktop App
 
-The desktop app has a command-line interface (see `--help`).
-However, you may use the web interface [web interface](#Web) for remote control.
+The desktop app has a command-line interface with two subcommands:
+
+- `show` starts the interactive simulation
+- `render` renders a batch of one or more inputs non-interactively
+
+You can inspect the available flags with `cargo run -p vss-desktop -- --help`. Configs may be supplied using `--config` or using sidecar files, e.g., `cube.color.png.vss.json`.
+
+Examples:
+
+- `cargo run -p vss-desktop -- show assets/cube.color.png`
+- `cargo run -p vss-desktop -- show --openxr=auto assets/cube.color.png`
+- `cargo run -p vss-desktop -- render --output '{dirname}/{stem}.vss.{extension}' 'assets/*.png'`
 
 ### <a name="Desktop_Build"></a>Building from Source
 

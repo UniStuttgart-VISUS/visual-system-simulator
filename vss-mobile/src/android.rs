@@ -154,15 +154,16 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate<'loca
     };
 
     set_load(Box::new(move |full_path| {
-        let full_path = CString::new(full_path).unwrap();
-        let mut asset = assetManager.open(&full_path).expect("Cannot open asset");
+        let full_path = CString::new(full_path)
+            .map_err(|err| format!("Cannot open asset path '{}': {err}", full_path))?;
+        let mut asset = assetManager
+            .open(&full_path)
+            .map_err(|_| format!("Cannot open asset '{}'", full_path.to_string_lossy()))?;
         let mut buffer = Vec::new();
-        match asset.read_to_end(&mut buffer) {
-            Ok(_) => Cursor::new(buffer),
-            Err(err) => {
-                panic!("Cannot read asset ({})", err);
-            }
-        }
+        asset
+            .read_to_end(&mut buffer)
+            .map_err(|err| format!("Cannot read asset '{}': {err}", full_path.to_string_lossy()))?;
+        Ok(Cursor::new(buffer))
     }));
 
     //TODO for testing purposes only

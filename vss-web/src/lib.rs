@@ -1,5 +1,6 @@
 #![cfg(target_arch = "wasm32")]
 use std::sync::mpsc::{self, Receiver, SyncSender};
+use std::sync::{Arc, RwLock};
 use vss::{RgbBuffer, UploadRgbBuffer, *};
 use vss_winit::*;
 use wasm_bindgen::prelude::*;
@@ -98,7 +99,8 @@ impl Simulator {
         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
         console_log::init().expect("Could not initialize logger");
 
-        let mut window_surface = WindowSurface::new(true, 1, None);
+        let mut window_surface =
+            WindowSurface::new(true, 1, None, None, Arc::new(RwLock::new(None)));
 
         use winit::platform::web::WindowExtWebSys;
         let document = web_sys::window()

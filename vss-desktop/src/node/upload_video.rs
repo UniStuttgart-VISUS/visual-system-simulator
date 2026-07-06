@@ -12,16 +12,43 @@ use ac_ffmpeg::{
     Error,
 };
 #[cfg(feature = "video")]
+use std::convert::TryFrom;
+#[cfg(feature = "video")]
 use std::fs::File;
 use std::path::Path;
+#[cfg(feature = "video")]
+use std::sync::{Arc, RwLock};
 
 use vss::*;
+
+#[cfg(feature = "video")]
+fn gcd(mut a: u64, mut b: u64) -> u64 {
+    while b != 0 {
+        let remainder = a % b;
+        a = b;
+        b = remainder;
+    }
+    a.max(1)
+}
+
+#[cfg(feature = "video")]
+#[derive(Clone)]
+pub struct VideoRenderState {
+    pub generation: u64,
+    pub eof: bool,
+    pub pts: ac_ffmpeg::time::Timestamp,
+    pub frame_time_base: ac_ffmpeg::time::TimeBase,
+    pub decode_error: Option<String>,
+}
 
 pub struct UploadVideo {
     upload_start: Option<std::time::Instant>,
     uploader: UploadRgbBuffer,
     next_pts: f32,
+    #[cfg(feature = "video")]
+    next_timestamp: ac_ffmpeg::time::Timestamp,
     next_buffer: RgbBuffer,
+    input_size: Option<[u32; 2]>,
     #[cfg(feature = "video")]
     demuxer: Option<DemuxerWithStreamInfo<File>>,
     #[cfg(feature = "video")]
@@ -30,17 +57,25 @@ pub struct UploadVideo {
     video_decoder: Option<VideoDecoder>,
     #[cfg(feature = "video")]
     video_scaler: Option<VideoFrameScaler>,
+    #[cfg(feature = "video")]
+    batch_state: Option<Arc<RwLock<VideoRenderState>>>,
+    #[cfg(feature = "video")]
+    advance_batch_frame: bool,
+    #[cfg(feature = "video")]
+    frame_time_base: ac_ffmpeg::time::TimeBase,
 }
 
 impl UploadVideo {
     pub fn new(context: &RenderContext) -> Self {
-        let mut uploader = UploadRgbBuffer::new(context);
-        uploader.set_flags(RgbInputFlags::VERTICALLY_FLIPPED);
+        let uploader = UploadRgbBuffer::new(context);
         Self {
             upload_start: None,
             uploader,
             next_pts: -1.0,
+            #[cfg(feature = "video")]
+            next_timestamp: ac_ffmpeg::time::Timestamp::from_micros(0),
             next_buffer: RgbBuffer::default(),
+            input_size: None,
             #[cfg(feature = "video")]
             demuxer: None,
             #[cfg(feature = "video")]
@@ -49,6 +84,12 @@ impl UploadVideo {
             video_decoder: None,
             #[cfg(feature = "video")]
             video_scaler: None,
+            #[cfg(feature = "video")]
+            batch_state: None,
+            #[cfg(feature = "video")]
+            advance_batch_frame: false,
+            #[cfg(feature = "video")]
+            frame_time_base: ac_ffmpeg::time::TimeBase::new(1, 30),
         }
     }
 
@@ -96,6 +137,22 @@ impl UploadVideo {
             .find(|(_, params)| params.is_video_codec())
             .ok_or_else(|| Error::new("Missing video stream"))?;
         let video_params = video_params.as_video_codec_parameters().unwrap();
+        let stream = &demuxer.streams()[video_stream_index];
+        if let Some(frame_count) = stream.frames() {
+            let duration = stream.duration();
+            if !duration.is_null() && duration.timestamp() > 0 {
+                let numerator = duration.timestamp() * i64::from(duration.time_base().num());
+                let denominator = i64::from(duration.time_base().den()) * frame_count as i64;
+                let divisor = gcd(numerator.unsigned_abs(), denominator.unsigned_abs()) as i64;
+                let numerator = numerator / divisor;
+                let denominator = denominator / divisor;
+                if let (Ok(numerator), Ok(denominator)) =
+                    (i32::try_from(numerator), i32::try_from(denominator))
+                {
+                    self.frame_time_base = ac_ffmpeg::time::TimeBase::new(numerator, denominator);
+                }
+            }
+        }
         if cfg!(debug_assertions) {
             println!(
                 "Video codec: {}",
@@ -123,6 +180,15 @@ impl UploadVideo {
             .target_pixel_format(target_format)
             .algorithm(Algorithm::FastBilinear)
             .build()?;
+        let input_size = [
+            u32::try_from(video_params.width())
+                .map_err(|_| Error::new("Video width exceeds supported range"))?,
+            u32::try_from(video_params.height())
+                .map_err(|_| Error::new("Video height exceeds supported range"))?,
+        ];
+        self.uploader
+            .set_render_resolution(RenderResolution::Custom { res: input_size });
+        self.input_size = Some(input_size);
 
         self.upload_start = Some(std::time::Instant::now());
         self.demuxer = Some(demuxer);
@@ -130,6 +196,23 @@ impl UploadVideo {
         self.video_decoder = Some(video_decoder);
         self.video_scaler = Some(video_scaler);
         Ok(())
+    }
+
+    #[cfg(feature = "video")]
+    pub fn enable_batch_render(&mut self) -> Result<Arc<RwLock<VideoRenderState>>, Error> {
+        if !self.next_frame()? {
+            return Err(Error::new("Video contains no decodable frames"));
+        }
+        let state = Arc::new(RwLock::new(VideoRenderState {
+            generation: 1,
+            eof: false,
+            pts: ac_ffmpeg::time::Timestamp::from_micros(0),
+            frame_time_base: self.frame_time_base,
+            decode_error: None,
+        }));
+        state.write().unwrap().pts = self.next_timestamp;
+        self.batch_state = Some(state.clone());
+        Ok(state)
     }
 
     #[cfg(feature = "video")]
@@ -146,7 +229,7 @@ impl UploadVideo {
                             // Process frame.
                             // XXX: using a software scaler might be a bad idea for 10bit 4k video data.
                             let scaled_frame = video_scaler.scale(&frame)?;
-                            self.from_video_frame(scaled_frame);
+                            self.update_from_video_frame(scaled_frame);
                             result = Ok(true);
                             break;
                         }
@@ -178,8 +261,9 @@ impl UploadVideo {
     }
 
     #[cfg(feature = "video")]
-    fn from_video_frame(&mut self, rgba_frame: VideoFrame) {
+    fn update_from_video_frame(&mut self, rgba_frame: VideoFrame) {
         let pts = rgba_frame.pts().as_f32().unwrap_or(0f32);
+        self.next_timestamp = rgba_frame.pts();
         let width = rgba_frame.width() as u32;
         let height = rgba_frame.height() as u32;
         let plane0 = &rgba_frame.planes()[0];
@@ -196,11 +280,35 @@ impl UploadVideo {
             }
         } else {
             // Copy.
-            self.next_buffer.pixels_rgb.copy_from_slice(&plane0.data());
+            self.next_buffer.pixels_rgb.copy_from_slice(plane0.data());
         }
     }
 
     fn validate_data(&mut self) {
+        #[cfg(feature = "video")]
+        if let Some(state) = self.batch_state.clone() {
+            if self.advance_batch_frame {
+                self.advance_batch_frame = false;
+                match self.next_frame() {
+                    Ok(true) => {
+                        let mut state = state.write().unwrap();
+                        state.generation += 1;
+                        state.pts = self.next_timestamp;
+                    }
+                    Ok(false) => state.write().unwrap().eof = true,
+                    Err(err) => {
+                        let mut state = state.write().unwrap();
+                        state.eof = true;
+                        state.decode_error = Some(err.to_string());
+                    }
+                }
+            }
+            if !state.read().unwrap().eof {
+                self.uploader.upload_buffer(&self.next_buffer);
+            }
+            return;
+        }
+
         if let Some(upload_start) = self.upload_start {
             #[cfg(feature = "video")]
             if self.next_pts < 0.0 {
@@ -216,8 +324,11 @@ impl UploadVideo {
     }
 
     pub fn set_flags(&mut self, flags: RgbInputFlags) {
-        self.uploader
-            .set_flags(flags | RgbInputFlags::VERTICALLY_FLIPPED);
+        self.uploader.set_flags(flags);
+    }
+
+    pub fn input_size(&self) -> Option<[u32; 2]> {
+        self.input_size.or_else(|| self.uploader.input_size())
     }
 }
 
@@ -253,5 +364,13 @@ impl Node for UploadVideo {
     ) {
         self.validate_data();
         self.uploader.render(context, encoder, screen)
+    }
+
+    fn post_render(&mut self, context: &RenderContext) {
+        self.uploader.post_render(context);
+        #[cfg(feature = "video")]
+        if self.batch_state.is_some() {
+            self.advance_batch_frame = true;
+        }
     }
 }

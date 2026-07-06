@@ -30,7 +30,7 @@ struct VulkanLoaderConfig {
 
 pub(super) fn run_vulkan<F>(runtime: &Runtime, build_pipeline: F) -> Result<(), RuntimeError>
 where
-    F: FnOnce(&mut RenderContext, &[View]),
+    F: FnOnce(&mut RenderContext, &[View]) -> Result<(), String>,
 {
     let entry = runtime.load_entry()?;
 
@@ -94,7 +94,7 @@ where
         output_format,
     );
     let initial_views = runtime.initial_views(&view_configs, view_configuration_type)?;
-    build_pipeline(&mut context, &initial_views);
+    build_pipeline(&mut context, &initial_views).map_err(RuntimeError::View)?;
     let (session, mut frame_waiter, mut frame_stream) = unsafe {
         instance.create_session::<xr::Vulkan>(
             system,
@@ -441,7 +441,7 @@ unsafe fn run_vulkan_frames(
             .handle
             .acquire_image()
             .map_err(RuntimeError::OpenXr)?;
-        let (_, views) = session
+        let (view_state_flags, views) = session
             .locate_views(
                 view_configuration_type,
                 frame_state.predicted_display_time,
@@ -457,6 +457,7 @@ unsafe fn run_vulkan_frames(
             session,
             eye_tracking,
             context,
+            view_state_flags,
             &views,
             &swapchain.targets[image_index as usize],
             frame_state.predicted_display_time,

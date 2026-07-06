@@ -1,7 +1,7 @@
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
-use cgmath::{Matrix4, SquareMatrix, Vector4};
+use cgmath::{Matrix4, Rad, SquareMatrix, Vector3, Vector4};
 use vss::*;
 use winit::{
     application::ApplicationHandler,
@@ -10,6 +10,7 @@ use winit::{
     event::*,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     keyboard::{Key, NamedKey},
+    platform::run_on_demand::EventLoopExtRunOnDemand,
     window::Window,
 };
 
@@ -25,18 +26,35 @@ pub struct WindowSurface {
     poll_fn: Box<dyn FnMut() -> bool>,
 
     active: bool,
-    static_pos: Option<(f32, f32)>,
+    static_view: Option<(f32, f32)>,
+    static_gaze: Option<(f32, f32)>,
+    pose_input_size: Arc<RwLock<Option<[u32; 2]>>>,
     mouse: MouseInput,
 
     override_gaze: bool,
     override_view: bool,
 }
 
+pub fn pose_from_position(
+    position: (f32, f32),
+    pose_size: [u32; 2],
+) -> (Matrix4<f32>, Vector3<f32>) {
+    let width = pose_size[0].max(1) as f32;
+    let height = pose_size[1].max(1) as f32;
+    let yaw = (position.0 / width - 0.5) * std::f32::consts::PI * 2.0;
+    let pitch = (position.1 / height - 0.5) * std::f32::consts::PI;
+    let view = Matrix4::from_angle_x(Rad(pitch)) * Matrix4::from_angle_y(Rad(yaw));
+    let gaze = (view.invert().unwrap() * Vector4::unit_z()).truncate();
+    (view, gaze)
+}
+
 impl WindowSurface {
     pub fn new<I, P>(
         visible: bool,
         flow_count: usize,
-        static_pos: Option<(f32, f32)>,
+        static_view: Option<(f32, f32)>,
+        static_gaze: Option<(f32, f32)>,
+        pose_input_size: Arc<RwLock<Option<[u32; 2]>>>,
         init_fn: I,
         poll_fn: P,
     ) -> Self
@@ -53,64 +71,68 @@ impl WindowSurface {
             init_fn: Box::new(init_fn),
             poll_fn: Box::new(poll_fn),
             active: false,
-            static_pos,
+            static_view,
+            static_gaze,
+            pose_input_size,
             mouse: MouseInput {
                 position: (0.0, 0.0),
                 left_button: false,
                 right_button: false,
             },
-            override_view: static_pos.is_some(),
+            override_view: false,
             override_gaze: false,
         }
     }
 
-    pub fn run_app(mut self) -> Result<(), EventLoopError> {
-        let event_loop = EventLoop::new().unwrap();
+    pub fn run_app(mut self, event_loop: &mut EventLoop<()>) -> Result<(), EventLoopError> {
         event_loop.set_control_flow(ControlFlow::Poll);
 
         #[cfg(target_arch = "wasm32")]
         {
             use winit::platform::web::EventLoopExtWebSys;
-            event_loop.spawn_app(event_handler)
+            event_loop.spawn_app(self)
         }
         #[cfg(not(target_arch = "wasm32"))]
-        event_loop.run_app(&mut self)
+        event_loop.run_app_on_demand(&mut self)
     }
 
     fn update_input(&self) {
         let surface = self.surface.clone().unwrap();
         for f in surface.flows.iter() {
-            if self.override_view || self.override_gaze {
-                let view_pos = self.static_pos.unwrap_or(self.mouse.position);
+            let pose_size = self
+                .pose_input_size
+                .read()
+                .unwrap()
+                .unwrap_or([surface.width(), surface.height()]);
+            let view_position = self.static_view.or(if self.override_view {
+                Some(self.mouse.position)
+            } else {
+                None
+            });
+            let gaze_position = self.static_gaze.or(if self.override_gaze {
+                Some(self.mouse.position)
+            } else {
+                None
+            });
 
-                let yaw =
-                    (view_pos.0 / (surface.width() as f32) - 0.5) * std::f32::consts::PI * 2.0;
-                let pitch = (view_pos.1 / (surface.height() as f32) - 0.5) * std::f32::consts::PI; //50 mm lens
-                let view = Matrix4::from_angle_x(cgmath::Rad(pitch))
-                    * Matrix4::from_angle_y(cgmath::Rad(yaw));
-
+            {
                 let mut eye = f.eye_mut();
 
-                if self.override_view {
-                    eye.view = view;
+                if let Some(position) = view_position {
+                    eye.view = pose_from_position(position, pose_size).0;
                 }
-                if self.override_gaze {
-                    eye.gaze = (eye.view * view.invert().unwrap() * Vector4::unit_z()).truncate();
+
+                if let Some(position) = gaze_position {
+                    eye.gaze = pose_from_position(position, pose_size).1;
                 }
             }
+
             f.input(&self.mouse);
         }
     }
 
     fn update_size(&mut self, deferred_size: Option<PhysicalSize<u32>>) {
-        let new_size = if self.static_pos.is_some() {
-            Some(PhysicalSize::new(1920, 1080))
-        } else {
-            // TODO-WGPU
-            // let dpi_factor = self.window.scale_factor();
-            // let size = size.to_physical(dpi_factor);
-            deferred_size
-        };
+        let new_size = deferred_size;
 
         if let Some(new_size) = new_size {
             if let Some(surface) = &mut self.surface {
@@ -130,14 +152,11 @@ impl WindowSurface {
 
 impl ApplicationHandler for WindowSurface {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        // On macOS, wgpu cannot acquire textures for hidden windows: the surface
-        // reports `Occluded` forever, so batch renders never produce output.
-        let native_window_visible = self.visible || cfg!(target_os = "macos");
         let window_attributes = Window::default_attributes()
             .with_title("Visual System Simulator")
             .with_min_inner_size(LogicalSize::new(640.0, 360.0))
             .with_inner_size(LogicalSize::new(1280.0, 720.0))
-            .with_visible(native_window_visible);
+            .with_visible(self.visible);
 
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
         window.set_cursor_visible(true);

@@ -46,7 +46,7 @@ impl Runtime {
 
     pub fn run<F>(&self, build_pipeline: F) -> Result<(), RuntimeError>
     where
-        F: FnOnce(&mut RenderContext, &[View]),
+        F: FnOnce(&mut RenderContext, &[View]) -> Result<(), String>,
     {
         let entry = self.load_entry()?;
 
@@ -186,7 +186,7 @@ impl Runtime {
 
     fn run_vulkan<F>(&self, build_pipeline: F) -> Result<(), RuntimeError>
     where
-        F: FnOnce(&mut RenderContext, &[View]),
+        F: FnOnce(&mut RenderContext, &[View]) -> Result<(), String>,
     {
         vulkan::run_vulkan(self, build_pipeline)
     }
@@ -194,7 +194,7 @@ impl Runtime {
     #[cfg(all(target_vendor = "apple"))]
     fn run_metal<F>(&self, build_pipeline: F) -> Result<(), RuntimeError>
     where
-        F: FnOnce(&mut RenderContext, &[View]),
+        F: FnOnce(&mut RenderContext, &[View]) -> Result<(), String>,
     {
         metal::run_metal(self, build_pipeline)
     }
@@ -203,7 +203,7 @@ impl Runtime {
     #[allow(dead_code)]
     fn run_metal<F>(&self, _build_pipeline: F) -> Result<(), RuntimeError>
     where
-        F: FnOnce(&mut RenderContext, &[View]),
+        F: FnOnce(&mut RenderContext, &[View]) -> Result<(), String>,
     {
         Err(RuntimeError::NotImplemented {
             backend: Backend::Metal,
@@ -447,6 +447,7 @@ impl Runtime {
         session: &xr::Session<G>,
         eye_tracking: Option<&EyeTracking>,
         context: &mut RenderContext,
+        view_state_flags: xr::ViewStateFlags,
         located: &[xr::View],
         targets: &[RenderTexture],
         predicted_display_time: xr::Time,
@@ -478,6 +479,8 @@ impl Runtime {
         } else {
             vec![None; located.len()]
         };
+        let hardware_pose_valid = view_state_flags.contains(xr::ViewStateFlags::POSITION_VALID)
+            && view_state_flags.contains(xr::ViewStateFlags::ORIENTATION_VALID);
 
         let mut encoder =
             context
@@ -496,8 +499,10 @@ impl Runtime {
             )?;
             {
                 let mut eye = context.flows[index].eye_mut();
-                eye.position = view.position;
-                eye.view = view.view;
+                if hardware_pose_valid {
+                    eye.position = view.position;
+                    eye.view = view.view;
+                }
                 eye.proj = view.projection;
                 if let Some(gaze) = gaze_vectors[index] {
                     eye.gaze = gaze;
