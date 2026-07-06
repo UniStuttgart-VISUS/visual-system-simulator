@@ -66,6 +66,11 @@ Examples:
 - `cargo run -p vss-desktop -- show assets/cube.color.png`
 - `cargo run -p vss-desktop -- show --openxr=auto assets/cube.color.png`
 - `cargo run -p vss-desktop -- render --output '{dirname}/{stem}.vss.{extension}' 'assets/*.png'`
+- `cargo run -p vss-desktop -- render --config 'assets/configs/*.json' assets/marketplace.png`
+
+The render command accepts repeated configuration files and configuration glob patterns. The default
+output name includes the config stem, or `vss` when no config is supplied. Custom output patterns can
+use `{config}`, for example `--output 'output/{config}/{stem}.{extension}'`.
 
 ### <a name="Desktop_Build"></a>Building from Source
 

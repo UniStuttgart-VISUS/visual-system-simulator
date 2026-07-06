@@ -1,5 +1,6 @@
 use super::{refresh_flow_configs, report_diagnostics, CommonConfig};
 use crate::flow::{build_flow, finalize_flows, FlowError, FlowRequest, FlowStage};
+use std::collections::HashSet;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 use vss::*;
@@ -11,24 +12,33 @@ struct OutputInfo {
     extension: String,
     /// Basename without extension, e.g., `image`.
     stem: String,
+    /// Configuration basename without extension, e.g., `normal`.
+    config_stem: String,
 }
 
 #[derive(Debug)]
 struct PlannedInput {
+    config: Option<PathBuf>,
     input: String,
     output: PathBuf,
 }
 
 #[derive(Debug, clap::Args)]
 pub(crate) struct RenderArgs {
-    #[arg(short = 'c', long = "config", value_name = "FILE")]
-    config: Option<PathBuf>,
+    #[arg(
+        short = 'c',
+        long = "config",
+        value_name = "FILE_OR_PATTERN",
+        help = "Configuration files and glob patterns; may be repeated"
+    )]
+    config: Vec<String>,
 
     #[arg(
         short = 'o',
         long = "output",
         value_name = "PATTERN",
-        default_value = "{dirname}/{stem}.vss.{extension}"
+        default_value = "{dirname}/{stem}.{config}.{extension}",
+        help = "Output pattern ({dirname}, {stem}, {extension}, {config})"
     )]
     output: String,
 
@@ -74,6 +84,7 @@ fn run_batch_render(config: RenderConfig) -> Result<(), FlowError> {
         planned_inputs,
     } = config;
     for planned_input in planned_inputs {
+        common.base_config = planned_input.config.clone();
         common.inputs = vec![planned_input.input.clone()];
         let diagnostics = refresh_flow_configs(&mut common).map_err(|err| FlowError {
             input: planned_input.input.clone(),
@@ -199,7 +210,7 @@ fn run_headless_render_with_renderer(
     Ok(())
 }
 
-fn input_output_info(path: &Path) -> OutputInfo {
+fn input_output_info(path: &Path, config: Option<&Path>) -> OutputInfo {
     let dirname = match path.parent() {
         Some(parent) if !parent.as_os_str().is_empty() => parent.to_string_lossy().to_string(),
         _ => ".".to_string(),
@@ -212,15 +223,24 @@ fn input_output_info(path: &Path) -> OutputInfo {
         .extension()
         .map(|extension| extension.to_string_lossy().to_string())
         .unwrap_or_default();
+    let config_stem = config
+        .and_then(Path::file_stem)
+        .map(|stem| stem.to_string_lossy().to_string())
+        .unwrap_or_else(|| "vss".to_string());
     OutputInfo {
         dirname,
         extension,
         stem,
+        config_stem,
     }
 }
 
-fn plan_output_path(pattern: &str, input: &Path) -> Result<PathBuf, Box<dyn Error>> {
-    let info = input_output_info(input);
+fn plan_output_path(
+    pattern: &str,
+    input: &Path,
+    config: Option<&Path>,
+) -> Result<PathBuf, Box<dyn Error>> {
+    let info = input_output_info(input, config);
     let output = format_output_pattern(pattern, &info)
         .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidInput, err))?;
     Ok(PathBuf::from(output))
@@ -241,6 +261,7 @@ fn format_output_pattern(pattern: &str, info: &OutputInfo) -> Result<String, Str
             "dirname" => &info.dirname,
             "stem" => &info.stem,
             "extension" => &info.extension,
+            "config" => &info.config_stem,
             other => return Err(format!("unknown placeholder: {{{other}}}")),
         });
 
@@ -251,51 +272,76 @@ fn format_output_pattern(pattern: &str, info: &OutputInfo) -> Result<String, Str
     Ok(result)
 }
 
-fn expand_input_pattern(input: &str) -> Result<Vec<String>, Box<dyn Error>> {
-    if !input.contains(['*', '?', '[']) {
-        return Ok(vec![input.to_string()]);
+fn expand_path_pattern(pattern: &str) -> Result<Vec<PathBuf>, Box<dyn Error>> {
+    if !pattern.contains(['*', '?', '[']) {
+        return Ok(vec![PathBuf::from(pattern)]);
     }
 
-    let mut matches: Vec<PathBuf> = glob::glob(input)?.collect::<Result<_, _>>()?;
+    let mut matches: Vec<PathBuf> = glob::glob(pattern)?.collect::<Result<_, _>>()?;
     if matches.is_empty() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::NotFound,
-            format!("unmatched glob pattern: {input}"),
+            format!("unmatched glob pattern: {pattern}"),
         )
         .into());
     }
     matches.sort();
-    Ok(matches
-        .into_iter()
-        .map(|path| path.to_string_lossy().to_string())
-        .collect())
+    Ok(matches)
+}
+
+fn expand_patterns(patterns: &[String]) -> Result<Vec<PathBuf>, Box<dyn Error>> {
+    patterns
+        .iter()
+        .map(|pattern| expand_path_pattern(pattern))
+        .collect::<Result<Vec<_>, _>>()
+        .map(|matches| matches.into_iter().flatten().collect())
 }
 
 fn plan_inputs(
     inputs: &[String],
+    configs: &[String],
     output_pattern: &str,
 ) -> Result<Vec<PlannedInput>, Box<dyn Error>> {
-    inputs
-        .iter()
-        .map(|raw_input| expand_input_pattern(raw_input))
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .flatten()
-        .map(|input| {
-            let output = plan_output_path(output_pattern, Path::new(&input))?;
-            Ok(PlannedInput { input, output })
-        })
-        .collect()
+    let inputs = expand_patterns(inputs)?;
+    let configs = if configs.is_empty() {
+        vec![None]
+    } else {
+        expand_patterns(configs)?.into_iter().map(Some).collect()
+    };
+    let mut outputs = HashSet::new();
+    let mut planned = Vec::new();
+
+    for config in configs {
+        for input in &inputs {
+            let output = plan_output_path(output_pattern, input, config.as_deref())?;
+            if !outputs.insert(output.clone()) {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::AlreadyExists,
+                    format!(
+                        "multiple renders would write {}; include {{config}} and/or {{stem}} in --output",
+                        output.display()
+                    ),
+                )
+                .into());
+            }
+            planned.push(PlannedInput {
+                config: config.clone(),
+                input: input.to_string_lossy().to_string(),
+                output,
+            });
+        }
+    }
+
+    Ok(planned)
 }
 
 impl RenderArgs {
     fn into_config(self) -> Result<RenderConfig, Box<dyn Error>> {
         let common = CommonConfig {
             inputs: self.input,
-            base_config: self.config,
             ..CommonConfig::default()
         };
-        let planned_inputs = plan_inputs(&common.inputs, &self.output)?;
+        let planned_inputs = plan_inputs(&common.inputs, &self.config, &self.output)?;
         Ok(RenderConfig {
             common,
             force: self.force,
