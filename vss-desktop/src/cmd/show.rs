@@ -109,6 +109,7 @@ fn run_windowed(config: ShowConfig, event_loop: &mut EventLoop<()>) -> Result<()
                     input: config.common.inputs[0].clone(),
                     output: None,
                     force: false,
+                    show_gui: true,
                     render_resolution: RenderResolution::Screen {
                         input_scale: 1.0,
                         output_scale: OutputScale::default(),
@@ -178,6 +179,7 @@ fn run_openxr(config: ShowConfig, backend: OpenXrBackend) -> Result<(), String> 
                         input: config.common.inputs[0].clone(),
                         output: None,
                         force: false,
+                        show_gui: true,
                         render_resolution: RenderResolution::Buffer { input_scale: 1.0 },
                         view_port: viewport,
                     },

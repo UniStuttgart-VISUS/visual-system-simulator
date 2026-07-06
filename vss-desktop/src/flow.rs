@@ -217,6 +217,7 @@ pub(crate) struct FlowRequest {
     pub(crate) input: String,
     pub(crate) output: Option<PathBuf>,
     pub(crate) force: bool,
+    pub(crate) show_gui: bool,
     pub(crate) render_resolution: RenderResolution,
     pub(crate) view_port: ViewPort,
 }
@@ -258,7 +259,9 @@ pub(crate) fn build_flow(
     display.set_viewport(request.view_port);
     display.set_output_scale(OutputScale::default());
     context.add_node(Box::new(display), flow_index);
-    context.add_node(Box::new(GuiOverlay::new(context)), flow_index);
+    if request.show_gui {
+        context.add_node(Box::new(GuiOverlay::new(context)), flow_index);
+    }
 
     if let Some(output_node) = output_node {
         context.add_node(output_node, flow_index);

@@ -145,6 +145,7 @@ fn run_headless_render_with_renderer(
             input: config.inputs[0].clone(),
             output: Some(output_path),
             force,
+            show_gui: false,
             render_resolution: RenderResolution::Buffer { input_scale: 1.0 },
             view_port: ViewPort {
                 x: 0.0,
