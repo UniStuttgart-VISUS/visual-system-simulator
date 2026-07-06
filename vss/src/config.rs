@@ -370,51 +370,24 @@ fn parse_structured_document(
     document
 }
 
-fn parse_legacy_document(
-    source: &str,
-    root: &Value,
-    diagnostics: &mut Vec<Diagnostic>,
-) -> ConfigDocument {
-    let Some(object) = root.as_object() else {
-        diagnostics.push(diagnostic(
-            DiagnosticSeverity::Error,
-            source,
-            "",
-            "expected an object",
-        ));
-        return ConfigDocument::default();
-    };
-
-    let mut document = ConfigDocument::default();
-    for (key, value) in object {
-        document
-            .both
-            .simulator
-            .insert(key.clone(), parse_simulator_value(source, key, value));
-    }
-    diagnostics.push(diagnostic(
-        DiagnosticSeverity::Warning,
-        source,
-        "",
-        "legacy flat configuration is deprecated; wrap simulator fields inside `both.simulator`",
-    ));
-    document
-}
-
 pub fn parse_config_value(source: &str, root: &Value) -> (ConfigDocument, Vec<Diagnostic>) {
     let mut diagnostics = Vec::new();
-    let document = if root
-        .as_object()
-        .map(|object| {
-            object
-                .keys()
-                .any(|key| matches!(key.as_str(), "both" | "left" | "right"))
-        })
-        .unwrap_or(false)
-    {
-        parse_structured_document(source, root, &mut diagnostics)
-    } else {
-        parse_legacy_document(source, root, &mut diagnostics)
+    let document = match root.as_object() {
+        Some(object)
+            if !object.is_empty()
+                && !object
+                    .keys()
+                    .any(|key| matches!(key.as_str(), "both" | "left" | "right")) =>
+        {
+            diagnostics.push(diagnostic(
+                DiagnosticSeverity::Error,
+                source,
+                "",
+                "unsupported configuration format; expected `both`, `left`, or `right` sections",
+            ));
+            ConfigDocument::default()
+        }
+        _ => parse_structured_document(source, root, &mut diagnostics),
     };
     (document, diagnostics)
 }
@@ -547,7 +520,9 @@ pub fn load_config_layers_from_text(
 
 #[cfg(test)]
 mod tests {
-    use super::load_config_layers_from_text;
+    use super::{
+        diagnostics_have_errors, load_config_layers_from_text, parse_config_str, DiagnosticSeverity,
+    };
     use std::io::ErrorKind;
     use std::path::Path;
 
@@ -568,6 +543,20 @@ mod tests {
         let result = load_config_layers_from_text(None, &["input.png".to_string()], |_| Ok(None));
 
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn flat_config_format_is_rejected() {
+        let (document, diagnostics) =
+            parse_config_str("legacy.json", r#"{"glaucoma_onoff": true}"#).unwrap();
+
+        assert!(document.both.simulator.is_empty());
+        assert!(diagnostics_have_errors(&diagnostics));
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].severity, DiagnosticSeverity::Error);
+        assert!(diagnostics[0]
+            .message
+            .contains("unsupported configuration format"));
     }
 }
 
