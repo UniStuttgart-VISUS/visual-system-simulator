@@ -521,8 +521,11 @@ pub fn load_config_layers_from_text(
 #[cfg(test)]
 mod tests {
     use super::{
-        diagnostics_have_errors, load_config_layers_from_text, parse_config_str, DiagnosticSeverity,
+        apply_field, diagnostics_have_errors, load_config_layers_from_text, parse_config_str,
+        validate_value_kind, AssetId, ConfigValue, DiagnosticSeverity, FieldKind,
     };
+    use serde_json::Value;
+    use std::collections::BTreeMap;
     use std::io::ErrorKind;
     use std::path::Path;
 
@@ -557,6 +560,33 @@ mod tests {
         assert!(diagnostics[0]
             .message
             .contains("unsupported configuration format"));
+    }
+
+    #[test]
+    fn null_asset_clears_the_asset() {
+        let field = ConfigValue {
+            value: Value::Null,
+            source: "config.json".to_string(),
+            path: "both.simulator.map".to_string(),
+            children: BTreeMap::new(),
+        };
+        let mut target = AssetId::from("old.png");
+
+        apply_field(&field, &mut target, &|_, _| unreachable!()).unwrap();
+
+        assert!(target.is_empty());
+    }
+
+    #[test]
+    fn null_asset_is_valid() {
+        let field = ConfigValue {
+            value: Value::Null,
+            source: "config.json".to_string(),
+            path: "both.simulator.map".to_string(),
+            children: BTreeMap::new(),
+        };
+
+        assert!(validate_value_kind(FieldKind::Asset, &field).is_ok());
     }
 }
 
@@ -718,13 +748,23 @@ fn validate_value_kind(expected: FieldKind, value: &ConfigValue) -> Result<(), S
         FieldKind::F64 | FieldKind::F32 | FieldKind::I32 | FieldKind::U32 => {
             validate_number(&value.value, expected).map_err(ToString::to_string)
         }
-        FieldKind::String | FieldKind::Asset => {
+        FieldKind::String => {
             if value.value.is_string() {
                 Ok(())
             } else {
                 Err(format!(
                     "expected {}, found {}",
                     expected_type_name(expected),
+                    value_type_name(&value.value)
+                ))
+            }
+        }
+        FieldKind::Asset => {
+            if value.value.is_string() || value.value.is_null() {
+                Ok(())
+            } else {
+                Err(format!(
+                    "expected string or null, found {}",
                     value_type_name(&value.value)
                 ))
             }
@@ -873,11 +913,15 @@ fn apply_field(
             *target = asset_resolver(&field.source, v);
             return Ok(());
         }
+        if field.value.is_null() {
+            *target = AssetId::new();
+            return Ok(());
+        }
         return Err(diagnostic(
             DiagnosticSeverity::Error,
             &field.source,
             field.path.clone(),
-            "expected a string",
+            "expected a string or null",
         ));
     }
     Err(diagnostic(
