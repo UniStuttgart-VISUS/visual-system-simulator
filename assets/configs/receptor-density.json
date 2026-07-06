@@ -1,3 +1,7 @@
 {
-	"receptordensity_onoff": true
+  "both": {
+    "simulator": {
+      "receptordensity_onoff": true
+    }
+  }
 }
