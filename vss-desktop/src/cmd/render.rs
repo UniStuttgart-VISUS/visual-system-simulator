@@ -3,6 +3,7 @@ use crate::flow::{build_flow, finalize_flows, FlowError, FlowRequest, FlowStage}
 use std::collections::HashSet;
 use std::error::Error;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 use vss::*;
 
 struct OutputInfo {
@@ -66,6 +67,13 @@ pub(crate) struct RenderArgs {
     force: bool,
 
     #[arg(
+        short = 'v',
+        long = "verbose",
+        help = "Print timing information for each render stage"
+    )]
+    verbose: bool,
+
+    #[arg(
         value_name = "INPUT",
         required = true,
         num_args = 1..,
@@ -78,7 +86,12 @@ pub(crate) struct RenderArgs {
 struct RenderConfig {
     common: CommonConfig,
     force: bool,
+    verbose: bool,
     planned_inputs: Vec<PlannedInput>,
+}
+
+fn format_duration(duration: Duration) -> String {
+    format!("{:.3} ms", duration.as_secs_f64() * 1000.0)
 }
 
 pub(crate) fn run(args: RenderArgs) -> Result<(), String> {
@@ -87,6 +100,8 @@ pub(crate) fn run(args: RenderArgs) -> Result<(), String> {
 }
 
 fn run_batch_render(config: RenderConfig) -> Result<(), FlowError> {
+    let batch_start = Instant::now();
+    let renderer_start = Instant::now();
     let renderer = create_headless_renderer().map_err(|message| FlowError {
         input: config
             .common
@@ -97,14 +112,20 @@ fn run_batch_render(config: RenderConfig) -> Result<(), FlowError> {
         stage: FlowStage::Encode,
         message,
     })?;
+    let renderer_time = renderer_start.elapsed();
 
     let RenderConfig {
         mut common,
         force,
+        verbose,
         planned_inputs,
     } = config;
+    if verbose {
+        eprintln!("render: device setup {}", format_duration(renderer_time));
+    }
     let mut pending_outputs = Vec::new();
     for planned_input in planned_inputs {
+        let config_start = Instant::now();
         common.base_config = planned_input.config.clone();
         common.inputs = vec![planned_input.input.clone()];
         let diagnostics = refresh_flow_configs(&mut common).map_err(|err| FlowError {
@@ -119,9 +140,15 @@ fn run_batch_render(config: RenderConfig) -> Result<(), FlowError> {
                 message: "configuration validation failed".to_string(),
             });
         }
-        if let Some(pending) =
-            run_headless_render_with_renderer(&common, force, planned_input.output, &renderer)?
-        {
+        let config_time = config_start.elapsed();
+        if let Some(pending) = run_headless_render_with_renderer(
+            &common,
+            force,
+            planned_input.output,
+            &renderer,
+            verbose,
+            config_time,
+        )? {
             pending_outputs.push(pending);
         }
     }
@@ -134,6 +161,12 @@ fn run_batch_render(config: RenderConfig) -> Result<(), FlowError> {
     }
     if let Some(err) = first_error {
         return Err(err);
+    }
+    if verbose {
+        eprintln!(
+            "render: batch total {}",
+            format_duration(batch_start.elapsed())
+        );
     }
 
     Ok(())
@@ -170,12 +203,15 @@ fn run_headless_render_with_renderer(
     force: bool,
     output_path: PathBuf,
     renderer: &HeadlessRenderer,
+    verbose: bool,
+    config_time: Duration,
 ) -> Result<Option<PendingImageOutput>, FlowError> {
     let first_input = config
         .inputs
         .first()
         .cloned()
         .unwrap_or_else(|| "unknown".to_string());
+    let context_start = Instant::now();
     let mut context = RenderContext::new(
         [1, 1],
         1,
@@ -183,6 +219,7 @@ fn run_headless_render_with_renderer(
         renderer.queue.clone(),
         wgpu::TextureFormat::Rgba8UnormSrgb,
     );
+    let context_time = context_start.elapsed();
 
     let built = build_flow(
         &mut context,
@@ -202,7 +239,9 @@ fn run_headless_render_with_renderer(
             },
         },
     )?;
+    let finalize_start = Instant::now();
     let diagnostics = finalize_flows(&mut context, &config.config_document, &[0]);
+    let finalize_time = finalize_start.elapsed();
     if report_diagnostics(&diagnostics).is_err() {
         return Err(FlowError {
             input: first_input,
@@ -216,6 +255,7 @@ fn run_headless_render_with_renderer(
         context.output_format(),
         Some("batch render dummy screen"),
     );
+    let render_start = Instant::now();
     let mut encoder = context
         .device()
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -224,6 +264,20 @@ fn run_headless_render_with_renderer(
     context.render(&mut encoder, &dummy_screen);
     context.queue().submit(std::iter::once(encoder.finish()));
     context.post_render();
+    let render_time = render_start.elapsed();
+
+    if verbose {
+        eprintln!(
+            "render {}: config {}, context {}, endpoints/decode {}, graph {}, finalize {}, gpu/readback {}",
+            first_input,
+            format_duration(config_time),
+            format_duration(context_time),
+            format_duration(built.endpoint_setup_time),
+            format_duration(built.graph_build_time),
+            format_duration(finalize_time),
+            format_duration(render_time),
+        );
+    }
 
     if built.render_once {
         return Ok(Some(PendingImageOutput {
@@ -393,6 +447,7 @@ impl RenderArgs {
         Ok(RenderConfig {
             common,
             force: self.force,
+            verbose: self.verbose,
             planned_inputs,
         })
     }

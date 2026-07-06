@@ -4,6 +4,7 @@ use std::fmt;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
+use std::time::{Duration, Instant};
 use tempfile::NamedTempFile;
 use vss::*;
 
@@ -236,6 +237,8 @@ pub(crate) struct FlowRequest {
 pub(crate) struct BuiltFlow {
     pub(crate) input_size: Option<[u32; 2]>,
     pub(crate) render_once: bool,
+    pub(crate) endpoint_setup_time: Duration,
+    pub(crate) graph_build_time: Duration,
     pub(crate) output_completion: Option<std::sync::mpsc::Receiver<Result<(), String>>>,
     pub(crate) output_processed: Arc<RwLock<bool>>,
     pub(crate) output_failure: Arc<RwLock<Option<String>>>,
@@ -246,6 +249,7 @@ pub(crate) fn build_flow(
     flow_index: usize,
     request: FlowRequest,
 ) -> Result<BuiltFlow, FlowError> {
+    let endpoint_setup_start = Instant::now();
     let endpoints = create_endpoints(
         context,
         &request.input,
@@ -253,6 +257,7 @@ pub(crate) fn build_flow(
         request.force,
         request.render_resolution,
     )?;
+    let endpoint_setup_time = endpoint_setup_start.elapsed();
     let Endpoints {
         nodes: (input_node, output_node),
         input_size,
@@ -262,6 +267,7 @@ pub(crate) fn build_flow(
         output_failure,
     } = endpoints;
 
+    let graph_build_start = Instant::now();
     context.add_node(input_node, flow_index);
     context.add_node(Box::new(Cataract::new(context)), flow_index);
     context.add_node(Box::new(Lens::new(context)), flow_index);
@@ -281,10 +287,13 @@ pub(crate) fn build_flow(
     if let Some(output_node) = output_node {
         context.add_node(output_node, flow_index);
     }
+    let graph_build_time = graph_build_start.elapsed();
 
     Ok(BuiltFlow {
         input_size,
         render_once,
+        endpoint_setup_time,
+        graph_build_time,
         output_completion,
         output_processed,
         output_failure,
