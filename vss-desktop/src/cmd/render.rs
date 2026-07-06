@@ -3,6 +3,7 @@ use crate::flow::{build_flow, finalize_flows, FlowError, FlowRequest, FlowStage}
 use std::collections::HashSet;
 use std::error::Error;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, RwLock};
 use vss::*;
 
 struct OutputInfo {
@@ -21,6 +22,28 @@ struct PlannedInput {
     config: Option<PathBuf>,
     input: String,
     output: PathBuf,
+}
+
+struct PendingImageOutput {
+    input: String,
+    processed: Arc<RwLock<bool>>,
+    failure: Arc<RwLock<Option<String>>>,
+}
+
+impl PendingImageOutput {
+    fn wait(self) -> Result<(), FlowError> {
+        while self.failure.read().unwrap().is_none() && !*self.processed.read().unwrap() {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        if let Some(message) = self.failure.read().unwrap().clone() {
+            return Err(FlowError {
+                input: self.input,
+                stage: FlowStage::Encode,
+                message,
+            });
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, clap::Args)]
@@ -83,6 +106,7 @@ fn run_batch_render(config: RenderConfig) -> Result<(), FlowError> {
         force,
         planned_inputs,
     } = config;
+    let mut pending_outputs = Vec::new();
     for planned_input in planned_inputs {
         common.base_config = planned_input.config.clone();
         common.inputs = vec![planned_input.input.clone()];
@@ -98,7 +122,21 @@ fn run_batch_render(config: RenderConfig) -> Result<(), FlowError> {
                 message: "configuration validation failed".to_string(),
             });
         }
-        run_headless_render_with_renderer(&common, force, planned_input.output, &renderer)?;
+        if let Some(pending) =
+            run_headless_render_with_renderer(&common, force, planned_input.output, &renderer)?
+        {
+            pending_outputs.push(pending);
+        }
+    }
+
+    let mut first_error = None;
+    for pending in pending_outputs {
+        if let Err(err) = pending.wait() {
+            first_error.get_or_insert(err);
+        }
+    }
+    if let Some(err) = first_error {
+        return Err(err);
     }
 
     Ok(())
@@ -135,7 +173,7 @@ fn run_headless_render_with_renderer(
     force: bool,
     output_path: PathBuf,
     renderer: &HeadlessRenderer,
-) -> Result<(), FlowError> {
+) -> Result<Option<PendingImageOutput>, FlowError> {
     let first_input = config
         .inputs
         .first()
@@ -181,7 +219,25 @@ fn run_headless_render_with_renderer(
         context.output_format(),
         Some("batch render dummy screen"),
     );
-    loop {
+    let mut encoder = context
+        .device()
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("batch render encoder"),
+        });
+    context.render(&mut encoder, &dummy_screen);
+    context.queue().submit(std::iter::once(encoder.finish()));
+    context.post_render();
+
+    if built.render_once {
+        return Ok(Some(PendingImageOutput {
+            input: first_input,
+            processed: built.output_processed,
+            failure: built.output_failure,
+        }));
+    }
+
+    while built.output_failure.read().unwrap().is_none() && !*built.output_processed.read().unwrap()
+    {
         let mut encoder =
             context
                 .device()
@@ -191,11 +247,6 @@ fn run_headless_render_with_renderer(
         context.render(&mut encoder, &dummy_screen);
         context.queue().submit(std::iter::once(encoder.finish()));
         context.post_render();
-
-        if built.output_failure.read().unwrap().is_some() || *built.output_processed.read().unwrap()
-        {
-            break;
-        }
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
 
@@ -207,7 +258,7 @@ fn run_headless_render_with_renderer(
         });
     }
 
-    Ok(())
+    Ok(None)
 }
 
 fn input_output_info(path: &Path, config: Option<&Path>) -> OutputInfo {

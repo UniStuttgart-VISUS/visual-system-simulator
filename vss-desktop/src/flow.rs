@@ -46,6 +46,7 @@ impl std::error::Error for FlowError {}
 struct Endpoints {
     nodes: EndpointNodes,
     input_size: Option<[u32; 2]>,
+    render_once: bool,
     output_processed: Arc<RwLock<bool>>,
     output_failure: Arc<RwLock<Option<String>>>,
 }
@@ -102,6 +103,7 @@ fn create_endpoints(
         Ok(Endpoints {
             nodes: (Box::new(input_node), output_node),
             input_size,
+            render_once: true,
             output_processed: input_processed,
             output_failure,
         })
@@ -146,6 +148,7 @@ fn create_endpoints(
         Ok(Endpoints {
             nodes: (Box::new(input_node), output_node),
             input_size,
+            render_once: false,
             output_processed: input_processed,
             output_failure,
         })
@@ -224,6 +227,7 @@ pub(crate) struct FlowRequest {
 
 pub(crate) struct BuiltFlow {
     pub(crate) input_size: Option<[u32; 2]>,
+    pub(crate) render_once: bool,
     pub(crate) output_processed: Arc<RwLock<bool>>,
     pub(crate) output_failure: Arc<RwLock<Option<String>>>,
 }
@@ -243,6 +247,7 @@ pub(crate) fn build_flow(
     let Endpoints {
         nodes: (input_node, output_node),
         input_size,
+        render_once,
         output_processed,
         output_failure,
     } = endpoints;
@@ -269,6 +274,7 @@ pub(crate) fn build_flow(
 
     Ok(BuiltFlow {
         input_size,
+        render_once,
         output_processed,
         output_failure,
     })

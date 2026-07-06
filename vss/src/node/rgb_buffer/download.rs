@@ -3,17 +3,46 @@ use wgpu::Buffer;
 use super::*;
 use std::io::Cursor;
 use std::mem::size_of;
-use std::sync::{Arc, RwLock};
+use std::sync::{mpsc, Arc, Mutex, OnceLock, RwLock};
 
 pub type RgbBufferCb = Box<dyn FnOnce(RgbBuffer) + Send>;
 
-enum Message {
-    Buffer(RgbBuffer),
-    Callback(Option<RgbBufferCb>),
+type EncodeJob = Box<dyn FnOnce() + Send + 'static>;
+
+fn encode_sender() -> &'static mpsc::SyncSender<EncodeJob> {
+    static SENDER: OnceLock<mpsc::SyncSender<EncodeJob>> = OnceLock::new();
+    SENDER.get_or_init(|| {
+        let worker_count = std::thread::available_parallelism()
+            .map(usize::from)
+            .unwrap_or(1)
+            .min(4);
+        let (tx, rx) = mpsc::sync_channel::<EncodeJob>(worker_count * 2);
+        let rx = Arc::new(Mutex::new(rx));
+        for worker_index in 0..worker_count {
+            let rx = rx.clone();
+            std::thread::Builder::new()
+                .name(format!("vss-image-encoder-{worker_index}"))
+                .spawn(move || loop {
+                    let Ok(job) = rx.lock().unwrap().recv() else {
+                        break;
+                    };
+                    job();
+                })
+                .expect("failed to start image encoder worker");
+        }
+        tx
+    })
 }
+
+fn enqueue_encode(job: EncodeJob) {
+    if let Err(err) = encode_sender().send(job) {
+        (err.0)();
+    }
+}
+
 /// A node that downloads RGB buffers.
 pub struct DownloadRgbBuffer {
-    tx: std::sync::mpsc::Sender<Message>,
+    callback: Option<RgbBufferCb>,
     input: Texture,
     buffer: Buffer,
     res: [f32; 2],
@@ -21,23 +50,6 @@ pub struct DownloadRgbBuffer {
 
 impl DownloadRgbBuffer {
     pub fn new(context: &RenderContext) -> Self {
-        let (tx, rx) = std::sync::mpsc::channel::<Message>();
-        std::thread::spawn(move || {
-            let mut callback: Option<RgbBufferCb> = None;
-            while let Ok(message) = rx.recv() {
-                match message {
-                    Message::Buffer(rgb_buffer) => {
-                        if let Some(cb) = callback.take() {
-                            (cb)(rgb_buffer);
-                        }
-                    }
-                    Message::Callback(new_callback) => {
-                        callback = new_callback;
-                    }
-                }
-            }
-        });
-
         let device = context.device();
         let queue = context.queue();
 
@@ -54,7 +66,7 @@ impl DownloadRgbBuffer {
             placeholder_texture(device, queue, Some("Download texture placeholder")).unwrap();
 
         DownloadRgbBuffer {
-            tx,
+            callback: None,
             input: texture,
             buffer: download_buffer,
             res: [0.0, 0.0],
@@ -62,7 +74,7 @@ impl DownloadRgbBuffer {
     }
 
     pub fn set_buffer_cb(&mut self, cb: Option<RgbBufferCb>) {
-        self.tx.send(Message::Callback(cb)).unwrap();
+        self.callback = cb;
     }
 
     pub fn set_image_encoder<F>(
@@ -75,27 +87,31 @@ impl DownloadRgbBuffer {
         F: FnOnce(Vec<u8>) -> Result<(), String> + Send + 'static,
     {
         let cb = Box::new(move |rgb_buffer: RgbBuffer| {
-            let Some(img) = image::RgbImage::from_raw(
-                rgb_buffer.width,
-                rgb_buffer.height,
-                rgb_buffer.pixels_rgb.into_vec(),
-            ) else {
-                *failure.write().unwrap() = Some("failed to create RGB image buffer".to_string());
-                return;
-            };
+            enqueue_encode(Box::new(move || {
+                let Some(img) = image::RgbImage::from_raw(
+                    rgb_buffer.width,
+                    rgb_buffer.height,
+                    rgb_buffer.pixels_rgb.into_vec(),
+                ) else {
+                    *failure.write().unwrap() =
+                        Some("failed to create RGB image buffer".to_string());
+                    return;
+                };
 
-            let mut encoded = Cursor::new(Vec::new());
-            if let Err(err) = image::DynamicImage::ImageRgb8(img).write_to(&mut encoded, format) {
-                *failure.write().unwrap() = Some(format!("failed to encode image: {err}"));
-                return;
-            }
+                let mut encoded = Cursor::new(Vec::new());
+                if let Err(err) = image::DynamicImage::ImageRgb8(img).write_to(&mut encoded, format)
+                {
+                    *failure.write().unwrap() = Some(format!("failed to encode image: {err}"));
+                    return;
+                }
 
-            if let Err(err) = write_output(encoded.into_inner()) {
-                *failure.write().unwrap() = Some(err);
-                return;
-            }
+                if let Err(err) = write_output(encoded.into_inner()) {
+                    *failure.write().unwrap() = Some(err);
+                    return;
+                }
 
-            *processed.write().unwrap() = true;
+                *processed.write().unwrap() = true;
+            }));
         });
         self.set_buffer_cb(Some(cb));
     }
@@ -211,6 +227,8 @@ impl Node for DownloadRgbBuffer {
         };
         drop(padded_buffer);
         self.buffer.unmap();
-        self.tx.send(Message::Buffer(rgb_buffer)).unwrap();
+        if let Some(callback) = self.callback.take() {
+            callback(rgb_buffer);
+        }
     }
 }
