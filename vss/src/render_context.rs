@@ -11,6 +11,7 @@ pub struct RenderContext {
 
     pub flows: Vec<Flow>,
     last_render_instant: Cell<Instant>,
+    pending_changes: Cell<NodeChanges>,
 }
 
 impl RenderContext {
@@ -31,6 +32,7 @@ impl RenderContext {
             output_format,
             flows,
             last_render_instant: Cell::new(Instant::now()),
+            pending_changes: Cell::new(NodeChanges::OUTPUT),
         }
     }
 
@@ -45,6 +47,7 @@ impl RenderContext {
     pub fn resize(&mut self, new_size: [u32; 2]) {
         assert!(new_size[0] > 0 && new_size[1] > 0, "Non-positive size");
         self.size = [new_size[0], new_size[1]];
+        self.apply_changes(NodeChanges::SLOTS);
     }
 
     pub fn delta_t(&self) -> f32 {
@@ -55,25 +58,35 @@ impl RenderContext {
         self.flows.iter().map(|flow| flow.nodes_len()).collect()
     }
 
-    pub fn validate_slots(&self) -> bool {
-        let mut result = true;
-        for flow in self.flows.iter() {
-            // Test every flow (do not short-circuit).
-            result = result && flow.validate_slots()
-        }
-        result
-    }
-
     pub fn negociate_slots(&self) {
         for flow in self.flows.iter() {
             flow.negociate_slots(self);
         }
+        self.apply_changes(NodeChanges::SLOTS);
     }
 
-    pub fn inspect(&self, inspector: &mut dyn Inspector) {
+    pub fn inspect(&self, inspector: &mut dyn Inspector) -> NodeChanges {
+        let mut result = NodeChanges::empty();
         for (i, flow) in self.flows.iter().enumerate() {
-            inspector.flow(i, flow);
+            result |= inspector.flow(i, flow);
         }
+        self.apply_changes(result);
+        result.normalized()
+    }
+
+    pub fn apply_changes(&self, changes: NodeChanges) {
+        self.pending_changes
+            .set((self.pending_changes.get() | changes).normalized());
+    }
+
+    pub fn take_changes(&self) -> NodeChanges {
+        let changes = self.pending_changes.get().normalized();
+        self.pending_changes.set(NodeChanges::empty());
+        changes
+    }
+
+    pub fn pending_changes(&self) -> NodeChanges {
+        self.pending_changes.get().normalized()
     }
 
     pub fn device(&self) -> &wgpu::Device {

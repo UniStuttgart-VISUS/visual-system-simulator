@@ -42,15 +42,47 @@ pub use self::yuv_buffer::*;
 
 use super::*;
 
+bitflags::bitflags! {
+    #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+    pub struct NodeChanges: u8 {
+        const OUTPUT = 1 << 0;
+        const SLOTS = 1 << 1;
+    }
+}
+
+impl NodeChanges {
+    pub fn from_output_slots(output: bool, slots: bool) -> Self {
+        let mut result = Self::empty();
+        result.set(Self::OUTPUT, output);
+        result.set(Self::SLOTS, slots);
+        result.normalized()
+    }
+
+    pub fn normalized(mut self) -> Self {
+        if self.contains(Self::SLOTS) {
+            self.insert(Self::OUTPUT);
+        }
+        self
+    }
+}
+
+pub trait NodeConfig {
+    fn inspect(&mut self, inspector: &dyn Inspector) -> bool;
+}
+
+pub fn inspect_node_config(
+    inspector: &dyn Inspector,
+    name: &'static str,
+    config: &mut dyn NodeConfig,
+) -> bool {
+    let mut inspect = || config.inspect(inspector);
+    inspector.node(name, &mut inspect)
+}
+
 /// An executable function that implements an aspect of the simulation.
 pub trait Node {
     // Returns the node name.
     fn name(&self) -> &'static str;
-
-    /// Tests if this node's slots are still valid. Return false to trigger re-negociation.
-    fn validate_slots(&mut self) -> bool {
-        true
-    }
 
     /// Negociates input and output for this node (source texture and render target),
     /// possibly re-using suggested `slots` (for efficiency).
@@ -61,14 +93,20 @@ pub trait Node {
         original_image: &mut Option<Texture>,
     ) -> NodeSlots;
 
-    /// Set new parameters for this effect
-    #[allow(unused_variables)]
-    fn inspect(&mut self, inspector: &dyn Inspector) {}
+    fn inspect_config(&mut self, inspector: &dyn Inspector) -> bool {
+        let _ = inspector;
+        false
+    }
+
+    fn configure(&mut self) -> NodeChanges {
+        NodeChanges::empty()
+    }
 
     /// Handle input.
     #[allow(unused_variables)]
-    fn input(&mut self, eye: &EyeInput, mouse: &MouseInput) -> EyeInput {
-        eye.clone()
+    fn input(&mut self, eye: &EyeInput, mouse: &MouseInput) -> (EyeInput, NodeChanges) {
+        let _ = mouse;
+        (eye.clone(), NodeChanges::empty())
     }
 
     /// Issue render commands for the node.
@@ -85,52 +123,6 @@ pub trait Node {
 
     fn as_ui_mut(&mut self) -> Option<&'_ mut GuiOverlay> {
         None
-    }
-}
-
-impl Node for Box<dyn Node> {
-    fn name(&self) -> &'static str {
-        self.as_ref().name()
-    }
-
-    fn validate_slots(&mut self) -> bool {
-        self.as_mut().validate_slots()
-    }
-
-    fn negociate_slots(
-        &mut self,
-        context: &RenderContext,
-        slots: NodeSlots,
-        original_image: &mut Option<Texture>,
-    ) -> NodeSlots {
-        self.as_mut()
-            .negociate_slots(context, slots, original_image)
-    }
-
-    fn inspect(&mut self, inspector: &dyn Inspector) {
-        self.as_mut().inspect(inspector);
-    }
-
-    fn input(&mut self, eye: &EyeInput, mouse: &MouseInput) -> EyeInput {
-        self.as_mut().input(eye, mouse)
-    }
-    fn render(
-        &mut self,
-        context: &RenderContext,
-        encoder: &mut CommandEncoder,
-        screen: Option<&RenderTexture>,
-    ) {
-        self.as_mut().render(context, encoder, screen);
-    }
-
-    /// Invoked after all rendering commands have completed. (TODO: rename to on_frame_complete)
-    #[allow(unused_variables)]
-    fn post_render(&mut self, context: &RenderContext) {
-        self.as_mut().post_render(context);
-    }
-
-    fn as_ui_mut(&mut self) -> Option<&'_ mut GuiOverlay> {
-        self.as_mut().as_ui_mut()
     }
 }
 

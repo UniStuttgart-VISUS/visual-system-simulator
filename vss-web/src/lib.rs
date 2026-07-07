@@ -24,13 +24,15 @@ impl Node for UploadStream {
         "UploadStream"
     }
 
-    fn validate_slots(&mut self) -> bool {
+    fn input(&mut self, eye: &EyeInput, mouse: &MouseInput) -> (EyeInput, NodeChanges) {
+        //XXX: web stream frame polling here. might not be the right place in the long term.
+        let mut changes = NodeChanges::empty();
         if let Ok(buffer) = self.frame_receiver.try_recv() {
             self.upload.upload_buffer(&buffer);
-            false
-        } else {
-            self.upload.validate_slots()
+            changes |= NodeChanges::SLOTS;
         }
+        let (eye, input_changes) = Node::input(&mut self.upload, eye, mouse);
+        (eye, (changes | input_changes).normalized())
     }
 
     fn negociate_slots(
@@ -39,15 +41,7 @@ impl Node for UploadStream {
         slots: NodeSlots,
         original_image: &mut Option<Texture>,
     ) -> NodeSlots {
-        self.upload.negociate_slots(context, slots, original_image)
-    }
-
-    fn inspect(&mut self, inspector: &dyn Inspector) {
-        self.upload.inspect(inspector);
-    }
-
-    fn input(&mut self, eye: &EyeInput, mouse: &MouseInput) -> EyeInput {
-        self.upload.input(eye, mouse)
+        Node::negociate_slots(&mut self.upload, context, slots, original_image)
     }
 
     fn render(
@@ -56,11 +50,11 @@ impl Node for UploadStream {
         encoder: &mut wgpu::CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        self.upload.render(context, encoder, screen);
+        Node::render(&mut self.upload, context, encoder, screen);
     }
 
     fn post_render(&mut self, context: &RenderContext) {
-        self.upload.post_render(context);
+        Node::post_render(&mut self.upload, context);
     }
 }
 

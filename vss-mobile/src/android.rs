@@ -63,20 +63,19 @@ impl Node for CameraStream {
         slots: NodeSlots,
         original_image: &mut Option<Texture>,
     ) -> NodeSlots {
-        self.upload.negociate_slots(context, slots, original_image)
+        Node::negociate_slots(&mut self.upload, context, slots, original_image)
     }
 
-    fn inspect(&mut self, inspector: &dyn Inspector) {
-        self.upload.inspect(inspector);
-    }
-
-    fn input(&mut self, eye: &EyeInput, mouse: &MouseInput) -> EyeInput {
+    fn input(&mut self, eye: &EyeInput, mouse: &MouseInput) -> (EyeInput, NodeChanges) {
         // Uploading the buffer here is a bit sketchy but works.
+        let mut changes = NodeChanges::empty();
         if let Ok(buffer) = self.frame_receiver.try_recv() {
             debug!("Uploading {}x{}px frame...", buffer.width, buffer.height);
             self.upload.upload_buffer(buffer);
+            changes |= NodeChanges::OUTPUT;
         }
-        self.upload.input(eye, mouse)
+        let (eye, input_changes) = Node::input(&mut self.upload, eye, mouse);
+        (eye, (changes | input_changes).normalized())
     }
 
     fn render(
@@ -85,11 +84,11 @@ impl Node for CameraStream {
         encoder: &mut wgpu::CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        self.upload.render(context, encoder, screen);
+        Node::render(&mut self.upload, context, encoder, screen);
     }
 
     fn post_render(&mut self, context: &RenderContext) {
-        self.upload.post_render(context);
+        Node::post_render(&mut self.upload, context);
     }
 }
 
@@ -248,11 +247,9 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDraw(
     let bridge = (*guard).as_mut().expect("Bridge should be created");
     // Fake input event for uploading and perspetive computation.
     for flow in bridge.surface.flows.iter() {
-        flow.input(&MouseInput::default());
+        let changes = flow.input(&MouseInput::default());
+        bridge.surface.apply_changes(changes);
     }
-    //TODO replace this with validate_slots() to triggering a content-related update
-    //(it is neccessary to refresh node resolutions but for this we need
-    //the upload node to have a buffer available to get the new resolution from)
     if (bridge.new_size[0] != bridge.current_size[0])
         || (bridge.new_size[1] != bridge.current_size[1])
     {
@@ -316,7 +313,10 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostSettings
     let inspector = FromJsonInspector::try_new(&json_string);
     match inspector {
         Ok(mut inspector) => {
-            bridge.surface.inspect(&mut inspector);
+            let result = bridge.surface.inspect(&mut inspector);
+            if result.contains(NodeChanges::SLOTS) {
+                bridge.surface.negociate_slots();
+            }
         }
         Err(err) => {
             error!("{:?}", err);

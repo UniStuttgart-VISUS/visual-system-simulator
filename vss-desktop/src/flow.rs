@@ -304,17 +304,17 @@ fn validate_and_apply_simulator(
     flow: &Flow,
     simulator: &BTreeMap<String, ConfigValue>,
     apply: bool,
-) -> Vec<Diagnostic> {
+) -> (NodeChanges, Vec<Diagnostic>) {
     let schema = schema_from_flow(flow);
     let mut diagnostics = validate_simulator_values(simulator, &schema);
+    let mut result = NodeChanges::empty();
     if apply && !diagnostics_have_errors(&diagnostics) {
-        diagnostics.extend(apply_simulator_values(
-            flow,
-            simulator,
-            &resolve_asset_reference,
-        ));
+        let (apply_result, apply_diagnostics) =
+            apply_simulator_values(flow, simulator, &resolve_asset_reference);
+        result |= apply_result;
+        diagnostics.extend(apply_diagnostics);
     }
-    diagnostics
+    (result, diagnostics)
 }
 
 pub(crate) fn finalize_flows(
@@ -327,6 +327,7 @@ pub(crate) fn finalize_flows(
     context.negociate_slots();
 
     let mut diagnostics = Vec::new();
+    let mut configure_result = NodeChanges::empty();
     let mut configured_eyes = [false; 2];
     for (flow_index, flow) in context.flows.iter().enumerate() {
         let eye_index = eye_indices[flow_index];
@@ -335,23 +336,28 @@ pub(crate) fn finalize_flows(
         } else {
             config_document.effective_right()
         };
-        diagnostics.extend(validate_and_apply_simulator(
-            flow,
-            &section.simulator_value_map(),
-            true,
-        ));
+        let (flow_result, flow_diagnostics) =
+            validate_and_apply_simulator(flow, &section.simulator_value_map(), true);
+        configure_result |= flow_result;
+        diagnostics.extend(flow_diagnostics);
         configured_eyes[eye_index] = true;
     }
 
     if !configured_eyes[1] {
         if let Some(flow) = context.flows.first() {
-            diagnostics.extend(validate_and_apply_simulator(
+            let (_, flow_diagnostics) = validate_and_apply_simulator(
                 flow,
                 &config_document.effective_right().simulator_value_map(),
                 false,
-            ));
+            );
+            diagnostics.extend(flow_diagnostics);
         }
     }
+
+    if configure_result.contains(NodeChanges::SLOTS) {
+        context.negociate_slots();
+    }
+    context.apply_changes(configure_result);
 
     diagnostics
 }

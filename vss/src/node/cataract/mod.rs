@@ -1,5 +1,6 @@
 use super::*;
 
+#[derive(Copy, Clone, PartialEq)]
 struct Uniforms {
     resolution: [f32; 2],
     blur_factor: f32,
@@ -10,14 +11,43 @@ struct Uniforms {
 }
 
 pub struct Cataract {
+    config: CataractConfig,
     color_pipeline: wgpu::RenderPipeline,
     metrics_ab_pipeline: wgpu::RenderPipeline,
     metrics_cd_pipeline: wgpu::RenderPipeline,
     uniforms: ShaderUniforms<Uniforms>,
     sources_bind_group: wgpu::BindGroup,
     targets: ColorDepthTargets,
+    slots_active: bool,
+}
 
-    track_error: bool,
+pub struct CataractConfig {
+    pub active: bool,
+    pub blur_factor: f64,
+    pub contrast_factor: f64,
+    pub track_error: bool,
+}
+
+impl Default for CataractConfig {
+    fn default() -> Self {
+        Self {
+            active: false,
+            blur_factor: 0.0,
+            contrast_factor: 0.0,
+            track_error: false,
+        }
+    }
+}
+
+impl NodeConfig for CataractConfig {
+    fn inspect(&mut self, inspector: &dyn Inspector) -> bool {
+        let mut changed = false;
+        changed |= inspector.mut_bool("ct_onoff", &mut self.active);
+        changed |= inspector.mut_f64("ct_blur_factor", &mut self.blur_factor);
+        changed |= inspector.mut_f64("ct_contrast_factor", &mut self.contrast_factor);
+        changed |= inspector.mut_bool("track_error", &mut self.track_error);
+        changed
+    }
 }
 
 impl Cataract {
@@ -83,14 +113,19 @@ impl Cataract {
         );
 
         Cataract {
+            config: CataractConfig::default(),
             color_pipeline,
             metrics_ab_pipeline,
             metrics_cd_pipeline,
             uniforms,
             sources_bind_group,
             targets: ColorDepthTargets::new(device, "Cataract"),
-            track_error: false,
+            slots_active: false,
         }
+    }
+
+    fn slots_active(&self) -> bool {
+        self.config.active || self.config.track_error
     }
 }
 
@@ -105,6 +140,10 @@ impl Node for Cataract {
         slots: NodeSlots,
         _original_image: &mut Option<Texture>,
     ) -> NodeSlots {
+        if !self.slots_active {
+            return slots.to_passthrough();
+        }
+
         let slots = slots
             .to_color_depth_metrics_input(context)
             .to_color_depth_metrics_output(context, "CataractNode");
@@ -119,29 +158,28 @@ impl Node for Cataract {
         slots
     }
 
-    fn inspect(&mut self, inspector: &dyn Inspector) {
-        let mut active = self.uniforms.data.active == 0;
-        if inspector.mut_bool("ct_onoff", &mut active) {
-            self.uniforms.data.active = active as i32;
-        }
-        if self.uniforms.data.active == 0 {
-            self.uniforms.data.blur_factor = 0.0;
-            self.uniforms.data.contrast_factor = 0.0;
-        }
+    fn inspect_config(&mut self, inspector: &dyn Inspector) -> bool {
+        inspect_node_config(inspector, self.name(), &mut self.config)
+    }
 
-        // ct_blur_factor is between 0 and 100
-        let mut blur_factor = (self.uniforms.data.blur_factor * 100.0) as f64;
-        if inspector.mut_f64("ct_blur_factor", &mut blur_factor) {
-            self.uniforms.data.blur_factor = (blur_factor as f32) / 100.0;
-        }
+    fn configure(&mut self) -> NodeChanges {
+        let slots_active = self.slots_active();
+        let scale = if self.config.active { 0.01 } else { 0.0 };
+        let uniforms = Uniforms {
+            resolution: self.uniforms.data.resolution,
+            blur_factor: self.config.blur_factor as f32 * scale,
+            contrast_factor: self.config.contrast_factor as f32 * scale,
+            active: self.config.active as i32,
+            track_error: self.config.track_error as i32,
+            _padding: [0, 0],
+        };
+        let output_changed = self.uniforms.data != uniforms;
+        let slots_changed = self.slots_active != slots_active;
 
-        // ct_contrast_factor is between 0 and 100
-        let mut contrast_factor = (self.uniforms.data.contrast_factor * 100.0) as f64;
-        if inspector.mut_f64("ct_contrast_factor", &mut contrast_factor) {
-            self.uniforms.data.contrast_factor = (contrast_factor as f32) / 100.0;
-        }
+        self.slots_active = slots_active;
+        self.uniforms.data = uniforms;
 
-        inspector.mut_bool("track_error", &mut self.track_error);
+        NodeChanges::from_output_slots(output_changed, slots_changed)
     }
 
     fn render(
@@ -150,7 +188,9 @@ impl Node for Cataract {
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        self.uniforms.data.track_error = self.track_error as i32;
+        if !self.slots_active {
+            return;
+        }
 
         self.uniforms.upload(context.queue());
 
@@ -170,7 +210,7 @@ impl Node for Cataract {
             render_pass.draw(0..6, 0..1);
         }
 
-        if self.track_error {
+        if self.config.track_error {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Cataract metrics_ab_pass"),
                 color_attachments: &[
@@ -193,7 +233,7 @@ impl Node for Cataract {
             render_pass.draw(0..6, 0..1);
         }
 
-        if self.track_error {
+        if self.config.track_error {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Cataract metrics_cd_pass"),
                 color_attachments: &[

@@ -6,6 +6,7 @@ use super::*;
 
 const DIOPTRES_SCALING: f64 = 0.332_763_369_417_523;
 
+#[derive(Copy, Clone, PartialEq)]
 struct Uniforms {
     lens_position: [f32; 2],
 
@@ -35,6 +36,7 @@ struct Uniforms {
 }
 
 pub struct Lens {
+    config: LensConfig,
     generator: NormalMapGenerator,
     color_pipeline: wgpu::RenderPipeline,
     metrics_ab_pipeline: wgpu::RenderPipeline,
@@ -44,13 +46,57 @@ pub struct Lens {
     normal_bind_group: wgpu::BindGroup,
     cornea_bind_group: wgpu::BindGroup,
     targets: ColorTargets,
+    slots_active: bool,
+}
 
+pub struct LensConfig {
+    samplecount: i32,
     presbyopia_onoff: bool,
+    presbyopia_near_point: f64,
     myopiahyperopia_onoff: bool,
     myopiahyperopia_mnh: f64,
+    astigmatism_dpt: f64,
+    astigmatism_angle_deg: f32,
+    eye_distance_center: f32,
     depth_min: f32,
     depth_max: f32,
     track_error: bool,
+}
+
+impl Default for LensConfig {
+    fn default() -> Self {
+        Self {
+            samplecount: 4,
+            presbyopia_onoff: false,
+            presbyopia_near_point: 0.0,
+            myopiahyperopia_onoff: false,
+            myopiahyperopia_mnh: 0.0,
+            astigmatism_dpt: 0.0,
+            astigmatism_angle_deg: 0.0,
+            eye_distance_center: 0.0,
+            depth_min: 200.0,
+            depth_max: 5000.0,
+            track_error: false,
+        }
+    }
+}
+
+impl NodeConfig for LensConfig {
+    fn inspect(&mut self, inspector: &dyn Inspector) -> bool {
+        let mut changed = false;
+        changed |= inspector.mut_i32("rays", &mut self.samplecount);
+        changed |= inspector.mut_bool("presbyopia_onoff", &mut self.presbyopia_onoff);
+        changed |= inspector.mut_f64("presbyopia_near_point", &mut self.presbyopia_near_point);
+        changed |= inspector.mut_bool("myopiahyperopia_onoff", &mut self.myopiahyperopia_onoff);
+        changed |= inspector.mut_f64("myopiahyperopia_mnh", &mut self.myopiahyperopia_mnh);
+        changed |= inspector.mut_f64("astigmatism_dpt", &mut self.astigmatism_dpt);
+        changed |= inspector.mut_f32("astigmatism_angle_deg", &mut self.astigmatism_angle_deg);
+        changed |= inspector.mut_f32("eye_distance_center", &mut self.eye_distance_center);
+        changed |= inspector.mut_f32("depth_min", &mut self.depth_min);
+        changed |= inspector.mut_f32("depth_max", &mut self.depth_max);
+        changed |= inspector.mut_bool("track_error", &mut self.track_error);
+        changed
+    }
 }
 
 impl Lens {
@@ -158,6 +204,7 @@ impl Lens {
         );
 
         Lens {
+            config: LensConfig::default(),
             generator,
             color_pipeline,
             metrics_ab_pipeline,
@@ -167,13 +214,12 @@ impl Lens {
             normal_bind_group,
             cornea_bind_group,
             targets: ColorTargets::new(device, "Lens"),
-            presbyopia_onoff: false,
-            myopiahyperopia_onoff: false,
-            myopiahyperopia_mnh: 0.0,
-            depth_min: 200.0,
-            depth_max: 5000.0,
-            track_error: false,
+            slots_active: false,
         }
+    }
+
+    fn slots_active(&self) -> bool {
+        self.config.presbyopia_onoff || self.config.myopiahyperopia_onoff || self.config.track_error
     }
 }
 
@@ -188,6 +234,10 @@ impl Node for Lens {
         slots: NodeSlots,
         _original_image: &mut Option<Texture>,
     ) -> NodeSlots {
+        if !self.slots_active {
+            return slots.to_passthrough();
+        }
+
         let slots = slots
             .to_color_depth_metrics_input(context)
             .to_color_metrics_output(context, "LensNode");
@@ -205,86 +255,71 @@ impl Node for Lens {
         slots
     }
 
-    fn inspect(&mut self, inspector: &dyn Inspector) {
-        // default values
-        self.uniforms.data.near_point = 0.0;
-        self.uniforms.data.far_point = f32::INFINITY;
-        self.uniforms.data.near_vision_factor = 0.0;
-        self.uniforms.data.far_vision_factor = 0.0;
-        self.uniforms.data.active = 0;
+    fn inspect_config(&mut self, inspector: &dyn Inspector) -> bool {
+        inspect_node_config(inspector, self.name(), &mut self.config)
+    }
 
-        inspector.mut_i32("rays", &mut self.uniforms.data.samplecount);
+    fn configure(&mut self) -> NodeChanges {
+        let slots_active = self.slots_active();
+        let mut active = 0;
+        let mut near_point: f32 = 0.0;
+        let mut far_point = f32::INFINITY;
+        let mut near_vision_factor: f32 = 0.0;
+        let mut far_vision_factor: f32 = 0.0;
 
-        inspector.mut_bool("presbyopia_onoff", &mut self.presbyopia_onoff);
-        // near point is a parameter between 0 and 100 that is to be scaled to 0 - 1000
-        let mut near_point = self.uniforms.data.near_point as f64;
-        if inspector.mut_f64("presbyopia_near_point", &mut near_point) {
-            self.uniforms.data.near_point = near_point as f32;
-        }
-        if self.presbyopia_onoff {
-            self.uniforms.data.active = 1;
-            self.uniforms.data.near_vision_factor = 1.0;
+        if self.config.presbyopia_onoff {
+            active = 1;
+            near_point = self.config.presbyopia_near_point as f32;
+            near_vision_factor = 1.0;
         }
 
-        inspector.mut_bool("myopiahyperopia_onoff", &mut self.myopiahyperopia_onoff);
-        if self.myopiahyperopia_onoff {
-            self.uniforms.data.active = 1;
-        }
-
-        if inspector.mut_f64("myopiahyperopia_mnh", &mut self.myopiahyperopia_mnh) {
-            // mnh represents a range of -3D to 3D
-            let dioptres = ((self.myopiahyperopia_mnh / 50.0 - 1.0) * 3.0) as f32;
-
+        if self.config.myopiahyperopia_onoff {
+            active = 1;
+            let dioptres = ((self.config.myopiahyperopia_mnh / 50.0 - 1.0) * 3.0) as f32;
             if dioptres < 0.0 {
-                // myopia
-                self.uniforms.data.far_point = -1000.0 / dioptres;
-                // u_near_point should not be farther than u_far_point
-                self.uniforms.data.near_point = self
-                    .uniforms
-                    .data
-                    .near_point
-                    .min(self.uniforms.data.far_point);
-                let vision_factor = 1.0 - dioptres * DIOPTRES_SCALING as f32;
-                self.uniforms.data.far_vision_factor =
-                    self.uniforms.data.far_vision_factor.max(vision_factor);
+                far_point = -1000.0 / dioptres;
+                near_point = near_point.min(far_point);
+                far_vision_factor = far_vision_factor.max(1.0 - dioptres * DIOPTRES_SCALING as f32);
             } else if dioptres > 0.0 {
-                // hyperopia
-                let hyperopia_near_point = 1000.0 / (4.4 - dioptres);
-                self.uniforms.data.near_point =
-                    self.uniforms.data.near_point.max(hyperopia_near_point);
-                let vision_factor = 1.0 + dioptres * DIOPTRES_SCALING as f32;
-                self.uniforms.data.near_vision_factor =
-                    self.uniforms.data.near_vision_factor.max(vision_factor);
+                near_point = near_point.max(1000.0 / (4.4 - dioptres));
+                near_vision_factor =
+                    near_vision_factor.max(1.0 + dioptres * DIOPTRES_SCALING as f32);
             }
         }
 
-        // dpt to eccentricity in mm: 0.2 mm ~ 1dpt
-        // the actual formula is more complex but requires many parameters that are specific to an eye
-        // since our values for the eye parametes are far from realistic, i would argue this is sufficient
-        let mut astigmatism_dpt = (self.uniforms.data.astigmatism_ecc_mm / 0.2) as f64;
-        if inspector.mut_f64("astigmatism_dpt", &mut astigmatism_dpt) {
-            self.uniforms.data.astigmatism_ecc_mm = (0.2 * astigmatism_dpt) as f32;
-        }
+        let astigmatism_ecc_mm = (0.2 * self.config.astigmatism_dpt) as f32;
+        let uniforms = Uniforms {
+            lens_position: self.uniforms.data.lens_position,
+            active,
+            samplecount: self.config.samplecount,
+            depth_min: self.config.depth_min,
+            depth_max: self.config.depth_max,
+            near_point,
+            far_point,
+            near_vision_factor,
+            far_vision_factor,
+            astigmatism_ecc_mm,
+            astigmatism_angle_deg: self.config.astigmatism_angle_deg,
+            eye_distance_center: self.config.eye_distance_center,
+            track_error: self.config.track_error as i32,
+        };
+        let output_changed = self.uniforms.data != uniforms;
+        let slots_changed = self.slots_active != slots_active;
 
-        inspector.mut_f32(
-            "astigmatism_angle_deg",
-            &mut self.uniforms.data.astigmatism_angle_deg,
-        );
+        self.slots_active = slots_active;
+        self.uniforms.data = uniforms;
 
-        inspector.mut_f32(
-            "eye_distance_center",
-            &mut self.uniforms.data.eye_distance_center,
-        );
-
-        inspector.mut_f32("depth_min", &mut self.depth_min);
-        inspector.mut_f32("depth_max", &mut self.depth_max);
-        inspector.mut_bool("track_error", &mut self.track_error);
+        NodeChanges::from_output_slots(output_changed, slots_changed)
     }
 
-    fn input(&mut self, eye: &EyeInput, _mouse: &MouseInput) -> EyeInput {
-        self.uniforms.data.lens_position[0] = eye.position.x;
-        self.uniforms.data.lens_position[1] = eye.position.y;
-        eye.clone()
+    fn input(&mut self, eye: &EyeInput, _mouse: &MouseInput) -> (EyeInput, NodeChanges) {
+        let lens_position = [eye.position.x, eye.position.y];
+        let output_changed = self.slots_active && self.uniforms.data.lens_position != lens_position;
+        self.uniforms.data.lens_position = lens_position;
+        (
+            eye.clone(),
+            NodeChanges::from_output_slots(output_changed, false),
+        )
     }
 
     fn render(
@@ -293,9 +328,10 @@ impl Node for Lens {
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        self.uniforms.data.depth_min = self.depth_min;
-        self.uniforms.data.depth_max = self.depth_max;
-        self.uniforms.data.track_error = self.track_error as i32;
+        if !self.slots_active {
+            return;
+        }
+
         self.uniforms.upload(context.queue());
 
         {
@@ -316,7 +352,7 @@ impl Node for Lens {
             render_pass.draw(0..6, 0..1);
         }
 
-        if self.track_error {
+        if self.config.track_error {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Lens metrics_ab_pass"),
                 color_attachments: &[
@@ -341,7 +377,7 @@ impl Node for Lens {
             render_pass.draw(0..6, 0..1);
         }
 
-        if self.track_error {
+        if self.config.track_error {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Lens metrics_cd_pass"),
                 color_attachments: &[

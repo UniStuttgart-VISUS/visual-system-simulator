@@ -24,7 +24,7 @@ struct Uniforms {
     _padding: i32,
 }
 
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, PartialEq, Default)]
 enum CombinationFunction {
     #[default]
     AbsoluteErrorRGBVectorLength,
@@ -44,7 +44,7 @@ enum MixType {
     OverlayThreshold,
 }
 
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, PartialEq, Default)]
 enum ColorMapType {
     #[default]
     Viridis,
@@ -52,7 +52,7 @@ enum ColorMapType {
     Grayscale,
 }
 
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, PartialEq, Default)]
 enum BaseImage {
     #[default]
     Output,
@@ -60,7 +60,7 @@ enum BaseImage {
     Ganglion,
 }
 
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, PartialEq, Default)]
 struct VisualizationType {
     pub base_image: BaseImage,
     pub combination_function: CombinationFunction,
@@ -69,6 +69,7 @@ struct VisualizationType {
 }
 
 pub struct VisOverlay {
+    config: VisOverlayConfig,
     hive_rot: Matrix4<f32>,
     pipeline: wgpu::RenderPipeline,
     uniforms: ShaderUniforms<Uniforms>,
@@ -82,6 +83,79 @@ pub struct VisOverlay {
     //previous_mouse_position: (f32, f32),
     highlight_position: (f32, f32),
     bees_visible: bool,
+}
+
+pub struct VisOverlayConfig {
+    eye_idx: i32,
+    vis_type: VisualizationType,
+    heat_scale: f32,
+}
+
+impl Default for VisOverlayConfig {
+    fn default() -> Self {
+        Self {
+            eye_idx: 0,
+            vis_type: VisualizationType::default(),
+            heat_scale: 1.0,
+        }
+    }
+}
+
+impl NodeConfig for VisOverlayConfig {
+    fn inspect(&mut self, inspector: &dyn Inspector) -> bool {
+        let mut changed = false;
+        changed |= inspector.mut_i32("flow_id", &mut self.eye_idx);
+
+        let mut file_base_image = self.vis_type.base_image as i32;
+        if inspector.mut_i32("file_base_image", &mut file_base_image) {
+            self.vis_type.base_image = match file_base_image {
+                0 => BaseImage::Output,
+                1 => BaseImage::Original,
+                2 => BaseImage::Ganglion,
+                _ => panic!("No BaseImage of {} found", file_base_image),
+            };
+            changed = true;
+        }
+
+        let mut file_mix_type = self.vis_type.mix_type as i32;
+        if inspector.mut_i32("file_mix_type", &mut file_mix_type) {
+            self.vis_type.mix_type = match file_mix_type {
+                0 => MixType::BaseImageOnly,
+                1 => MixType::ColorMapOnly,
+                2 => MixType::OverlayThreshold,
+                _ => panic!("No MixType of {} found", file_mix_type),
+            };
+            changed = true;
+        }
+
+        let mut file_cm_type = self.vis_type.color_map_type as i32;
+        if inspector.mut_i32("file_cm_type", &mut file_cm_type) {
+            self.vis_type.color_map_type = match file_cm_type {
+                0 => ColorMapType::Viridis,
+                1 => ColorMapType::Turbo,
+                2 => ColorMapType::Grayscale,
+                _ => panic!("No ColorMapType of {} found", file_cm_type),
+            };
+            changed = true;
+        }
+
+        let mut file_cf = self.vis_type.combination_function as i32;
+        if inspector.mut_i32("file_cf", &mut file_cf) {
+            self.vis_type.combination_function = match file_cf {
+                0 => CombinationFunction::AbsoluteErrorRGBVectorLength,
+                1 => CombinationFunction::AbsoluteErrorXYVectorLength,
+                2 => CombinationFunction::AbsoluteErrorRGBXYVectorLength,
+                3 => CombinationFunction::UncertaintyRGBVectorLength,
+                4 => CombinationFunction::UncertaintyXYVectorLength,
+                5 => CombinationFunction::UncertaintyRGBXYVectorLength,
+                6 => CombinationFunction::UncertaintyGenVar,
+                _ => panic!("No CombinationFunction of {} found", file_cf),
+            };
+            changed = true;
+        }
+        changed |= inspector.mut_f32("cm_scale", &mut self.heat_scale);
+        changed
+    }
 }
 
 impl VisOverlay {
@@ -151,6 +225,7 @@ impl VisOverlay {
         );
 
         VisOverlay {
+            config: VisOverlayConfig::default(),
             hive_rot: Matrix4::from_angle_x(Rad(0.0)),
             pipeline,
             uniforms,
@@ -195,52 +270,21 @@ impl Node for VisOverlay {
         slots
     }
 
-    fn inspect(&mut self, inspector: &dyn Inspector) {
-        inspector.mut_i32("flow_id", &mut self.uniforms.data.flow_idx);
-        let mut file_base_image = self.vis_type.base_image as i32;
-        if inspector.mut_i32("file_base_image", &mut file_base_image) {
-            self.vis_type.base_image = match file_base_image {
-                0 => BaseImage::Output,
-                1 => BaseImage::Original,
-                2 => BaseImage::Ganglion,
-                _ => panic!("No BaseImage of {} found", file_base_image),
-            };
-        }
+    fn inspect_config(&mut self, inspector: &dyn Inspector) -> bool {
+        inspect_node_config(inspector, self.name(), &mut self.config)
+    }
 
-        let mut file_mix_type = self.vis_type.mix_type as i32;
-        if inspector.mut_i32("file_mix_type", &mut file_mix_type) {
-            self.vis_type.mix_type = match file_mix_type {
-                0 => MixType::BaseImageOnly,
-                1 => MixType::ColorMapOnly,
-                2 => MixType::OverlayThreshold,
-                _ => panic!("No MixType of {} found", file_mix_type),
-            };
-        }
+    fn configure(&mut self) -> NodeChanges {
+        let eye_idx = self.config.eye_idx as u32;
+        let output_changed = self.eye_idx != eye_idx
+            || self.vis_type != self.config.vis_type
+            || self.heat_scale != self.config.heat_scale;
 
-        let mut file_cm_type = self.vis_type.color_map_type as i32;
-        if inspector.mut_i32("file_cm_type", &mut file_cm_type) {
-            self.vis_type.color_map_type = match file_cm_type {
-                0 => ColorMapType::Viridis,
-                1 => ColorMapType::Turbo,
-                2 => ColorMapType::Grayscale,
-                _ => panic!("No ColorMapType of {} found", file_cm_type),
-            };
-        }
+        self.eye_idx = eye_idx;
+        self.vis_type = self.config.vis_type;
+        self.heat_scale = self.config.heat_scale;
 
-        let mut file_cf = self.vis_type.combination_function as i32;
-        if inspector.mut_i32("file_cf", &mut file_cf) {
-            self.vis_type.combination_function = match file_cf {
-                0 => CombinationFunction::AbsoluteErrorRGBVectorLength,
-                1 => CombinationFunction::AbsoluteErrorXYVectorLength,
-                2 => CombinationFunction::AbsoluteErrorRGBXYVectorLength,
-                3 => CombinationFunction::UncertaintyRGBVectorLength,
-                4 => CombinationFunction::UncertaintyXYVectorLength,
-                5 => CombinationFunction::UncertaintyRGBXYVectorLength,
-                6 => CombinationFunction::UncertaintyGenVar,
-                _ => panic!("No CombinationFunction of {} found", file_cf),
-            };
-        }
-        inspector.mut_f32("cm_scale", &mut self.heat_scale);
+        NodeChanges::from_output_slots(output_changed, false)
     }
 
     fn render(

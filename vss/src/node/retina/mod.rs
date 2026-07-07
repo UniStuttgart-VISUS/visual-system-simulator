@@ -11,18 +11,8 @@ struct Uniforms {
     track_error: i32,
 }
 
-pub struct Retina {
-    color_pipeline: wgpu::RenderPipeline,
-    metrics_ab_pipeline: wgpu::RenderPipeline,
-    metrics_cd_pipeline: wgpu::RenderPipeline,
-    uniforms: ShaderUniforms<Uniforms>,
-    sources_bind_group: wgpu::BindGroup,
-    retina_bind_group: wgpu::BindGroup,
-    targets: ColorTargets,
-
-    retina_map_builder: RetinaMapBuilder,
-
-    map_valid: bool,
+#[derive(Clone, PartialEq)]
+struct MapConfig {
     retina_map_pos_x_path: AssetId,
     retina_map_neg_x_path: AssetId,
     retina_map_pos_y_path: AssetId,
@@ -31,7 +21,91 @@ pub struct Retina {
     retina_map_neg_z_path: AssetId,
     proj_matrix: Matrix4<f32>,
     cubemap_scale: f64,
+    retina_map_builder: RetinaMapBuilder,
+}
+
+pub struct Retina {
+    config: RetinaConfig,
+    color_pipeline: wgpu::RenderPipeline,
+    metrics_ab_pipeline: wgpu::RenderPipeline,
+    metrics_cd_pipeline: wgpu::RenderPipeline,
+    uniforms: ShaderUniforms<Uniforms>,
+    sources_bind_group: wgpu::BindGroup,
+    retina_bind_group: wgpu::BindGroup,
+    targets: ColorTargets,
+
+    map_valid: bool,
+    map_config_changed: bool,
     track_error: bool,
+}
+
+pub struct RetinaConfig {
+    retina_map_pos_x_path: AssetId,
+    retina_map_neg_x_path: AssetId,
+    retina_map_pos_y_path: AssetId,
+    retina_map_neg_y_path: AssetId,
+    retina_map_pos_z_path: AssetId,
+    retina_map_neg_z_path: AssetId,
+    achromatopsia_blur_factor: f32,
+    proj_matrix: Matrix4<f32>,
+    cubemap_scale: f64,
+    track_error: bool,
+    retina_map_builder: RetinaMapBuilder,
+}
+
+impl Default for RetinaConfig {
+    fn default() -> Self {
+        Self {
+            retina_map_pos_x_path: AssetId::new(),
+            retina_map_neg_x_path: AssetId::new(),
+            retina_map_pos_y_path: AssetId::new(),
+            retina_map_neg_y_path: AssetId::new(),
+            retina_map_pos_z_path: AssetId::new(),
+            retina_map_neg_z_path: AssetId::new(),
+            achromatopsia_blur_factor: 0.0,
+            proj_matrix: Matrix4::from_scale(1.0),
+            cubemap_scale: 1.0,
+            track_error: false,
+            retina_map_builder: RetinaMapBuilder::new(),
+        }
+    }
+}
+
+impl NodeConfig for RetinaConfig {
+    fn inspect(&mut self, inspector: &dyn Inspector) -> bool {
+        let mut changed = false;
+        changed |= inspector.mut_asset("retina_map_pos_x_path", &mut self.retina_map_pos_x_path);
+        changed |= inspector.mut_asset("retina_map_neg_x_path", &mut self.retina_map_neg_x_path);
+        changed |= inspector.mut_asset("retina_map_pos_y_path", &mut self.retina_map_pos_y_path);
+        changed |= inspector.mut_asset("retina_map_neg_y_path", &mut self.retina_map_neg_y_path);
+        changed |= inspector.mut_asset("retina_map_pos_z_path", &mut self.retina_map_pos_z_path);
+        changed |= inspector.mut_asset("retina_map_neg_z_path", &mut self.retina_map_neg_z_path);
+        changed |= inspector.mut_f32(
+            "achromatopsia_blur_factor",
+            &mut self.achromatopsia_blur_factor,
+        );
+        changed |= inspector.mut_matrix("proj_matrix", &mut self.proj_matrix);
+        changed |= inspector.mut_f64("cubemap_scale", &mut self.cubemap_scale);
+        changed |= inspector.mut_bool("track_error", &mut self.track_error);
+        changed |= self.retina_map_builder.inspect(inspector);
+        changed
+    }
+}
+
+impl RetinaConfig {
+    fn map_config(&self) -> MapConfig {
+        MapConfig {
+            retina_map_pos_x_path: self.retina_map_pos_x_path.clone(),
+            retina_map_neg_x_path: self.retina_map_neg_x_path.clone(),
+            retina_map_pos_y_path: self.retina_map_pos_y_path.clone(),
+            retina_map_neg_y_path: self.retina_map_neg_y_path.clone(),
+            retina_map_pos_z_path: self.retina_map_pos_z_path.clone(),
+            retina_map_neg_z_path: self.retina_map_neg_z_path.clone(),
+            proj_matrix: self.proj_matrix,
+            cubemap_scale: self.cubemap_scale,
+            retina_map_builder: self.retina_map_builder.clone(),
+        }
+    }
 }
 
 impl Retina {
@@ -119,6 +193,7 @@ impl Retina {
         );
 
         Retina {
+            config: RetinaConfig::default(),
             color_pipeline,
             metrics_ab_pipeline,
             metrics_cd_pipeline,
@@ -128,15 +203,7 @@ impl Retina {
             targets: ColorTargets::new(device, "Retina"),
 
             map_valid: false,
-            retina_map_pos_x_path: AssetId::new(),
-            retina_map_neg_x_path: AssetId::new(),
-            retina_map_pos_y_path: AssetId::new(),
-            retina_map_neg_y_path: AssetId::new(),
-            retina_map_pos_z_path: AssetId::new(),
-            retina_map_neg_z_path: AssetId::new(),
-            proj_matrix: Matrix4::from_scale(1.0),
-            cubemap_scale: 1.0,
-            retina_map_builder: RetinaMapBuilder::new(),
+            map_config_changed: false,
             track_error: false,
         }
     }
@@ -159,12 +226,12 @@ impl Retina {
                 Err(err) => panic!("failed to load retina map {}: {err}", path),
             }
         };
-        load_map(&self.retina_map_pos_x_path);
-        load_map(&self.retina_map_neg_x_path);
-        load_map(&self.retina_map_pos_y_path);
-        load_map(&self.retina_map_neg_y_path);
-        load_map(&self.retina_map_pos_z_path);
-        load_map(&self.retina_map_neg_z_path);
+        load_map(&self.config.retina_map_pos_x_path);
+        load_map(&self.config.retina_map_neg_x_path);
+        load_map(&self.config.retina_map_pos_y_path);
+        load_map(&self.config.retina_map_neg_y_path);
+        load_map(&self.config.retina_map_pos_z_path);
+        load_map(&self.config.retina_map_neg_z_path);
 
         if image_data.len() == 6 {
             (_, self.retina_bind_group) = load_cubemap(
@@ -178,38 +245,38 @@ impl Retina {
             .unwrap()
             .create_bind_group(device);
         } else {
-            let projection = self.proj_matrix;
+            let projection = self.config.proj_matrix;
             let res_x = self.uniforms.data.resolution[0] * 2.0 * projection[0][0];
             let res_y = self.uniforms.data.resolution[1] * 2.0 * projection[1][1];
             let mut resolution = res_x.max(res_y);
-            if self.cubemap_scale > 0.0 {
-                resolution *= self.cubemap_scale as f32;
+            if self.config.cubemap_scale > 0.0 {
+                resolution *= self.config.cubemap_scale as f32;
             }
             let clamped_res = resolution.max(1.0) as u32;
             let cubemap_resolution = (clamped_res, clamped_res);
 
             //orientations directly taken from https://www.khronos.org/opengl/wiki/Cubemap_Texture
-            let retina_map_pos_x = self.retina_map_builder.generate(
+            let retina_map_pos_x = self.config.retina_map_builder.generate(
                 cubemap_resolution,
                 &[-Vector3::unit_z(), -Vector3::unit_y(), Vector3::unit_x()],
             );
-            let retina_map_neg_x = self.retina_map_builder.generate(
+            let retina_map_neg_x = self.config.retina_map_builder.generate(
                 cubemap_resolution,
                 &[Vector3::unit_z(), Vector3::unit_y(), -Vector3::unit_x()],
             );
-            let retina_map_pos_y = self.retina_map_builder.generate(
+            let retina_map_pos_y = self.config.retina_map_builder.generate(
                 cubemap_resolution,
                 &[Vector3::unit_x(), Vector3::unit_z(), Vector3::unit_y()],
             );
-            let retina_map_neg_y = self.retina_map_builder.generate(
+            let retina_map_neg_y = self.config.retina_map_builder.generate(
                 cubemap_resolution,
                 &[Vector3::unit_x(), -Vector3::unit_z(), -Vector3::unit_y()],
             );
-            let retina_map_pos_z = self.retina_map_builder.generate(
+            let retina_map_pos_z = self.config.retina_map_builder.generate(
                 cubemap_resolution,
                 &[Vector3::unit_x(), -Vector3::unit_y(), Vector3::unit_z()],
             );
-            let retina_map_neg_z = self.retina_map_builder.generate(
+            let retina_map_neg_z = self.config.retina_map_builder.generate(
                 cubemap_resolution,
                 &[-Vector3::unit_x(), -Vector3::unit_y(), -Vector3::unit_z()],
             );
@@ -269,43 +336,42 @@ impl Node for Retina {
         slots
     }
 
-    fn inspect(&mut self, inspector: &dyn Inspector) {
-        if inspector.mut_asset("retina_map_pos_x_path", &mut self.retina_map_pos_x_path) {
-            self.map_valid = false;
-        }
-        if inspector.mut_asset("retina_map_neg_x_path", &mut self.retina_map_neg_x_path) {
-            self.map_valid = false;
-        }
-        if inspector.mut_asset("retina_map_pos_y_path", &mut self.retina_map_pos_y_path) {
-            self.map_valid = false;
-        }
-        if inspector.mut_asset("retina_map_neg_y_path", &mut self.retina_map_neg_y_path) {
-            self.map_valid = false;
-        }
-        if inspector.mut_asset("retina_map_pos_z_path", &mut self.retina_map_pos_z_path) {
-            self.map_valid = false;
-        }
-        if inspector.mut_asset("retina_map_neg_z_path", &mut self.retina_map_neg_z_path) {
-            self.map_valid = false;
-        }
-        inspector.mut_f32(
-            "achromatopsia_blur_factor",
-            &mut self.uniforms.data.achromatopsia_blur_factor,
-        );
-
-        inspector.mut_matrix("proj_matrix", &mut self.proj_matrix);
-        inspector.mut_f64("cubemap_scale", &mut self.cubemap_scale);
-
-        self.retina_map_builder.inspect(inspector);
+    fn inspect_config(&mut self, inspector: &dyn Inspector) -> bool {
+        let old_map_config = self.config.map_config();
+        let changed = inspect_node_config(inspector, self.name(), &mut self.config);
+        self.map_config_changed |= old_map_config != self.config.map_config();
+        changed
     }
 
-    fn input(&mut self, eye: &EyeInput, _mouse: &MouseInput) -> EyeInput {
+    fn configure(&mut self) -> NodeChanges {
+        let track_error = self.config.track_error as i32;
+        let output_changed = self.map_config_changed
+            || self.uniforms.data.achromatopsia_blur_factor
+                != self.config.achromatopsia_blur_factor
+            || self.uniforms.data.track_error != track_error;
+
+        if self.map_config_changed {
+            self.map_valid = false;
+            self.map_config_changed = false;
+        }
+        self.track_error = self.config.track_error;
+        self.uniforms.data.achromatopsia_blur_factor = self.config.achromatopsia_blur_factor;
+        self.uniforms.data.track_error = track_error;
+
+        NodeChanges::from_output_slots(output_changed, false)
+    }
+
+    fn input(&mut self, eye: &EyeInput, _mouse: &MouseInput) -> (EyeInput, NodeChanges) {
         let gaze_rotation =
             Matrix4::look_to_lh(Point3::new(0.0, 0.0, 0.0), eye.gaze, Vector3::unit_y());
-        self.uniforms.data.gaze_inv_proj =
-            (gaze_rotation.invert().unwrap() * eye.proj.invert().unwrap()).into();
+        let gaze_inv_proj = (gaze_rotation.invert().unwrap() * eye.proj.invert().unwrap()).into();
+        let output_changed = self.uniforms.data.gaze_inv_proj != gaze_inv_proj;
+        self.uniforms.data.gaze_inv_proj = gaze_inv_proj;
 
-        eye.clone()
+        (
+            eye.clone(),
+            NodeChanges::from_output_slots(output_changed, false),
+        )
     }
 
     fn render(
@@ -314,7 +380,6 @@ impl Node for Retina {
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        self.uniforms.data.track_error = self.track_error as i32;
         self.uniforms.upload(context.queue());
         self.validate_map(context);
 

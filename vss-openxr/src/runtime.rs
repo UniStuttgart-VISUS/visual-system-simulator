@@ -7,7 +7,7 @@ use cgmath::{InnerSpace, Matrix3, Matrix4, Quaternion, SquareMatrix, Vector3};
 use openxr as xr;
 use openxr::sys as xrsys;
 use std::{env, fmt, iter, path::PathBuf, ptr, rc::Rc};
-use vss::{create_sampler_linear, MouseInput, RenderContext, RenderTexture};
+use vss::{create_sampler_linear, MouseInput, NodeChanges, RenderContext, RenderTexture};
 
 pub const LOADER_PATH_ENV: &str = "VSS_OPENXR_LOADER";
 pub const VULKAN_LOADER_PATH_ENV: &str = "VSS_VULKAN_LOADER";
@@ -488,6 +488,7 @@ impl Runtime {
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                     label: Some("OpenXR VSS render encoder"),
                 });
+        context.apply_changes(NodeChanges::OUTPUT);
         let view_count = located.len();
         for (index, (openxr_view, target)) in located.iter().zip(targets).enumerate() {
             let view = Self::view_from_openxr(
@@ -508,7 +509,8 @@ impl Runtime {
                     eye.gaze = gaze;
                 }
             }
-            context.flows[index].input(&MouseInput::default());
+            let input_changes = context.flows[index].input(&MouseInput::default());
+            context.apply_changes(input_changes);
             context.render_flow(index, &mut encoder, target);
         }
         context.queue().submit(iter::once(encoder.finish()));

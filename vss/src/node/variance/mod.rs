@@ -4,6 +4,7 @@ use super::*;
 
 use std::{collections::HashMap, mem::size_of, time::Instant};
 
+#[derive(Copy, Clone, PartialEq)]
 struct Uniforms {
     resolution: [f32; 2],
     track_error: i32,
@@ -13,6 +14,7 @@ struct Uniforms {
 }
 
 pub struct VarianceMeasure {
+    config: VarianceConfig,
     color_measurement_pipeline: wgpu::RenderPipeline,
     metrics_ab_pipeline: wgpu::RenderPipeline,
     metrics_cd_pipeline: wgpu::RenderPipeline,
@@ -25,13 +27,36 @@ pub struct VarianceMeasure {
     buffer_dimensions: BufferDimensions,
     last_info: Instant,
     should_download: bool,
+    slots_active: bool,
+}
 
+pub struct VarianceConfig {
     measure_variance: u32,
-
     variance_metric: u32,
-
     variance_color_space: u32,
     track_error: bool,
+}
+
+impl Default for VarianceConfig {
+    fn default() -> Self {
+        Self {
+            measure_variance: 0,
+            variance_metric: 0,
+            variance_color_space: 0,
+            track_error: false,
+        }
+    }
+}
+
+impl NodeConfig for VarianceConfig {
+    fn inspect(&mut self, inspector: &dyn Inspector) -> bool {
+        let mut changed = false;
+        changed |= inspector.mut_u32("measure_variance", &mut self.measure_variance);
+        changed |= inspector.mut_u32("variance_metric", &mut self.variance_metric);
+        changed |= inspector.mut_u32("variance_color_space", &mut self.variance_color_space);
+        changed |= inspector.mut_bool("track_error", &mut self.track_error);
+        changed
+    }
 }
 
 impl VarianceMeasure {
@@ -124,6 +149,7 @@ impl VarianceMeasure {
         });
 
         VarianceMeasure {
+            config: VarianceConfig::default(),
             color_measurement_pipeline,
             metrics_ab_pipeline,
             metrics_cd_pipeline,
@@ -139,11 +165,12 @@ impl VarianceMeasure {
             buffer_dimensions,
             last_info: Instant::now(),
             should_download: false,
-            measure_variance: 0,
-            variance_metric: 0,
-            variance_color_space: 0,
-            track_error: false,
+            slots_active: false,
         }
+    }
+
+    fn slots_active(&self) -> bool {
+        self.config.measure_variance != 0 || self.config.track_error
     }
 
     fn measure_variance(&mut self, context: &RenderContext) -> (f32, f32) {
@@ -249,6 +276,10 @@ impl Node for VarianceMeasure {
         slots: NodeSlots,
         _original_image: &mut Option<Texture>,
     ) -> NodeSlots {
+        if !self.slots_active {
+            return slots.to_passthrough();
+        }
+
         let slots = slots
             .to_color_metrics_input(context)
             .to_color_metrics_output(context, "VarianceNode");
@@ -285,11 +316,26 @@ impl Node for VarianceMeasure {
         slots
     }
 
-    fn inspect(&mut self, inspector: &dyn Inspector) {
-        inspector.mut_u32("measure_variance", &mut self.measure_variance);
-        inspector.mut_u32("variance_metric", &mut self.variance_metric);
-        inspector.mut_u32("variance_color_space", &mut self.variance_color_space);
-        inspector.mut_bool("track_error", &mut self.track_error);
+    fn inspect_config(&mut self, inspector: &dyn Inspector) -> bool {
+        inspect_node_config(inspector, self.name(), &mut self.config)
+    }
+
+    fn configure(&mut self) -> NodeChanges {
+        let slots_active = self.slots_active();
+        let uniforms = Uniforms {
+            resolution: self.uniforms.data.resolution,
+            track_error: self.config.track_error as i32,
+            show_variance: self.config.measure_variance,
+            variance_metric: self.config.variance_metric,
+            color_space: self.config.variance_color_space,
+        };
+        let output_changed = self.uniforms.data != uniforms;
+        let slots_changed = self.slots_active != slots_active;
+
+        self.slots_active = slots_active;
+        self.uniforms.data = uniforms;
+
+        NodeChanges::from_output_slots(output_changed, slots_changed)
     }
 
     fn render(
@@ -298,12 +344,11 @@ impl Node for VarianceMeasure {
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        self.uniforms.upload(context.queue());
+        if !self.slots_active {
+            return;
+        }
 
-        self.uniforms.data.track_error = self.track_error as i32;
-        self.uniforms.data.show_variance = self.measure_variance;
-        self.uniforms.data.variance_metric = self.variance_metric;
-        self.uniforms.data.color_space = self.variance_color_space;
+        self.uniforms.upload(context.queue());
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -328,7 +373,7 @@ impl Node for VarianceMeasure {
             render_pass.draw(0..6, 0..1);
         }
 
-        if self.track_error {
+        if self.config.track_error {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Variance metrics_ab_pass"),
                 color_attachments: &[
@@ -352,7 +397,7 @@ impl Node for VarianceMeasure {
             render_pass.draw(0..6, 0..1);
         }
 
-        if self.track_error {
+        if self.config.track_error {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Variance metrics_cd_pass"),
                 color_attachments: &[

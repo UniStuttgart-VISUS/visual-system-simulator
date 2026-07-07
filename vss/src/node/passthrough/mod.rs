@@ -5,7 +5,7 @@ pub struct Passthrough;
 
 impl Passthrough {
     pub fn new(_context: &RenderContext) -> Self {
-        Passthrough {}
+        Passthrough
     }
 }
 

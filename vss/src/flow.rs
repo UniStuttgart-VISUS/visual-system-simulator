@@ -56,15 +56,6 @@ impl Flow {
         self.nodes.borrow().len()
     }
 
-    pub fn validate_slots(&self) -> bool {
-        let mut result = true;
-        for node in self.nodes.borrow_mut().iter_mut() {
-            // Test every node (do not short-circuit).
-            result = result && node.validate_slots()
-        }
-        result
-    }
-
     pub fn negociate_slots(&self, context: &RenderContext) {
         let mut slot_a = NodeSlots::new();
         let mut slot_b = NodeSlots::new();
@@ -102,19 +93,27 @@ impl Flow {
         }
     }
 
-    pub fn inspect(&self, inspector: &dyn Inspector) {
+    pub fn inspect(&self, inspector: &dyn Inspector) -> NodeChanges {
         // Propagate to nodes.
+        let mut result = NodeChanges::empty();
         for node in self.nodes.borrow_mut().iter_mut() {
-            inspector.mut_node(node);
+            if node.inspect_config(inspector) {
+                result |= node.configure();
+            }
         }
+        result
     }
 
-    pub fn input(&self, mouse: &MouseInput) {
+    pub fn input(&self, mouse: &MouseInput) -> NodeChanges {
         // Propagate to nodes.
         let mut eye = self.eye.borrow().clone();
+        let mut result = NodeChanges::empty();
         for node in self.nodes.borrow_mut().iter_mut().rev() {
-            eye = node.input(&eye, mouse);
+            let (next_eye, changes) = node.input(&eye, mouse);
+            eye = next_eye;
+            result |= changes;
         }
+        result.normalized()
     }
 
     pub fn render(
@@ -124,10 +123,18 @@ impl Flow {
         screen: &RenderTexture,
     ) {
         // Update UI if present.
-        self.update_ui();
+        let ui_changes = self.update_ui();
+        context.apply_changes(ui_changes);
+        if ui_changes.contains(NodeChanges::SLOTS) {
+            self.negociate_slots(context);
+        }
 
         // Render all nodes.
-        let last_index = self.nodes.borrow_mut().len() - 1;
+        let nodes_len = self.nodes.borrow().len();
+        if nodes_len == 0 {
+            return;
+        }
+        let last_index = nodes_len - 1;
         for (idx, node) in self.nodes.borrow_mut().iter_mut().enumerate() {
             node.render(
                 context,
@@ -141,7 +148,7 @@ impl Flow {
         }
     }
 
-    fn update_ui(&self) {
+    fn update_ui(&self) -> NodeChanges {
         let ui_tuple = {
             let mut nodes = self.nodes.borrow_mut();
             nodes
@@ -149,28 +156,33 @@ impl Flow {
                 .find_map(|node| node.as_ui_mut().map(|ui_node| ui_node.begin_run()))
         };
 
-        if let Some((context, input)) = ui_tuple {
-            let full_output = context.run_ui(input, |ctx| {
-                egui::Window::new("Inspector").show(ctx, |ui| {
-                    egui::Grid::new("inspector_grid")
-                        .num_columns(2)
-                        .spacing([6.0, 4.0])
-                        .striped(true)
-                        .show(ui, |ui| {
-                            self.inspect(&UiInspector::new(ui));
-                        });
-                });
-            });
+        let Some((context, input)) = ui_tuple else {
+            return NodeChanges::empty();
+        };
 
-            let mut nodes = self.nodes.borrow_mut();
-            nodes
-                .iter_mut()
-                .find_map(|node| {
-                    node.as_ui_mut()
-                        .map(|ui_node| ui_node.end_run(full_output.clone()))
-                })
-                .unwrap();
-        }
+        let mut result = NodeChanges::empty();
+        let full_output = context.run_ui(input, |ctx| {
+            egui::Window::new("Inspector").show(ctx, |ui| {
+                egui::Grid::new("inspector_grid")
+                    .num_columns(2)
+                    .spacing([6.0, 4.0])
+                    .striped(true)
+                    .show(ui, |ui| {
+                        result |= self.inspect(&UiInspector::new(ui));
+                    });
+            });
+        });
+
+        let mut nodes = self.nodes.borrow_mut();
+        nodes
+            .iter_mut()
+            .find_map(|node| {
+                node.as_ui_mut()
+                    .map(|ui_node| ui_node.end_run(full_output.clone()))
+            })
+            .unwrap();
+
+        result
     }
 
     pub fn post_render(&self, context: &RenderContext) {

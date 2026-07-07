@@ -9,6 +9,7 @@ use cgmath::Vector3;
 
 use crate::*;
 
+#[derive(Clone, PartialEq)]
 pub struct RetinaMapBuilder {
     glaucoma_onoff: bool,
     glaucoma_fov: i32,
@@ -35,6 +36,12 @@ pub struct RetinaMapBuilder {
 
 impl RetinaMapBuilder {
     pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Default for RetinaMapBuilder {
+    fn default() -> Self {
         RetinaMapBuilder {
             glaucoma_onoff: false,
             glaucoma_fov: 0,
@@ -54,49 +61,55 @@ impl RetinaMapBuilder {
             receptordensity_onoff: false,
         }
     }
+}
 
-    pub fn inspect(&mut self, inspector: &dyn Inspector) {
-        inspector.mut_bool("glaucoma_onoff", &mut self.glaucoma_onoff);
-        inspector.mut_i32("glaucoma_fov", &mut self.glaucoma_fov);
+impl NodeConfig for RetinaMapBuilder {
+    fn inspect(&mut self, inspector: &dyn Inspector) -> bool {
+        let mut changed = false;
+        changed |= inspector.mut_bool("glaucoma_onoff", &mut self.glaucoma_onoff);
+        changed |= inspector.mut_i32("glaucoma_fov", &mut self.glaucoma_fov);
 
-        inspector.mut_bool("achromatopsia_onoff", &mut self.achromatopsia_onoff);
-        inspector.mut_i32("achromatopsia_int", &mut self.achromatopsia_int);
+        changed |= inspector.mut_bool("achromatopsia_onoff", &mut self.achromatopsia_onoff);
+        changed |= inspector.mut_i32("achromatopsia_int", &mut self.achromatopsia_int);
 
-        inspector.mut_bool("nyctalopia_onoff", &mut self.nyctalopia_onoff);
-        inspector.mut_i32("nyctalopia_int", &mut self.nyctalopia_int);
+        changed |= inspector.mut_bool("nyctalopia_onoff", &mut self.nyctalopia_onoff);
+        changed |= inspector.mut_i32("nyctalopia_int", &mut self.nyctalopia_int);
 
-        inspector.mut_bool("colorblindness_onoff", &mut self.colorblindness_onoff);
-        inspector.mut_i32("colorblindness_type", &mut self.colorblindness_type);
-        inspector.mut_i32("colorblindness_int", &mut self.colorblindness_int);
+        changed |= inspector.mut_bool("colorblindness_onoff", &mut self.colorblindness_onoff);
+        changed |= inspector.mut_i32("colorblindness_type", &mut self.colorblindness_type);
+        changed |= inspector.mut_i32("colorblindness_int", &mut self.colorblindness_int);
 
-        inspector.mut_bool(
+        changed |= inspector.mut_bool(
             "maculardegeneration_onoff",
             &mut self.maculardegeneration_onoff,
         );
-        inspector.mut_bool(
+        changed |= inspector.mut_bool(
             "maculardegeneration_veasy",
             &mut self.maculardegeneration_veasy,
         );
-        inspector.mut_i32(
+        changed |= inspector.mut_i32(
             "maculardegeneration_inteasy",
             &mut self.maculardegeneration_inteasy,
         );
-        inspector.mut_bool(
+        changed |= inspector.mut_bool(
             "maculardegeneration_vadvanced",
             &mut self.maculardegeneration_vadvanced,
         );
-        inspector.mut_f64(
+        changed |= inspector.mut_f64(
             "maculardegeneration_radius",
             &mut self.maculardegeneration_radius,
         );
-        inspector.mut_f64(
+        changed |= inspector.mut_f64(
             "maculardegeneration_intadvanced",
             &mut self.maculardegeneration_intadvanced,
         );
 
-        inspector.mut_bool("receptordensity_onoff", &mut self.receptordensity_onoff);
+        changed |= inspector.mut_bool("receptordensity_onoff", &mut self.receptordensity_onoff);
+        changed
     }
+}
 
+impl RetinaMapBuilder {
     pub fn generate(&self, resolution: (u32, u32), orientation: &[Vector3<f32>; 3]) -> Box<[u8]> {
         let mut maps: Vec<image::ImageBuffer<image::Rgba<u8>, Vec<u8>>> = Vec::new();
 

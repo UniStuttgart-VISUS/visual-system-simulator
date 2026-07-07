@@ -284,7 +284,9 @@ impl UploadVideo {
         }
     }
 
-    fn validate_data(&mut self) {
+    fn validate_data(&mut self) -> bool {
+        let mut output_changed = false;
+
         #[cfg(feature = "video")]
         if let Some(state) = self.batch_state.clone() {
             if self.advance_batch_frame {
@@ -294,6 +296,7 @@ impl UploadVideo {
                         let mut state = state.write().unwrap();
                         state.generation += 1;
                         state.pts = self.next_timestamp;
+                        output_changed = true;
                     }
                     Ok(false) => state.write().unwrap().eof = true,
                     Err(err) => {
@@ -305,22 +308,25 @@ impl UploadVideo {
             }
             if !state.read().unwrap().eof {
                 self.uploader.upload_buffer(&self.next_buffer);
+                output_changed = true;
             }
-            return;
+            return output_changed;
         }
 
         if let Some(upload_start) = self.upload_start {
             #[cfg(feature = "video")]
             if self.next_pts < 0.0 {
-                self.next_frame().unwrap();
+                output_changed |= self.next_frame().unwrap();
             }
 
             let current_pts = upload_start.elapsed().as_secs_f32();
             if self.next_pts >= 0.0 && self.next_pts <= current_pts {
                 self.uploader.upload_buffer(&self.next_buffer);
                 self.next_pts = -1.0;
+                output_changed = true;
             }
         }
+        output_changed
     }
 
     pub fn set_flags(&mut self, flags: RgbInputFlags) {
@@ -344,16 +350,24 @@ impl Node for UploadVideo {
         original_image: &mut Option<Texture>,
     ) -> NodeSlots {
         self.validate_data();
-        self.uploader
-            .negociate_slots(context, slots, original_image)
+        Node::negociate_slots(&mut self.uploader, context, slots, original_image)
     }
 
-    fn inspect(&mut self, inspector: &dyn Inspector) {
-        self.uploader.inspect(inspector);
-    }
-
-    fn input(&mut self, eye: &EyeInput, mouse: &MouseInput) -> EyeInput {
-        self.uploader.input(eye, mouse)
+    fn input(&mut self, eye: &EyeInput, mouse: &MouseInput) -> (EyeInput, NodeChanges) {
+        let output_changed = self.validate_data() || self.upload_start.is_some();
+        #[cfg(feature = "video")]
+        let output_changed = {
+            let mut output_changed = output_changed;
+            if let Some(state) = &self.batch_state {
+                output_changed |= !state.read().unwrap().eof;
+            }
+            output_changed
+        };
+        let (eye, input_changes) = Node::input(&mut self.uploader, eye, mouse);
+        (
+            eye,
+            (input_changes | NodeChanges::from_output_slots(output_changed, false)).normalized(),
+        )
     }
 
     fn render(
@@ -363,14 +377,18 @@ impl Node for UploadVideo {
         screen: Option<&RenderTexture>,
     ) {
         self.validate_data();
-        self.uploader.render(context, encoder, screen)
+        Node::render(&mut self.uploader, context, encoder, screen)
     }
 
     fn post_render(&mut self, context: &RenderContext) {
-        self.uploader.post_render(context);
+        Node::post_render(&mut self.uploader, context);
+        if self.upload_start.is_some() {
+            context.apply_changes(NodeChanges::OUTPUT);
+        }
         #[cfg(feature = "video")]
         if self.batch_state.is_some() {
             self.advance_batch_frame = true;
+            context.apply_changes(NodeChanges::OUTPUT);
         }
     }
 }

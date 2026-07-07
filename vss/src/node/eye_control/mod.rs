@@ -5,19 +5,39 @@ use std::ops::Mul;
 
 /// A node that implements eye control.
 pub struct EyeControl {
+    config: EyeControlConfig,
     configured_view: Matrix4<f32>,
+    edit_eye_position: u32,
+}
 
+pub struct EyeControlConfig {
     eye_axis_rot_x: f64,
     eye_axis_rot_y: f64,
-    edit_eye_position: u32,
+}
+
+impl Default for EyeControlConfig {
+    fn default() -> Self {
+        Self {
+            eye_axis_rot_x: 0.0,
+            eye_axis_rot_y: 0.0,
+        }
+    }
+}
+
+impl NodeConfig for EyeControlConfig {
+    fn inspect(&mut self, inspector: &dyn Inspector) -> bool {
+        let mut changed = false;
+        changed |= inspector.mut_f64("eye_axis_rot_x", &mut self.eye_axis_rot_x);
+        changed |= inspector.mut_f64("eye_axis_rot_y", &mut self.eye_axis_rot_y);
+        changed
+    }
 }
 
 impl EyeControl {
     pub fn new(_context: &RenderContext) -> Self {
         EyeControl {
+            config: EyeControlConfig::default(),
             configured_view: Matrix4::from_scale(1.0),
-            eye_axis_rot_x: 0.0,
-            eye_axis_rot_y: 0.0,
             edit_eye_position: 0,
         }
     }
@@ -37,22 +57,20 @@ impl Node for EyeControl {
         slots.to_passthrough()
     }
 
-    fn inspect(&mut self, inspector: &dyn Inspector) {
-        let mut configured_view = Matrix4::from_scale(1.0);
-
-        // if the eye has strabism, it needs some angle offset
-        inspector.mut_f64("eye_axis_rot_x", &mut self.eye_axis_rot_x);
-        configured_view =
-            configured_view.mul(Matrix4::from_angle_x(Rad(self.eye_axis_rot_x as f32)));
-
-        inspector.mut_f64("eye_axis_rot_y", &mut self.eye_axis_rot_y);
-        configured_view =
-            configured_view.mul(Matrix4::from_angle_y(Rad(self.eye_axis_rot_y as f32)));
-
-        self.configured_view = configured_view;
+    fn inspect_config(&mut self, inspector: &dyn Inspector) -> bool {
+        inspect_node_config(inspector, self.name(), &mut self.config)
     }
 
-    fn input(&mut self, eye: &EyeInput, _mouse: &MouseInput) -> EyeInput {
+    fn configure(&mut self) -> NodeChanges {
+        let configured_view = Matrix4::from_angle_x(Rad(self.config.eye_axis_rot_x as f32)).mul(
+            Matrix4::from_angle_y(Rad(self.config.eye_axis_rot_y as f32)),
+        );
+        let output_changed = self.configured_view != configured_view;
+        self.configured_view = configured_view;
+        NodeChanges::from_output_slots(output_changed, false)
+    }
+
+    fn input(&mut self, eye: &EyeInput, _mouse: &MouseInput) -> (EyeInput, NodeChanges) {
         // vp.mouse_input.position = (position.x as f32, position.y as f32);
         match self.edit_eye_position {
             1 => {
@@ -69,7 +87,7 @@ impl Node for EyeControl {
 
         let mut eye = eye.clone();
         eye.view = self.configured_view.mul(eye.view);
-        eye
+        (eye, NodeChanges::empty())
     }
 
     fn render(

@@ -85,7 +85,7 @@ impl WindowSurface {
     }
 
     pub fn run_app(mut self, event_loop: &mut EventLoop<()>) -> Result<(), EventLoopError> {
-        event_loop.set_control_flow(ControlFlow::Poll);
+        event_loop.set_control_flow(ControlFlow::Wait);
 
         #[cfg(target_arch = "wasm32")]
         {
@@ -98,6 +98,7 @@ impl WindowSurface {
 
     fn update_input(&self) {
         let surface = self.surface.clone().unwrap();
+        let mut changes = NodeChanges::empty();
         for f in surface.flows.iter() {
             let pose_size = self
                 .pose_input_size
@@ -127,8 +128,9 @@ impl WindowSurface {
                 }
             }
 
-            f.input(&self.mouse);
+            changes |= f.input(&self.mouse);
         }
+        surface.apply_changes(changes);
     }
 
     fn update_size(&mut self, deferred_size: Option<PhysicalSize<u32>>) {
@@ -139,13 +141,16 @@ impl WindowSurface {
                 let surface = Rc::get_mut(surface).unwrap();
 
                 surface.resize([new_size.width, new_size.height]);
-                for flow in surface.flows.iter() {
-                    flow.negociate_slots(&surface);
-                    // TODO-WGPU
-                    // flow.last_perspective.borrow_mut().proj = cgmath::perspective(
-                    //    cgmath::Deg(70.0), (size.width/size.height) as f32, 0.05, 1000.0);
-                }
             }
+        }
+    }
+
+    fn request_output(&self) {
+        if let Some(surface) = &self.surface {
+            surface.apply_changes(NodeChanges::OUTPUT);
+        }
+        if let Some(window) = &self.window {
+            window.request_redraw();
         }
     }
 }
@@ -169,6 +174,12 @@ impl ApplicationHandler for WindowSurface {
         );
 
         (self.init_fn)(&mut surface);
+        if (self.poll_fn)() {
+            self.window = Some(window);
+            self.surface = Some(Rc::new(surface));
+            event_loop.exit();
+            return;
+        }
 
         surface.negociate_slots();
         window.request_redraw();
@@ -200,13 +211,12 @@ impl ApplicationHandler for WindowSurface {
             }
             WindowEvent::Resized(size) => {
                 self.deferred_size = Some(size);
-                if let Some(window) = &self.window {
-                    window.request_redraw();
-                }
+                self.request_output();
             }
             WindowEvent::CursorMoved { position, .. } => {
                 if self.active {
                     self.mouse.position = (position.x as f32, position.y as f32);
+                    self.request_output();
                 }
             }
             WindowEvent::CursorLeft { .. } => {
@@ -214,6 +224,7 @@ impl ApplicationHandler for WindowSurface {
                     self.override_view = false;
                     self.override_gaze = false;
                     //XXX: reset gaze?
+                    self.request_output();
                 }
             }
             WindowEvent::MouseInput { state, button, .. } => {
@@ -229,23 +240,38 @@ impl ApplicationHandler for WindowSurface {
                         }
                         _ => {}
                     }
+                    self.request_output();
                 }
             }
             WindowEvent::RedrawRequested => {
+                let mut changes = self.surface.clone().unwrap().take_changes();
                 self.update_size(self.deferred_size);
                 self.deferred_size = None;
 
-                let surface = self.surface.clone().unwrap();
-                if !surface.validate_slots() {
-                    surface.negociate_slots();
+                self.update_input();
+                changes |= self.surface.clone().unwrap().take_changes();
+
+                if changes.contains(NodeChanges::SLOTS) {
+                    self.surface.clone().unwrap().negociate_slots();
+                    changes |= self.surface.clone().unwrap().take_changes();
                 }
 
-                self.update_input();
-                let drawn = self.surface.clone().unwrap().draw();
+                let drawn = if changes.contains(NodeChanges::OUTPUT) {
+                    self.surface.clone().unwrap().draw()
+                } else {
+                    false
+                };
 
                 if drawn && (self.poll_fn)() {
                     event_loop.exit();
-                } else if let Some(window) = &self.window {
+                } else if self
+                    .surface
+                    .clone()
+                    .unwrap()
+                    .pending_changes()
+                    .contains(NodeChanges::OUTPUT)
+                {
+                    let window = self.window.as_ref().unwrap();
                     window.request_redraw();
                 }
             }
@@ -254,7 +280,13 @@ impl ApplicationHandler for WindowSurface {
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        if let Some(window) = &self.window {
+        if self
+            .surface
+            .as_ref()
+            .map(|surface| surface.pending_changes().contains(NodeChanges::OUTPUT))
+            .unwrap_or(false)
+        {
+            let window = self.window.as_ref().unwrap();
             window.request_redraw();
         }
     }

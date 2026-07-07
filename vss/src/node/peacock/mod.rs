@@ -1,5 +1,6 @@
 use super::*;
 
+#[derive(Copy, Clone, PartialEq)]
 struct Uniforms {
     cb_cpu: f32,
     cb_cpv: f32,
@@ -14,16 +15,43 @@ struct Uniforms {
 }
 
 pub struct PeacockCB {
+    config: PeacockConfig,
     color_pipeline: wgpu::RenderPipeline,
     metrics_ab_pipeline: wgpu::RenderPipeline,
     metrics_cd_pipeline: wgpu::RenderPipeline,
     uniforms: ShaderUniforms<Uniforms>,
     sources_bind_group: wgpu::BindGroup,
     targets: ColorTargets,
+    slots_active: bool,
+}
 
+pub struct PeacockConfig {
     peacock_cb_onoff: bool,
+    peacock_cb_strength: f32,
     peacock_cb_type: i32,
     track_error: bool,
+}
+
+impl Default for PeacockConfig {
+    fn default() -> Self {
+        Self {
+            peacock_cb_onoff: false,
+            peacock_cb_strength: 0.0,
+            peacock_cb_type: 0,
+            track_error: false,
+        }
+    }
+}
+
+impl NodeConfig for PeacockConfig {
+    fn inspect(&mut self, inspector: &dyn Inspector) -> bool {
+        let mut changed = false;
+        changed |= inspector.mut_bool("peacock_cb_onoff", &mut self.peacock_cb_onoff);
+        changed |= inspector.mut_f32("peacock_cb_strength", &mut self.peacock_cb_strength);
+        changed |= inspector.mut_i32("peacock_cb_type", &mut self.peacock_cb_type);
+        changed |= inspector.mut_bool("track_error", &mut self.track_error);
+        changed
+    }
 }
 
 impl PeacockCB {
@@ -91,18 +119,19 @@ impl PeacockCB {
         );
 
         PeacockCB {
+            config: PeacockConfig::default(),
             color_pipeline,
             metrics_ab_pipeline,
             metrics_cd_pipeline,
             uniforms,
             sources_bind_group,
             targets: ColorTargets::new(device, "Peacock"),
-
-            peacock_cb_onoff: false,
-            peacock_cb_type: 0,
-
-            track_error: false,
+            slots_active: false,
         }
+    }
+
+    fn slots_active(&self) -> bool {
+        self.config.peacock_cb_onoff || self.config.track_error
     }
 }
 
@@ -117,6 +146,10 @@ impl Node for PeacockCB {
         slots: NodeSlots,
         _original_image: &mut Option<Texture>,
     ) -> NodeSlots {
+        if !self.slots_active {
+            return slots.to_passthrough();
+        }
+
         let slots = slots
             .to_color_metrics_input(context)
             .to_color_metrics_output(context, "PeacockNode");
@@ -129,33 +162,51 @@ impl Node for PeacockCB {
         slots
     }
 
-    fn inspect(&mut self, inspector: &dyn Inspector) {
+    fn inspect_config(&mut self, inspector: &dyn Inspector) -> bool {
+        inspect_node_config(inspector, self.name(), &mut self.config)
+    }
+
+    fn configure(&mut self) -> NodeChanges {
+        let slots_active = self.slots_active();
         const V_CPU: [f32; 3] = [0.753, 1.140, 0.171];
         const V_CPV: [f32; 3] = [0.265, -0.140, -0.003];
         const V_AM: [f32; 3] = [1.273463, 0.968437, 0.062921];
         const V_AYI: [f32; 3] = [-0.073894, 0.003331, 0.292119];
 
-        inspector.mut_bool("peacock_cb_onoff", &mut self.peacock_cb_onoff);
-
-        inspector.mut_f32("peacock_cb_strength", &mut self.uniforms.data.cb_strength);
-
-        inspector.mut_i32("peacock_cb_type", &mut self.peacock_cb_type);
-        if self.peacock_cb_onoff {
-            let cb_type = self.peacock_cb_type as usize;
-            if cb_type < 3 {
-                self.uniforms.data.cb_cpu = V_CPU[cb_type];
-                self.uniforms.data.cb_cpv = V_CPV[cb_type];
-                self.uniforms.data.cb_am = V_AM[cb_type];
-                self.uniforms.data.cb_ayi = V_AYI[cb_type];
-                self.uniforms.data.cb_monochrome = 0;
+        let mut uniforms = Uniforms {
+            cb_cpu: 0.0,
+            cb_cpv: 0.0,
+            cb_am: 0.0,
+            cb_ayi: 0.0,
+            track_error: self.config.track_error as i32,
+            cb_monochrome: 0,
+            cb_strength: if self.config.peacock_cb_onoff {
+                self.config.peacock_cb_strength
             } else {
-                self.uniforms.data.cb_monochrome = 1;
+                0.0
+            },
+            _padding: 0.0,
+        };
+
+        if self.config.peacock_cb_onoff {
+            let cb_type = self.config.peacock_cb_type as usize;
+            if cb_type < 3 {
+                uniforms.cb_cpu = V_CPU[cb_type];
+                uniforms.cb_cpv = V_CPV[cb_type];
+                uniforms.cb_am = V_AM[cb_type];
+                uniforms.cb_ayi = V_AYI[cb_type];
+            } else {
+                uniforms.cb_monochrome = 1;
             }
-        } else {
-            self.uniforms.data.cb_strength = 0.0;
         }
 
-        inspector.mut_bool("track_error", &mut self.track_error);
+        let output_changed = self.uniforms.data != uniforms;
+        let slots_changed = self.slots_active != slots_active;
+
+        self.slots_active = slots_active;
+        self.uniforms.data = uniforms;
+
+        NodeChanges::from_output_slots(output_changed, slots_changed)
     }
 
     fn render(
@@ -164,7 +215,10 @@ impl Node for PeacockCB {
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        self.uniforms.data.track_error = self.track_error as i32;
+        if !self.slots_active {
+            return;
+        }
+
         self.uniforms.upload(context.queue());
 
         {
@@ -183,7 +237,7 @@ impl Node for PeacockCB {
             render_pass.draw(0..6, 0..1);
         }
 
-        if self.track_error {
+        if self.config.track_error {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Peacock metrics_ab_pass"),
                 color_attachments: &[
@@ -206,7 +260,7 @@ impl Node for PeacockCB {
             render_pass.draw(0..6, 0..1);
         }
 
-        if self.track_error {
+        if self.config.track_error {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Peacock metrics_cd_pass"),
                 color_attachments: &[

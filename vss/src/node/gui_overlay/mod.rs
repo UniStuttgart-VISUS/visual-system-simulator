@@ -128,7 +128,7 @@ impl Node for GuiOverlay {
         slots
     }
 
-    fn input(&mut self, eye: &EyeInput, mouse: &MouseInput) -> EyeInput {
+    fn input(&mut self, eye: &EyeInput, mouse: &MouseInput) -> (EyeInput, NodeChanges) {
         let mut egui_input = egui::RawInput::default();
         egui_input.screen_rect = Some(egui::Rect::from_min_size(
             egui::Pos2::ZERO,
@@ -151,7 +151,7 @@ impl Node for GuiOverlay {
 
         self.egui_input = Some(egui_input);
 
-        eye.clone()
+        (eye.clone(), NodeChanges::empty())
     }
 
     fn render(
@@ -236,22 +236,22 @@ impl<'open> UiInspector<'open> {
 }
 
 impl<'open> Inspector for UiInspector<'open> {
-    fn flow(&self, index: usize, flow: &Flow) {
+    fn flow(&self, index: usize, flow: &Flow) -> NodeChanges {
         {
             let mut ui = self.ui.borrow_mut();
             ui.heading(format!("Flow {}", index));
             ui.end_row();
         }
-        flow.inspect(self);
+        flow.inspect(self)
     }
 
-    fn mut_node(&self, node: &mut dyn Node) {
+    fn node(&self, name: &'static str, inspect: &mut dyn FnMut() -> bool) -> bool {
         {
             let mut ui = self.ui.borrow_mut();
-            ui.heading(node.name());
+            ui.heading(name);
             ui.end_row();
         }
-        node.inspect(self);
+        inspect()
     }
 
     fn mut_bool(&self, name: &'static str, value: &mut bool) -> bool {

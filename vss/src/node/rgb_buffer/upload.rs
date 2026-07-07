@@ -280,13 +280,18 @@ impl Node for UploadRgbBuffer {
         slots
     }
 
-    fn input(&mut self, eye: &EyeInput, _mouse: &MouseInput) -> EyeInput {
-        self.uniforms.data.inv_proj_view = (eye.proj
-            * (Matrix4::from_translation(-eye.position) * eye.view))
+    fn input(&mut self, eye: &EyeInput, _mouse: &MouseInput) -> (EyeInput, NodeChanges) {
+        let inv_proj_view = (eye.proj * (Matrix4::from_translation(-eye.position) * eye.view))
             .invert()
             .unwrap()
             .into();
-        eye.clone()
+        let output_changed =
+            self.buffer_upload || self.uniforms.data.inv_proj_view != inv_proj_view;
+        self.uniforms.data.inv_proj_view = inv_proj_view;
+        (
+            eye.clone(),
+            NodeChanges::from_output_slots(output_changed, false),
+        )
     }
 
     fn render(

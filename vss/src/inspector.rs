@@ -6,9 +6,11 @@ use std::fmt::Display;
 use cgmath::Matrix4;
 
 pub trait Inspector {
-    fn flow(&self, index: usize, flow: &Flow);
+    fn flow(&self, index: usize, flow: &Flow) -> NodeChanges;
 
-    fn mut_node(&self, node: &mut dyn Node);
+    fn node(&self, _name: &'static str, inspect: &mut dyn FnMut() -> bool) -> bool {
+        inspect()
+    }
 
     // Returns true if value was changed.
     fn mut_bool(&self, name: &'static str, value: &mut bool) -> bool;
@@ -69,16 +71,18 @@ impl FromJsonInspector {
 }
 
 impl Inspector for FromJsonInspector {
-    fn flow(&self, index: usize, flow: &Flow) {
+    fn flow(&self, index: usize, flow: &Flow) -> NodeChanges {
         self.current_flow_index.replace(index);
-        flow.inspect(self);
+        let result = flow.inspect(self);
         self.current_flow_index.take();
+        result
     }
 
-    fn mut_node(&self, node: &mut dyn Node) {
-        self.current_node_name.replace(node.name().to_string());
-        node.inspect(self);
+    fn node(&self, name: &'static str, inspect: &mut dyn FnMut() -> bool) -> bool {
+        self.current_node_name.replace(name.to_string());
+        let changed = inspect();
         self.current_node_name.take();
+        changed
     }
 
     fn mut_bool(&self, name: &'static str, value: &mut bool) -> bool {
@@ -183,7 +187,7 @@ impl Display for ToJsonInspector {
 }
 
 impl Inspector for ToJsonInspector {
-    fn flow(&self, index: usize, flow: &Flow) {
+    fn flow(&self, index: usize, flow: &Flow) -> NodeChanges {
         assert_eq!(
             index,
             self.flows.borrow().len(),
@@ -191,22 +195,24 @@ impl Inspector for ToJsonInspector {
         );
         self.current_flow.borrow_mut().clear();
 
-        flow.inspect(self);
+        let result = flow.inspect(self);
 
         self.flows
             .borrow_mut()
             .push(serde_json::Value::Object(self.current_flow.take()));
+        result
     }
 
-    fn mut_node(&self, node: &mut dyn Node) {
+    fn node(&self, name: &'static str, inspect: &mut dyn FnMut() -> bool) -> bool {
         self.current_node_attributes.borrow_mut().clear();
 
-        node.inspect(self);
+        let changed = inspect();
 
         self.current_flow.borrow_mut().insert(
-            node.name().to_string(),
+            name.to_string(),
             serde_json::Value::Object(self.current_node_attributes.take()),
         );
+        changed
     }
 
     fn mut_bool(&self, name: &'static str, value: &mut bool) -> bool {

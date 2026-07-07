@@ -1,4 +1,4 @@
-use crate::{AssetId, Flow, Inspector, Node};
+use crate::{AssetId, Flow, Inspector, NodeChanges};
 use cgmath::Matrix4;
 use serde_json::{Map, Value};
 use std::any::Any;
@@ -610,12 +610,8 @@ impl SchemaCollector {
 }
 
 impl Inspector for SchemaCollector {
-    fn flow(&self, _index: usize, flow: &Flow) {
-        flow.inspect(self);
-    }
-
-    fn mut_node(&self, node: &mut dyn Node) {
-        node.inspect(self);
+    fn flow(&self, _index: usize, flow: &Flow) -> NodeChanges {
+        flow.inspect(self)
     }
 
     fn mut_bool(&self, name: &'static str, _value: &mut bool) -> bool {
@@ -965,12 +961,8 @@ impl<'a> SectionApplier<'a> {
 }
 
 impl Inspector for SectionApplier<'_> {
-    fn flow(&self, _index: usize, flow: &Flow) {
-        flow.inspect(self);
-    }
-
-    fn mut_node(&self, node: &mut dyn Node) {
-        node.inspect(self);
+    fn flow(&self, _index: usize, flow: &Flow) -> NodeChanges {
+        flow.inspect(self)
     }
 
     fn mut_bool(&self, name: &'static str, value: &mut bool) -> bool {
@@ -1022,8 +1014,8 @@ pub fn apply_simulator_values(
     flow: &Flow,
     simulator: &BTreeMap<String, ConfigValue>,
     asset_resolver: &AssetResolver<'_>,
-) -> Vec<Diagnostic> {
+) -> (NodeChanges, Vec<Diagnostic>) {
     let applier = SectionApplier::new(simulator, asset_resolver);
-    flow.inspect(&applier);
-    applier.diagnostics.into_inner()
+    let result = flow.inspect(&applier);
+    (result, applier.diagnostics.into_inner())
 }
