@@ -125,6 +125,14 @@ fn run_batch_render(config: RenderConfig) -> Result<(), FlowError> {
     }
     let mut pending_outputs = Vec::new();
     for planned_input in planned_inputs {
+        if !force && planned_input.output.exists() {
+            eprintln!(
+                "encode error for {}: output file already exists: {}; pass --force to overwrite",
+                planned_input.input,
+                planned_input.output.display()
+            );
+            continue;
+        }
         let config_start = Instant::now();
         common.base_config = planned_input.config.clone();
         common.inputs = vec![planned_input.input.clone()];
