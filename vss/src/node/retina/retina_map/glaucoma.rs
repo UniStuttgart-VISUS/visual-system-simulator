@@ -49,7 +49,7 @@ fn generate(
 
     let mut mapbuffer = image::ImageBuffer::new(res.0, res.1);
 
-    let global_forward = -Vector3::unit_z(); //Result of OpenGL being Right-handed
+    let global_forward = -Vector3::unit_z(); // Result of OpenGL being right-handed.
 
     for (x, y, pixel) in mapbuffer.enumerate_pixels_mut() {
         let right = (((x as f32 + 0.5) / res.0 as f32) * 2.0 - 1.0) * orientation[0];

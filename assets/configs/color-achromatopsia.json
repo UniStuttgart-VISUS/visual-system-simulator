@@ -3,8 +3,9 @@
     "simulator": {
       "achromatopsia_onoff": true,
       "achromatopsia_int": 100,
-      "cataract_onoff": false,
-      "cataract_int": 0,
+      "ct_onoff": false,
+      "ct_blur_factor": 0,
+      "ct_contrast_factor": 0,
       "colorblindness_onoff": false,
       "colorblindness_type": 0,
       "colorblindness_int": 0,

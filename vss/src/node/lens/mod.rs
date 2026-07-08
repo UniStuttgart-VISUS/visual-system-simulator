@@ -6,6 +6,7 @@ use super::*;
 
 const DIOPTRES_SCALING: f64 = 0.332_763_369_417_523;
 
+#[repr(C)]
 #[derive(Copy, Clone, PartialEq)]
 struct Uniforms {
     lens_position: [f32; 2],

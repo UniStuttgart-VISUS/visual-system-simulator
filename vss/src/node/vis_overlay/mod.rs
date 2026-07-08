@@ -5,6 +5,7 @@ use cgmath::Matrix4;
 use cgmath::Rad;
 use wgpu::CommandEncoder;
 
+#[repr(C)]
 struct Uniforms {
     hive_rotation: [[f32; 4]; 4],
 

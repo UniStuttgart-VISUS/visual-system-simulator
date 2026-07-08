@@ -1,6 +1,7 @@
 use super::*;
 use wgpu::CommandEncoder;
 
+#[repr(C)]
 struct Uniforms {
     viewport: [f32; 4],
     resolution_in: [f32; 2],

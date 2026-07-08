@@ -4,6 +4,7 @@ use super::*;
 
 use std::{collections::HashMap, mem::size_of, time::Instant};
 
+#[repr(C)]
 #[derive(Copy, Clone, PartialEq)]
 struct Uniforms {
     resolution: [f32; 2],

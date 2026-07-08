@@ -4,6 +4,7 @@ use self::retina_map::*;
 use super::*;
 use cgmath::{Matrix4, Point3, SquareMatrix, Vector3};
 
+#[repr(C)]
 struct Uniforms {
     gaze_inv_proj: [[f32; 4]; 4],
     resolution: [f32; 2],

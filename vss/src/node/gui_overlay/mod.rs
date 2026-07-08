@@ -2,6 +2,7 @@ use super::*;
 use std::cell::RefCell;
 use wgpu::CommandEncoder;
 
+#[repr(C)]
 struct Uniforms {
     resolution_in: [f32; 2],
     resolution_out: [f32; 2],

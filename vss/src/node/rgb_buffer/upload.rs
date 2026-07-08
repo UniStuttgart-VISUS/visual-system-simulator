@@ -4,6 +4,7 @@ use std::io::Cursor;
 use std::path::Path;
 use wgpu::CommandEncoder;
 
+#[repr(C)]
 struct Uniforms {
     inv_proj_view: [[f32; 4]; 4],
     flags: u32,

@@ -1,8 +1,10 @@
 use super::*;
 use wgpu::Origin3d;
 
+#[repr(C)]
 struct Uniforms {
     format: i32,
+    _padding: [i32; 3],
 }
 
 #[derive(Copy, Clone)]
@@ -45,6 +47,7 @@ impl UploadYuvBuffer {
             device,
             Uniforms {
                 format: YuvFormat::YCbCr as i32,
+                _padding: [0; 3],
             },
         );
 

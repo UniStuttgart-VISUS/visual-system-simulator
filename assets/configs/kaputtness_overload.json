@@ -22,8 +22,7 @@
       "nyctalopia_onoff": false,
       "nyctalopia_int": 0,
       "presbyopia_onoff": false,
-      "presbyopia_near_point": 0,
-      "retina_map_path": null
+      "presbyopia_near_point": 0
     }
   }
 }

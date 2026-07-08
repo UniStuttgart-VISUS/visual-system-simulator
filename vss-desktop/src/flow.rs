@@ -269,6 +269,7 @@ pub(crate) fn build_flow(
 
     let graph_build_start = Instant::now();
     context.add_node(input_node, flow_index);
+    //TODO: when using OpenXR: context.add_node(Box::new(EyeControl::new(context)), flow_index);
     context.add_node(Box::new(Cataract::new(context)), flow_index);
     context.add_node(Box::new(Lens::new(context)), flow_index);
     context.add_node(Box::new(Retina::new(context)), flow_index);

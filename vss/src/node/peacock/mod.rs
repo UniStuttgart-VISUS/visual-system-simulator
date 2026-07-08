@@ -1,5 +1,6 @@
 use super::*;
 
+#[repr(C)]
 #[derive(Copy, Clone, PartialEq)]
 struct Uniforms {
     cb_cpu: f32,

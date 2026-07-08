@@ -40,7 +40,7 @@ pub fn generate(
 ) -> image::ImageBuffer<image::Rgba<u8>, Vec<u8>> {
     let mut map = image::ImageBuffer::new(res.0, res.1);
 
-    let global_forward = -Vector3::unit_z(); //Result of OpenGL being Right-handed
+    let global_forward = -Vector3::unit_z(); // Result of OpenGL being right-handed.
     let affected_angle = radius * MACULAR_SIZE / 2.0;
 
     for (x, y, pixel) in map.enumerate_pixels_mut() {

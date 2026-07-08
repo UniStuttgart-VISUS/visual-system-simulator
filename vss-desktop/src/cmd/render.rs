@@ -256,14 +256,7 @@ fn run_headless_render_with_renderer(
         Some("batch render dummy screen"),
     );
     let render_start = Instant::now();
-    let mut encoder = context
-        .device()
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("batch render encoder"),
-        });
-    context.render(&mut encoder, &dummy_screen);
-    context.queue().submit(std::iter::once(encoder.finish()));
-    context.post_render();
+    render_headless_frame(&mut context, &dummy_screen);
     let render_time = render_start.elapsed();
 
     if verbose {
@@ -290,15 +283,7 @@ fn run_headless_render_with_renderer(
 
     while built.output_failure.read().unwrap().is_none() && !*built.output_processed.read().unwrap()
     {
-        let mut encoder =
-            context
-                .device()
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("batch render encoder"),
-                });
-        context.render(&mut encoder, &dummy_screen);
-        context.queue().submit(std::iter::once(encoder.finish()));
-        context.post_render();
+        render_headless_frame(&mut context, &dummy_screen);
     }
 
     if let Some(message) = built.output_failure.read().unwrap().clone() {
@@ -310,6 +295,26 @@ fn run_headless_render_with_renderer(
     }
 
     Ok(None)
+}
+
+fn render_headless_frame(context: &mut RenderContext, screen: &RenderTexture) {
+    let mut changes = NodeChanges::empty();
+    for flow in &context.flows {
+        changes |= flow.input(&MouseInput::default());
+    }
+    context.apply_changes(changes);
+    if changes.contains(NodeChanges::SLOTS) {
+        context.negociate_slots();
+    }
+
+    let mut encoder = context
+        .device()
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("batch render encoder"),
+        });
+    context.render(&mut encoder, screen);
+    context.queue().submit(std::iter::once(encoder.finish()));
+    context.post_render();
 }
 
 fn input_output_info(path: &Path, config: Option<&Path>) -> OutputInfo {
