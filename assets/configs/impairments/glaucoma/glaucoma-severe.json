@@ -10,7 +10,7 @@
       "colorblindness_type": 0,
       "colorblindness_int": 0,
       "glaucoma_onoff": true,
-      "glaucoma_fov": 100,
+      "glaucoma_fov": 70,
       "maculardegeneration_onoff": false,
       "maculardegeneration_vadvanced": false,
       "maculardegeneration_veasy": false,
