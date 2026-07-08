@@ -1,8 +1,9 @@
 {
   "both": {
     "simulator": {
-      "achromatopsia_onoff": false,
-      "achromatopsia_int": 0,
+      "achromatopsia_onoff": true,
+      "achromatopsia_int": 100,
+      "achromatopsia_blur_factor": 1.0,
       "ct_onoff": false,
       "ct_blur_factor": 0,
       "ct_contrast_factor": 0,
@@ -11,11 +12,11 @@
       "colorblindness_int": 0,
       "glaucoma_onoff": false,
       "glaucoma_fov": 0,
-      "maculardegeneration_onoff": true,
+      "maculardegeneration_onoff": false,
       "maculardegeneration_vadvanced": false,
-      "maculardegeneration_veasy": true,
+      "maculardegeneration_veasy": false,
       "maculardegeneration_intadvanced": 0,
-      "maculardegeneration_inteasy": 100,
+      "maculardegeneration_inteasy": 0,
       "maculardegeneration_radius": 0,
       "myopiahyperopia_onoff": false,
       "myopiahyperopia_mnh": 50,
