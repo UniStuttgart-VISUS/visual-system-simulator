@@ -1,6 +1,7 @@
 package com.vss.simulator;
 
 import android.content.Context;
+import android.hardware.HardwareBuffer;
 import android.os.Looper;
 import android.util.AttributeSet;
 import android.view.SurfaceHolder;
@@ -54,6 +55,18 @@ public class SimulatorSurfaceView extends SurfaceView implements SurfaceHolder.C
     @Override
     public void surfaceRedrawNeeded(SurfaceHolder holder) {
         assert Looper.getMainLooper().isCurrentThread() : "Called from non-UI thread";
+        SimulatorBridge.draw();
+    }
+
+    public void postHardwareBuffer(
+            int width,
+            int height,
+            int dataSpace,
+            int rotationDegrees,
+            HardwareBuffer hardwareBuffer
+    ) {
+        assert Looper.getMainLooper().isCurrentThread() : "Called from non-UI thread";
+        SimulatorBridge.postHardwareBuffer(width, height, dataSpace, rotationDegrees, hardwareBuffer);
         SimulatorBridge.draw();
     }
 

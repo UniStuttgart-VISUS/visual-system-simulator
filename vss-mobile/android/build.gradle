@@ -1,72 +1,142 @@
-apply plugin: 'com.android.application'
-
-buildscript {
-    repositories {
-        google()
-        mavenCentral()
-        maven {
-            url "https://plugins.gradle.org/m2/"
-        }
-    }
-    dependencies {
-        classpath 'com.android.tools.build:gradle:8.0.2'
-        classpath 'org.mozilla.rust-android-gradle:plugin:0.9.3'
-    }
+plugins {
+    id 'com.android.application' version '9.2.0'
 }
 
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
-    }
-}
+def rustTargets = [
+    [
+        abi      : 'armeabi-v7a',
+        triple   : 'armv7-linux-androideabi',
+        linker   : 'armv7a-linux-androideabi24-clang.cmd',
+        linkerEnv: 'CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER'
+    ],
+    [
+        abi      : 'arm64-v8a',
+        triple   : 'aarch64-linux-android',
+        linker   : 'aarch64-linux-android24-clang.cmd',
+        linkerEnv: 'CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER'
+    ],
+    [
+        abi      : 'x86',
+        triple   : 'i686-linux-android',
+        linker   : 'i686-linux-android24-clang.cmd',
+        linkerEnv: 'CARGO_TARGET_I686_LINUX_ANDROID_LINKER'
+    ],
+    [
+        abi      : 'x86_64',
+        triple   : 'x86_64-linux-android',
+        linker   : 'x86_64-linux-android24-clang.cmd',
+        linkerEnv: 'CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER'
+    ],
+]
 
-apply plugin: 'org.mozilla.rust-android-gradle.rust-android'
-
-cargo {
-    module = "../"
-    libname = "vss-mobile"
-    targets = ["arm", "arm64", "x86", "x86_64"]
-    targetDirectory = "../../target"
-}
+def rustLibraryName = 'libvss_mobile.so'
+def androidNdkVersion = '28.2.13676358'
 
 android {
-    compileSdkVersion 33
-    ndkVersion "23.1.7779620"
+    namespace 'com.vss'
+    compileSdk 37
+    ndkVersion androidNdkVersion
+
     defaultConfig {
         applicationId "com.vss"
-        minSdkVersion 24
-        targetSdkVersion 33
+        minSdk 28
+        targetSdk 37
         versionCode 1
         versionName "1.0"
     }
+
     compileOptions {
-        targetCompatibility JavaVersion.VERSION_1_8
-        sourceCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
+
+    buildFeatures {
+        buildConfig true
+    }
+
     buildTypes {
         release {
             minifyEnabled true
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+
+    sourceSets {
+        main {
+            jniLibs.srcDir file("$buildDir/rustJniLibs")
+        }
+    }
+
     dependencies {
-        implementation 'androidx.annotation:annotation:1.5.0'
-        implementation 'androidx.appcompat:appcompat:1.6.1'
-        implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+        implementation 'androidx.annotation:annotation:1.9.1'
+        implementation 'androidx.appcompat:appcompat:1.7.1'
+        implementation 'androidx.constraintlayout:constraintlayout:2.2.1'
         implementation 'androidx.slidingpanelayout:slidingpanelayout:1.2.0'
-        implementation 'androidx.webkit:webkit:1.7.0'
-        implementation 'com.google.android.material:material:1.8.0'
+        implementation 'androidx.webkit:webkit:1.14.0'
+        implementation 'com.google.android.material:material:1.13.0'
     }
-    namespace 'com.vss'
-    tasks.whenTaskAdded { task ->
-        // Require cargo to be run before copying JNI libraries.
-        if ((task.name == 'mergeDebugJniLibFolders' || task.name == 'mergeReleaseJniLibFolders')) {
-            task.dependsOn 'cargoBuild'
+
+}
+
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        def variantName = variant.name
+        def capitalizedVariantName = variantName.capitalize()
+        def cargoProfile = variant.buildType == 'release' ? 'release' : 'debug'
+        def androidSdkDirectory = providers.environmentVariable('ANDROID_HOME')
+            .orElse(providers.environmentVariable('ANDROID_SDK_ROOT'))
+            .orElse("${System.properties['user.home']}\\AppData\\Local\\Android\\Sdk")
+        def ndkDirectory = androidSdkDirectory.map { sdk -> file("${sdk}\\ndk\\${androidNdkVersion}") }
+
+        def copyTasks = rustTargets.collect { rustTarget ->
+            def capitalizedAbi = rustTarget.abi
+                .replace('-', '_')
+                .split('_')
+                .collect { it.capitalize() }
+                .join('')
+            def cargoTask = tasks.register("cargoBuild${capitalizedVariantName}${capitalizedAbi}", Exec) {
+                workingDir file('../..')
+                commandLine 'cargo', 'build', '-p', 'vss-mobile', '--target', rustTarget.triple
+                if (cargoProfile == 'release') {
+                    args '--release'
+                }
+                doFirst {
+                    def sdkDirectory = androidSdkDirectory.get()
+                    def selectedNdkDirectory = ndkDirectory.get()
+                    if (!selectedNdkDirectory.isDirectory()) {
+                        def installedNdks = file("${sdkDirectory}\\ndk").listFiles()
+                            ?.findAll { it.isDirectory() }
+                            ?.sort { left, right -> left.name <=> right.name }
+                        if (!installedNdks) {
+                            throw new GradleException(
+                                "Android NDK ${androidNdkVersion} is not installed and no fallback NDK exists under ${sdkDirectory}\\ndk"
+                            )
+                        }
+                        selectedNdkDirectory = installedNdks.last()
+                        logger.warn("Android NDK ${androidNdkVersion} is not installed; using ${selectedNdkDirectory.name} for Rust target ${rustTarget.triple}")
+                    }
+                    def ndkBin = new File(
+                        selectedNdkDirectory,
+                        'toolchains/llvm/prebuilt/windows-x86_64/bin'
+                    )
+                    environment rustTarget.linkerEnv, new File(ndkBin, rustTarget.linker).absolutePath
+                }
+            }
+            tasks.register("copyRust${capitalizedVariantName}${capitalizedAbi}JniLib", Copy) {
+                dependsOn cargoTask
+                from file("../../target/${rustTarget.triple}/${cargoProfile}/${rustLibraryName}")
+                into layout.buildDirectory.dir("rustJniLibs/${rustTarget.abi}")
+            }
         }
-        // Require "clean builds" to avoid issues with build caches.
-        if (task.name == 'assembleDebug' || task.name == 'assembleRelease')  {
-            task.dependsOn 'clean'
+
+        def aggregateTask = tasks.register("cargoBuild${capitalizedVariantName}") {
+            dependsOn copyTasks
+        }
+        tasks.matching { it.name == "merge${capitalizedVariantName}JniLibFolders" }.configureEach {
+            dependsOn aggregateTask
+        }
+        tasks.matching { it.name == "assemble${capitalizedVariantName}" }.configureEach {
+            dependsOn 'clean'
         }
     }
 }

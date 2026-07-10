@@ -4,6 +4,13 @@ use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use wgpu::{self, CurrentSurfaceTexture};
 
+#[cfg(target_os = "android")]
+const ANDROID_HARDWARE_BUFFER_EXTENSION: &std::ffi::CStr =
+    c"VK_ANDROID_external_memory_android_hardware_buffer";
+
+#[cfg(target_os = "android")]
+const SAMPLER_YCBCR_CONVERSION_EXTENSION: &std::ffi::CStr = c"VK_KHR_sampler_ycbcr_conversion";
+
 /// Represents a presentation surface and its associated [RenderContext].
 pub struct Surface<'window> {
     surface: wgpu::Surface<'window>,
@@ -79,6 +86,45 @@ impl<'window> Surface<'window> {
                 .await
                 .expect("Cannot create adapter");
 
+            #[cfg(target_os = "android")]
+            let (device, queue) = {
+                let descriptor = android_device_descriptor(&adapter);
+                let mut ycbcr_features =
+                    ash::vk::PhysicalDeviceSamplerYcbcrConversionFeatures::default()
+                        .sampler_ycbcr_conversion(true);
+                let hal_adapter = unsafe {
+                    adapter
+                        .as_hal::<wgpu_hal::api::Vulkan>()
+                        .expect("Android renderer should use Vulkan")
+                };
+                let hal_device = unsafe {
+                    hal_adapter
+                        .open_with_callback(
+                            descriptor.required_features,
+                            &descriptor.required_limits,
+                            &descriptor.memory_hints,
+                            Some(Box::new(|args| {
+                                push_unique_extension(
+                                    args.extensions,
+                                    ANDROID_HARDWARE_BUFFER_EXTENSION,
+                                );
+                                push_unique_extension(
+                                    args.extensions,
+                                    SAMPLER_YCBCR_CONVERSION_EXTENSION,
+                                );
+                                *args.create_info = args.create_info.push_next(&mut ycbcr_features);
+                            })),
+                        )
+                        .expect("Cannot create Android Vulkan device")
+                };
+                unsafe {
+                    adapter
+                        .create_device_from_hal::<wgpu_hal::api::Vulkan>(hal_device, &descriptor)
+                        .expect("Cannot wrap Android Vulkan device")
+                }
+            };
+
+            #[cfg(not(target_os = "android"))]
             let (device, queue) = adapter
                 .request_device(&wgpu::DeviceDescriptor {
                     label: None,
@@ -191,6 +237,36 @@ impl<'window> Surface<'window> {
         output.present();
         self.render_context.post_render();
         true
+    }
+}
+
+#[cfg(target_os = "android")]
+fn android_device_descriptor(adapter: &wgpu::Adapter) -> wgpu::DeviceDescriptor<'static> {
+    let mut required_features = wgpu::Features::empty();
+    if adapter
+        .features()
+        .contains(wgpu::Features::TEXTURE_FORMAT_NV12)
+    {
+        required_features |= wgpu::Features::TEXTURE_FORMAT_NV12;
+    }
+
+    wgpu::DeviceDescriptor {
+        label: None,
+        required_features,
+        required_limits: wgpu::Limits::default(),
+        experimental_features: wgpu::ExperimentalFeatures::disabled(),
+        trace: wgpu::Trace::Off,
+        memory_hints: wgpu::MemoryHints::Performance,
+    }
+}
+
+#[cfg(target_os = "android")]
+fn push_unique_extension(
+    extensions: &mut Vec<&'static std::ffi::CStr>,
+    extension: &'static std::ffi::CStr,
+) {
+    if !extensions.contains(&extension) {
+        extensions.push(extension);
     }
 }
 

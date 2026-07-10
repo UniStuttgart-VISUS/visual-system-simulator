@@ -26,6 +26,7 @@ pub struct YuvBuffer {
 
 pub struct UploadYuvBuffer {
     buffer_next: Option<YuvBuffer>,
+    output_size: Option<[u32; 2]>,
     format: YuvFormat,
 
     pipeline: wgpu::RenderPipeline,
@@ -90,6 +91,7 @@ impl UploadYuvBuffer {
 
         UploadYuvBuffer {
             buffer_next: None,
+            output_size: None,
             format: YuvFormat::YCbCr,
             pipeline,
             uniforms,
@@ -121,6 +123,8 @@ impl UploadYuvBuffer {
     }
 
     pub fn upload_buffer(&mut self, buffer: YuvBuffer) {
+        self.set_output_size(buffer.width, buffer.height);
+
         // Test if we have to invalidate textures.
         if let Some(texture_y) = &self.texture_y {
             if buffer.width != texture_y.width() || buffer.height != texture_y.height() {
@@ -133,9 +137,17 @@ impl UploadYuvBuffer {
         self.buffer_next = Some(buffer);
     }
 
+    pub fn set_output_size(&mut self, width: u32, height: u32) {
+        self.output_size = Some([width.max(1), height.max(1)]);
+    }
+
     pub fn set_format(&mut self, format: YuvFormat) {
         self.format = format;
         self.uniforms.data.format = format as i32;
+    }
+
+    pub fn color_target(&self) -> RenderTexture {
+        self.targets.rt_color.clone()
     }
 }
 
@@ -203,6 +215,9 @@ impl Node for UploadYuvBuffer {
         if let Some(texture_y) = &self.texture_y {
             width = texture_y.width();
             height = texture_y.height();
+        } else if let Some([output_width, output_height]) = self.output_size {
+            width = output_width;
+            height = output_height;
         }
 
         let slots = slots.emplace_color_depth_output(context, height, width, "UploadYuvBuffer");

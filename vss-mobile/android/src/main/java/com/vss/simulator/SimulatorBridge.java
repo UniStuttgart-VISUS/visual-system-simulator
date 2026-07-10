@@ -1,6 +1,7 @@
 package com.vss.simulator;
 
 import android.content.res.AssetManager;
+import android.hardware.HardwareBuffer;
 import android.util.Log;
 import android.view.Surface;
 
@@ -14,7 +15,7 @@ public class SimulatorBridge {
     static {
         try {
             Log.d(LOG_TAG, "Loading native library...");
-            System.loadLibrary("vss-mobile");
+            System.loadLibrary("vss_mobile");
             LIBRARY_LOADED = true;
             Log.i(LOG_TAG, "Loading native library: successful");
         } catch (java.lang.UnsatisfiedLinkError e) {
@@ -31,6 +32,14 @@ public class SimulatorBridge {
     private static native void nativeDraw();
 
     private static native void nativePostFrame(int width, int height, byte[] y, byte[] u, byte[] v);
+
+    private static native void nativePostHardwareBuffer(
+            int width,
+            int height,
+            int dataSpace,
+            int rotationDegrees,
+            HardwareBuffer hardwareBuffer
+    );
 
     private static native void nativePostSettings(String jsonString);
 
@@ -66,8 +75,18 @@ public class SimulatorBridge {
 
     public static void postFrame(int width, int height, byte[] y, byte[] u, byte[] v) {
         assert LIBRARY_LOADED : "Native library not loaded";
-        //Log.d(LOG_TAG, "Posting input frame");
         nativePostFrame(width, height, y, u, v);
+    }
+
+    public static void postHardwareBuffer(
+            int width,
+            int height,
+            int dataSpace,
+            int rotationDegrees,
+            HardwareBuffer hardwareBuffer
+    ) {
+        assert LIBRARY_LOADED : "Native library not loaded";
+        nativePostHardwareBuffer(width, height, dataSpace, rotationDegrees, hardwareBuffer);
     }
 
     public static void postSettings(String jsonString) {

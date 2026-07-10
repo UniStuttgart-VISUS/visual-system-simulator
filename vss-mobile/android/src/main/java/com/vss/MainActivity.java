@@ -3,6 +3,7 @@ package com.vss;
 import android.Manifest;
 import android.app.AlertDialog;
 import android.content.pm.PackageManager;
+import android.hardware.HardwareBuffer;
 import android.hardware.camera2.CameraDevice;
 import android.net.Uri;
 import android.os.Bundle;
@@ -46,7 +47,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     private WebView inspectorView;
 
     private SimulatorSurfaceView simulatorView;
-    private CameraAccess cameraAccess;
+    private CameraTextureAccess cameraTextureAccess;
 
     //region Android activity lifecycle
 
@@ -190,8 +191,23 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     public void startSimulator() {
         Log.d(LOG_TAG, "Starting simulator");
 
-        // Open camera.
-        this.cameraAccess = new CameraAccess(this, new CameraAccess.CameraDelegate() {
+        startCamera();
+
+        // Enter immersive mode.
+        WindowInsetsControllerCompat windowInsetsController = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        windowInsetsController.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_BARS_BY_TOUCH);
+        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars());
+        // Prevent screen from turning off.
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        // Switch to simulation state.
+        this.inspectorSimulatorPane.open();
+        this.startButton.hide();
+        activityState = ActivityState.Simulating;
+    }
+
+    private void startCamera() {
+        this.cameraTextureAccess = new CameraTextureAccess(this, new CameraTextureAccess.CameraDelegate() {
             @Override
             public void onCameraOpen(CameraDevice cameraDevice) {
             }
@@ -210,28 +226,24 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
             }
 
             @Override
-            public void onFrameAvailable(int width, int height, byte[] y, byte[] u, byte[] v) {
-                simulatorView.postFrame(width, height, y, u, v);
+            public void onFrameAvailable(
+                    int width,
+                    int height,
+                    int dataSpace,
+                    int rotationDegrees,
+                    HardwareBuffer hardwareBuffer
+            ) {
+                simulatorView.postHardwareBuffer(width, height, dataSpace, rotationDegrees, hardwareBuffer);
             }
         });
-
-        // Enter immersive mode.
-        WindowInsetsControllerCompat windowInsetsController = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
-        windowInsetsController.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_BARS_BY_TOUCH);
-        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars());
-        // Prevent screen from turning off.
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-
-        // Switch to simulation state.
-        this.inspectorSimulatorPane.open();
-        this.startButton.hide();
-        activityState = ActivityState.Simulating;
     }
 
     void stopSimulator() {
         // Close camera.
-        this.cameraAccess.close();
-        this.cameraAccess = null;
+        if (this.cameraTextureAccess != null) {
+            this.cameraTextureAccess.close();
+            this.cameraTextureAccess = null;
+        }
 
         // Leave immersive mode.
         WindowInsetsControllerCompat windowInsetsController = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());

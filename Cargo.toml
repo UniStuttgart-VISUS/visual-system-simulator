@@ -10,6 +10,7 @@ members = [
 ]
 
 [workspace.dependencies]
+ash = "0.38"
 cgmath = "0.18"
 raw-window-handle = "0.6"
 wgpu = "29"
