@@ -1,8 +1,6 @@
 #![allow(non_snake_case)]
 #![cfg(target_os = "android")]
 
-mod hardware_buffer_texture;
-
 use std::ffi::{c_void, CString};
 use std::io::{Cursor, Read};
 use std::panic;
@@ -24,7 +22,7 @@ use raw_window_handle::*;
 
 use vss::*;
 
-use hardware_buffer_texture::{HardwareBufferFrame, HardwareBufferTextureNode, MediaFrame};
+use crate::node::frame::{Frame, FrameNode, HardwareBufferFrame};
 
 struct AndroidHandle(RawWindowHandle);
 
@@ -47,7 +45,7 @@ impl HasDisplayHandle for AndroidHandle {
 
 struct Bridge {
     pub surface: Surface<'static>,
-    pub hardware_buffer_sender: SyncSender<MediaFrame>,
+    pub frame_sender: SyncSender<Frame>,
     pub current_size: [i32; 2],
     pub new_size: [i32; 2],
 }
@@ -68,7 +66,7 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate<'loca
     android_logger::init_once(
         Config::default()
             .with_max_level(LevelFilter::Trace)
-            .with_tag("libvss-mobile"),
+            .with_tag("libvss-android"),
     );
 
     panic::set_hook(Box::new(|info| {
@@ -147,19 +145,19 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate<'loca
     let size = [window.width() as u32, window.height() as u32];
     let mut surface = vss::Surface::new(size, handle, 1);
 
-    let (hardware_tx, hardware_rx) = mpsc::sync_channel::<MediaFrame>(2);
-    build_flow(&mut surface, hardware_rx);
+    let (frame_tx, frame_rx) = mpsc::sync_channel::<Frame>(2);
+    build_flow(&mut surface, frame_rx);
 
     *guard = Some(Bridge {
         surface,
-        hardware_buffer_sender: hardware_tx,
+        frame_sender: frame_tx,
         current_size: [1, 1],
         new_size: [1, 1],
     });
 }
 
-fn build_flow(surface: &mut Surface, hardware_buffer_receiver: Receiver<MediaFrame>) {
-    let node = HardwareBufferTextureNode::new(surface, hardware_buffer_receiver);
+fn build_flow(surface: &mut Surface, frame_receiver: Receiver<Frame>) {
+    let node = FrameNode::new(surface, frame_receiver);
     surface.add_node(Box::new(node), 0);
 
     // Visual system passes.
@@ -206,8 +204,8 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostHardware
     };
 
     let res = bridge
-        .hardware_buffer_sender
-        .try_send(MediaFrame::Hardware(frame));
+        .frame_sender
+        .try_send(Frame::Hardware(frame));
     if res.is_ok() {
         bridge.new_size = [width, height];
     } else {
@@ -248,12 +246,12 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostRgba<'lo
 
     let mut guard = BRIDGE.lock().unwrap();
     let bridge = guard.as_mut().expect("Bridge should be created");
-    let frame = MediaFrame::Rgba(RgbBuffer {
+    let frame = Frame::Rgba(RgbBuffer {
         pixels_rgb: data.into_boxed_slice(),
         width: width as u32,
         height: height as u32,
     });
-    if bridge.hardware_buffer_sender.try_send(frame).is_ok() {
+    if bridge.frame_sender.try_send(frame).is_ok() {
         bridge.new_size = [width, height];
     }
 }

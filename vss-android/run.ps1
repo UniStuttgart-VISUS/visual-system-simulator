@@ -15,11 +15,10 @@ $RenderTimeoutSec = 20
 $StartSettleSeconds = 3
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$mobileDir = Split-Path -Parent $scriptDir
-$repoDir = Split-Path -Parent $mobileDir
-$androidDir = Join-Path $mobileDir "android"
+$androidDir = $scriptDir
+$repoDir = Split-Path -Parent $scriptDir
 $launchDir = (Get-Location).Path
-$apk = Join-Path $androidDir "build\outputs\apk\debug\VSS-debug.apk"
+$apk = Join-Path $androidDir "app\build\outputs\apk\debug\app-debug.apk"
 $adbArgs = @(); if ($Device) { $adbArgs = @("-s", $Device) }
 
 $mediaTypes = @{
@@ -34,7 +33,7 @@ $mediaTypes = @{
 
 function Show-Usage {
     Write-Host @"
-Usage: .\android-run.ps1 <action> [<action> ...] [options]
+Usage: .\run.ps1 <action> [<action> ...] [options]
 
 Actions (run in the order given, any combination):
   install     Build and install the debug APK.
@@ -46,9 +45,9 @@ Actions (run in the order given, any combination):
               After 'camera'/'share': waits for a rendered frame.
 
 Examples:
-  .\android-run.ps1 install start
-  .\android-run.ps1 install start camera screenshot
-  .\android-run.ps1 install start share screenshot -Media assets\marketplace.png
+  .\run.ps1 install start
+  .\run.ps1 install start camera screenshot
+  .\run.ps1 install start share screenshot -Media assets\marketplace.png
 
 Options:
   -Device <serial>   Pass -s <serial> to adb.
@@ -99,8 +98,8 @@ function Wait-ForRenderedFrame {
 
 function Save-Screenshot {
     $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-    $remote = "/sdcard/vss-mobile-$timestamp.png"
-    $local = Join-Path $scriptDir "vss-mobile-$timestamp.png"
+    $remote = "/sdcard/vss-android-$timestamp.png"
+    $local = Join-Path $scriptDir "vss-android-$timestamp.png"
     Write-Host "Capturing screenshot to $local..."
     Invoke-Adb "Capturing screenshot" @("shell", "screencap", "-p", $remote) | Out-Null
     Invoke-Adb "Pulling screenshot" @("pull", $remote, $local) | Out-Null
@@ -202,7 +201,7 @@ function Invoke-CameraAction {
 }
 
 function Invoke-ShareAction {
-    if (-not $Media) { throw "share requires -Media <path>. Example: .\android-run.ps1 share -Media assets\marketplace.png" }
+    if (-not $Media) { throw "share requires -Media <path>. Example: .\run.ps1 share -Media assets\marketplace.png" }
 
     Invoke-Adb "Clearing logcat" @("logcat", "-c") | Out-Null
     $sharedMedia = Push-LocalMediaForSharing $Media

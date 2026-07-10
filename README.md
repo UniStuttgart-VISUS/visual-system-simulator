@@ -95,7 +95,7 @@ If you have a head mount such as Google Cardboard, you can turn on the "Splitscr
 
 First, make sure the `android-sdk`, `ndk`, and `ndk-bundle` are installed. This can be done and verified using [Android Studio](https://developer.android.com/studio/). Probably, you want to install the JDK as well. If you get errors while building, you might have to adjust some environment variables (`JAVA_HOME`, `ANDROID_HOME`, and `PATH`) and accept licenses (`sdkmanager --licenses`) - and yes, Java developer environments are the apex of shit.
 
-If you got everything right, you can go to `vss-mobile/android` and run `gradlew build`.
+If you got everything right, you can go to `vss-android` and run `gradlew build`.
 
 TODO: describe build steps here, where to find the APK and what to do with it.
 

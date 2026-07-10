@@ -1,5 +1,5 @@
 [package]
-name = "vss-mobile"
+name = "vss-android"
 edition = "2018"
 version = "1.0.0"
 authors = ["The Visual System Simulator Developers"]

@@ -20,7 +20,7 @@ const ANDROID_HARDWARE_BUFFER_EXTENSION: &std::ffi::CStr =
 
 const AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE: u64 = 0x100;
 
-pub enum MediaFrame {
+pub enum Frame {
     Hardware(HardwareBufferFrame),
     Rgba(RgbBuffer),
 }
@@ -1061,8 +1061,8 @@ impl Drop for HardwareBufferRef {
     }
 }
 
-pub struct HardwareBufferTextureNode {
-    hardware_frame_receiver: Receiver<MediaFrame>,
+pub struct FrameNode {
+    frame_receiver: Receiver<Frame>,
     targets: ColorDepthTargets,
     output_size: [u32; 2],
     frame_count: u64,
@@ -1071,11 +1071,11 @@ pub struct HardwareBufferTextureNode {
     use_rgba: bool,
 }
 
-impl HardwareBufferTextureNode {
-    pub fn new(context: &RenderContext, hardware_frame_receiver: Receiver<MediaFrame>) -> Self {
+impl FrameNode {
+    pub fn new(context: &RenderContext, frame_receiver: Receiver<Frame>) -> Self {
         Self {
-            hardware_frame_receiver,
-            targets: ColorDepthTargets::new(context.device(), "HardwareBufferTextureNode"),
+            frame_receiver,
+            targets: ColorDepthTargets::new(context.device(), "FrameNode"),
             output_size: [1, 1],
             frame_count: 0,
             renderer: HardwareBufferRenderer::new(),
@@ -1086,7 +1086,7 @@ impl HardwareBufferTextureNode {
 
     fn receive_latest_frame(&mut self) -> bool {
         let mut latest = None;
-        while let Ok(frame) = self.hardware_frame_receiver.try_recv() {
+        while let Ok(frame) = self.frame_receiver.try_recv() {
             latest = Some(frame);
         }
 
@@ -1094,7 +1094,7 @@ impl HardwareBufferTextureNode {
             return false;
         };
 
-        if let MediaFrame::Rgba(buffer) = frame {
+        if let Frame::Rgba(buffer) = frame {
             warn!(
                 "RGBA image upload path is active ({}x{})",
                 buffer.width, buffer.height
@@ -1104,7 +1104,7 @@ impl HardwareBufferTextureNode {
             self.use_rgba = true;
             return true;
         }
-        let MediaFrame::Hardware(frame) = frame else {
+        let Frame::Hardware(frame) = frame else {
             unreachable!()
         };
         self.use_rgba = false;
@@ -1124,9 +1124,9 @@ impl HardwareBufferTextureNode {
     }
 }
 
-impl Node for HardwareBufferTextureNode {
+impl Node for FrameNode {
     fn name(&self) -> &'static str {
-        "HardwareBufferTextureNode"
+        "FrameNode"
     }
 
     fn negociate_slots(
@@ -1144,7 +1144,7 @@ impl Node for HardwareBufferTextureNode {
             context,
             self.output_size[0],
             self.output_size[1],
-            "HardwareBufferTextureNode",
+            "FrameNode",
         );
         self.targets = slots.as_color_depth_targets();
 

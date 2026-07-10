@@ -1,5 +1,5 @@
 plugins {
-    id 'com.android.application' version '9.2.0'
+    id 'com.android.application'
 }
 
 def rustTargets = [
@@ -29,7 +29,7 @@ def rustTargets = [
     ],
 ]
 
-def rustLibraryName = 'libvss_mobile.so'
+def rustLibraryName = 'libvss_android.so'
 def androidNdkVersion = '28.2.13676358'
 
 android {
@@ -96,7 +96,7 @@ androidComponents {
                 .join('')
             def cargoTask = tasks.register("cargoBuild${capitalizedVariantName}${capitalizedAbi}", Exec) {
                 workingDir file('../..')
-                commandLine 'cargo', 'build', '-p', 'vss-mobile', '--target', rustTarget.triple
+                commandLine 'cargo', 'build', '-p', 'vss-android', '--target', rustTarget.triple
                 if (cargoProfile == 'release') {
                     args '--release'
                 }
