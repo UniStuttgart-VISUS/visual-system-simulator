@@ -9,17 +9,21 @@ use jni::objects::JObject;
 use jni::{EnvUnowned, Outcome};
 
 use ndk_sys::{
-    AHardwareBuffer, AHardwareBuffer_Desc, AHardwareBuffer_Plane, AHardwareBuffer_Planes,
-    AHardwareBuffer_UsageFlags, AHardwareBuffer_acquire, AHardwareBuffer_describe,
-    AHardwareBuffer_fromHardwareBuffer, AHardwareBuffer_lockPlanes, AHardwareBuffer_release,
-    AHardwareBuffer_unlock, ARect,
+    AHardwareBuffer, AHardwareBuffer_Desc, AHardwareBuffer_acquire, AHardwareBuffer_describe,
+    AHardwareBuffer_fromHardwareBuffer, AHardwareBuffer_release,
 };
 
 use vss::*;
 
-#[allow(dead_code)]
 const ANDROID_HARDWARE_BUFFER_EXTENSION: &std::ffi::CStr =
     ash::vk::ANDROID_EXTERNAL_MEMORY_ANDROID_HARDWARE_BUFFER_NAME;
+
+const AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE: u64 = 0x100;
+
+pub enum MediaFrame {
+    Hardware(HardwareBufferFrame),
+    Rgba(RgbBuffer),
+}
 
 pub struct HardwareBufferFrame {
     buffer: HardwareBufferRef,
@@ -105,11 +109,9 @@ impl HardwareBufferRef {
         }
     }
 
-    fn import_external_ycbcr(
+    fn import_hardware_buffer(
         &self,
         context: &RenderContext,
-        width: u32,
-        height: u32,
         data_space: i32,
         rotation_degrees: i32,
     ) -> Result<ExternalHardwareBufferTexture, HardwareBufferImportError> {
@@ -130,6 +132,14 @@ impl HardwareBufferRef {
             ));
         }
 
+        let desc = self.describe();
+        if desc.usage & AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE == 0 {
+            return Err(HardwareBufferImportError::Unsupported(format!(
+                "AHardwareBuffer usage {:#x} is missing AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE",
+                desc.usage
+            )));
+        }
+
         let ahb = ash::android::external_memory_android_hardware_buffer::Device::new(
             hal_device.shared_instance().raw_instance(),
             hal_device.raw_device(),
@@ -137,6 +147,7 @@ impl HardwareBufferRef {
         let (
             allocation_size,
             memory_type_bits,
+            queried_format,
             external_format,
             ycbcr_model,
             ycbcr_range,
@@ -160,6 +171,7 @@ impl HardwareBufferRef {
             (
                 properties.allocation_size,
                 properties.memory_type_bits,
+                format_properties.format,
                 format_properties.external_format,
                 format_properties.suggested_ycbcr_model,
                 format_properties.suggested_ycbcr_range,
@@ -168,39 +180,48 @@ impl HardwareBufferRef {
                 format_properties.suggested_y_chroma_offset,
             )
         };
-
-        if external_format == 0 {
-            return Err(HardwareBufferImportError::Unsupported(
-                "AHardwareBuffer did not report an Android external format".to_string(),
-            ));
-        }
-
-        let mut conversion_external_format =
-            vk::ExternalFormatANDROID::default().external_format(external_format);
-        let conversion_info = vk::SamplerYcbcrConversionCreateInfo::default()
-            .push_next(&mut conversion_external_format)
-            .format(vk::Format::UNDEFINED)
-            .ycbcr_model(ycbcr_model)
-            .ycbcr_range(ycbcr_range)
-            .components(ycbcr_components)
-            .x_chroma_offset(x_chroma_offset)
-            .y_chroma_offset(y_chroma_offset)
-            .chroma_filter(vk::Filter::LINEAR)
-            .force_explicit_reconstruction(false);
         let raw_device = hal_device.raw_device().clone();
-        let conversion = unsafe {
-            raw_device
-                .create_sampler_ycbcr_conversion(&conversion_info, None)
-                .map_err(|err| HardwareBufferImportError::Vulkan {
-                    step: "vkCreateSamplerYcbcrConversion",
-                    err,
-                })?
+
+        let format = if queried_format != vk::Format::UNDEFINED {
+            queried_format
+        } else if external_format == 0 {
+            vk_format_from_ahb(desc.format).ok_or_else(|| {
+                HardwareBufferImportError::Unsupported(format!(
+                    "Unsupported RGBA AHardwareBuffer format {}",
+                    desc.format
+                ))
+            })?
+        } else {
+            vk::Format::UNDEFINED
+        };
+        let uses_external_format = format == vk::Format::UNDEFINED;
+
+        let conversion = if !uses_external_format {
+            None
+        } else {
+            let mut conversion_external_format =
+                vk::ExternalFormatANDROID::default().external_format(external_format);
+            let conversion_info = vk::SamplerYcbcrConversionCreateInfo::default()
+                .push_next(&mut conversion_external_format)
+                .format(format)
+                .ycbcr_model(ycbcr_model)
+                .ycbcr_range(ycbcr_range)
+                .components(ycbcr_components)
+                .x_chroma_offset(x_chroma_offset)
+                .y_chroma_offset(y_chroma_offset)
+                .chroma_filter(vk::Filter::LINEAR)
+                .force_explicit_reconstruction(false);
+            Some(unsafe {
+                raw_device
+                    .create_sampler_ycbcr_conversion(&conversion_info, None)
+                    .map_err(|err| HardwareBufferImportError::Vulkan {
+                        step: "vkCreateSamplerYcbcrConversion",
+                        err,
+                    })?
+            })
         };
 
-        let mut sampler_conversion =
-            vk::SamplerYcbcrConversionInfo::default().conversion(conversion);
         let sampler_info = vk::SamplerCreateInfo::default()
-            .push_next(&mut sampler_conversion)
             .mag_filter(vk::Filter::LINEAR)
             .min_filter(vk::Filter::LINEAR)
             .mipmap_mode(vk::SamplerMipmapMode::NEAREST)
@@ -210,27 +231,32 @@ impl HardwareBufferRef {
             .min_lod(0.0)
             .max_lod(0.0);
         let sampler = unsafe {
-            raw_device
-                .create_sampler(&sampler_info, None)
-                .inspect_err(|_| raw_device.destroy_sampler_ycbcr_conversion(conversion, None))
-                .map_err(|err| HardwareBufferImportError::Vulkan {
-                    step: "vkCreateSampler",
-                    err,
-                })?
+            if let Some(conversion) = conversion {
+                let mut sampler_conversion =
+                    vk::SamplerYcbcrConversionInfo::default().conversion(conversion);
+                raw_device.create_sampler(&sampler_info.push_next(&mut sampler_conversion), None)
+            } else {
+                raw_device.create_sampler(&sampler_info, None)
+            }
+            .inspect_err(|_| {
+                if let Some(conversion) = conversion {
+                    raw_device.destroy_sampler_ycbcr_conversion(conversion, None);
+                }
+            })
+            .map_err(|err| HardwareBufferImportError::Vulkan {
+                step: "vkCreateSampler",
+                err,
+            })?
         };
 
-        let mut image_external_format =
-            vk::ExternalFormatANDROID::default().external_format(external_format);
         let mut external_image = vk::ExternalMemoryImageCreateInfo::default()
             .handle_types(vk::ExternalMemoryHandleTypeFlags::ANDROID_HARDWARE_BUFFER_ANDROID);
         let image_info = vk::ImageCreateInfo::default()
-            .push_next(&mut image_external_format)
-            .push_next(&mut external_image)
             .image_type(vk::ImageType::TYPE_2D)
-            .format(vk::Format::UNDEFINED)
+            .format(format)
             .extent(vk::Extent3D {
-                width: width.max(1),
-                height: height.max(1),
+                width: desc.width.max(1),
+                height: desc.height.max(1),
                 depth: 1,
             })
             .mip_levels(1)
@@ -241,11 +267,24 @@ impl HardwareBufferRef {
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
             .initial_layout(vk::ImageLayout::UNDEFINED);
         let image = unsafe {
-            raw_device
-                .create_image(&image_info, None)
+            let result = if !uses_external_format {
+                raw_device.create_image(&image_info.push_next(&mut external_image), None)
+            } else {
+                let mut image_external_format =
+                    vk::ExternalFormatANDROID::default().external_format(external_format);
+                raw_device.create_image(
+                    &image_info
+                        .push_next(&mut image_external_format)
+                        .push_next(&mut external_image),
+                    None,
+                )
+            };
+            result
                 .inspect_err(|_| {
                     raw_device.destroy_sampler(sampler, None);
-                    raw_device.destroy_sampler_ycbcr_conversion(conversion, None);
+                    if let Some(conversion) = conversion {
+                        raw_device.destroy_sampler_ycbcr_conversion(conversion, None);
+                    }
                 })
                 .map_err(|err| HardwareBufferImportError::Vulkan {
                     step: "vkCreateImage",
@@ -253,19 +292,22 @@ impl HardwareBufferRef {
                 })?
         };
 
-        let memory_requirements = unsafe { raw_device.get_image_memory_requirements(image) };
+        let destroy_image_resources = || unsafe {
+            raw_device.destroy_image(image, None);
+            raw_device.destroy_sampler(sampler, None);
+            if let Some(conversion) = conversion {
+                raw_device.destroy_sampler_ycbcr_conversion(conversion, None);
+            }
+        };
+
         let memory_type_index = find_memory_type_index(
             hal_device.shared_instance().raw_instance(),
             hal_device.raw_physical_device(),
-            memory_type_bits & memory_requirements.memory_type_bits,
+            memory_type_bits,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         )
         .ok_or_else(|| {
-            unsafe {
-                raw_device.destroy_image(image, None);
-                raw_device.destroy_sampler(sampler, None);
-                raw_device.destroy_sampler_ycbcr_conversion(conversion, None);
-            }
+            destroy_image_resources();
             HardwareBufferImportError::NoMemoryType
         })?;
 
@@ -275,16 +317,12 @@ impl HardwareBufferRef {
         let allocation_info = vk::MemoryAllocateInfo::default()
             .push_next(&mut dedicated)
             .push_next(&mut import)
-            .allocation_size(allocation_size.max(memory_requirements.size))
+            .allocation_size(allocation_size)
             .memory_type_index(memory_type_index);
         let memory = unsafe {
             raw_device
                 .allocate_memory(&allocation_info, None)
-                .inspect_err(|_| {
-                    raw_device.destroy_image(image, None);
-                    raw_device.destroy_sampler(sampler, None);
-                    raw_device.destroy_sampler_ycbcr_conversion(conversion, None);
-                })
+                .inspect_err(|_| destroy_image_resources())
                 .map_err(|err| HardwareBufferImportError::Vulkan {
                     step: "vkAllocateMemory",
                     err,
@@ -296,9 +334,7 @@ impl HardwareBufferRef {
                 .bind_image_memory(image, memory, 0)
                 .inspect_err(|_| {
                     raw_device.free_memory(memory, None);
-                    raw_device.destroy_image(image, None);
-                    raw_device.destroy_sampler(sampler, None);
-                    raw_device.destroy_sampler_ycbcr_conversion(conversion, None);
+                    destroy_image_resources();
                 })
                 .map_err(|err| HardwareBufferImportError::Vulkan {
                     step: "vkBindImageMemory",
@@ -306,12 +342,10 @@ impl HardwareBufferRef {
                 })?;
         }
 
-        let mut view_conversion = vk::SamplerYcbcrConversionInfo::default().conversion(conversion);
         let view_info = vk::ImageViewCreateInfo::default()
-            .push_next(&mut view_conversion)
             .image(image)
             .view_type(vk::ImageViewType::TYPE_2D)
-            .format(vk::Format::UNDEFINED)
+            .format(format)
             .subresource_range(
                 vk::ImageSubresourceRange::default()
                     .aspect_mask(vk::ImageAspectFlags::COLOR)
@@ -321,13 +355,17 @@ impl HardwareBufferRef {
                     .layer_count(1),
             );
         let image_view = unsafe {
-            raw_device
-                .create_image_view(&view_info, None)
+            let result = if let Some(conversion) = conversion {
+                let mut view_conversion =
+                    vk::SamplerYcbcrConversionInfo::default().conversion(conversion);
+                raw_device.create_image_view(&view_info.push_next(&mut view_conversion), None)
+            } else {
+                raw_device.create_image_view(&view_info, None)
+            };
+            result
                 .inspect_err(|_| {
                     raw_device.free_memory(memory, None);
-                    raw_device.destroy_image(image, None);
-                    raw_device.destroy_sampler(sampler, None);
-                    raw_device.destroy_sampler_ycbcr_conversion(conversion, None);
+                    destroy_image_resources();
                 })
                 .map_err(|err| HardwareBufferImportError::Vulkan {
                     step: "vkCreateImageView",
@@ -341,6 +379,7 @@ impl HardwareBufferRef {
 
         Ok(ExternalHardwareBufferTexture {
             raw_device,
+            queue_family_index: hal_device.queue_family_index(),
             image,
             memory,
             image_view,
@@ -356,60 +395,21 @@ impl HardwareBufferRef {
             x_chroma_offset,
             y_chroma_offset,
             source_image_ready: false,
+            render_target_image: None,
+            target_image_layout: vk::ImageLayout::UNDEFINED,
             render_resources: None,
         })
-    }
-
-    fn lock_yuv(&self, width: u32, height: u32) -> Result<YuvBuffer, String> {
-        let rect = ARect {
-            left: 0,
-            top: 0,
-            right: width as i32,
-            bottom: height as i32,
-        };
-        let mut planes: AHardwareBuffer_Planes = unsafe { std::mem::zeroed() };
-        let usage = AHardwareBuffer_UsageFlags::AHARDWAREBUFFER_USAGE_CPU_READ_RARELY.0 as u64;
-        let result =
-            unsafe { AHardwareBuffer_lockPlanes(self.ptr.as_ptr(), usage, -1, &rect, &mut planes) };
-        if result != 0 {
-            return Err(format!(
-                "AHardwareBuffer_lockPlanes failed with status {result}"
-            ));
-        }
-
-        let yuv = (|| {
-            if planes.planeCount < 3 {
-                return Err(format!(
-                    "Expected at least 3 YUV planes, got {}",
-                    planes.planeCount
-                ));
-            }
-            let pixels_y = copy_plane(&planes.planes[0], width, height)?;
-            let pixels_u = copy_chroma_plane(&planes.planes[1], width, height)?;
-            let pixels_v = copy_chroma_plane(&planes.planes[2], width, height)?;
-            Ok(YuvBuffer {
-                pixels_y,
-                pixels_u,
-                pixels_v,
-                width,
-                height,
-            })
-        })();
-
-        unsafe {
-            AHardwareBuffer_unlock(self.ptr.as_ptr(), std::ptr::null_mut());
-        }
-        yuv
     }
 }
 
 struct ExternalHardwareBufferTexture {
     raw_device: ash::Device,
+    queue_family_index: u32,
     image: vk::Image,
     memory: vk::DeviceMemory,
     image_view: vk::ImageView,
     sampler: vk::Sampler,
-    conversion: vk::SamplerYcbcrConversion,
+    conversion: Option<vk::SamplerYcbcrConversion>,
     hardware_buffer: usize,
     external_format: u64,
     data_space: i32,
@@ -420,6 +420,8 @@ struct ExternalHardwareBufferTexture {
     x_chroma_offset: vk::ChromaLocation,
     y_chroma_offset: vk::ChromaLocation,
     source_image_ready: bool,
+    render_target_image: Option<vk::Image>,
+    target_image_layout: vk::ImageLayout,
     render_resources: Option<ExternalRenderResources>,
 }
 
@@ -446,14 +448,14 @@ impl ExternalHardwareBufferTexture {
     ) -> Result<(), HardwareBufferImportError> {
         let target_texture = target.texture.as_ref().ok_or_else(|| {
             HardwareBufferImportError::Unsupported(
-                "External YCbCr render needs a texture-backed RenderTexture".to_string(),
+                "Hardware-buffer render needs a texture-backed RenderTexture".to_string(),
             )
         })?;
         let target_view = {
             let Some(target_view) = (unsafe { target.view.as_hal::<wgpu_hal::api::Vulkan>() })
             else {
                 return Err(HardwareBufferImportError::Unsupported(
-                    "External YCbCr render target is not a Vulkan texture view".to_string(),
+                    "Hardware-buffer render target is not a Vulkan texture view".to_string(),
                 ));
             };
             unsafe { target_view.raw_handle() }
@@ -463,20 +465,25 @@ impl ExternalHardwareBufferTexture {
                 (unsafe { target_texture.as_hal::<wgpu_hal::api::Vulkan>() })
             else {
                 return Err(HardwareBufferImportError::Unsupported(
-                    "External YCbCr render target is not a Vulkan texture".to_string(),
+                    "Hardware-buffer render target is not a Vulkan texture".to_string(),
                 ));
             };
             unsafe { target_texture.raw_handle() }
         };
+        if self.render_target_image != Some(target_image) {
+            self.render_target_image = Some(target_image);
+            self.target_image_layout = vk::ImageLayout::UNDEFINED;
+            self.render_resources = None;
+        }
         let target_format = vk_format_from_wgpu(output_format).ok_or_else(|| {
             HardwareBufferImportError::Unsupported(format!(
-                "Unsupported external YCbCr output format {output_format:?}"
+                "Unsupported hardware-buffer output format {output_format:?}"
             ))
         })?;
         let Some(hal_device) = (unsafe { context.device().as_hal::<wgpu_hal::api::Vulkan>() })
         else {
             return Err(HardwareBufferImportError::Unsupported(
-                "External YCbCr render device is not Vulkan".to_string(),
+                "Hardware-buffer render device is not Vulkan".to_string(),
             ));
         };
 
@@ -495,26 +502,23 @@ impl ExternalHardwareBufferTexture {
             )?);
         }
         let resources = self.render_resources.as_ref().unwrap();
-        let transition_source_image = !self.source_image_ready;
 
         let mut encoder =
             context
                 .device()
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("External YCbCr render encoder"),
+                    label: Some("Hardware-buffer render encoder"),
                 });
         let command_result = unsafe {
             encoder.as_hal_mut::<wgpu_hal::api::Vulkan, _, _>(|hal_encoder| {
                 let Some(hal_encoder) = hal_encoder else {
                     return Err(HardwareBufferImportError::Unsupported(
-                        "External YCbCr render command encoder is not Vulkan".to_string(),
+                        "Hardware-buffer render command encoder is not Vulkan".to_string(),
                     ));
                 };
                 let command_buffer = hal_encoder.raw_handle();
                 self.record_target_to_color_barrier(command_buffer, target_image);
-                if transition_source_image {
-                    self.record_image_ready_barrier(command_buffer);
-                }
+                self.record_image_ready_barrier(command_buffer);
                 resources.record_draw(
                     &self.raw_device,
                     command_buffer,
@@ -526,19 +530,26 @@ impl ExternalHardwareBufferTexture {
             })
         };
         command_result?;
-        if transition_source_image {
-            self.source_image_ready = true;
-        }
+
+        self.source_image_ready = true;
+        self.target_image_layout = vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL;
+
         context.queue().submit(std::iter::once(encoder.finish()));
         Ok(())
     }
 
     unsafe fn record_image_ready_barrier(&self, command_buffer: vk::CommandBuffer) {
+        if self.source_image_ready {
+            return;
+        }
+
         let barrier = vk::ImageMemoryBarrier::default()
             .src_access_mask(vk::AccessFlags::empty())
             .dst_access_mask(vk::AccessFlags::SHADER_READ)
-            .old_layout(vk::ImageLayout::UNDEFINED)
+            .old_layout(vk::ImageLayout::GENERAL)
             .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .src_queue_family_index(vk::QUEUE_FAMILY_FOREIGN_EXT)
+            .dst_queue_family_index(self.queue_family_index)
             .image(self.image)
             .subresource_range(
                 vk::ImageSubresourceRange::default()
@@ -566,10 +577,24 @@ impl ExternalHardwareBufferTexture {
         command_buffer: vk::CommandBuffer,
         target_image: vk::Image,
     ) {
+        let (src_stage, src_access_mask, old_layout) =
+            if self.target_image_layout == vk::ImageLayout::UNDEFINED {
+                (
+                    vk::PipelineStageFlags::TOP_OF_PIPE,
+                    vk::AccessFlags::empty(),
+                    vk::ImageLayout::UNDEFINED,
+                )
+            } else {
+                (
+                    vk::PipelineStageFlags::FRAGMENT_SHADER,
+                    vk::AccessFlags::SHADER_READ,
+                    vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                )
+            };
         let barrier = vk::ImageMemoryBarrier::default()
-            .src_access_mask(vk::AccessFlags::SHADER_READ)
+            .src_access_mask(src_access_mask)
             .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
-            .old_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .old_layout(old_layout)
             .new_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .image(target_image)
             .subresource_range(
@@ -583,7 +608,7 @@ impl ExternalHardwareBufferTexture {
         unsafe {
             self.raw_device.cmd_pipeline_barrier(
                 command_buffer,
-                vk::PipelineStageFlags::FRAGMENT_SHADER,
+                src_stage,
                 vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
                 vk::DependencyFlags::empty(),
                 &[],
@@ -632,8 +657,10 @@ impl Drop for ExternalHardwareBufferTexture {
             drop(self.render_resources.take());
             self.raw_device.destroy_image_view(self.image_view, None);
             self.raw_device.destroy_sampler(self.sampler, None);
-            self.raw_device
-                .destroy_sampler_ycbcr_conversion(self.conversion, None);
+            if let Some(conversion) = self.conversion {
+                self.raw_device
+                    .destroy_sampler_ycbcr_conversion(conversion, None);
+            }
             self.raw_device.free_memory(self.memory, None);
             self.raw_device.destroy_image(self.image, None);
             AHardwareBuffer_release(self.hardware_buffer as *mut AHardwareBuffer);
@@ -1034,47 +1061,27 @@ impl Drop for HardwareBufferRef {
     }
 }
 
-pub struct CameraTextureNode {
-    hardware_frame_receiver: Receiver<HardwareBufferFrame>,
-    manual_frame_receiver: Receiver<YuvBuffer>,
-    upload: UploadYuvBuffer,
+pub struct HardwareBufferTextureNode {
+    hardware_frame_receiver: Receiver<MediaFrame>,
+    targets: ColorDepthTargets,
+    output_size: [u32; 2],
     frame_count: u64,
-    backend: CameraTextureBackend,
+    renderer: HardwareBufferRenderer,
+    rgba_renderer: UploadRgbBuffer,
+    use_rgba: bool,
 }
 
-impl CameraTextureNode {
-    pub fn new(
-        context: &RenderContext,
-        hardware_frame_receiver: Receiver<HardwareBufferFrame>,
-        manual_frame_receiver: Receiver<YuvBuffer>,
-    ) -> Self {
-        let mut upload = UploadYuvBuffer::new(context);
-        upload.set_format(YuvFormat::YCbCr);
+impl HardwareBufferTextureNode {
+    pub fn new(context: &RenderContext, hardware_frame_receiver: Receiver<MediaFrame>) -> Self {
         Self {
             hardware_frame_receiver,
-            manual_frame_receiver,
-            upload,
+            targets: ColorDepthTargets::new(context.device(), "HardwareBufferTextureNode"),
+            output_size: [1, 1],
             frame_count: 0,
-            backend: CameraTextureBackend::probing(),
+            renderer: HardwareBufferRenderer::new(),
+            rgba_renderer: UploadRgbBuffer::new(context),
+            use_rgba: false,
         }
-    }
-
-    fn receive_latest_manual_frame(&mut self) -> bool {
-        let mut latest = None;
-        while let Ok(frame) = self.manual_frame_receiver.try_recv() {
-            latest = Some(frame);
-        }
-
-        let Some(frame) = latest else {
-            return false;
-        };
-
-        debug!(
-            "Uploading manual {}x{}px frame...",
-            frame.width, frame.height
-        );
-        self.upload.upload_buffer(frame);
-        true
     }
 
     fn receive_latest_frame(&mut self) -> bool {
@@ -1087,6 +1094,21 @@ impl CameraTextureNode {
             return false;
         };
 
+        if let MediaFrame::Rgba(buffer) = frame {
+            warn!(
+                "RGBA image upload path is active ({}x{})",
+                buffer.width, buffer.height
+            );
+            self.output_size = [buffer.width.max(1), buffer.height.max(1)];
+            self.rgba_renderer.upload_buffer(&buffer);
+            self.use_rgba = true;
+            return true;
+        }
+        let MediaFrame::Hardware(frame) = frame else {
+            unreachable!()
+        };
+        self.use_rgba = false;
+
         self.frame_count += 1;
         if self.frame_count == 1 || self.frame_count.is_multiple_of(120) {
             let desc = frame.buffer.describe();
@@ -1096,13 +1118,15 @@ impl CameraTextureNode {
             );
         }
 
-        self.backend.queue_frame(frame, &mut self.upload)
+        self.output_size = [frame.width.max(1), frame.height.max(1)];
+        self.renderer.queue_frame(frame);
+        true
     }
 }
 
-impl Node for CameraTextureNode {
+impl Node for HardwareBufferTextureNode {
     fn name(&self) -> &'static str {
-        "CameraTextureNode"
+        "HardwareBufferTextureNode"
     }
 
     fn negociate_slots(
@@ -1111,148 +1135,68 @@ impl Node for CameraTextureNode {
         slots: NodeSlots,
         original_image: &mut Option<Texture>,
     ) -> NodeSlots {
-        Node::negociate_slots(&mut self.upload, context, slots, original_image)
+        if self.use_rgba {
+            return self
+                .rgba_renderer
+                .negociate_slots(context, slots, original_image);
+        }
+        let slots = slots.emplace_color_depth_output(
+            context,
+            self.output_size[0],
+            self.output_size[1],
+            "HardwareBufferTextureNode",
+        );
+        self.targets = slots.as_color_depth_targets();
+
+        let (color_out, _) = slots.as_color_depth_target();
+        original_image.replace(color_out.as_texture());
+
+        slots
     }
 
     fn input(&mut self, eye: &EyeInput, _mouse: &MouseInput) -> (EyeInput, NodeChanges) {
-        let hardware_changes = self.receive_latest_frame();
-        let manual_changes = self.receive_latest_manual_frame();
-        let mut changes = if hardware_changes || manual_changes {
+        let changes = if self.receive_latest_frame() {
             NodeChanges::OUTPUT
         } else {
             NodeChanges::empty()
         };
-        let (eye, input_changes) = Node::input(&mut self.upload, eye, _mouse);
-        changes |= input_changes;
-        (eye, changes.normalized())
+        (eye.clone(), changes.normalized())
     }
 
     fn render(
         &mut self,
         context: &RenderContext,
-        encoder: &mut wgpu::CommandEncoder,
+        _encoder: &mut wgpu::CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
-        if self.backend.render(context, &mut self.upload) {
+        if self.use_rgba {
+            self.rgba_renderer.render(context, _encoder, screen);
             return;
         }
-        Node::render(&mut self.upload, context, encoder, screen);
-    }
-
-    fn post_render(&mut self, context: &RenderContext) {
-        Node::post_render(&mut self.upload, context);
-    }
-}
-
-enum CameraTextureBackend {
-    Probing {
-        zero_copy: ZeroCopyCamera,
-        cpu_copy: CpuCopyCamera,
-    },
-    ZeroCopy(ZeroCopyCamera),
-    CpuCopy(CpuCopyCamera),
-}
-
-impl CameraTextureBackend {
-    fn probing() -> Self {
-        Self::Probing {
-            zero_copy: ZeroCopyCamera::new(),
-            cpu_copy: CpuCopyCamera::new(),
-        }
-    }
-
-    fn queue_frame(&mut self, frame: HardwareBufferFrame, upload: &mut UploadYuvBuffer) -> bool {
-        match self {
-            CameraTextureBackend::Probing { zero_copy, .. } => {
-                upload.set_output_size(frame.width, frame.height);
-                zero_copy.queue_frame(frame);
-                true
+        let target = screen.unwrap_or(&self.targets.rt_color);
+        match self
+            .renderer
+            .render(context, target, context.output_format())
+        {
+            ZeroCopyRender::Rendered | ZeroCopyRender::NoFrame => {}
+            ZeroCopyRender::FrameImportFailed(err) => {
+                warn!("Hardware-buffer zero-copy frame import failed: {err}");
             }
-            CameraTextureBackend::ZeroCopy(zero_copy) => {
-                upload.set_output_size(frame.width, frame.height);
-                zero_copy.queue_frame(frame);
-                true
-            }
-            CameraTextureBackend::CpuCopy(cpu_copy) => cpu_copy.upload_frame(frame, upload),
-        }
-    }
-
-    fn render(&mut self, context: &RenderContext, upload: &mut UploadYuvBuffer) -> bool {
-        let backend = std::mem::replace(self, CameraTextureBackend::probing());
-        match backend {
-            CameraTextureBackend::Probing {
-                mut zero_copy,
-                mut cpu_copy,
-            } => match zero_copy.render(context, upload) {
-                ZeroCopyRender::Rendered => {
-                    *self = CameraTextureBackend::ZeroCopy(zero_copy);
-                    true
-                }
-                ZeroCopyRender::FrameImportFailed { frame, err } => {
-                    warn!("Hardware-buffer zero-copy unavailable, switching to CPU copy: {err}");
-                    cpu_copy.upload_frame(frame, upload);
-                    *self = CameraTextureBackend::CpuCopy(cpu_copy);
-                    false
-                }
-                ZeroCopyRender::RenderFailed(err) => {
-                    warn!(
-                        "Hardware-buffer zero-copy render unavailable, switching to CPU copy: {err}"
-                    );
-                    *self = CameraTextureBackend::CpuCopy(cpu_copy);
-                    false
-                }
-                ZeroCopyRender::NoFrame => {
-                    *self = CameraTextureBackend::Probing {
-                        zero_copy,
-                        cpu_copy,
-                    };
-                    false
-                }
-            },
-            CameraTextureBackend::ZeroCopy(mut zero_copy) => {
-                match zero_copy.render(context, upload) {
-                    ZeroCopyRender::Rendered => {
-                        *self = CameraTextureBackend::ZeroCopy(zero_copy);
-                        true
-                    }
-                    ZeroCopyRender::FrameImportFailed { frame, err } => {
-                        warn!(
-                            "Hardware-buffer zero-copy unavailable, switching to CPU copy: {err}"
-                        );
-                        let mut cpu_copy = CpuCopyCamera::new();
-                        cpu_copy.upload_frame(frame, upload);
-                        *self = CameraTextureBackend::CpuCopy(cpu_copy);
-                        false
-                    }
-                    ZeroCopyRender::RenderFailed(err) => {
-                        warn!(
-                            "Hardware-buffer zero-copy render unavailable, switching to CPU copy: {err}"
-                        );
-                        *self = CameraTextureBackend::CpuCopy(CpuCopyCamera::new());
-                        false
-                    }
-                    ZeroCopyRender::NoFrame => {
-                        *self = CameraTextureBackend::ZeroCopy(zero_copy);
-                        false
-                    }
-                }
-            }
-            CameraTextureBackend::CpuCopy(cpu_copy) => {
-                *self = CameraTextureBackend::CpuCopy(cpu_copy);
-                false
+            ZeroCopyRender::RenderFailed(err) => {
+                warn!("Hardware-buffer zero-copy render failed: {err}");
             }
         }
     }
 }
 
-struct ZeroCopyCamera {
+struct HardwareBufferRenderer {
     pending_frame: Option<HardwareBufferFrame>,
     current_texture: Option<ExternalHardwareBufferTexture>,
     retired_textures: VecDeque<ExternalHardwareBufferTexture>,
     logged_active: bool,
 }
 
-impl ZeroCopyCamera {
+impl HardwareBufferRenderer {
     fn new() -> Self {
         Self {
             pending_frame: None,
@@ -1266,19 +1210,22 @@ impl ZeroCopyCamera {
         self.pending_frame = Some(frame);
     }
 
-    fn render(&mut self, context: &RenderContext, upload: &UploadYuvBuffer) -> ZeroCopyRender {
+    fn render(
+        &mut self,
+        context: &RenderContext,
+        target: &RenderTexture,
+        output_format: wgpu::TextureFormat,
+    ) -> ZeroCopyRender {
         if let Some(frame) = self.pending_frame.take() {
-            match frame.buffer.import_external_ycbcr(
+            match frame.buffer.import_hardware_buffer(
                 context,
-                frame.width.max(1),
-                frame.height.max(1),
                 frame.data_space,
                 frame.rotation_degrees,
             ) {
                 Ok(texture) => {
                     if !self.logged_active {
                         warn!(
-                            "Camera hardware-buffer zero-copy path is active ({})",
+                            "HardwareBuffer zero-copy path is active ({})",
                             texture.conversion_metadata()
                         );
                         self.logged_active = true;
@@ -1295,7 +1242,7 @@ impl ZeroCopyCamera {
                         "Hardware-buffer zero-copy frame import failed, reusing previous external frame: {err}"
                     );
                 }
-                Err(err) => return ZeroCopyRender::FrameImportFailed { frame, err },
+                Err(err) => return ZeroCopyRender::FrameImportFailed(err),
             }
         }
 
@@ -1303,8 +1250,7 @@ impl ZeroCopyCamera {
             return ZeroCopyRender::NoFrame;
         };
 
-        let target = upload.color_target();
-        match texture.render_to(context, &target, context.output_format()) {
+        match texture.render_to(context, target, output_format) {
             Ok(()) => ZeroCopyRender::Rendered,
             Err(err) => ZeroCopyRender::RenderFailed(err),
         }
@@ -1314,89 +1260,8 @@ impl ZeroCopyCamera {
 enum ZeroCopyRender {
     Rendered,
     NoFrame,
-    FrameImportFailed {
-        frame: HardwareBufferFrame,
-        err: HardwareBufferImportError,
-    },
+    FrameImportFailed(HardwareBufferImportError),
     RenderFailed(HardwareBufferImportError),
-}
-
-struct CpuCopyCamera {
-    logged_active: bool,
-}
-
-impl CpuCopyCamera {
-    fn new() -> Self {
-        Self {
-            logged_active: false,
-        }
-    }
-
-    fn upload_frame(&mut self, frame: HardwareBufferFrame, upload: &mut UploadYuvBuffer) -> bool {
-        match frame
-            .buffer
-            .lock_yuv(frame.width.max(1), frame.height.max(1))
-        {
-            Ok(buffer) => {
-                if !self.logged_active {
-                    warn!("Camera hardware-buffer CPU copy path is active");
-                    self.logged_active = true;
-                }
-                upload.upload_buffer(buffer);
-                true
-            }
-            Err(err) => {
-                warn!("Hardware-buffer CPU copy failed: {err}");
-                false
-            }
-        }
-    }
-}
-
-fn copy_plane(plane: &AHardwareBuffer_Plane, width: u32, height: u32) -> Result<Box<[u8]>, String> {
-    let data = plane_data(plane)?;
-    let width = width as usize;
-    let height = height as usize;
-    let row_stride = plane.rowStride as usize;
-    let pixel_stride = plane.pixelStride.max(1) as usize;
-    let mut pixels = vec![0; width * height];
-
-    for row in 0..height {
-        let row_base = row * row_stride;
-        for col in 0..width {
-            pixels[row * width + col] = unsafe { *data.add(row_base + col * pixel_stride) };
-        }
-    }
-
-    Ok(pixels.into_boxed_slice())
-}
-
-fn copy_chroma_plane(
-    plane: &AHardwareBuffer_Plane,
-    width: u32,
-    height: u32,
-) -> Result<Box<[u8]>, String> {
-    let data = plane_data(plane)?;
-    let width = width as usize;
-    let height = (height / 2) as usize;
-    let row_stride = plane.rowStride as usize;
-    let pixel_stride = plane.pixelStride.max(1) as usize;
-    let mut pixels = vec![0; width * height / 2];
-
-    for row in 0..height {
-        let row_base = row * row_stride;
-        for col in 0..(width / 2) {
-            pixels[row * (width / 2) + col] = unsafe { *data.add(row_base + col * pixel_stride) };
-        }
-    }
-
-    Ok(pixels.into_boxed_slice())
-}
-
-fn plane_data(plane: &AHardwareBuffer_Plane) -> Result<*const u8, String> {
-    NonNull::new(plane.data as *mut u8)
-        .map(|ptr| ptr.as_ptr() as *const u8)
-        .ok_or_else(|| "AHardwareBuffer plane data was null".to_string())
 }
 
 fn vk_format_from_wgpu(format: wgpu::TextureFormat) -> Option<vk::Format> {
@@ -1405,6 +1270,18 @@ fn vk_format_from_wgpu(format: wgpu::TextureFormat) -> Option<vk::Format> {
         wgpu::TextureFormat::Rgba8UnormSrgb => Some(vk::Format::R8G8B8A8_SRGB),
         wgpu::TextureFormat::Bgra8Unorm => Some(vk::Format::B8G8R8A8_UNORM),
         wgpu::TextureFormat::Bgra8UnormSrgb => Some(vk::Format::B8G8R8A8_SRGB),
+        _ => None,
+    }
+}
+
+fn vk_format_from_ahb(format: u32) -> Option<vk::Format> {
+    match format {
+        1 => Some(vk::Format::R8G8B8A8_UNORM),
+        2 => Some(vk::Format::R8G8B8A8_UNORM),
+        3 => Some(vk::Format::R8G8B8_UNORM),
+        4 => Some(vk::Format::R5G6B5_UNORM_PACK16),
+        22 => Some(vk::Format::R16G16B16A16_SFLOAT),
+        43 => Some(vk::Format::A2B10G10R10_UNORM_PACK32),
         _ => None,
     }
 }
@@ -1514,7 +1391,7 @@ fn create_wgsl_shader_module(
 ) -> Result<vk::ShaderModule, HardwareBufferImportError> {
     let spirv = compile_wgsl_to_spirv(source, entry_point).map_err(|err| {
         HardwareBufferImportError::Unsupported(format!(
-            "Cannot compile external YCbCr shader: {err}"
+            "Cannot compile hardware-buffer shader: {err}"
         ))
     })?;
     let shader_info = vk::ShaderModuleCreateInfo::default().code(&spirv);
@@ -1621,10 +1498,10 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOut {
 //
 // GLSL source:
 // #version 450
-// layout(set = 0, binding = 0) uniform sampler2D camera_texture;
+// layout(set = 0, binding = 0) uniform sampler2D hardware_buffer_texture;
 // layout(location = 0) in vec2 uv;
 // layout(location = 0) out vec4 out_color;
-// void main() { out_color = texture(camera_texture, uv); }
+// void main() { out_color = texture(hardware_buffer_texture, uv); }
 const EXTERNAL_FRAGMENT_SHADER_SPIRV: &[u32] = &[
     0x07230203, 0x00010000, 0x00000000, 0x00000013, 0x00000000, 0x00020011, 0x00000001, 0x0003000e,
     0x00000000, 0x00000001, 0x0007000f, 0x00000004, 0x00000001, 0x6e69616d, 0x00000000, 0x0000000c,

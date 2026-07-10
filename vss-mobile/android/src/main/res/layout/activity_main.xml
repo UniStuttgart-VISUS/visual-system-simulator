@@ -52,4 +52,18 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:srcCompat="@android:drawable/ic_media_play" />
 
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/gallery_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="16dp"
+        android:clickable="true"
+        android:contentDescription="@string/open_media"
+        android:focusable="true"
+        android:onClick="openMediaClicked"
+        app:layout_constraintBottom_toBottomOf="@id/start_button"
+        app:layout_constraintEnd_toStartOf="@id/start_button"
+        app:layout_constraintTop_toTopOf="@id/start_button"
+        app:srcCompat="@android:drawable/ic_menu_gallery" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>

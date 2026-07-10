@@ -31,8 +31,6 @@ public class SimulatorBridge {
 
     private static native void nativeDraw();
 
-    private static native void nativePostFrame(int width, int height, byte[] y, byte[] u, byte[] v);
-
     private static native void nativePostHardwareBuffer(
             int width,
             int height,
@@ -40,6 +38,8 @@ public class SimulatorBridge {
             int rotationDegrees,
             HardwareBuffer hardwareBuffer
     );
+
+    private static native void nativePostRgba(int width, int height, java.nio.ByteBuffer pixels);
 
     private static native void nativePostSettings(String jsonString);
 
@@ -73,11 +73,6 @@ public class SimulatorBridge {
         nativeDraw();
     }
 
-    public static void postFrame(int width, int height, byte[] y, byte[] u, byte[] v) {
-        assert LIBRARY_LOADED : "Native library not loaded";
-        nativePostFrame(width, height, y, u, v);
-    }
-
     public static void postHardwareBuffer(
             int width,
             int height,
@@ -87,6 +82,11 @@ public class SimulatorBridge {
     ) {
         assert LIBRARY_LOADED : "Native library not loaded";
         nativePostHardwareBuffer(width, height, dataSpace, rotationDegrees, hardwareBuffer);
+    }
+
+    public static void postRgba(int width, int height, java.nio.ByteBuffer pixels) {
+        assert LIBRARY_LOADED : "Native library not loaded";
+        nativePostRgba(width, height, pixels);
     }
 
     public static void postSettings(String jsonString) {

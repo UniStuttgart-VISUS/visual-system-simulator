@@ -1,9 +1,9 @@
 #![allow(non_snake_case)]
 #![cfg(target_os = "android")]
 
-mod camera_texture;
+mod hardware_buffer_texture;
 
-use std::ffi::{CString, c_void};
+use std::ffi::{c_void, CString};
 use std::io::{Cursor, Read};
 use std::panic;
 use std::ptr::NonNull;
@@ -12,7 +12,7 @@ use std::sync::{Mutex, MutexGuard};
 
 use log::*;
 
-use jni::objects::{JByteArray, JClass, JObject, JString};
+use jni::objects::{JByteBuffer, JClass, JObject, JString};
 use jni::sys::jint;
 use jni::{EnvUnowned, Outcome};
 
@@ -24,7 +24,7 @@ use raw_window_handle::*;
 
 use vss::*;
 
-use camera_texture::{CameraTextureNode, HardwareBufferFrame};
+use hardware_buffer_texture::{HardwareBufferFrame, HardwareBufferTextureNode, MediaFrame};
 
 struct AndroidHandle(RawWindowHandle);
 
@@ -47,8 +47,7 @@ impl HasDisplayHandle for AndroidHandle {
 
 struct Bridge {
     pub surface: Surface<'static>,
-    pub hardware_buffer_sender: SyncSender<HardwareBufferFrame>,
-    pub manual_frame_sender: SyncSender<YuvBuffer>,
+    pub hardware_buffer_sender: SyncSender<MediaFrame>,
     pub current_size: [i32; 2],
     pub new_size: [i32; 2],
 }
@@ -148,25 +147,19 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate<'loca
     let size = [window.width() as u32, window.height() as u32];
     let mut surface = vss::Surface::new(size, handle, 1);
 
-    let (hardware_tx, hardware_rx) = mpsc::sync_channel(2);
-    let (manual_tx, manual_rx) = mpsc::sync_channel(2);
-    build_flow(&mut surface, hardware_rx, manual_rx);
+    let (hardware_tx, hardware_rx) = mpsc::sync_channel::<MediaFrame>(2);
+    build_flow(&mut surface, hardware_rx);
 
     *guard = Some(Bridge {
         surface,
         hardware_buffer_sender: hardware_tx,
-        manual_frame_sender: manual_tx,
         current_size: [1, 1],
         new_size: [1, 1],
     });
 }
 
-fn build_flow(
-    surface: &mut Surface,
-    hardware_buffer_receiver: Receiver<HardwareBufferFrame>,
-    manual_frame_receiver: Receiver<YuvBuffer>,
-) {
-    let node = CameraTextureNode::new(surface, hardware_buffer_receiver, manual_frame_receiver);
+fn build_flow(surface: &mut Surface, hardware_buffer_receiver: Receiver<MediaFrame>) {
+    let node = HardwareBufferTextureNode::new(surface, hardware_buffer_receiver);
     surface.add_node(Box::new(node), 0);
 
     // Visual system passes.
@@ -212,11 +205,56 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostHardware
         return;
     };
 
-    let res = bridge.hardware_buffer_sender.try_send(frame);
+    let res = bridge
+        .hardware_buffer_sender
+        .try_send(MediaFrame::Hardware(frame));
     if res.is_ok() {
         bridge.new_size = [width, height];
     } else {
         warn!("{}, dropping hardware-buffer frame", res.err().unwrap());
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostRgba<'local>(
+    mut env: EnvUnowned<'local>,
+    _class: JClass,
+    width: jint,
+    height: jint,
+    pixels: JByteBuffer<'local>,
+) {
+    let expected_len = (width.max(0) as usize)
+        .saturating_mul(height.max(0) as usize)
+        .saturating_mul(4);
+    let data = env
+        .with_env_no_catch(|env| -> jni::errors::Result<Vec<u8>> {
+            let address = env.get_direct_buffer_address(&pixels)?;
+            let capacity = env.get_direct_buffer_capacity(&pixels)?;
+            Ok(unsafe { std::slice::from_raw_parts(address, capacity.min(expected_len)).to_vec() })
+        })
+        .into_outcome();
+    let Outcome::Ok(data) = data else {
+        warn!("Cannot read direct RGBA buffer");
+        return;
+    };
+    if data.len() != expected_len {
+        warn!(
+            "Unexpected RGBA buffer length {}, expected {}",
+            data.len(),
+            expected_len
+        );
+        return;
+    }
+
+    let mut guard = BRIDGE.lock().unwrap();
+    let bridge = guard.as_mut().expect("Bridge should be created");
+    let frame = MediaFrame::Rgba(RgbBuffer {
+        pixels_rgb: data.into_boxed_slice(),
+        width: width as u32,
+        height: height as u32,
+    });
+    if bridge.hardware_buffer_sender.try_send(frame).is_ok() {
+        bridge.new_size = [width, height];
     }
 }
 
@@ -264,50 +302,6 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDraw(
         bridge.surface.negociate_slots();
     }
     bridge.surface.draw();
-}
-
-#[no_mangle]
-pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostFrame<'local>(
-    mut env: EnvUnowned<'local>,
-    _class: JClass,
-    width: jint,
-    height: jint,
-    y: JByteArray<'local>,
-    u: JByteArray<'local>,
-    v: JByteArray<'local>,
-) {
-    let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
-    let bridge = (*guard).as_mut().expect("Bridge should be created");
-
-    let (pixels_y, pixels_u, pixels_v) = match env
-        .with_env_no_catch(|env| -> jni::errors::Result<_> {
-            Ok((
-                env.convert_byte_array(y)?.into_boxed_slice(),
-                env.convert_byte_array(u)?.into_boxed_slice(),
-                env.convert_byte_array(v)?.into_boxed_slice(),
-            ))
-        })
-        .into_outcome()
-    {
-        Outcome::Ok(pixels) => pixels,
-        Outcome::Err(err) => panic!("{}", err),
-        Outcome::Panic(payload) => panic::resume_unwind(payload),
-    };
-
-    let buffer = YuvBuffer {
-        pixels_y,
-        pixels_u,
-        pixels_v,
-        width: width as u32,
-        height: height as u32,
-    };
-
-    let res = bridge.manual_frame_sender.try_send(buffer);
-    if res.is_ok() {
-        bridge.new_size = [width, height];
-    } else {
-        warn!("{}, dropping manual frame", res.err().unwrap());
-    }
 }
 
 #[no_mangle]

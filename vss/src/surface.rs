@@ -9,6 +9,9 @@ const ANDROID_HARDWARE_BUFFER_EXTENSION: &std::ffi::CStr =
     c"VK_ANDROID_external_memory_android_hardware_buffer";
 
 #[cfg(target_os = "android")]
+const QUEUE_FAMILY_FOREIGN_EXTENSION: &std::ffi::CStr = c"VK_EXT_queue_family_foreign";
+
+#[cfg(target_os = "android")]
 const SAMPLER_YCBCR_CONVERSION_EXTENSION: &std::ffi::CStr = c"VK_KHR_sampler_ycbcr_conversion";
 
 /// Represents a presentation surface and its associated [RenderContext].
@@ -107,6 +110,10 @@ impl<'window> Surface<'window> {
                                 push_unique_extension(
                                     args.extensions,
                                     ANDROID_HARDWARE_BUFFER_EXTENSION,
+                                );
+                                push_unique_extension(
+                                    args.extensions,
+                                    QUEUE_FAMILY_FOREIGN_EXTENSION,
                                 );
                                 push_unique_extension(
                                     args.extensions,

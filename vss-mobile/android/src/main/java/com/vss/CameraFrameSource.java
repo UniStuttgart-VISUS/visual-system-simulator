@@ -7,7 +7,6 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.ImageFormat;
 import android.graphics.Point;
-import android.graphics.Rect;
 import android.hardware.HardwareBuffer;
 import android.hardware.SyncFence;
 import android.hardware.camera2.CameraAccessException;
@@ -16,10 +15,13 @@ import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
+import android.hardware.camera2.params.OutputConfiguration;
+import android.hardware.camera2.params.SessionConfiguration;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
 import android.os.Build;
+import android.os.Handler;
 import android.util.Log;
 import android.util.Range;
 import android.util.Size;
@@ -29,18 +31,16 @@ import android.view.Surface;
 import android.view.WindowManager;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.RequiresApi;
 import androidx.core.app.ActivityCompat;
 
-import java.util.Arrays;
 import java.util.List;
 import java.io.IOException;
 
-/**
- * Experimental camera path that passes GPU-backed HardwareBuffer frames to native code.
- */
-@RequiresApi(api = Build.VERSION_CODES.P)
-public class CameraTextureAccess {
+public class CameraFrameSource {
+    private static final String LOG_TAG = "CameraFrameSource";
+    private static final int CAMERA_IMAGE_FORMAT = ImageFormat.YUV_420_888;
+    private static final int CAMERA_IMAGE_MAX_IMAGES = 2;
+
     private final Context context;
     private final CameraDelegate delegate;
 
@@ -48,7 +48,7 @@ public class CameraTextureAccess {
     private CameraDevice cameraDevice;
     private CameraCaptureSession captureSession;
 
-    public CameraTextureAccess(Context context, CameraDelegate delegate) {
+    public CameraFrameSource(Context context, CameraDelegate delegate) {
         this.context = context;
         this.delegate = delegate;
         setupCamera();
@@ -88,7 +88,7 @@ public class CameraTextureAccess {
         return bestSize;
     }
 
-    private CameraSelection selectCamera(CameraManager manager, int imageFormat, Size screenSize)
+    private CameraSelection selectCamera(CameraManager manager, Size screenSize)
             throws CameraAccessException {
         CameraSelection best = null;
         for (String cameraId : manager.getCameraIdList()) {
@@ -100,13 +100,13 @@ public class CameraTextureAccess {
 
             StreamConfigurationMap map =
                     characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
-            if (map == null || map.getOutputSizes(imageFormat) == null) {
+            if (map == null || map.getOutputSizes(CAMERA_IMAGE_FORMAT) == null) {
                 continue;
             }
 
-            List<Size> outputSizes = Arrays.asList(map.getOutputSizes(imageFormat));
+            List<Size> outputSizes = List.of(map.getOutputSizes(CAMERA_IMAGE_FORMAT));
             if (outputSizes.isEmpty()) {
-                Log.w("CameraTexture", "No YUV_420_888 output sizes for camera " + cameraId);
+                Log.w(LOG_TAG, "No YUV_420_888 output sizes for camera " + cameraId);
                 continue;
             }
 
@@ -128,7 +128,7 @@ public class CameraTextureAccess {
                 score += Math.max(0, Math.round(300 - normalFovError * 10));
             }
 
-            Log.i("CameraTexture",
+            Log.i(LOG_TAG,
                     "Camera candidate " + cameraId
                             + ": score=" + score
                             + ", size=" + bestSize
@@ -166,10 +166,6 @@ public class CameraTextureAccess {
     }
 
     private boolean zoomRatioSupportsOne(CameraCharacteristics characteristics) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            return false;
-        }
-
         Range<Float> zoomRange = characteristics.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE);
         return zoomRange != null && zoomRange.contains(1.0f);
     }
@@ -224,52 +220,48 @@ public class CameraTextureAccess {
 
         CameraManager manager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
         try {
-            final int imageFormat = ImageFormat.YUV_420_888;
             Size screenSize = getScreenSize();
-            CameraSelection selection = selectCamera(manager, imageFormat, screenSize);
+            CameraSelection selection = selectCamera(manager, screenSize);
             if (selection == null) {
-                Log.e("CameraTexture", "No suitable back-facing YUV_420_888 camera found");
+                Log.e(LOG_TAG, "No suitable back-facing YUV_420_888 camera found");
                 return;
             }
 
-            Log.i("CameraTexture",
+            Log.i(LOG_TAG,
                     "Using hardware-buffer camera " + selection.cameraId
                             + " at " + selection.size
                             + " (sensor orientation is " + selection.sensorOrientationDegrees
                             + ", display rotation is " + displayRotationDegrees() + ")"
                             + " (screen resolution is " + screenSize + ")");
 
-            manager.openCamera(selection.cameraId, new CameraDevice.StateCallback() {
+            manager.openCamera(selection.cameraId, context.getMainExecutor(), new CameraDevice.StateCallback() {
                 @Override
                 public void onOpened(@NonNull CameraDevice cameraDevice) {
-                    Log.i("CameraTexture", "Device opened");
-                    delegate.onCameraOpen(cameraDevice);
-                    setupCameraSession(cameraDevice, imageFormat, selection);
+                    Log.i(LOG_TAG, "Device opened");
+                    setupCameraSession(cameraDevice, selection);
                 }
 
                 @Override
                 public void onDisconnected(@NonNull CameraDevice cameraDevice) {
-                    Log.i("CameraTexture", "Device disconnected");
-                    delegate.onCameraDisconnected(cameraDevice);
+                    Log.i(LOG_TAG, "Device disconnected");
                 }
 
                 @Override
                 public void onError(@NonNull CameraDevice cameraDevice, int error) {
-                    Log.e("CameraTexture", "Device error (" + error + ")");
-                    delegate.onCameraError(cameraDevice, error);
+                    Log.e(LOG_TAG, "Device error (" + error + ")");
                 }
-            }, null);
+            });
         } catch (CameraAccessException e) {
-            Log.e("CameraTexture", "Setting up camera failed", e);
+            Log.e(LOG_TAG, "Setting up camera failed", e);
         }
     }
 
-    private void setupCameraSession(CameraDevice cameraDevice, int imageFormat, CameraSelection selection) {
+    private void setupCameraSession(CameraDevice cameraDevice, CameraSelection selection) {
         Size size = selection.size;
         final int width = size.getWidth();
         final int height = size.getHeight();
 
-        imageReader = ImageReader.newInstance(width, height, imageFormat, 2);
+        imageReader = createHardwareBufferImageReader(width, height, CAMERA_IMAGE_MAX_IMAGES);
         imageReader.setOnImageAvailableListener(reader -> {
             Image image = reader.acquireLatestImage();
             if (image == null) {
@@ -298,44 +290,64 @@ public class CameraTextureAccess {
         }, null);
 
         try {
-            cameraDevice.createCaptureSession(Arrays.asList(imageReader.getSurface()), new CameraCaptureSession.StateCallback() {
-                @Override
-                public void onConfigured(@NonNull CameraCaptureSession session) {
-                    captureSession = session;
-                    try {
-                        CaptureRequest.Builder requestBuilder =
-                                cameraDevice.createCaptureRequest(TEMPLATE_PREVIEW);
-                        requestBuilder.addTarget(imageReader.getSurface());
-                        requestBuilder.set(CaptureRequest.CONTROL_AF_MODE,
-                                CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && selection.zoomRatioSupportsOne) {
-                            requestBuilder.set(CaptureRequest.CONTROL_ZOOM_RATIO, 1.0f);
-                        } else {
-                            Rect activeArray = selection.characteristics.get(
-                                    CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE
-                            );
-                            if (activeArray != null) {
-                                requestBuilder.set(CaptureRequest.SCALER_CROP_REGION, activeArray);
-                            }
+            cameraDevice.createCaptureSession(new SessionConfiguration(
+                    SessionConfiguration.SESSION_REGULAR,
+                    List.of(new OutputConfiguration(imageReader.getSurface())),
+                    context.getMainExecutor(),
+                    new CameraCaptureSession.StateCallback() {
+                        @Override
+                        public void onConfigured(@NonNull CameraCaptureSession session) {
+                            captureSession = session;
+                            startRepeatingRequest(cameraDevice, session, selection);
                         }
-                        captureSession.setRepeatingRequest(requestBuilder.build(),
-                                new CameraCaptureSession.CaptureCallback() {
-                                }, null);
-                    } catch (CameraAccessException e) {
-                        Log.e("CameraTextureSession", "Configure failed", e);
-                    }
-                }
 
-                @Override
-                public void onConfigureFailed(@NonNull CameraCaptureSession session) {
-                    Log.e("CameraTextureSession", "Configure failed");
-                }
-            }, null);
+                        @Override
+                        public void onConfigureFailed(@NonNull CameraCaptureSession session) {
+                            Log.e("CameraFrameSourceSession", "Configure failed");
+                        }
+                    }
+            ));
         } catch (CameraAccessException e) {
-            Log.e("CameraTextureSession", "Creating session", e);
+            Log.e("CameraFrameSourceSession", "Creating session", e);
         }
 
         this.cameraDevice = cameraDevice;
+    }
+
+    private void startRepeatingRequest(
+            CameraDevice cameraDevice,
+            CameraCaptureSession session,
+            CameraSelection selection
+    ) {
+        try {
+            CaptureRequest.Builder requestBuilder =
+                    cameraDevice.createCaptureRequest(TEMPLATE_PREVIEW);
+            requestBuilder.addTarget(imageReader.getSurface());
+            requestBuilder.set(CaptureRequest.CONTROL_AF_MODE,
+                    CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+            if (selection.zoomRatioSupportsOne) {
+                requestBuilder.set(CaptureRequest.CONTROL_ZOOM_RATIO, 1.0f);
+            }
+            session.setRepeatingRequest(
+                    requestBuilder.build(),
+                    new CameraCaptureSession.CaptureCallback() {
+                    },
+                    new Handler(context.getMainLooper())
+            );
+        } catch (CameraAccessException e) {
+            Log.e("CameraFrameSourceSession", "Configure failed", e);
+        }
+    }
+
+    private ImageReader createHardwareBufferImageReader(
+            int width,
+            int height,
+            int maxImages
+    ) {
+        long usage = HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE;
+        Log.i(LOG_TAG, "Creating GPU-sampled ImageReader with usage 0x"
+                + Long.toHexString(usage));
+        return ImageReader.newInstance(width, height, CAMERA_IMAGE_FORMAT, maxImages, usage);
     }
 
     private static class CameraSelection {
@@ -374,10 +386,10 @@ public class CameraTextureAccess {
 
         try (SyncFence fence = image.getFence()) {
             if (fence != null && fence.isValid() && !fence.awaitForever()) {
-                Log.w("CameraTexture", "Camera acquire fence reported an error");
+                Log.w(LOG_TAG, "Camera acquire fence reported an error");
             }
         } catch (IOException e) {
-            Log.w("CameraTexture", "Cannot get camera acquire fence; continuing without explicit wait", e);
+            Log.w(LOG_TAG, "Cannot get camera acquire fence; continuing without explicit wait", e);
         }
     }
 
@@ -397,12 +409,6 @@ public class CameraTextureAccess {
     }
 
     public interface CameraDelegate {
-        void onCameraOpen(CameraDevice cameraDevice);
-
-        void onCameraDisconnected(CameraDevice cameraDevice);
-
-        void onCameraError(CameraDevice cameraDevice, int error);
-
         void onCameraPermissionDenied();
 
         void onFrameAvailable(
