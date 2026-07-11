@@ -1,0 +1,190 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+plugins {
+    alias(libs.plugins.android.application)
+}
+
+data class RustTarget(
+    val abi: String,
+    val triple: String,
+    val linker: String,
+    val linkerEnvironmentVariable: String,
+)
+
+val rustTargets = listOf(
+    RustTarget(
+        abi = "armeabi-v7a",
+        triple = "armv7-linux-androideabi",
+        linker = "armv7a-linux-androideabi31-clang.cmd",
+        linkerEnvironmentVariable = "CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER",
+    ),
+    RustTarget(
+        abi = "arm64-v8a",
+        triple = "aarch64-linux-android",
+        linker = "aarch64-linux-android31-clang.cmd",
+        linkerEnvironmentVariable = "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER",
+    ),
+    RustTarget(
+        abi = "x86",
+        triple = "i686-linux-android",
+        linker = "i686-linux-android31-clang.cmd",
+        linkerEnvironmentVariable = "CARGO_TARGET_I686_LINUX_ANDROID_LINKER",
+    ),
+    RustTarget(
+        abi = "x86_64",
+        triple = "x86_64-linux-android",
+        linker = "x86_64-linux-android31-clang.cmd",
+        linkerEnvironmentVariable = "CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER",
+    ),
+)
+
+val rustLibraryName = "libvss_android.so"
+val androidNdkVersion = "28.2.13676358"
+val debugRustAbi = providers.gradleProperty("rustDebugAbi").orElse("arm64-v8a").get()
+
+require(rustTargets.any { it.abi == debugRustAbi }) {
+    "Unsupported rustDebugAbi '$debugRustAbi'. Expected one of: ${rustTargets.joinToString { it.abi }}"
+}
+
+android {
+    namespace = "com.vss"
+    compileSdk = 37
+    ndkVersion = androidNdkVersion
+
+    defaultConfig {
+        applicationId = "com.vss"
+        minSdk = 31
+        targetSdk = 37
+        versionCode = 1
+        versionName = "1.0"
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+        }
+    }
+
+    sourceSets {
+        getByName("debug").jniLibs.directories.add(
+            layout.buildDirectory.dir("rustJniLibs/debug-$debugRustAbi").get().asFile.absolutePath,
+        )
+        getByName("release").jniLibs.directories.add(
+            layout.buildDirectory.dir("rustJniLibs/release").get().asFile.absolutePath,
+        )
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = JvmTarget.JVM_17
+    }
+}
+
+dependencies {
+    implementation(libs.androidx.appcompat)
+    implementation(libs.androidx.constraintlayout)
+    implementation(libs.androidx.slidingpanelayout)
+    implementation(libs.google.material)
+}
+
+val repositoryDirectory = layout.projectDirectory.dir("../..")
+val androidSdkDirectory = providers.environmentVariable("ANDROID_HOME")
+    .orElse(providers.environmentVariable("ANDROID_SDK_ROOT"))
+    .orElse(providers.systemProperty("user.home").map { "$it\\AppData\\Local\\Android\\Sdk" })
+val ndkDirectory = androidSdkDirectory.map { file("$it\\ndk\\$androidNdkVersion") }
+
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        val variantName = variant.name
+        val capitalizedVariantName = variantName.replaceFirstChar(Char::uppercaseChar)
+        val cargoProfile = if (variant.buildType == "release") "release" else "debug"
+        val includedTargets = if (variant.buildType == "release") {
+            rustTargets
+        } else {
+            rustTargets.filter { it.abi == debugRustAbi }
+        }
+
+        val copyTasksByTarget = rustTargets.associateWith { rustTarget ->
+            val capitalizedAbi = rustTarget.abi
+                .split('-', '_')
+                .joinToString("") { it.replaceFirstChar(Char::uppercaseChar) }
+            val cargoTask = tasks.register<Exec>("cargoBuild$capitalizedVariantName$capitalizedAbi") {
+                group = "rust"
+                description = "Builds ${rustTarget.triple} Rust code for $variantName."
+                workingDir(repositoryDirectory)
+                commandLine(
+                    "cargo",
+                    "build",
+                    "-p",
+                    "vss-android",
+                    "--target",
+                    rustTarget.triple,
+                )
+                if (cargoProfile == "release") {
+                    args("--release")
+                }
+
+                val linker = ndkDirectory.map {
+                    File(it, "toolchains/llvm/prebuilt/windows-x86_64/bin/${rustTarget.linker}")
+                }
+                val linkerFile = linker.get()
+                environment(rustTarget.linkerEnvironmentVariable, linkerFile.absolutePath)
+                inputs.file(linkerFile).withPropertyName("androidNdkLinker")
+
+                inputs.files(
+                    repositoryDirectory.file("Cargo.toml"),
+                    repositoryDirectory.file("Cargo.lock"),
+                    repositoryDirectory.file("vss/Cargo.toml"),
+                    repositoryDirectory.file("vss-android/Cargo.toml"),
+                )
+                inputs.dir(repositoryDirectory.dir("vss/src"))
+                inputs.dir(repositoryDirectory.dir("vss-android/src"))
+                outputs.file(
+                    repositoryDirectory.file(
+                        "target/${rustTarget.triple}/$cargoProfile/$rustLibraryName",
+                    ),
+                )
+            }
+
+            tasks.register<Copy>("copyRust$capitalizedVariantName${capitalizedAbi}JniLib") {
+                group = "rust"
+                description = "Copies the ${rustTarget.abi} Rust library into $variantName JNI libs."
+                dependsOn(cargoTask)
+                from(
+                    repositoryDirectory.file(
+                        "target/${rustTarget.triple}/$cargoProfile/$rustLibraryName",
+                    ),
+                )
+                val outputRoot = if (variant.buildType == "release") {
+                    "rustJniLibs/release"
+                } else {
+                    "rustJniLibs/debug-${rustTarget.abi}"
+                }
+                into(layout.buildDirectory.dir("$outputRoot/${rustTarget.abi}"))
+            }
+        }
+
+        val aggregateTask = tasks.register("cargoBuild$capitalizedVariantName") {
+            group = "rust"
+            description = "Builds all Rust libraries included in $variantName."
+            dependsOn(includedTargets.map { copyTasksByTarget.getValue(it) })
+        }
+        tasks.matching { it.name == "merge${capitalizedVariantName}JniLibFolders" }.configureEach {
+            dependsOn(aggregateTask)
+        }
+    }
+}

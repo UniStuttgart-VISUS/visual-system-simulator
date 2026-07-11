@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = 'VSS'
-include ':app'
+rootProject.name = "VSS"
+include(":app")

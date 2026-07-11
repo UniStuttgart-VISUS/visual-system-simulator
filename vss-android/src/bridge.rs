@@ -203,9 +203,7 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostHardware
         return;
     };
 
-    let res = bridge
-        .frame_sender
-        .try_send(Frame::Hardware(frame));
+    let res = bridge.frame_sender.try_send(Frame::Hardware(frame));
     if res.is_ok() {
         bridge.new_size = [width, height];
     } else {
