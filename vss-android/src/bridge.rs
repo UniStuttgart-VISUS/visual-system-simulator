@@ -5,8 +5,7 @@ use std::ffi::{c_void, CString};
 use std::io::{Cursor, Read};
 use std::panic;
 use std::ptr::NonNull;
-use std::sync::mpsc::{self, Receiver, SyncSender};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use log::*;
 
@@ -23,6 +22,7 @@ use raw_window_handle::*;
 use vss::*;
 
 use crate::node::frame::{Frame, FrameNode, HardwareBufferFrame};
+use vss_catalog::Locale;
 
 struct AndroidHandle(RawWindowHandle);
 
@@ -45,7 +45,6 @@ impl HasDisplayHandle for AndroidHandle {
 
 struct Bridge {
     pub surface: Surface<'static>,
-    pub frame_sender: SyncSender<Frame>,
     pub current_size: [i32; 2],
     pub new_size: [i32; 2],
 }
@@ -54,6 +53,9 @@ unsafe impl Send for Bridge {}
 
 lazy_static::lazy_static! {
     static ref BRIDGE : Mutex<Option<Bridge>> = Mutex::new(None);
+    static ref PENDING_FRAME: Arc<Mutex<Option<Frame>>> = Arc::new(Mutex::new(None));
+    static ref PENDING_FRAME_SIZE: Mutex<Option<[i32; 2]>> = Mutex::new(None);
+    static ref PENDING_SETTINGS: Mutex<Option<String>> = Mutex::new(None);
 }
 
 #[no_mangle]
@@ -145,19 +147,17 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate<'loca
     let size = [window.width() as u32, window.height() as u32];
     let mut surface = vss::Surface::new(size, handle, 1);
 
-    let (frame_tx, frame_rx) = mpsc::sync_channel::<Frame>(2);
-    build_flow(&mut surface, frame_rx);
+    build_flow(&mut surface, PENDING_FRAME.clone());
 
     *guard = Some(Bridge {
         surface,
-        frame_sender: frame_tx,
         current_size: [1, 1],
         new_size: [1, 1],
     });
 }
 
-fn build_flow(surface: &mut Surface, frame_receiver: Receiver<Frame>) {
-    let node = FrameNode::new(surface, frame_receiver);
+fn build_flow(surface: &mut Surface, pending_frame: Arc<Mutex<Option<Frame>>>) {
+    let node = FrameNode::new(surface, pending_frame);
     surface.add_node(Box::new(node), 0);
 
     // Visual system passes.
@@ -188,9 +188,6 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostHardware
     rotation_degrees: jint,
     hardware_buffer: JObject<'local>,
 ) {
-    let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
-    let bridge = (*guard).as_mut().expect("Bridge should be created");
-
     let Some(frame) = HardwareBufferFrame::from_jni(
         &mut env,
         hardware_buffer,
@@ -203,12 +200,8 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostHardware
         return;
     };
 
-    let res = bridge.frame_sender.try_send(Frame::Hardware(frame));
-    if res.is_ok() {
-        bridge.new_size = [width, height];
-    } else {
-        warn!("{}, dropping hardware-buffer frame", res.err().unwrap());
-    }
+    *PENDING_FRAME.lock().unwrap() = Some(Frame::Hardware(frame));
+    *PENDING_FRAME_SIZE.lock().unwrap() = Some([width, height]);
 }
 
 #[no_mangle]
@@ -242,16 +235,13 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostRgba<'lo
         return;
     }
 
-    let mut guard = BRIDGE.lock().unwrap();
-    let bridge = guard.as_mut().expect("Bridge should be created");
     let frame = Frame::Rgba(RgbBuffer {
         pixels_rgb: data.into_boxed_slice(),
         width: width as u32,
         height: height as u32,
     });
-    if bridge.frame_sender.try_send(frame).is_ok() {
-        bridge.new_size = [width, height];
-    }
+    *PENDING_FRAME.lock().unwrap() = Some(frame);
+    *PENDING_FRAME_SIZE.lock().unwrap() = Some([width, height]);
 }
 
 #[no_mangle]
@@ -260,6 +250,9 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDestroy(
     _class: JClass,
 ) {
     let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
+    *PENDING_FRAME.lock().unwrap() = None;
+    *PENDING_FRAME_SIZE.lock().unwrap() = None;
+    *PENDING_SETTINGS.lock().unwrap() = None;
     *guard = None;
 }
 
@@ -282,6 +275,12 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDraw(
 ) {
     let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
     let bridge = (*guard).as_mut().expect("Bridge should be created");
+    if let Some(size) = PENDING_FRAME_SIZE.lock().unwrap().take() {
+        bridge.new_size = size;
+    }
+    if let Some(json_string) = PENDING_SETTINGS.lock().unwrap().take() {
+        apply_settings(bridge, &json_string);
+    }
     // Fake input event for uploading and perspetive computation.
     for flow in bridge.surface.flows.iter() {
         let changes = flow.input(&MouseInput::default());
@@ -306,12 +305,9 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostSettings
     _class: JClass,
     json_string: JString<'local>,
 ) {
-    let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
-    let bridge = (*guard).as_mut().expect("Bridge should be created");
-
     let json_string: String = match env
         .with_env_no_catch(|env| -> jni::errors::Result<_> {
-            Ok(env.get_string(&json_string)?.into())
+            json_string.try_to_string(env)
         })
         .into_outcome()
     {
@@ -320,7 +316,19 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostSettings
         Outcome::Panic(payload) => panic::resume_unwind(payload),
     };
 
-    let inspector = FromJsonInspector::try_new(&json_string);
+    let json_string = match serde_json::from_str::<serde_json::Value>(&json_string) {
+        Ok(serde_json::Value::Object(values)) => vss_catalog::engine_settings(&values).to_string(),
+        Ok(value) => value.to_string(),
+        Err(err) => {
+            error!("Invalid settings JSON: {}", err);
+            return;
+        }
+    };
+    *PENDING_SETTINGS.lock().unwrap() = Some(json_string);
+}
+
+fn apply_settings(bridge: &mut Bridge, json_string: &str) {
+    let inspector = FromJsonInspector::try_new(json_string);
     match inspector {
         Ok(mut inspector) => {
             let result = bridge.surface.inspect(&mut inspector);
@@ -351,6 +359,76 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeQuerySetting
         .into_outcome()
     {
         Outcome::Ok(json_string) => json_string,
+        Outcome::Err(err) => panic!("{}", err),
+        Outcome::Panic(payload) => panic::resume_unwind(payload),
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCatalog<'local>(
+    mut env: EnvUnowned<'local>,
+    _class: JClass,
+    locale: JString<'local>,
+) -> JString<'local> {
+    let tag = match env
+        .with_env_no_catch(|env| -> jni::errors::Result<String> {
+            locale.try_to_string(env)
+        })
+        .into_outcome()
+    {
+        Outcome::Ok(tag) => tag,
+        Outcome::Err(err) => panic!("{}", err),
+        Outcome::Panic(payload) => panic::resume_unwind(payload),
+    };
+    let json = vss_catalog::contract_json(Locale::from_tag(&tag));
+    match env
+        .with_env_no_catch(|env| env.new_string(json))
+        .into_outcome()
+    {
+        Outcome::Ok(value) => value,
+        Outcome::Err(err) => panic!("{}", err),
+        Outcome::Panic(payload) => panic::resume_unwind(payload),
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeComposeSettings<'local>(
+    mut env: EnvUnowned<'local>,
+    _class: JClass,
+    locale: JString<'local>,
+    active_profiles: JString<'local>,
+    manual_overrides: JString<'local>,
+) -> JString<'local> {
+    let (locale, active_profiles, manual_overrides) = match env
+        .with_env_no_catch(|env| -> jni::errors::Result<(String, String, String)> {
+            Ok((
+                locale.try_to_string(env)?,
+                active_profiles.try_to_string(env)?,
+                manual_overrides.try_to_string(env)?,
+            ))
+        })
+        .into_outcome()
+    {
+        Outcome::Ok(values) => values,
+        Outcome::Err(err) => panic!("{}", err),
+        Outcome::Panic(payload) => panic::resume_unwind(payload),
+    };
+    let active_profiles: Vec<String> = serde_json::from_str(&active_profiles)
+        .unwrap_or_else(|err| panic!("Invalid active profile list: {}", err));
+    let manual_overrides: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_str(&manual_overrides)
+            .unwrap_or_else(|err| panic!("Invalid manual overrides: {}", err));
+    let effective = vss_catalog::compose(
+        Locale::from_tag(&locale),
+        &active_profiles,
+        &manual_overrides,
+    );
+    let json = serde_json::to_string(&effective).expect("effective settings serialize");
+    match env
+        .with_env_no_catch(|env| env.new_string(json))
+        .into_outcome()
+    {
+        Outcome::Ok(value) => value,
         Outcome::Err(err) => panic!("{}", err),
         Outcome::Panic(payload) => panic::resume_unwind(payload),
     }

@@ -1,6 +1,25 @@
 <resources>
-    <string name="app_name">HowTheySee</string>
-    <string name="app_full_name">How They See</string>
+    <string name="app_name">VSS</string>
+    <string name="app_full_name">Visual System Simulator</string>
     <string name="start_simulation">Start Simulation</string>
     <string name="open_media">Open Image or Video</string>
+    <string name="exit_fullscreen_hint">Tap to exit fullscreen</string>
+    <string name="camera_required">Camera access is required for live preview</string>
+    <string name="allow_camera">Allow camera</string>
+    <string name="app_settings">App settings</string>
+    <string name="choose_source">Choose source</string>
+    <string name="camera">Camera</string>
+    <string name="enter_fullscreen">Enter fullscreen</string>
+    <string name="reset_manual_changes">Reset manual changes</string>
+    <string name="remove_profile">Remove %1$s?</string>
+    <string name="profile_affects_manual_changes">This profile affects manually changed settings.</string>
+    <string name="keep_overrides">Keep overrides</string>
+    <string name="discard_affected_overrides">Discard affected overrides</string>
+    <string name="cancel">Cancel</string>
+    <string name="apply_demonstration">Apply demonstration?</string>
+    <string name="apply_demonstration_message">Replace the current simulation or add these profiles?</string>
+    <string name="replace_current_simulation">Replace current simulation</string>
+    <string name="add_profiles">Add profiles</string>
+    <string name="information">Information</string>
+    <string name="reset">Reset</string>
 </resources>

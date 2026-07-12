@@ -2,6 +2,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.compose)
 }
 
 data class RustTarget(
@@ -66,6 +67,7 @@ android {
 
     buildFeatures {
         buildConfig = true
+        compose = true
     }
 
     buildTypes {
@@ -79,6 +81,9 @@ android {
     }
 
     sourceSets {
+        getByName("main").assets.directories.add(
+            layout.projectDirectory.dir("../../vss-catalog/articles").asFile.absolutePath,
+        )
         getByName("debug").jniLibs.directories.add(
             layout.buildDirectory.dir("rustJniLibs/debug-$debugRustAbi").get().asFile.absolutePath,
         )
@@ -95,10 +100,13 @@ kotlin {
 }
 
 dependencies {
-    implementation(libs.androidx.appcompat)
-    implementation(libs.androidx.constraintlayout)
-    implementation(libs.androidx.slidingpanelayout)
-    implementation(libs.google.material)
+    implementation(platform("androidx.compose:compose-bom:2026.05.00"))
+    implementation("androidx.activity:activity-compose:1.12.3")
+    implementation("androidx.core:core-ktx:1.17.0")
+    implementation("androidx.compose.foundation:foundation")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
 }
 
 val repositoryDirectory = layout.projectDirectory.dir("../..")
@@ -150,9 +158,13 @@ androidComponents {
                     repositoryDirectory.file("Cargo.lock"),
                     repositoryDirectory.file("vss/Cargo.toml"),
                     repositoryDirectory.file("vss-android/Cargo.toml"),
+                    repositoryDirectory.file("vss-catalog/Cargo.toml"),
+                    repositoryDirectory.file("vss-catalog/build.rs"),
                 )
                 inputs.dir(repositoryDirectory.dir("vss/src"))
                 inputs.dir(repositoryDirectory.dir("vss-android/src"))
+                inputs.dir(repositoryDirectory.dir("vss-catalog/src"))
+                inputs.dir(repositoryDirectory.dir("vss-catalog/articles"))
                 outputs.file(
                     repositoryDirectory.file(
                         "target/${rustTarget.triple}/$cargoProfile/$rustLibraryName",
@@ -182,6 +194,9 @@ androidComponents {
             group = "rust"
             description = "Builds all Rust libraries included in $variantName."
             dependsOn(includedTargets.map { copyTasksByTarget.getValue(it) })
+        }
+        tasks.matching { it.name == "merge${capitalizedVariantName}Assets" }.configureEach {
+            dependsOn(aggregateTask)
         }
         tasks.matching { it.name == "merge${capitalizedVariantName}JniLibFolders" }.configureEach {
             dependsOn(aggregateTask)

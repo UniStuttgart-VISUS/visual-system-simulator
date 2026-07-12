@@ -4,6 +4,7 @@ appcompat = "1.7.1"
 constraintlayout = "2.2.1"
 material = "1.13.0"
 slidingpanelayout = "1.2.0"
+kotlin = "2.2.21"
 
 [libraries]
 androidx-appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
@@ -13,3 +14,4 @@ google-material = { module = "com.google.android.material:material", version.ref
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

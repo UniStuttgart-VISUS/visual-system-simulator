@@ -53,6 +53,16 @@ object SimulatorBridge {
     @JvmStatic
     private external fun nativeQuerySettings(): String
 
+    @JvmStatic
+    private external fun nativeCatalog(locale: String): String
+
+    @JvmStatic
+    private external fun nativeComposeSettings(
+        locale: String,
+        activeProfiles: String,
+        manualOverrides: String,
+    ): String
+
     fun hasLoadedLibrary(): Boolean = libraryLoaded
 
     fun create(surface: Surface, assetManager: AssetManager) {
@@ -104,5 +114,19 @@ object SimulatorBridge {
         assert(libraryLoaded) { "Native library not loaded" }
         Log.v(LOG_TAG, "Querying simulator settings")
         return nativeQuerySettings()
+    }
+
+    fun catalog(locale: String): String {
+        assert(libraryLoaded) { "Native library not loaded" }
+        return nativeCatalog(locale)
+    }
+
+    fun composeSettings(
+        locale: String,
+        activeProfiles: String,
+        manualOverrides: String,
+    ): String {
+        assert(libraryLoaded) { "Native library not loaded" }
+        return nativeComposeSettings(locale, activeProfiles, manualOverrides)
     }
 }

@@ -17,13 +17,12 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
 import android.util.Log
-import com.vss.simulator.SimulatorSurfaceView
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.util.concurrent.CountDownLatch
 import kotlin.math.max
 
-class MediaFrameSource(context: Context, private val simulatorView: SimulatorSurfaceView) {
+class MediaFrameSource(context: Context, private val controller: SimulatorController) {
     private val context = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
     private val hardwareFrameLock = Any()
@@ -107,14 +106,14 @@ class MediaFrameSource(context: Context, private val simulatorView: SimulatorSur
 
     private fun postRgbaWhenSurfaceIsReady(width: Int, height: Int, pixels: ByteBuffer) {
         if (cancelled) return
-        if (!simulatorView.holder.surface.isValid) {
+        if (!controller.isReady()) {
             mainHandler.postDelayed(
                 { postRgbaWhenSurfaceIsReady(width, height, pixels) },
                 SURFACE_RETRY_DELAY_MS,
             )
             return
         }
-        simulatorView.postRgba(width, height, pixels)
+        controller.postRgba(width, height, pixels)
     }
 
     private fun sampleSize(width: Int, height: Int): Int {
@@ -374,7 +373,7 @@ class MediaFrameSource(context: Context, private val simulatorView: SimulatorSur
             }
             return
         }
-        if (!simulatorView.holder.surface.isValid) {
+        if (!controller.isReady()) {
             mainHandler.postDelayed(
                 ::postPendingHardwareFrameOnMainThread,
                 SURFACE_RETRY_DELAY_MS,
@@ -389,7 +388,7 @@ class MediaFrameSource(context: Context, private val simulatorView: SimulatorSur
             return
         }
         try {
-            simulatorView.postHardwareBuffer(
+            controller.postHardwareBuffer(
                 frame.width,
                 frame.height,
                 frame.dataSpace,

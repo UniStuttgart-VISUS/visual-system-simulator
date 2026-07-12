@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 use std::ptr::NonNull;
-use std::sync::mpsc::Receiver;
+use std::sync::{Arc, Mutex};
 
 use ash::vk;
 use log::*;
@@ -78,6 +78,13 @@ impl HardwareBufferFrame {
             data_space,
             rotation_degrees: normalize_rotation_degrees(rotation_degrees),
         })
+    }
+
+    fn output_size(&self) -> [u32; 2] {
+        match self.rotation_degrees {
+            90 | 270 => [self.height.max(1), self.width.max(1)],
+            _ => [self.width.max(1), self.height.max(1)],
+        }
     }
 }
 
@@ -1062,7 +1069,7 @@ impl Drop for HardwareBufferRef {
 }
 
 pub struct FrameNode {
-    frame_receiver: Receiver<Frame>,
+    pending_frame: Arc<Mutex<Option<Frame>>>,
     targets: ColorDepthTargets,
     output_size: [u32; 2],
     frame_count: u64,
@@ -1072,9 +1079,9 @@ pub struct FrameNode {
 }
 
 impl FrameNode {
-    pub fn new(context: &RenderContext, frame_receiver: Receiver<Frame>) -> Self {
+    pub fn new(context: &RenderContext, pending_frame: Arc<Mutex<Option<Frame>>>) -> Self {
         Self {
-            frame_receiver,
+            pending_frame,
             targets: ColorDepthTargets::new(context.device(), "FrameNode"),
             output_size: [1, 1],
             frame_count: 0,
@@ -1085,12 +1092,7 @@ impl FrameNode {
     }
 
     fn receive_latest_frame(&mut self) -> bool {
-        let mut latest = None;
-        while let Ok(frame) = self.frame_receiver.try_recv() {
-            latest = Some(frame);
-        }
-
-        let Some(frame) = latest else {
+        let Some(frame) = self.pending_frame.lock().unwrap().take() else {
             return false;
         };
 
@@ -1118,7 +1120,10 @@ impl FrameNode {
             );
         }
 
-        self.output_size = [frame.width.max(1), frame.height.max(1)];
+        // The import shader rotates the camera image into display orientation.
+        // A quarter turn also swaps the logical extent; keeping the sensor
+        // extent here would stretch the rotated image into the old aspect ratio.
+        self.output_size = frame.output_size();
         self.renderer.queue_frame(frame);
         true
     }
