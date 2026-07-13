@@ -45,6 +45,7 @@ pub struct Retina {
     map_valid: bool,
     configured_map: Option<MapConfig>,
     track_error: bool,
+    bypass: bool,
 }
 
 pub struct RetinaConfig {
@@ -173,6 +174,16 @@ impl Parameters for Retina {
 }
 
 impl RetinaConfig {
+    fn is_identity(&self) -> bool {
+        self.retina_map_builder.is_identity()
+            && self.retina_map_pos_x_path.is_empty()
+            && self.retina_map_neg_x_path.is_empty()
+            && self.retina_map_pos_y_path.is_empty()
+            && self.retina_map_neg_y_path.is_empty()
+            && self.retina_map_pos_z_path.is_empty()
+            && self.retina_map_neg_z_path.is_empty()
+    }
+
     fn map_config(&self) -> MapConfig {
         MapConfig {
             retina_map_pos_x_path: self.retina_map_pos_x_path.clone(),
@@ -196,10 +207,10 @@ impl Retina {
         let uniforms = ShaderUniforms::new(
             device,
             Uniforms {
-                gaze_inv_proj: [[0.0; 4]; 4],
+                gaze_inv_proj: Matrix4::<f32>::from_scale(1.0).into(),
                 resolution: [0.0; 2],
                 achromatopsia_blur_factor: 0.0,
-                track_error: 0,
+                track_error: -1,
             },
         );
 
@@ -207,9 +218,9 @@ impl Retina {
             label: Some("Retina Shader"),
             source: wgpu::ShaderSource::Wgsl(
                 concat!(
-                    include_str!("../common.wgsl"),
-                    include_str!("../vert.wgsl"),
-                    include_str!("mod.wgsl")
+                include_str!("../common.wgsl"),
+                include_str!("../vert.wgsl"),
+                include_str!("mod.wgsl")
                 )
                 .into(),
             ),
@@ -218,7 +229,7 @@ impl Retina {
         let (retina_layout, retina_bind_group) = load_cubemap_from_bytes(
             device,
             queue,
-            &[0; 4 * 6],
+            &[255; 4 * 6],
             1,
             create_sampler_linear(device),
             wgpu::TextureFormat::Rgba8Unorm,
@@ -285,11 +296,17 @@ impl Retina {
             map_valid: false,
             configured_map: None,
             track_error: false,
+            bypass: cfg!(target_arch = "wasm32"),
         }
     }
 
     fn validate_map(&mut self, context: &RenderContext) {
         if self.map_valid {
+            return;
+        }
+
+        if self.config.is_identity() {
+            self.map_valid = true;
             return;
         }
 
@@ -403,6 +420,9 @@ impl Node for Retina {
         slots: NodeSlots,
         _original_image: &mut Option<Texture>,
     ) -> NodeSlots {
+        if self.bypass {
+            return slots.to_passthrough();
+        }
         let slots = slots
             .to_color_metrics_input(context)
             .to_color_metrics_output(context, "RetinaNode");
@@ -417,7 +437,13 @@ impl Node for Retina {
     }
 
     fn configure(&mut self) -> NodeChanges {
-        let track_error = self.config.track_error as i32;
+        let bypass = cfg!(target_arch = "wasm32") || self.config.is_identity();
+        let bypass_changed = self.bypass != bypass;
+        let track_error = if self.config.is_identity() {
+            -1
+        } else {
+            self.config.track_error as i32
+        };
         let map_config = self.config.map_config();
         let map_config_changed = self.configured_map.as_ref() != Some(&map_config);
         let output_changed = map_config_changed
@@ -430,10 +456,11 @@ impl Node for Retina {
             self.configured_map = Some(map_config);
         }
         self.track_error = self.config.track_error;
+        self.bypass = bypass;
         self.uniforms.data.achromatopsia_blur_factor = self.config.achromatopsia_blur_factor;
         self.uniforms.data.track_error = track_error;
 
-        NodeChanges::from_output_slots(output_changed, false)
+        NodeChanges::from_output_slots(output_changed, bypass_changed)
     }
 
     fn input(&mut self, eye: &EyeInput, _mouse: &MouseInput) -> (EyeInput, NodeChanges) {
@@ -455,6 +482,9 @@ impl Node for Retina {
         encoder: &mut CommandEncoder,
         screen: Option<&RenderTexture>,
     ) {
+        if self.bypass {
+            return;
+        }
         self.uniforms.upload(context.queue());
         self.validate_map(context);
 

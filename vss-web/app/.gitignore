@@ -1,0 +1,6 @@
+node_modules/
+dist/
+public/
+src/wasm/
+test-results/
+playwright-report/

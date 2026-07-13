@@ -42,6 +42,7 @@ pub struct WindowSurface {
     visible: bool,
     init_fn: Option<Box<dyn FnOnce(&mut Surface)>>,
     poll_fn: Box<dyn FnMut() -> bool>,
+    update_fn: Option<Box<dyn FnMut(&Surface) -> NodeChanges>>,
     overlay: Option<Box<dyn WindowOverlay>>,
 
     active: bool,
@@ -90,6 +91,7 @@ impl WindowSurface {
             visible: visible,
             init_fn: Some(Box::new(init_fn)),
             poll_fn: Box::new(poll_fn),
+            update_fn: None,
             overlay: None,
             active: false,
             static_view,
@@ -113,6 +115,14 @@ impl WindowSurface {
 
     pub fn with_canvas_parent(mut self, id: impl Into<String>) -> Self {
         self.canvas_parent = Some(id.into());
+        self
+    }
+
+    pub fn with_update_fn(
+        mut self,
+        update_fn: impl 'static + FnMut(&Surface) -> NodeChanges,
+    ) -> Self {
+        self.update_fn = Some(Box::new(update_fn));
         self
     }
 
@@ -309,6 +319,9 @@ impl ApplicationHandler for WindowSurface {
             }
             WindowEvent::RedrawRequested => {
                 let mut changes = self.surface.clone().unwrap().take_changes();
+                if let Some(update) = &mut self.update_fn {
+                    changes |= update(&self.surface.clone().unwrap());
+                }
                 self.update_size(self.deferred_size);
                 self.deferred_size = None;
 

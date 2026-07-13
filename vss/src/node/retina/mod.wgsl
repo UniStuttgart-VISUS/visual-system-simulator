@@ -239,9 +239,18 @@ fn simulate(in: VertexOutput) -> SimulationOutput {
     let ndc = vec4<f32>(vec2(in.tex_coords.x, 1.0 - in.tex_coords.y) * 2.0 - 1.0, 0.9, 1.0);
     let frag_dir = uniforms.gaze_inv_proj * ndc;
 
-    let retina_mask = textureSample(in_retina_t, in_retina_s, normalize(frag_dir.xyz)/frag_dir.w);
-
     let original_color = textureSample(in_color_t, in_color_s, in.tex_coords);
+    if (uniforms.track_error == -1) {
+        out.color = original_color;
+        out.deflection = vec4<f32>(0.0);
+        out.color_change = vec4<f32>(0.0);
+        out.color_uncertainty = vec4<f32>(0.0);
+        out.covariances = vec4<f32>(0.0);
+        return out;
+    }
+
+    let retina_mask = textureSample(in_retina_t, in_retina_s, normalize(frag_dir.xyz) / frag_dir.w);
+
     let deflection = textureSample(in_deflection_t, in_deflection_s, in.tex_coords);
     let color_change = textureSample(in_color_change_t, in_color_change_s, in.tex_coords);
     let color_uncertainty = textureSample(in_color_uncertainty_t, in_color_uncertainty_s, in.tex_coords);
@@ -298,9 +307,26 @@ fn simulate(in: VertexOutput) -> SimulationOutput {
 
 @fragment
 fn fs_color(in: VertexOutput) -> ColorOutput {
-    let simulated = simulate(in);
     var out: ColorOutput;
-    out.color = simulated.color;
+    let original_color = textureSample(in_color_t, in_color_s, in.tex_coords);
+    if (uniforms.track_error == -1) {
+        out.color = original_color;
+        return out;
+    }
+
+    let ndc = vec4<f32>(vec2(in.tex_coords.x, 1.0 - in.tex_coords.y) * 2.0 - 1.0, 0.9, 1.0);
+    let frag_dir = uniforms.gaze_inv_proj * ndc;
+    let retina_mask = textureSample(in_retina_t, in_retina_s, normalize(frag_dir.xyz) / frag_dir.w);
+    var ev = ErrorValues(
+        vec3<f32>(0.0),
+        mat3x3<f32>(vec3<f32>(0.0), vec3<f32>(0.0), vec3<f32>(0.0)),
+        mat2x2<f32>(vec2<f32>(0.0), vec2<f32>(0.0))
+    );
+
+    out.color = applyBlurAndBloom(original_color, retina_mask, in.tex_coords, &ev, in_color_s, in_color_t, in_color_uncertainty_s, in_color_uncertainty_t, in_covariances_s, in_covariances_t, in_deflection_s, in_deflection_t);
+    out.color = applyNyctalopia(out.color, retina_mask, &ev);
+    out.color = applyColorBlindness(out.color, retina_mask, &ev);
+    out.color = glaucoma(out.color, retina_mask, &ev);
     return out;
 }
 

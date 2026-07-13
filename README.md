@@ -101,28 +101,13 @@ TODO: describe build steps here, where to find the APK and what to do with it.
 
 ## <a name="Web"></a>Web App
 
-Currently, the web app only supports remote control (in-browser simulation depends on [gfx#1900](https://github.com/gfx-rs/gfx/issues/1900)). To connect to a remote endpoint:
-
-1. First start the application you want to control remotely.
-    - (Android only) Open the navigation drawer, enable "Remote Access".
-2. Enter the URL of your device, e.g., `http://127.0.0.1:3000`.
-3. Click "connect" and let the web app connect to the remote endpoint.
-4. Once this is done, changes in the web app will be applied to the remote endpoint.
-
-The Simulation settings in the tab "Settings" are analogue to the ones in the Android app.
-
-In the "Import/Export" tab you can load and save your settings.
-
-In the "Upload" tab you can set input stimuli, the cornea map, and the retina map.
-
-In the "Draw" tab you can draw your own retina maps and inputs.
-
-By opening the web app and connecting the android device to the server one can remotely control the device's simulation settings via the web app.
-The following steps have to be taken.
+The static Vue application runs the Rust/WGPU simulator locally in current Chromium-based browsers with WebGPU. Images and videos are decoded and processed on-device. There is no camera, upload, telemetry, CDN, network API, or backend integration. Firefox and Safari are best effort and show a compatibility state when WebGPU is unavailable.
 
 ### <a name="Web_Build"></a> Building from Source
 
-You need to have [Node.js](https://nodejs.org/) installed. Then, enter the `vss-web` web directory, run `npm install`, and then `npm run build` . You can find the release files under `vss-web/dist`.
+Install Rust, `wasm-pack`, Node.js 22 or newer, and npm 11. From `vss-web/app`, run `npm ci` and then use `npm run dev`, `npm run build`, or `npm test`. Each entry point builds the WASM package automatically. The static output is in `vss-web/app/dist`; relative asset URLs allow hosting below a URL subpath.
+
+Dependency lifecycle scripts are disabled, and npm requires releases to be at least seven days old. There are currently no lifecycle-script or package-age exceptions. Any future exception must be narrowly documented here.
 
 ## <a name="Configuration"></a>Configuration
 

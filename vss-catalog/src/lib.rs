@@ -515,14 +515,15 @@ pub fn compose(
     manual: &Map<String, Value>,
 ) -> Map<String, Value> {
     let catalog = catalog(locale);
+    let active: BTreeSet<&str> = active.iter().map(String::as_str).collect();
     let mut result = Map::new();
     for group in &catalog.groups {
         for p in &group.settings {
             result.insert(p.id.into(), p.default.clone());
         }
     }
-    for id in active {
-        if let Some(layer) = catalog.presets.iter().find(|p| p.id == id) {
+    for layer in &catalog.presets {
+        if active.contains(layer.id) {
             for (k, v) in &layer.values {
                 result.insert((*k).into(), v.clone());
             }
@@ -819,6 +820,16 @@ mod tests {
         let values = compose(Locale::En, &active, &manual);
         assert_eq!(values["cataract.blur"], json!(10.0));
         assert_eq!(values["cataract.contrast"], json!(65.0));
+    }
+
+    #[test]
+    fn preset_composition_is_independent_of_click_order() {
+        let forward = vec!["cataract-light".into(), "cataract-strong".into()];
+        let reverse = vec!["cataract-strong".into(), "cataract-light".into()];
+        assert_eq!(
+            compose(Locale::En, &forward, &Map::new()),
+            compose(Locale::En, &reverse, &Map::new())
+        );
     }
 
     #[test]

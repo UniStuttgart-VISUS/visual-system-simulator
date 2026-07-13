@@ -158,6 +158,15 @@ builder_parameter!(
 );
 
 impl RetinaMapBuilder {
+    pub(super) fn is_identity(&self) -> bool {
+        !self.glaucoma_onoff
+            && !self.achromatopsia_onoff
+            && !self.nyctalopia_onoff
+            && !self.colorblindness_onoff
+            && !self.maculardegeneration_onoff
+            && !self.receptordensity_onoff
+    }
+
     pub fn generate(&self, resolution: (u32, u32), orientation: &[Vector3<f32>; 3]) -> Box<[u8]> {
         let mut maps: Vec<image::ImageBuffer<image::Rgba<u8>, Vec<u8>>> = Vec::new();
 
