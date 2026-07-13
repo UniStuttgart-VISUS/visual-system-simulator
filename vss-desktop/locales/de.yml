@@ -1,0 +1,14 @@
+panel:
+  hide_hint: "Drücke [Esc], um das Panel auszublenden"
+eyes:
+  both: "Beide Augen"
+  left: "Linkes Auge"
+  right: "Rechtes Auge"
+presets:
+  title: "Presets"
+  reset_layer: "Layer zurücksetzen"
+settings:
+  reset_value: "Wert zurücksetzen"
+  inherited: "geerbt"
+diagnostics:
+  warning: "Konfigurationswarnung"

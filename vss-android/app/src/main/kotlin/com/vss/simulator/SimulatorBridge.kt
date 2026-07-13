@@ -51,15 +51,12 @@ object SimulatorBridge {
     private external fun nativePostSettings(jsonString: String)
 
     @JvmStatic
-    private external fun nativeQuerySettings(): String
-
-    @JvmStatic
     private external fun nativeCatalog(locale: String): String
 
     @JvmStatic
     private external fun nativeComposeSettings(
         locale: String,
-        activeProfiles: String,
+        activePresets: String,
         manualOverrides: String,
     ): String
 
@@ -110,12 +107,6 @@ object SimulatorBridge {
         nativePostSettings(jsonString)
     }
 
-    fun querySettings(): String {
-        assert(libraryLoaded) { "Native library not loaded" }
-        Log.v(LOG_TAG, "Querying simulator settings")
-        return nativeQuerySettings()
-    }
-
     fun catalog(locale: String): String {
         assert(libraryLoaded) { "Native library not loaded" }
         return nativeCatalog(locale)
@@ -123,10 +114,10 @@ object SimulatorBridge {
 
     fun composeSettings(
         locale: String,
-        activeProfiles: String,
+        activePresets: String,
         manualOverrides: String,
     ): String {
         assert(libraryLoaded) { "Native library not loaded" }
-        return nativeComposeSettings(locale, activeProfiles, manualOverrides)
+        return nativeComposeSettings(locale, activePresets, manualOverrides)
     }
 }

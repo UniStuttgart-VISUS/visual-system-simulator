@@ -3,6 +3,7 @@ use std::borrow::BorrowMut;
 use super::*;
 use cgmath::Matrix4;
 use cgmath::Rad;
+use std::sync::OnceLock;
 use wgpu::CommandEncoder;
 
 #[repr(C)]
@@ -102,60 +103,82 @@ impl Default for VisOverlayConfig {
     }
 }
 
-impl NodeConfig for VisOverlayConfig {
-    fn inspect(&mut self, inspector: &dyn Inspector) -> bool {
-        let mut changed = false;
-        changed |= inspector.mut_i32("flow_id", &mut self.eye_idx);
-
-        let mut file_base_image = self.vis_type.base_image as i32;
-        if inspector.mut_i32("file_base_image", &mut file_base_image) {
-            self.vis_type.base_image = match file_base_image {
-                0 => BaseImage::Output,
-                1 => BaseImage::Original,
-                2 => BaseImage::Ganglion,
-                _ => panic!("No BaseImage of {} found", file_base_image),
-            };
-            changed = true;
-        }
-
-        let mut file_mix_type = self.vis_type.mix_type as i32;
-        if inspector.mut_i32("file_mix_type", &mut file_mix_type) {
-            self.vis_type.mix_type = match file_mix_type {
-                0 => MixType::BaseImageOnly,
-                1 => MixType::ColorMapOnly,
-                2 => MixType::OverlayThreshold,
-                _ => panic!("No MixType of {} found", file_mix_type),
-            };
-            changed = true;
-        }
-
-        let mut file_cm_type = self.vis_type.color_map_type as i32;
-        if inspector.mut_i32("file_cm_type", &mut file_cm_type) {
-            self.vis_type.color_map_type = match file_cm_type {
-                0 => ColorMapType::Viridis,
-                1 => ColorMapType::Turbo,
-                2 => ColorMapType::Grayscale,
-                _ => panic!("No ColorMapType of {} found", file_cm_type),
-            };
-            changed = true;
-        }
-
-        let mut file_cf = self.vis_type.combination_function as i32;
-        if inspector.mut_i32("file_cf", &mut file_cf) {
-            self.vis_type.combination_function = match file_cf {
-                0 => CombinationFunction::AbsoluteErrorRGBVectorLength,
-                1 => CombinationFunction::AbsoluteErrorXYVectorLength,
-                2 => CombinationFunction::AbsoluteErrorRGBXYVectorLength,
-                3 => CombinationFunction::UncertaintyRGBVectorLength,
-                4 => CombinationFunction::UncertaintyXYVectorLength,
-                5 => CombinationFunction::UncertaintyRGBXYVectorLength,
-                6 => CombinationFunction::UncertaintyGenVar,
-                _ => panic!("No CombinationFunction of {} found", file_cf),
-            };
-            changed = true;
-        }
-        changed |= inspector.mut_f32("cm_scale", &mut self.heat_scale);
-        changed
+pub const EYE: ParameterId<VisOverlay, i32> =
+    ParameterId::for_node("vis-overlay.eye", |n| &mut n.config.eye_idx);
+pub const HEAT_SCALE: ParameterId<VisOverlay, f32> =
+    ParameterId::for_node("vis-overlay.heat-scale", |n| &mut n.config.heat_scale);
+pub const BASE_IMAGE: ParameterId<VisOverlay, i32> =
+    ParameterId::with_setter("vis-overlay.base-image", |n, v| {
+        set_enum(
+            &mut n.config.vis_type.base_image,
+            v,
+            &[BaseImage::Output, BaseImage::Original, BaseImage::Ganglion],
+        )
+    });
+pub const MIX_TYPE: ParameterId<VisOverlay, i32> =
+    ParameterId::with_setter("vis-overlay.mix-type", |n, v| {
+        set_enum(
+            &mut n.config.vis_type.mix_type,
+            v,
+            &[
+                MixType::BaseImageOnly,
+                MixType::ColorMapOnly,
+                MixType::OverlayThreshold,
+            ],
+        )
+    });
+pub const COLOR_MAP: ParameterId<VisOverlay, i32> =
+    ParameterId::with_setter("vis-overlay.color-map", |n, v| {
+        set_enum(
+            &mut n.config.vis_type.color_map_type,
+            v,
+            &[
+                ColorMapType::Viridis,
+                ColorMapType::Turbo,
+                ColorMapType::Grayscale,
+            ],
+        )
+    });
+pub const COLOR_FUNCTION: ParameterId<VisOverlay, i32> =
+    ParameterId::with_setter("vis-overlay.color-function", |n, v| {
+        set_enum(
+            &mut n.config.vis_type.combination_function,
+            v,
+            &[
+                CombinationFunction::AbsoluteErrorRGBVectorLength,
+                CombinationFunction::AbsoluteErrorXYVectorLength,
+                CombinationFunction::AbsoluteErrorRGBXYVectorLength,
+                CombinationFunction::UncertaintyRGBVectorLength,
+                CombinationFunction::UncertaintyXYVectorLength,
+                CombinationFunction::UncertaintyRGBXYVectorLength,
+                CombinationFunction::UncertaintyGenVar,
+            ],
+        )
+    });
+fn set_enum<T: Copy + PartialEq>(target: &mut T, value: i32, values: &[T]) -> bool {
+    let value = *values
+        .get(value as usize)
+        .expect("invalid visualization enum value");
+    if *target == value {
+        false
+    } else {
+        *target = value;
+        true
+    }
+}
+impl Parameters for VisOverlay {
+    fn parameters() -> &'static [ParameterDescriptor] {
+        static P: OnceLock<Vec<ParameterDescriptor>> = OnceLock::new();
+        P.get_or_init(|| {
+            vec![
+                EYE.descriptor(),
+                BASE_IMAGE.descriptor(),
+                MIX_TYPE.descriptor(),
+                COLOR_MAP.descriptor(),
+                COLOR_FUNCTION.descriptor(),
+                HEAT_SCALE.descriptor(),
+            ]
+        })
     }
 }
 
@@ -269,10 +292,6 @@ impl Node for VisOverlay {
         }
 
         slots
-    }
-
-    fn inspect_config(&mut self, inspector: &dyn Inspector) -> bool {
-        inspect_node_config(inspector, self.name(), &mut self.config)
     }
 
     fn configure(&mut self) -> NodeChanges {

@@ -1,14 +1,13 @@
+#[macro_use]
+extern crate rust_i18n;
+
+i18n!("locales", fallback = "en");
+
 mod cmd;
 mod flow;
 mod node;
-
-use vss::*;
+mod ui;
 
 fn main() -> Result<(), String> {
-    set_load(Box::new(|path| {
-        std::fs::read(path)
-            .map(std::io::Cursor::new)
-            .map_err(|err| format!("Cannot read file '{path}' ({err})"))
-    }));
     cmd::run()
 }

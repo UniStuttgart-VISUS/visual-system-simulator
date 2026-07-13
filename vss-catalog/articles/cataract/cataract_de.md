@@ -5,10 +5,10 @@ title: Katarakt (Grauer Star)
 demonstrations:
   - id: cataract-light
     label: Leichte Katarakt simulieren
-    profiles: [cataract-light]
+    presets: [cataract-light]
   - id: cataract-strong
     label: Starke Katarakt simulieren
-    profiles: [cataract-strong]
+    presets: [cataract-strong]
 ---
 
 ![](images/katarakt-schwach.png) 

@@ -134,20 +134,14 @@ fn run_batch_render(config: RenderConfig) -> Result<(), FlowError> {
             continue;
         }
         let config_start = Instant::now();
-        common.base_config = planned_input.config.clone();
+        common.config_paths = planned_input.config.clone().into_iter().collect();
         common.inputs = vec![planned_input.input.clone()];
         let diagnostics = refresh_flow_configs(&mut common).map_err(|err| FlowError {
             input: planned_input.input.clone(),
             stage: FlowStage::Decode,
             message: err.to_string(),
         })?;
-        if report_diagnostics(&diagnostics).is_err() {
-            return Err(FlowError {
-                input: planned_input.input,
-                stage: FlowStage::Decode,
-                message: "configuration validation failed".to_string(),
-            });
-        }
+        report_diagnostics(&diagnostics);
         let config_time = config_start.elapsed();
         if let Some(pending) = run_headless_render_with_renderer(
             &common,
@@ -236,7 +230,6 @@ fn run_headless_render_with_renderer(
             input: config.inputs[0].clone(),
             output: Some(output_path),
             force,
-            show_gui: false,
             render_resolution: RenderResolution::Buffer { input_scale: 1.0 },
             view_port: ViewPort {
                 x: 0.0,
@@ -250,13 +243,7 @@ fn run_headless_render_with_renderer(
     let finalize_start = Instant::now();
     let diagnostics = finalize_flows(&mut context, &config.config_document, &[0]);
     let finalize_time = finalize_start.elapsed();
-    if report_diagnostics(&diagnostics).is_err() {
-        return Err(FlowError {
-            input: first_input,
-            stage: FlowStage::Encode,
-            message: "configuration validation failed".to_string(),
-        });
-    }
+    report_diagnostics(&diagnostics);
 
     let dummy_screen = RenderTexture::empty_color_with_format(
         context.device(),

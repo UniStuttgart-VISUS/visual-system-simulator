@@ -5,7 +5,7 @@ title: Glaukom (Grüner Star)
 demonstrations:
   - id: glaucoma-moderate
     label: Mittleres Glaukom simulieren
-    profiles: [glaucoma-moderate]
+    presets: [glaucoma-moderate]
 ---
 
 ![](images/glaukom-mittel.png) 

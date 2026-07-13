@@ -5,10 +5,10 @@ title: Cataract
 demonstrations:
   - id: cataract-light
     label: Simulate mild cataract
-    profiles: [cataract-light]
+    presets: [cataract-light]
   - id: cataract-strong
     label: Simulate severe cataract
-    profiles: [cataract-strong]
+    presets: [cataract-strong]
 ---
 
 ![](images/katarakt-schwach.png) 

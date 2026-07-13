@@ -10,3 +10,7 @@ resolver = "2"
 cgmath = { workspace = true }
 vss = { path = "../vss" }
 winit = { workspace = true }
+wgpu = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3", features = ["Document", "Element", "Window"] }

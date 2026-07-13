@@ -1,25 +1,26 @@
-use std::fmt::{Display, Formatter};
+use std::{
+    fmt::{Display, Formatter},
+    io::Cursor,
+};
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct AssetId {
-    raw: String,
-}
+#[derive(Debug, Default, Clone, Eq, PartialEq)]
+pub struct AssetId(String);
 
 impl AssetId {
     pub fn from_str(raw: impl Into<String>) -> Self {
-        Self { raw: raw.into() }
+        Self(raw.into())
     }
 
     pub fn new() -> Self {
-        Self { raw: "".into() }
+        Self::default()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.raw.is_empty()
+        self.0.is_empty()
     }
 
     pub fn raw(&self) -> &str {
-        &self.raw
+        &self.0
     }
 }
 
@@ -37,6 +38,19 @@ impl From<&str> for AssetId {
 
 impl Display for AssetId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.raw)
+        f.write_str(&self.0)
+    }
+}
+
+pub trait AssetLoader: Send + Sync {
+    fn load(&self, id: &AssetId) -> Result<Cursor<Vec<u8>>, String>;
+}
+
+impl<F> AssetLoader for F
+where
+    F: Fn(&AssetId) -> Result<Cursor<Vec<u8>>, String> + Send + Sync,
+{
+    fn load(&self, id: &AssetId) -> Result<Cursor<Vec<u8>>, String> {
+        self(id)
     }
 }

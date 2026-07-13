@@ -1,8 +1,15 @@
 mod retina_map;
 
-use self::retina_map::*;
+use self::retina_map::RetinaMapBuilder;
+pub use self::retina_map::{
+    ACHROMATOPSIA_ENABLED, ACHROMATOPSIA_INTENSITY, COLOR_ENABLED, COLOR_INTENSITY, COLOR_TYPE,
+    GLAUCOMA_ENABLED, GLAUCOMA_FIELD, MACULAR_ADVANCED, MACULAR_ENABLED, MACULAR_INTENSITY,
+    MACULAR_RADIUS, MACULAR_SIMPLE, MACULAR_SIMPLE_INTENSITY, NYCTALOPIA_ENABLED,
+    NYCTALOPIA_INTENSITY, RECEPTOR_DENSITY_ENABLED,
+};
 use super::*;
 use cgmath::{Matrix4, Point3, SquareMatrix, Vector3};
+use std::sync::OnceLock;
 
 #[repr(C)]
 struct Uniforms {
@@ -36,7 +43,7 @@ pub struct Retina {
     targets: ColorTargets,
 
     map_valid: bool,
-    map_config_changed: bool,
+    configured_map: Option<MapConfig>,
     track_error: bool,
 }
 
@@ -72,24 +79,96 @@ impl Default for RetinaConfig {
     }
 }
 
-impl NodeConfig for RetinaConfig {
-    fn inspect(&mut self, inspector: &dyn Inspector) -> bool {
-        let mut changed = false;
-        changed |= inspector.mut_asset("retina_map_pos_x_path", &mut self.retina_map_pos_x_path);
-        changed |= inspector.mut_asset("retina_map_neg_x_path", &mut self.retina_map_neg_x_path);
-        changed |= inspector.mut_asset("retina_map_pos_y_path", &mut self.retina_map_pos_y_path);
-        changed |= inspector.mut_asset("retina_map_neg_y_path", &mut self.retina_map_neg_y_path);
-        changed |= inspector.mut_asset("retina_map_pos_z_path", &mut self.retina_map_pos_z_path);
-        changed |= inspector.mut_asset("retina_map_neg_z_path", &mut self.retina_map_neg_z_path);
-        changed |= inspector.mut_f32(
-            "achromatopsia_blur_factor",
-            &mut self.achromatopsia_blur_factor,
-        );
-        changed |= inspector.mut_matrix("proj_matrix", &mut self.proj_matrix);
-        changed |= inspector.mut_f64("cubemap_scale", &mut self.cubemap_scale);
-        changed |= inspector.mut_bool("track_error", &mut self.track_error);
-        changed |= self.retina_map_builder.inspect(inspector);
-        changed
+macro_rules! retina_parameter {
+    ($name:ident, $ty:ty, $id:literal, $field:ident) => {
+        pub const $name: ParameterId<Retina, $ty> =
+            ParameterId::for_node($id, |n| &mut n.config.$field);
+    };
+}
+retina_parameter!(
+    MAP_POS_X,
+    AssetId,
+    "retina.map-pos-x",
+    retina_map_pos_x_path
+);
+retina_parameter!(
+    MAP_NEG_X,
+    AssetId,
+    "retina.map-neg-x",
+    retina_map_neg_x_path
+);
+retina_parameter!(
+    MAP_POS_Y,
+    AssetId,
+    "retina.map-pos-y",
+    retina_map_pos_y_path
+);
+retina_parameter!(
+    MAP_NEG_Y,
+    AssetId,
+    "retina.map-neg-y",
+    retina_map_neg_y_path
+);
+retina_parameter!(
+    MAP_POS_Z,
+    AssetId,
+    "retina.map-pos-z",
+    retina_map_pos_z_path
+);
+retina_parameter!(
+    MAP_NEG_Z,
+    AssetId,
+    "retina.map-neg-z",
+    retina_map_neg_z_path
+);
+retina_parameter!(
+    ACHROMATOPSIA_BLUR,
+    f32,
+    "achromatopsia.blur",
+    achromatopsia_blur_factor
+);
+retina_parameter!(
+    PROJECTION_MATRIX,
+    Matrix4<f32>,
+    "retina.projection-matrix",
+    proj_matrix
+);
+retina_parameter!(CUBEMAP_SCALE, f64, "retina.cubemap-scale", cubemap_scale);
+retina_parameter!(TRACK_ERROR, bool, "retina.track-error", track_error);
+
+impl Parameters for Retina {
+    fn parameters() -> &'static [ParameterDescriptor] {
+        static P: OnceLock<Vec<ParameterDescriptor>> = OnceLock::new();
+        P.get_or_init(|| {
+            vec![
+                MAP_POS_X.descriptor(),
+                MAP_NEG_X.descriptor(),
+                MAP_POS_Y.descriptor(),
+                MAP_NEG_Y.descriptor(),
+                MAP_POS_Z.descriptor(),
+                MAP_NEG_Z.descriptor(),
+                ACHROMATOPSIA_BLUR.descriptor(),
+                PROJECTION_MATRIX.descriptor(),
+                CUBEMAP_SCALE.descriptor(),
+                TRACK_ERROR.descriptor(),
+                GLAUCOMA_ENABLED.descriptor(),
+                GLAUCOMA_FIELD.descriptor(),
+                ACHROMATOPSIA_ENABLED.descriptor(),
+                ACHROMATOPSIA_INTENSITY.descriptor(),
+                NYCTALOPIA_ENABLED.descriptor(),
+                NYCTALOPIA_INTENSITY.descriptor(),
+                COLOR_ENABLED.descriptor(),
+                COLOR_TYPE.descriptor(),
+                COLOR_INTENSITY.descriptor(),
+                MACULAR_ENABLED.descriptor(),
+                MACULAR_SIMPLE.descriptor(),
+                MACULAR_SIMPLE_INTENSITY.descriptor(),
+                MACULAR_ADVANCED.descriptor(),
+                MACULAR_RADIUS.descriptor(),
+                MACULAR_INTENSITY.descriptor(),
+                RECEPTOR_DENSITY_ENABLED.descriptor(),
+            ]
+        })
     }
 }
 
@@ -204,7 +283,7 @@ impl Retina {
             targets: ColorTargets::new(device, "Retina"),
 
             map_valid: false,
-            map_config_changed: false,
+            configured_map: None,
             track_error: false,
         }
     }
@@ -222,7 +301,7 @@ impl Retina {
             if path.is_empty() {
                 return;
             }
-            match load(path.raw()) {
+            match context.load_asset(path) {
                 Ok(data) => image_data.push(data),
                 Err(err) => panic!("failed to load retina map {}: {err}", path),
             }
@@ -337,23 +416,18 @@ impl Node for Retina {
         slots
     }
 
-    fn inspect_config(&mut self, inspector: &dyn Inspector) -> bool {
-        let old_map_config = self.config.map_config();
-        let changed = inspect_node_config(inspector, self.name(), &mut self.config);
-        self.map_config_changed |= old_map_config != self.config.map_config();
-        changed
-    }
-
     fn configure(&mut self) -> NodeChanges {
         let track_error = self.config.track_error as i32;
-        let output_changed = self.map_config_changed
+        let map_config = self.config.map_config();
+        let map_config_changed = self.configured_map.as_ref() != Some(&map_config);
+        let output_changed = map_config_changed
             || self.uniforms.data.achromatopsia_blur_factor
                 != self.config.achromatopsia_blur_factor
             || self.uniforms.data.track_error != track_error;
 
-        if self.map_config_changed {
+        if map_config_changed {
             self.map_valid = false;
-            self.map_config_changed = false;
+            self.configured_map = Some(map_config);
         }
         self.track_error = self.config.track_error;
         self.uniforms.data.achromatopsia_blur_factor = self.config.achromatopsia_blur_factor;

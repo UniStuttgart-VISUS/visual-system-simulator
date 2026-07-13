@@ -5,19 +5,21 @@ use clap::{Parser, Subcommand};
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
-use vss::*;
+use vss_catalog::{
+    diagnostics_to_string, load_config_layers_from_text, ConfigDocument, Diagnostic,
+};
 
 #[derive(Debug, Default)]
 pub(super) struct CommonConfig {
     pub inputs: Vec<String>,
-    pub base_config: Option<PathBuf>,
+    pub config_paths: Vec<PathBuf>,
     pub config_document: ConfigDocument,
 }
 
 #[derive(Debug, Parser)]
 #[command(
     name = "vss-desktop",
-    version = "1.1.0",
+    version,
     author = "The Visual System Simulator Developers",
     about = "Simulates various aspects of the human visual system",
     disable_help_subcommand = true
@@ -48,23 +50,16 @@ fn read_text_file(path: &Path) -> Result<Option<String>, Box<dyn Error>> {
 }
 
 fn refresh_flow_configs(config: &mut CommonConfig) -> Result<Vec<Diagnostic>, Box<dyn Error>> {
-    let (documents, diagnostics) = vss::load_config_layers_from_text(
-        config.base_config.as_deref(),
-        &config.inputs,
-        read_text_file,
-    )?;
+    let (documents, diagnostics) =
+        load_config_layers_from_text(&config.config_paths, &config.inputs, read_text_file)?;
     config.config_document = documents;
     Ok(diagnostics)
 }
 
-pub(super) fn report_diagnostics(diagnostics: &[Diagnostic]) -> Result<(), String> {
-    let message = vss::diagnostics_to_string(diagnostics);
+pub(super) fn report_diagnostics(diagnostics: &[Diagnostic]) {
     if !diagnostics.is_empty() {
-        eprintln!("{message}");
+        eprintln!("{}", diagnostics_to_string(diagnostics));
     }
-    (!vss::diagnostics_have_errors(diagnostics))
-        .then_some(())
-        .ok_or(message)
 }
 
 pub(crate) fn run() -> Result<(), String> {

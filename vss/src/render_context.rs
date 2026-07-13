@@ -1,6 +1,6 @@
 use crate::*;
 use instant::Instant;
-use std::cell::Cell;
+use std::{cell::Cell, sync::Arc};
 
 /// Owns the device state, render graph, and frame timing used by simulation nodes.
 pub struct RenderContext {
@@ -8,6 +8,7 @@ pub struct RenderContext {
     queue: wgpu::Queue,
     size: [u32; 2],
     output_format: wgpu::TextureFormat,
+    asset_loader: Arc<dyn AssetLoader>,
 
     pub flows: Vec<Flow>,
     last_render_instant: Cell<Instant>,
@@ -30,10 +31,23 @@ impl RenderContext {
             queue,
             size,
             output_format,
+            asset_loader: Arc::new(|id: &AssetId| {
+                std::fs::read(id.raw())
+                    .map(std::io::Cursor::new)
+                    .map_err(|err| format!("Cannot read asset '{}': {err}", id))
+            }),
             flows,
             last_render_instant: Cell::new(Instant::now()),
             pending_changes: Cell::new(NodeChanges::OUTPUT),
         }
+    }
+
+    pub fn set_asset_loader(&mut self, loader: impl AssetLoader + 'static) {
+        self.asset_loader = Arc::new(loader);
+    }
+
+    pub fn load_asset(&self, id: &AssetId) -> Result<std::io::Cursor<Vec<u8>>, String> {
+        self.asset_loader.load(id)
     }
 
     pub fn add_node(&mut self, node: Box<dyn Node>, flow_index: usize) {
@@ -63,15 +77,6 @@ impl RenderContext {
             flow.negociate_slots(self);
         }
         self.apply_changes(NodeChanges::SLOTS);
-    }
-
-    pub fn inspect(&self, inspector: &mut dyn Inspector) -> NodeChanges {
-        let mut result = NodeChanges::empty();
-        for (i, flow) in self.flows.iter().enumerate() {
-            result |= inspector.flow(i, flow);
-        }
-        self.apply_changes(result);
-        result.normalized()
     }
 
     pub fn apply_changes(&self, changes: NodeChanges) {

@@ -1,7 +1,5 @@
 {
   "both": {
-    "simulator": {
-      "receptordensity_onoff": true
-    }
+    "retina.receptor-density-enabled": true
   }
 }

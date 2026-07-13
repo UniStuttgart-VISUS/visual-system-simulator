@@ -3,6 +3,7 @@ mod generator;
 pub use generator::*;
 
 use super::*;
+use std::sync::OnceLock;
 
 const DIOPTRES_SCALING: f64 = 0.332_763_369_417_523;
 
@@ -82,21 +83,54 @@ impl Default for LensConfig {
     }
 }
 
-impl NodeConfig for LensConfig {
-    fn inspect(&mut self, inspector: &dyn Inspector) -> bool {
-        let mut changed = false;
-        changed |= inspector.mut_i32("rays", &mut self.samplecount);
-        changed |= inspector.mut_bool("presbyopia_onoff", &mut self.presbyopia_onoff);
-        changed |= inspector.mut_f64("presbyopia_near_point", &mut self.presbyopia_near_point);
-        changed |= inspector.mut_bool("myopiahyperopia_onoff", &mut self.myopiahyperopia_onoff);
-        changed |= inspector.mut_f64("myopiahyperopia_mnh", &mut self.myopiahyperopia_mnh);
-        changed |= inspector.mut_f64("astigmatism_dpt", &mut self.astigmatism_dpt);
-        changed |= inspector.mut_f32("astigmatism_angle_deg", &mut self.astigmatism_angle_deg);
-        changed |= inspector.mut_f32("eye_distance_center", &mut self.eye_distance_center);
-        changed |= inspector.mut_f32("depth_min", &mut self.depth_min);
-        changed |= inspector.mut_f32("depth_max", &mut self.depth_max);
-        changed |= inspector.mut_bool("track_error", &mut self.track_error);
-        changed
+pub const RAYS: ParameterId<Lens, i32> =
+    ParameterId::for_node("lens.rays", |n| &mut n.config.samplecount);
+pub const PRESBYOPIA_ENABLED: ParameterId<Lens, bool> =
+    ParameterId::for_node("eye.presbyopia-enabled", |n| &mut n.config.presbyopia_onoff);
+pub const NEAR_POINT: ParameterId<Lens, f64> =
+    ParameterId::for_node("eye.near-point", |n| &mut n.config.presbyopia_near_point);
+pub const REFRACTION_ENABLED: ParameterId<Lens, bool> =
+    ParameterId::for_node("eye.refraction-enabled", |n| {
+        &mut n.config.myopiahyperopia_onoff
+    });
+pub const REFRACTION_DIOPTERS: ParameterId<Lens, f64> =
+    ParameterId::for_node("eye.refraction-diopters", |n| {
+        &mut n.config.myopiahyperopia_mnh
+    });
+pub const ASTIGMATISM_DIOPTERS: ParameterId<Lens, f64> =
+    ParameterId::for_node("eye.astigmatism-diopters", |n| {
+        &mut n.config.astigmatism_dpt
+    });
+pub const ASTIGMATISM_ANGLE: ParameterId<Lens, f32> =
+    ParameterId::for_node("eye.astigmatism-angle", |n| {
+        &mut n.config.astigmatism_angle_deg
+    });
+pub const EYE_CENTER_DISTANCE: ParameterId<Lens, f32> =
+    ParameterId::for_node("eye.center-distance", |n| &mut n.config.eye_distance_center);
+pub const DEPTH_MIN: ParameterId<Lens, f32> =
+    ParameterId::for_node("lens.depth-min", |n| &mut n.config.depth_min);
+pub const DEPTH_MAX: ParameterId<Lens, f32> =
+    ParameterId::for_node("lens.depth-max", |n| &mut n.config.depth_max);
+pub const TRACK_ERROR: ParameterId<Lens, bool> =
+    ParameterId::for_node("lens.track-error", |n| &mut n.config.track_error);
+impl Parameters for Lens {
+    fn parameters() -> &'static [ParameterDescriptor] {
+        static P: OnceLock<Vec<ParameterDescriptor>> = OnceLock::new();
+        P.get_or_init(|| {
+            vec![
+                RAYS.descriptor(),
+                PRESBYOPIA_ENABLED.descriptor(),
+                NEAR_POINT.descriptor(),
+                REFRACTION_ENABLED.descriptor(),
+                REFRACTION_DIOPTERS.descriptor(),
+                ASTIGMATISM_DIOPTERS.descriptor(),
+                ASTIGMATISM_ANGLE.descriptor(),
+                EYE_CENTER_DISTANCE.descriptor(),
+                DEPTH_MIN.descriptor(),
+                DEPTH_MAX.descriptor(),
+                TRACK_ERROR.descriptor(),
+            ]
+        })
     }
 }
 
@@ -254,10 +288,6 @@ impl Node for Lens {
         (_, self.normal_bind_group) = self.generator.texture.create_bind_group(device);
 
         slots
-    }
-
-    fn inspect_config(&mut self, inspector: &dyn Inspector) -> bool {
-        inspect_node_config(inspector, self.name(), &mut self.config)
     }
 
     fn configure(&mut self) -> NodeChanges {

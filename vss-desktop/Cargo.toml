@@ -9,12 +9,20 @@ wgpu = { workspace = true }
 vss = { path = "../vss" }
 vss-winit = { path = "../vss-winit" }
 vss-openxr = { path = "../vss-openxr" }
+vss-catalog = { path = "../vss-catalog" }
 pollster = "0.4"
 clap = { version = "4", features = ["derive"] }
 glob = "0.3"
 ac_ffmpeg = { package = "ac-ffmpeg", version = "0.19.0", optional = true }
 rfd = "0.15"
 tempfile = "3"
+egui = "0.34"
+egui-wgpu = "0.34"
+egui-winit = "0.34"
+serde_json = "1"
+sys-locale = "0.3"
+rust-i18n = { workspace = true }
+winit = { workspace = true }
 
 [features]
 default = []

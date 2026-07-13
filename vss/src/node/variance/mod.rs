@@ -2,7 +2,7 @@ use wgpu::Buffer;
 
 use super::*;
 
-use std::{collections::HashMap, mem::size_of, time::Instant};
+use std::{collections::HashMap, mem::size_of, sync::OnceLock, time::Instant};
 
 #[repr(C)]
 #[derive(Copy, Clone, PartialEq)]
@@ -49,14 +49,27 @@ impl Default for VarianceConfig {
     }
 }
 
-impl NodeConfig for VarianceConfig {
-    fn inspect(&mut self, inspector: &dyn Inspector) -> bool {
-        let mut changed = false;
-        changed |= inspector.mut_u32("measure_variance", &mut self.measure_variance);
-        changed |= inspector.mut_u32("variance_metric", &mut self.variance_metric);
-        changed |= inspector.mut_u32("variance_color_space", &mut self.variance_color_space);
-        changed |= inspector.mut_bool("track_error", &mut self.track_error);
-        changed
+pub const MEASURE: ParameterId<VarianceMeasure, u32> =
+    ParameterId::for_node("variance.measure", |n| &mut n.config.measure_variance);
+pub const METRIC: ParameterId<VarianceMeasure, u32> =
+    ParameterId::for_node("variance.metric", |n| &mut n.config.variance_metric);
+pub const COLOR_SPACE: ParameterId<VarianceMeasure, u32> =
+    ParameterId::for_node("variance.color-space", |n| {
+        &mut n.config.variance_color_space
+    });
+pub const TRACK_ERROR: ParameterId<VarianceMeasure, bool> =
+    ParameterId::for_node("variance.track-error", |n| &mut n.config.track_error);
+impl Parameters for VarianceMeasure {
+    fn parameters() -> &'static [ParameterDescriptor] {
+        static P: OnceLock<Vec<ParameterDescriptor>> = OnceLock::new();
+        P.get_or_init(|| {
+            vec![
+                MEASURE.descriptor(),
+                METRIC.descriptor(),
+                COLOR_SPACE.descriptor(),
+                TRACK_ERROR.descriptor(),
+            ]
+        })
     }
 }
 
@@ -315,10 +328,6 @@ impl Node for VarianceMeasure {
         self.download_buffer = download_buffer;
 
         slots
-    }
-
-    fn inspect_config(&mut self, inspector: &dyn Inspector) -> bool {
-        inspect_node_config(inspector, self.name(), &mut self.config)
     }
 
     fn configure(&mut self) -> NodeChanges {

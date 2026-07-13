@@ -1,4 +1,5 @@
 use super::*;
+use std::sync::OnceLock;
 
 #[repr(C)]
 #[derive(Copy, Clone, PartialEq)]
@@ -40,14 +41,26 @@ impl Default for CataractConfig {
     }
 }
 
-impl NodeConfig for CataractConfig {
-    fn inspect(&mut self, inspector: &dyn Inspector) -> bool {
-        let mut changed = false;
-        changed |= inspector.mut_bool("ct_onoff", &mut self.active);
-        changed |= inspector.mut_f64("ct_blur_factor", &mut self.blur_factor);
-        changed |= inspector.mut_f64("ct_contrast_factor", &mut self.contrast_factor);
-        changed |= inspector.mut_bool("track_error", &mut self.track_error);
-        changed
+pub const ENABLED: ParameterId<Cataract, bool> =
+    ParameterId::for_node("cataract.enabled", |n| &mut n.config.active);
+pub const BLUR: ParameterId<Cataract, f64> =
+    ParameterId::for_node("cataract.blur", |n| &mut n.config.blur_factor);
+pub const CONTRAST: ParameterId<Cataract, f64> =
+    ParameterId::for_node("cataract.contrast", |n| &mut n.config.contrast_factor);
+pub const TRACK_ERROR: ParameterId<Cataract, bool> =
+    ParameterId::for_node("cataract.track-error", |n| &mut n.config.track_error);
+
+impl Parameters for Cataract {
+    fn parameters() -> &'static [ParameterDescriptor] {
+        static P: OnceLock<Vec<ParameterDescriptor>> = OnceLock::new();
+        P.get_or_init(|| {
+            vec![
+                ENABLED.descriptor(),
+                BLUR.descriptor(),
+                CONTRAST.descriptor(),
+                TRACK_ERROR.descriptor(),
+            ]
+        })
     }
 }
 
@@ -157,10 +170,6 @@ impl Node for Cataract {
         self.targets = slots.as_all_target();
 
         slots
-    }
-
-    fn inspect_config(&mut self, inspector: &dyn Inspector) -> bool {
-        inspect_node_config(inspector, self.name(), &mut self.config)
     }
 
     fn configure(&mut self) -> NodeChanges {

@@ -19,7 +19,7 @@ struct FrontMatter {
 struct Demonstration {
     id: String,
     label: String,
-    profiles: Vec<String>,
+    presets: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -66,9 +66,9 @@ fn main() {
         for demo in &metadata.demonstrations {
             let shape = demo_shapes
                 .entry(demo.id.clone())
-                .or_insert_with(|| demo.profiles.clone());
+                .or_insert_with(|| demo.presets.clone());
             assert_eq!(
-                shape, &demo.profiles,
+                shape, &demo.presets,
                 "Demonstration '{}' differs between locales",
                 demo.id
             );
@@ -186,8 +186,8 @@ fn validate_metadata(metadata: &FrontMatter, path: &Path) {
             path.display()
         );
         assert!(
-            !demo.profiles.is_empty(),
-            "Demonstration '{}' has no profiles",
+            !demo.presets.is_empty(),
+            "Demonstration '{}' has no presets",
             demo.id
         );
     }

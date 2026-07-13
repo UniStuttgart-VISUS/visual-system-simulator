@@ -7,20 +7,18 @@ license = "Apache-2.0"
 resolver = "2"
 
 [dependencies]
-ash = { workspace = true }
 cgmath = { workspace = true }
 raw-window-handle = { workspace = true }
 wgpu = { workspace = true }
-wgpu-hal = { workspace = true }
-egui = "0.34"
-egui-wgpu = "0.34"
 image = "0.25"
 bitflags = "2.13"
 futures-intrusive = "0.5"
-serde_json = "*"
-serde = "1"
 instant = "0.1"
 pollster = "0.4"
+
+[target.'cfg(target_os = "android")'.dependencies]
+ash = { workspace = true }
+wgpu-hal = { workspace = true }
 
 [features]
 webgl = ["wgpu/webgl"]

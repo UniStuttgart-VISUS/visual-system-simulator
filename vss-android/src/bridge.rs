@@ -119,9 +119,9 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate<'loca
         )
     };
 
-    set_load(Box::new(move |full_path| {
-        let full_path = CString::new(full_path)
-            .map_err(|err| format!("Cannot open asset path '{}': {err}", full_path))?;
+    let asset_loader = move |id: &AssetId| {
+        let full_path = CString::new(id.raw())
+            .map_err(|err| format!("Cannot open asset path '{}': {err}", id))?;
         let mut asset = assetManager
             .open(&full_path)
             .ok_or_else(|| format!("Cannot open asset '{}'", full_path.to_string_lossy()))?;
@@ -130,7 +130,7 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate<'loca
             .read_to_end(&mut buffer)
             .map_err(|err| format!("Cannot read asset '{}': {err}", full_path.to_string_lossy()))?;
         Ok(Cursor::new(buffer))
-    }));
+    };
 
     //TODO for testing purposes only
     // value_map.insert("peacock_cb_onoff".into(), Value::Bool(true));
@@ -146,6 +146,7 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate<'loca
     let handle = AndroidHandle(RawWindowHandle::AndroidNdk(window_handle));
     let size = [window.width() as u32, window.height() as u32];
     let mut surface = vss::Surface::new(size, handle, 1);
+    surface.set_asset_loader(asset_loader);
 
     build_flow(&mut surface, PENDING_FRAME.clone());
 
@@ -163,8 +164,10 @@ fn build_flow(surface: &mut Surface, pending_frame: Arc<Mutex<Option<Frame>>>) {
     // Visual system passes.
     let node = Cataract::new(surface);
     surface.add_node(Box::new(node), 0);
-    // let node = Lens::new(surface);
-    // surface.add_node(Box::new(node), 0);
+    let node = EyeControl::new(surface);
+    surface.add_node(Box::new(node), 0);
+    let node = Lens::new(surface);
+    surface.add_node(Box::new(node), 0);
     let node = Retina::new(surface);
     surface.add_node(Box::new(node), 0);
     let node = PeacockCB::new(surface);
@@ -306,9 +309,7 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostSettings
     json_string: JString<'local>,
 ) {
     let json_string: String = match env
-        .with_env_no_catch(|env| -> jni::errors::Result<_> {
-            json_string.try_to_string(env)
-        })
+        .with_env_no_catch(|env| -> jni::errors::Result<_> { json_string.try_to_string(env) })
         .into_outcome()
     {
         Outcome::Ok(json_string) => json_string,
@@ -317,8 +318,11 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostSettings
     };
 
     let json_string = match serde_json::from_str::<serde_json::Value>(&json_string) {
-        Ok(serde_json::Value::Object(values)) => vss_catalog::engine_settings(&values).to_string(),
-        Ok(value) => value.to_string(),
+        Ok(value @ serde_json::Value::Object(_)) => value.to_string(),
+        Ok(_) => {
+            error!("Settings must be a JSON object");
+            return;
+        }
         Err(err) => {
             error!("Invalid settings JSON: {}", err);
             return;
@@ -328,39 +332,50 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostSettings
 }
 
 fn apply_settings(bridge: &mut Bridge, json_string: &str) {
-    let inspector = FromJsonInspector::try_new(json_string);
-    match inspector {
-        Ok(mut inspector) => {
-            let result = bridge.surface.inspect(&mut inspector);
-            if result.contains(NodeChanges::SLOTS) {
-                bridge.surface.negociate_slots();
+    let values =
+        match serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(json_string) {
+            Ok(values) => values,
+            Err(err) => {
+                error!("Invalid settings JSON: {err}");
+                return;
+            }
+        };
+    let root = serde_json::json!({ "both": values });
+    let (document, diagnostics) = vss_catalog::parse_config_value("android", &root);
+    if !diagnostics.is_empty() {
+        error!("{}", vss_catalog::diagnostics_to_string(&diagnostics));
+        return;
+    }
+    let settings = document.effective_left().value_map();
+    let engine = match vss_catalog::validate_settings(&settings) {
+        Ok(()) => settings,
+        Err(diagnostics) => {
+            error!("{}", vss_catalog::diagnostics_to_string(&diagnostics));
+            return;
+        }
+    };
+    let mut patches = Vec::new();
+    for flow in &bridge.surface.flows {
+        match vss_catalog::compile_parameter_patch(flow, &engine, &|_, reference| {
+            AssetId::from_str(reference)
+        }) {
+            Ok(patch) => patches.push(patch),
+            Err(diagnostics) => {
+                error!("{}", vss_catalog::diagnostics_to_string(&diagnostics));
+                return;
             }
         }
-        Err(err) => {
-            error!("{:?}", err);
-        }
     }
-}
-
-#[no_mangle]
-pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeQuerySettings<'local>(
-    mut env: EnvUnowned<'local>,
-    _class: JClass,
-) -> JString<'local> {
-    let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
-    let bridge = (*guard).as_mut().expect("Bridge should be created");
-
-    let mut inspector = ToJsonInspector::new();
-    bridge.surface.inspect(&mut inspector);
-    let json_string = inspector.to_string();
-
-    match env
-        .with_env_no_catch(|env| -> jni::errors::Result<_> { env.new_string(json_string) })
-        .into_outcome()
-    {
-        Outcome::Ok(json_string) => json_string,
-        Outcome::Err(err) => panic!("{}", err),
-        Outcome::Panic(payload) => panic::resume_unwind(payload),
+    let changes = bridge
+        .surface
+        .flows
+        .iter()
+        .zip(patches)
+        .fold(NodeChanges::empty(), |changes, (flow, patch)| {
+            changes | patch.apply(flow)
+        });
+    if changes.contains(NodeChanges::SLOTS) {
+        bridge.surface.negociate_slots();
     }
 }
 
@@ -371,9 +386,7 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCatalog<'loc
     locale: JString<'local>,
 ) -> JString<'local> {
     let tag = match env
-        .with_env_no_catch(|env| -> jni::errors::Result<String> {
-            locale.try_to_string(env)
-        })
+        .with_env_no_catch(|env| -> jni::errors::Result<String> { locale.try_to_string(env) })
         .into_outcome()
     {
         Outcome::Ok(tag) => tag,
@@ -396,14 +409,14 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeComposeSetti
     mut env: EnvUnowned<'local>,
     _class: JClass,
     locale: JString<'local>,
-    active_profiles: JString<'local>,
+    active_presets: JString<'local>,
     manual_overrides: JString<'local>,
 ) -> JString<'local> {
-    let (locale, active_profiles, manual_overrides) = match env
+    let (locale, active_presets, manual_overrides) = match env
         .with_env_no_catch(|env| -> jni::errors::Result<(String, String, String)> {
             Ok((
                 locale.try_to_string(env)?,
-                active_profiles.try_to_string(env)?,
+                active_presets.try_to_string(env)?,
                 manual_overrides.try_to_string(env)?,
             ))
         })
@@ -413,14 +426,14 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeComposeSetti
         Outcome::Err(err) => panic!("{}", err),
         Outcome::Panic(payload) => panic::resume_unwind(payload),
     };
-    let active_profiles: Vec<String> = serde_json::from_str(&active_profiles)
-        .unwrap_or_else(|err| panic!("Invalid active profile list: {}", err));
+    let active_presets: Vec<String> = serde_json::from_str(&active_presets)
+        .unwrap_or_else(|err| panic!("Invalid active preset list: {}", err));
     let manual_overrides: serde_json::Map<String, serde_json::Value> =
         serde_json::from_str(&manual_overrides)
             .unwrap_or_else(|err| panic!("Invalid manual overrides: {}", err));
     let effective = vss_catalog::compose(
         Locale::from_tag(&locale),
-        &active_profiles,
+        &active_presets,
         &manual_overrides,
     );
     let json = serde_json::to_string(&effective).expect("effective settings serialize");

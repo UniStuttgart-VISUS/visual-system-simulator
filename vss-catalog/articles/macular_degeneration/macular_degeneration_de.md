@@ -5,7 +5,7 @@ title: Makuladegeneration
 demonstrations:
   - id: macular-moderate
     label: Mittlere Makuladegeneration simulieren
-    profiles: [macular-moderate]
+    presets: [macular-moderate]
 ---
 
 ![](images/makuladegeneration-mittel.png) 

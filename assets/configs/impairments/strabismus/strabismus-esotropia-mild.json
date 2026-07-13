@@ -1,23 +1,17 @@
 {
   "both": {
-    "simulator": {
-      "eye_axis_rot_x": 0,
-      "myopiahyperopia_onoff": false,
-      "myopiahyperopia_mnh": 50,
-      "astigmatism_dpt": 0,
-      "astigmatism_angle_deg": 0
-    }
+    "eye.axis-x": 0,
+    "eye.refraction-enabled": false,
+    "eye.refraction-diopters": 50,
+    "eye.astigmatism-diopters": 0,
+    "eye.astigmatism-angle": 0
   },
   "left": {
-    "simulator": {
-      "eye_axis_rot_y": 0.05,
-      "eye_distance_center": -10
-    }
+    "eye.axis-y": 0.05,
+    "eye.center-distance": -10
   },
   "right": {
-    "simulator": {
-      "eye_axis_rot_y": -0.05,
-      "eye_distance_center": 10
-    }
+    "eye.axis-y": -0.05,
+    "eye.center-distance": 10
   }
 }

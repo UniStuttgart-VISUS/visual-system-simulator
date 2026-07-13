@@ -5,7 +5,7 @@ title: Glaucoma
 demonstrations:
   - id: glaucoma-moderate
     label: Simulate moderate glaucoma
-    profiles: [glaucoma-moderate]
+    presets: [glaucoma-moderate]
 ---
 
 ![](images/glaukom-mittel.png) 

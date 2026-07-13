@@ -1,18 +1,16 @@
 //!
 //! This module contains several [Nodes](Node) that can be chained to form a [Flow].
 //!
-mod cataract;
+pub mod cataract;
 mod display;
-mod eye_control;
-mod gui_overlay;
-mod lens;
-mod passthrough;
-mod peacock;
-mod retina;
+pub mod eye_control;
+pub mod lens;
+pub mod peacock;
+pub mod retina;
 mod rgb_buffer;
 mod slot;
-mod variance;
-mod vis_overlay;
+pub mod variance;
+pub mod vis_overlay;
 mod yuv_buffer;
 
 use wgpu::util::DeviceExt;
@@ -26,21 +24,29 @@ use wgpu::ShaderModule;
 
 use cgmath::Matrix4;
 
-pub use self::cataract::*;
+pub use self::cataract::{Cataract, CataractConfig};
 pub use self::display::*;
-pub use self::eye_control::*;
-pub use self::gui_overlay::*;
-pub use self::lens::*;
-pub use self::passthrough::*;
-pub use self::peacock::*;
-pub use self::retina::*;
+pub use self::eye_control::{EyeControl, EyeControlConfig};
+pub use self::lens::{Lens, LensConfig};
+pub use self::peacock::{PeacockCB, PeacockConfig};
+pub use self::retina::{Retina, RetinaConfig};
 pub use self::rgb_buffer::*;
 pub use self::slot::*;
-pub use self::variance::*;
-pub use self::vis_overlay::*;
+pub use self::variance::{VarianceConfig, VarianceMeasure};
+pub use self::vis_overlay::{VisOverlay, VisOverlayConfig};
 pub use self::yuv_buffer::*;
 
 use super::*;
+use std::any::Any;
+
+/// Converts a struct to `&[u8]`.
+///
+/// # Safety
+/// Padding bytes in the type may be uninitialized. The caller must ensure that
+/// reading every byte of the value is valid, for example by using `#[repr(packed)]`.
+unsafe fn any_as_u8_slice<T: Sized>(value: &T) -> &[u8] {
+    std::slice::from_raw_parts((value as *const T).cast::<u8>(), std::mem::size_of::<T>())
+}
 
 bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -66,21 +72,8 @@ impl NodeChanges {
     }
 }
 
-pub trait NodeConfig {
-    fn inspect(&mut self, inspector: &dyn Inspector) -> bool;
-}
-
-pub fn inspect_node_config(
-    inspector: &dyn Inspector,
-    name: &'static str,
-    config: &mut dyn NodeConfig,
-) -> bool {
-    let mut inspect = || config.inspect(inspector);
-    inspector.node(name, &mut inspect)
-}
-
 /// An executable function that implements an aspect of the simulation.
-pub trait Node {
+pub trait Node: Any {
     // Returns the node name.
     fn name(&self) -> &'static str;
 
@@ -92,11 +85,6 @@ pub trait Node {
         slots: NodeSlots,
         original_image: &mut Option<Texture>,
     ) -> NodeSlots;
-
-    fn inspect_config(&mut self, inspector: &dyn Inspector) -> bool {
-        let _ = inspector;
-        false
-    }
 
     fn configure(&mut self) -> NodeChanges {
         NodeChanges::empty()
@@ -120,10 +108,6 @@ pub trait Node {
     /// Invoked after all rendering commands have completed. (TODO: rename to on_frame_complete)
     #[allow(unused_variables)]
     fn post_render(&mut self, context: &RenderContext) {}
-
-    fn as_ui_mut(&mut self) -> Option<&'_ mut GuiOverlay> {
-        None
-    }
 }
 
 pub struct ShaderUniforms<T> {

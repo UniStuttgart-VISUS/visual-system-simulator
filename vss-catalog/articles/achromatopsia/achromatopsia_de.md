@@ -5,7 +5,7 @@ title: Achromatopsie (Totale Farbenblindheit)
 demonstrations:
   - id: achromatopsia
     label: Achromatopsie simulieren
-    profiles: [achromatopsia]
+    presets: [achromatopsia]
 ---
 
 ![](images/achromatopsie.png) 

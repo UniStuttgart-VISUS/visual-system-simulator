@@ -1,8 +1,17 @@
 use crate::*;
 use cgmath::Matrix4;
 use cgmath::Vector3;
-use std::cell::{RefCell, RefMut};
+use std::{
+    any::{Any, TypeId},
+    cell::{RefCell, RefMut},
+    sync::OnceLock,
+};
 use wgpu::CommandEncoder;
+
+pub const GAZE: FlowParameterId<[f64; 2]> =
+    FlowParameterId::new("gaze", |flow, value| flow.set_flow_parameter("gaze", value));
+pub const VIEW: FlowParameterId<[f64; 2]> =
+    FlowParameterId::new("view", |flow, value| flow.set_flow_parameter("view", value));
 
 /// Represents properties of eye input (perspetive and tracking).
 #[derive(Clone, Debug)]
@@ -25,6 +34,8 @@ pub struct MouseInput {
 pub struct Flow {
     nodes: RefCell<Vec<Box<dyn Node>>>,
     eye: RefCell<EyeInput>,
+    gaze: RefCell<[f64; 2]>,
+    view: RefCell<[f64; 2]>,
 }
 
 impl Flow {
@@ -37,11 +48,31 @@ impl Flow {
                 proj: cgmath::perspective(cgmath::Deg(70.0), 1.0, 0.05, 1000.0),
                 gaze: Vector3::new(0.0, 0.0, 1.0),
             }),
+            gaze: RefCell::new([0.0, 0.0]),
+            view: RefCell::new([0.0, 0.0]),
         }
     }
 
     pub fn eye_mut(&self) -> RefMut<'_, EyeInput> {
         self.eye.borrow_mut()
+    }
+
+    pub(crate) fn set_flow_parameter(&self, id: &str, value: [f64; 2]) -> bool {
+        match id {
+            "gaze" if self.gaze() != value => *self.gaze.borrow_mut() = value,
+            "view" if self.view() != value => *self.view.borrow_mut() = value,
+            "gaze" | "view" => return false,
+            _ => panic!("unknown flow parameter {id}"),
+        }
+        true
+    }
+
+    pub fn gaze(&self) -> [f64; 2] {
+        *self.gaze.borrow()
+    }
+
+    pub fn view(&self) -> [f64; 2] {
+        *self.view.borrow()
     }
 
     pub fn add_node(&mut self, node: Box<dyn Node>) {
@@ -93,15 +124,64 @@ impl Flow {
         }
     }
 
-    pub fn inspect(&self, inspector: &dyn Inspector) -> NodeChanges {
-        // Propagate to nodes.
-        let mut result = NodeChanges::empty();
-        for node in self.nodes.borrow_mut().iter_mut() {
-            if node.inspect_config(inspector) {
-                result |= node.configure();
-            }
+    pub(crate) fn try_with_unique_node_mut<N: Node + 'static, R>(
+        &self,
+        apply: impl FnOnce(&mut N) -> R,
+    ) -> Option<R> {
+        let mut nodes = self.nodes.borrow_mut();
+        let mut matches = nodes
+            .iter_mut()
+            .filter_map(|node| (node.as_mut() as &mut dyn Any).downcast_mut::<N>());
+        let target = matches.next();
+        assert!(
+            matches.next().is_none(),
+            "duplicate parameter target node type"
+        );
+        target.map(apply)
+    }
+
+    pub(crate) fn unique_node_index<N: Node + 'static>(&self) -> Option<usize> {
+        let nodes = self.nodes.borrow();
+        let mut matches = nodes
+            .iter()
+            .enumerate()
+            .filter(|(_, node)| node.as_ref().type_id() == TypeId::of::<N>());
+        let index = matches.next()?.0;
+        matches.next().is_none().then_some(index)
+    }
+
+    pub(crate) fn with_node_at_mut<N: Node + 'static, R>(
+        &self,
+        index: usize,
+        apply: impl FnOnce(&mut N) -> R,
+    ) -> Option<R> {
+        let mut nodes = self.nodes.borrow_mut();
+        Some(apply(
+            (nodes.get_mut(index)?.as_mut() as &mut dyn Any).downcast_mut::<N>()?,
+        ))
+    }
+
+    pub(crate) fn configure_node_at(&self, index: usize) -> NodeChanges {
+        self.nodes
+            .borrow_mut()
+            .get_mut(index)
+            .map_or(NodeChanges::empty(), |node| node.configure())
+    }
+
+    pub(crate) fn configure_node_types(&self, types: &[TypeId]) -> NodeChanges {
+        let mut changes = NodeChanges::empty();
+        let mut nodes = self.nodes.borrow_mut();
+        for ty in types {
+            let mut matches = nodes
+                .iter_mut()
+                .filter(|node| node.as_ref().type_id() == *ty);
+            changes |= matches.next().expect("changed node is missing").configure();
+            assert!(
+                matches.next().is_none(),
+                "duplicate parameter target node type"
+            );
         }
-        result
+        changes.normalized()
     }
 
     pub fn input(&self, mouse: &MouseInput) -> NodeChanges {
@@ -122,13 +202,6 @@ impl Flow {
         encoder: &mut CommandEncoder,
         screen: &RenderTexture,
     ) {
-        // Update UI if present.
-        let ui_changes = self.update_ui();
-        context.apply_changes(ui_changes);
-        if ui_changes.contains(NodeChanges::SLOTS) {
-            self.negociate_slots(context);
-        }
-
         // Render all nodes.
         let nodes_len = self.nodes.borrow().len();
         if nodes_len == 0 {
@@ -148,46 +221,16 @@ impl Flow {
         }
     }
 
-    fn update_ui(&self) -> NodeChanges {
-        let ui_tuple = {
-            let mut nodes = self.nodes.borrow_mut();
-            nodes
-                .iter_mut()
-                .find_map(|node| node.as_ui_mut().map(|ui_node| ui_node.begin_run()))
-        };
-
-        let Some((context, input)) = ui_tuple else {
-            return NodeChanges::empty();
-        };
-
-        let mut result = NodeChanges::empty();
-        let full_output = context.run_ui(input, |ctx| {
-            egui::Window::new("Inspector").show(ctx, |ui| {
-                egui::Grid::new("inspector_grid")
-                    .num_columns(2)
-                    .spacing([6.0, 4.0])
-                    .striped(true)
-                    .show(ui, |ui| {
-                        result |= self.inspect(&UiInspector::new(ui));
-                    });
-            });
-        });
-
-        let mut nodes = self.nodes.borrow_mut();
-        nodes
-            .iter_mut()
-            .find_map(|node| {
-                node.as_ui_mut()
-                    .map(|ui_node| ui_node.end_run(full_output.clone()))
-            })
-            .unwrap();
-
-        result
-    }
-
     pub fn post_render(&self, context: &RenderContext) {
         for node in self.nodes.borrow_mut().iter_mut() {
             node.post_render(context);
         }
+    }
+}
+
+impl Parameters for Flow {
+    fn parameters() -> &'static [ParameterDescriptor] {
+        static PARAMETERS: OnceLock<Vec<ParameterDescriptor>> = OnceLock::new();
+        PARAMETERS.get_or_init(|| vec![GAZE.descriptor(), VIEW.descriptor()])
     }
 }

@@ -1,0 +1,79 @@
+groups:
+  cataract: Cataract
+  color: Color vision
+  glaucoma: Glaucoma
+  achromatopsia: Achromatopsia
+  nyctalopia: Night blindness
+  macular: Macular degeneration
+  eye: Eye
+  retina: Retina
+  pose: Pose
+settings:
+  enabled: Enabled
+  blur: Blur
+  contrast_loss: Contrast loss
+  strength: Strength
+  type: Type
+  field_loss: Field loss
+  intensity: Intensity
+  simple_model: Simple model
+  severity: Severity
+  advanced_model: Advanced model
+  radius: Radius
+  axis_x: Axis X
+  axis_y: Axis Y
+  center_distance: Center distance
+  refraction: Refraction
+  refraction_power: Refraction power
+  presbyopia: Presbyopia
+  near_point: Near point
+  astigmatism: Astigmatism
+  astigmatism_angle: Astigmatism angle
+  color_deficiency: Color deficiency
+  color_deficiency_type: Color deficiency type
+  color_deficiency_intensity: Color deficiency intensity
+  receptor_density: Receptor density
+  retina_map_pos_x: Retina map +X
+  retina_map_neg_x: Retina map -X
+  retina_map_pos_y: Retina map +Y
+  retina_map_neg_y: Retina map -Y
+  retina_map_pos_z: Retina map +Z
+  retina_map_neg_z: Retina map -Z
+  gaze: Gaze
+  view: View
+  cataract:
+    enabled_help: Enable or disable cataract simulation.
+    blur_help: Strength of light scattering.
+    contrast_help: Reduction of image contrast.
+  color:
+    enabled_help: Simulate color vision deficiency.
+    strength_help: Effect blend strength.
+    type_help: Affected receptor type.
+choices:
+  red: Red
+  green: Green
+  blue: Blue
+  monochrome: Monochrome
+presets:
+  cataract_light: Mild cataract
+  cataract_strong: Severe cataract
+  protanopia: Protanopia
+  glaucoma_moderate: Moderate glaucoma
+  achromatopsia: Achromatopsia
+  night_blindness: Night blindness
+  macular_moderate: Moderate macular degeneration
+diagnostics:
+  expected_object: Expected an object
+  unknown_configuration_field: Unknown configuration field
+  unsupported_configuration_format: "Unsupported configuration format; expected `both`, `left`, or `right` sections"
+  invalid_json: "Invalid JSON: %{error}"
+  error_count: "Configuration contains %{count} errors."
+  error: error
+  source: source
+  path: path
+  configuration_file_not_found: "Configuration file not found: %{path}"
+  failed_to_parse_configuration: "Failed to parse configuration %{path}: %{error}"
+  unknown_setting: "Unknown setting `%{id}`"
+  matrix_not_supported: Matrix configuration is not supported yet
+  invalid_setting_value: "Invalid value for setting `%{id}`"
+  setting_node_missing: "Setting `%{id}` was ignored because its node is not present in the flow"

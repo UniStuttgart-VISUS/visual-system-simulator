@@ -1,0 +1,14 @@
+panel:
+  hide_hint: "Press [Esc] to hide panel"
+eyes:
+  both: "Both eyes"
+  left: "Left eye"
+  right: "Right eye"
+presets:
+  title: "Presets"
+  reset_layer: "Reset layer"
+settings:
+  reset_value: "Reset value"
+  inherited: "inherited"
+diagnostics:
+  warning: "Configuration warning"

@@ -14,6 +14,7 @@ members = [
 ash = "0.38"
 cgmath = "0.18"
 raw-window-handle = "0.6"
+rust-i18n = "4"
 wgpu = "29"
 wgpu-hal = "29"
 winit = "0.30"

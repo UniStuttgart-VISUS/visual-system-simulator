@@ -3,16 +3,34 @@ use std::sync::{Arc, RwLock};
 
 use cgmath::{Matrix4, Rad, SquareMatrix, Vector3, Vector4};
 use vss::*;
+#[cfg(not(target_arch = "wasm32"))]
+use winit::platform::run_on_demand::EventLoopExtRunOnDemand;
 use winit::{
-    application::ApplicationHandler,
-    dpi::*,
-    error::EventLoopError,
-    event::*,
-    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
-    keyboard::{Key, NamedKey},
-    platform::run_on_demand::EventLoopExtRunOnDemand,
-    window::Window,
+    application::ApplicationHandler, dpi::*, event::*, event_loop::ActiveEventLoop, window::Window,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use winit::{
+    error::EventLoopError,
+    event_loop::{ControlFlow, EventLoop},
+};
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct EventResponse {
+    pub consumed: bool,
+    pub repaint: bool,
+}
+
+pub trait WindowOverlay {
+    fn initialize(&mut self, window: &Arc<Window>, surface: &Surface);
+    fn window_event(&mut self, window: &Window, event: &WindowEvent) -> EventResponse;
+    fn prepare(&mut self, window: &Window, surface: &Surface);
+    fn render(
+        &mut self,
+        surface: &Surface,
+        encoder: &mut wgpu::CommandEncoder,
+        target: &wgpu::TextureView,
+    );
+}
 
 /// Represents a window along with its associated rendering context and [Flow].
 pub struct WindowSurface {
@@ -22,8 +40,9 @@ pub struct WindowSurface {
 
     deferred_size: Option<PhysicalSize<u32>>,
     visible: bool,
-    init_fn: Box<dyn Fn(&mut Surface)>,
+    init_fn: Option<Box<dyn FnOnce(&mut Surface)>>,
     poll_fn: Box<dyn FnMut() -> bool>,
+    overlay: Option<Box<dyn WindowOverlay>>,
 
     active: bool,
     static_view: Option<(f32, f32)>,
@@ -33,6 +52,7 @@ pub struct WindowSurface {
 
     override_gaze: bool,
     override_view: bool,
+    canvas_parent: Option<String>,
 }
 
 pub fn pose_from_position(
@@ -59,7 +79,7 @@ impl WindowSurface {
         poll_fn: P,
     ) -> Self
     where
-        I: 'static + Fn(&mut Surface),
+        I: 'static + FnOnce(&mut Surface),
         P: 'static + FnMut() -> bool,
     {
         Self {
@@ -68,8 +88,9 @@ impl WindowSurface {
             flow_count,
             deferred_size: None,
             visible: visible,
-            init_fn: Box::new(init_fn),
+            init_fn: Some(Box::new(init_fn)),
             poll_fn: Box::new(poll_fn),
+            overlay: None,
             active: false,
             static_view,
             static_gaze,
@@ -81,18 +102,29 @@ impl WindowSurface {
             },
             override_view: false,
             override_gaze: false,
+            canvas_parent: None,
         }
     }
 
+    pub fn with_overlay(mut self, overlay: impl WindowOverlay + 'static) -> Self {
+        self.overlay = Some(Box::new(overlay));
+        self
+    }
+
+    pub fn with_canvas_parent(mut self, id: impl Into<String>) -> Self {
+        self.canvas_parent = Some(id.into());
+        self
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn spawn(self, event_loop: winit::event_loop::EventLoop<()>) {
+        use winit::platform::web::EventLoopExtWebSys;
+        event_loop.spawn_app(self);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn run_app(mut self, event_loop: &mut EventLoop<()>) -> Result<(), EventLoopError> {
         event_loop.set_control_flow(ControlFlow::Wait);
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            use winit::platform::web::EventLoopExtWebSys;
-            event_loop.spawn_app(self)
-        }
-        #[cfg(not(target_arch = "wasm32"))]
         event_loop.run_app_on_demand(&mut self)
     }
 
@@ -164,6 +196,18 @@ impl ApplicationHandler for WindowSurface {
             .with_visible(self.visible);
 
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
+        #[cfg(target_arch = "wasm32")]
+        if let Some(parent) = &self.canvas_parent {
+            use winit::platform::web::WindowExtWebSys;
+            let document = web_sys::window().unwrap().document().unwrap();
+            document
+                .get_element_by_id(parent)
+                .expect("canvas parent is missing")
+                .append_child(&web_sys::Element::from(
+                    window.canvas().expect("window has no canvas"),
+                ))
+                .expect("cannot append canvas");
+        }
         window.set_cursor_visible(true);
         let window_size = window.inner_size();
 
@@ -173,7 +217,10 @@ impl ApplicationHandler for WindowSurface {
             self.flow_count,
         );
 
-        (self.init_fn)(&mut surface);
+        self.init_fn.take().expect("window initialized twice")(&mut surface);
+        if let Some(overlay) = &mut self.overlay {
+            overlay.initialize(&window, &surface);
+        }
         if (self.poll_fn)() {
             self.window = Some(window);
             self.surface = Some(Rc::new(surface));
@@ -193,17 +240,18 @@ impl ApplicationHandler for WindowSurface {
         _window_id: winit::window::WindowId,
         event: WindowEvent,
     ) {
+        let response = self
+            .overlay
+            .as_mut()
+            .zip(self.window.as_ref())
+            .map(|(overlay, window)| overlay.window_event(window, &event))
+            .unwrap_or_default();
+        if response.repaint {
+            self.request_output();
+        }
+
         match event {
-            WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        logical_key: Key::Named(NamedKey::Escape),
-                        ..
-                    },
-                ..
-            }
-            | WindowEvent::CloseRequested
-            | WindowEvent::Destroyed => {
+            event if closes_window(&event) => {
                 event_loop.exit();
             }
             WindowEvent::Focused(active) => {
@@ -214,7 +262,7 @@ impl ApplicationHandler for WindowSurface {
                 self.request_output();
             }
             WindowEvent::CursorMoved { position, .. } => {
-                if self.active {
+                if self.active && !response.consumed {
                     self.mouse.position = (position.x as f32, position.y as f32);
                     self.request_output();
                 }
@@ -228,7 +276,23 @@ impl ApplicationHandler for WindowSurface {
                 }
             }
             WindowEvent::MouseInput { state, button, .. } => {
-                if self.active {
+                if self.active
+                    && !simulation_input_allowed(response.consumed)
+                    && state == ElementState::Released
+                {
+                    match button {
+                        MouseButton::Left => {
+                            self.override_view = false;
+                            self.mouse.left_button = false;
+                        }
+                        MouseButton::Right => {
+                            self.override_gaze = false;
+                            self.mouse.right_button = false;
+                        }
+                        _ => {}
+                    }
+                    self.request_output();
+                } else if self.active && simulation_input_allowed(response.consumed) {
                     match button {
                         MouseButton::Left => {
                             self.override_view = state == ElementState::Pressed;
@@ -257,7 +321,15 @@ impl ApplicationHandler for WindowSurface {
                 }
 
                 let drawn = if changes.contains(NodeChanges::OUTPUT) {
-                    self.surface.clone().unwrap().draw()
+                    let surface = self.surface.clone().unwrap();
+                    if let (Some(overlay), Some(window)) = (&mut self.overlay, &self.window) {
+                        overlay.prepare(window, &surface);
+                        surface.draw_with(|_, encoder, target| {
+                            overlay.render(&surface, encoder, target)
+                        })
+                    } else {
+                        surface.draw()
+                    }
                 } else {
                     false
                 };
@@ -290,4 +362,37 @@ impl ApplicationHandler for WindowSurface {
             window.request_redraw();
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn consumed_events_are_not_simulation_input() {
+        assert!(!simulation_input_allowed(true));
+        assert!(simulation_input_allowed(false));
+    }
+
+    #[test]
+    fn escape_is_not_a_close_request() {
+        assert!(!is_exit_event(false, false));
+        assert!(is_exit_event(true, false));
+        assert!(closes_window(&WindowEvent::CloseRequested));
+    }
+}
+
+fn simulation_input_allowed(consumed: bool) -> bool {
+    !consumed
+}
+
+fn closes_window(event: &WindowEvent) -> bool {
+    is_exit_event(
+        matches!(event, WindowEvent::CloseRequested),
+        matches!(event, WindowEvent::Destroyed),
+    )
+}
+
+fn is_exit_event(close_requested: bool, destroyed: bool) -> bool {
+    close_requested || destroyed
 }

@@ -9,15 +9,15 @@
     <string name="camera">Kamera</string>
     <string name="enter_fullscreen">Vollbildmodus öffnen</string>
     <string name="reset_manual_changes">Manuelle Änderungen zurücksetzen</string>
-    <string name="remove_profile">%1$s entfernen?</string>
-    <string name="profile_affects_manual_changes">Dieses Profil betrifft manuell geänderte Einstellungen.</string>
+    <string name="remove_preset">%1$s entfernen?</string>
+    <string name="preset_affects_manual_changes">Diese Voreinstellung betrifft manuell geänderte Einstellungen.</string>
     <string name="keep_overrides">Überschreibungen beibehalten</string>
     <string name="discard_affected_overrides">Betroffene Überschreibungen verwerfen</string>
     <string name="cancel">Abbrechen</string>
     <string name="apply_demonstration">Demonstration anwenden?</string>
-    <string name="apply_demonstration_message">Die aktuelle Simulation ersetzen oder diese Profile hinzufügen?</string>
+    <string name="apply_demonstration_message">Die aktuelle Simulation ersetzen oder diese Voreinstellungen hinzufügen?</string>
     <string name="replace_current_simulation">Aktuelle Simulation ersetzen</string>
-    <string name="add_profiles">Profile hinzufügen</string>
+    <string name="add_presets">Voreinstellungen hinzufügen</string>
     <string name="information">Informationen</string>
     <string name="reset">Zurücksetzen</string>
 </resources>

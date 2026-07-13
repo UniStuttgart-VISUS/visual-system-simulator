@@ -7,6 +7,7 @@ mod receptor_density;
 
 use cgmath::Vector3;
 
+use super::Retina;
 use crate::*;
 
 #[derive(Clone, PartialEq)]
@@ -63,51 +64,98 @@ impl Default for RetinaMapBuilder {
     }
 }
 
-impl NodeConfig for RetinaMapBuilder {
-    fn inspect(&mut self, inspector: &dyn Inspector) -> bool {
-        let mut changed = false;
-        changed |= inspector.mut_bool("glaucoma_onoff", &mut self.glaucoma_onoff);
-        changed |= inspector.mut_i32("glaucoma_fov", &mut self.glaucoma_fov);
-
-        changed |= inspector.mut_bool("achromatopsia_onoff", &mut self.achromatopsia_onoff);
-        changed |= inspector.mut_i32("achromatopsia_int", &mut self.achromatopsia_int);
-
-        changed |= inspector.mut_bool("nyctalopia_onoff", &mut self.nyctalopia_onoff);
-        changed |= inspector.mut_i32("nyctalopia_int", &mut self.nyctalopia_int);
-
-        changed |= inspector.mut_bool("colorblindness_onoff", &mut self.colorblindness_onoff);
-        changed |= inspector.mut_i32("colorblindness_type", &mut self.colorblindness_type);
-        changed |= inspector.mut_i32("colorblindness_int", &mut self.colorblindness_int);
-
-        changed |= inspector.mut_bool(
-            "maculardegeneration_onoff",
-            &mut self.maculardegeneration_onoff,
-        );
-        changed |= inspector.mut_bool(
-            "maculardegeneration_veasy",
-            &mut self.maculardegeneration_veasy,
-        );
-        changed |= inspector.mut_i32(
-            "maculardegeneration_inteasy",
-            &mut self.maculardegeneration_inteasy,
-        );
-        changed |= inspector.mut_bool(
-            "maculardegeneration_vadvanced",
-            &mut self.maculardegeneration_vadvanced,
-        );
-        changed |= inspector.mut_f64(
-            "maculardegeneration_radius",
-            &mut self.maculardegeneration_radius,
-        );
-        changed |= inspector.mut_f64(
-            "maculardegeneration_intadvanced",
-            &mut self.maculardegeneration_intadvanced,
-        );
-
-        changed |= inspector.mut_bool("receptordensity_onoff", &mut self.receptordensity_onoff);
-        changed
-    }
+macro_rules! builder_parameter {
+    ($name:ident, $ty:ty, $id:literal, $field:ident) => {
+        pub const $name: ParameterId<Retina, $ty> =
+            ParameterId::for_node($id, |n| &mut n.config.retina_map_builder.$field);
+    };
 }
+builder_parameter!(GLAUCOMA_ENABLED, bool, "glaucoma.enabled", glaucoma_onoff);
+builder_parameter!(GLAUCOMA_FIELD, i32, "glaucoma.field", glaucoma_fov);
+builder_parameter!(
+    ACHROMATOPSIA_ENABLED,
+    bool,
+    "achromatopsia.enabled",
+    achromatopsia_onoff
+);
+builder_parameter!(
+    ACHROMATOPSIA_INTENSITY,
+    i32,
+    "achromatopsia.intensity",
+    achromatopsia_int
+);
+builder_parameter!(
+    NYCTALOPIA_ENABLED,
+    bool,
+    "nyctalopia.enabled",
+    nyctalopia_onoff
+);
+builder_parameter!(
+    NYCTALOPIA_INTENSITY,
+    i32,
+    "nyctalopia.intensity",
+    nyctalopia_int
+);
+builder_parameter!(
+    COLOR_ENABLED,
+    bool,
+    "retina.color-deficiency-enabled",
+    colorblindness_onoff
+);
+builder_parameter!(
+    COLOR_TYPE,
+    i32,
+    "retina.color-deficiency-type",
+    colorblindness_type
+);
+builder_parameter!(
+    COLOR_INTENSITY,
+    i32,
+    "retina.color-deficiency-intensity",
+    colorblindness_int
+);
+builder_parameter!(
+    MACULAR_ENABLED,
+    bool,
+    "macular.enabled",
+    maculardegeneration_onoff
+);
+builder_parameter!(
+    MACULAR_SIMPLE,
+    bool,
+    "macular.simple",
+    maculardegeneration_veasy
+);
+builder_parameter!(
+    MACULAR_SIMPLE_INTENSITY,
+    i32,
+    "macular.simple-intensity",
+    maculardegeneration_inteasy
+);
+builder_parameter!(
+    MACULAR_ADVANCED,
+    bool,
+    "macular.advanced",
+    maculardegeneration_vadvanced
+);
+builder_parameter!(
+    MACULAR_RADIUS,
+    f64,
+    "macular.radius",
+    maculardegeneration_radius
+);
+builder_parameter!(
+    MACULAR_INTENSITY,
+    f64,
+    "macular.intensity",
+    maculardegeneration_intadvanced
+);
+builder_parameter!(
+    RECEPTOR_DENSITY_ENABLED,
+    bool,
+    "retina.receptor-density-enabled",
+    receptordensity_onoff
+);
 
 impl RetinaMapBuilder {
     pub fn generate(&self, resolution: (u32, u32), orientation: &[Vector3<f32>; 3]) -> Box<[u8]> {

@@ -2,6 +2,7 @@ use super::*;
 
 use cgmath::Rad;
 use std::ops::Mul;
+use std::sync::OnceLock;
 
 /// A node that implements eye control.
 pub struct EyeControl {
@@ -24,12 +25,14 @@ impl Default for EyeControlConfig {
     }
 }
 
-impl NodeConfig for EyeControlConfig {
-    fn inspect(&mut self, inspector: &dyn Inspector) -> bool {
-        let mut changed = false;
-        changed |= inspector.mut_f64("eye_axis_rot_x", &mut self.eye_axis_rot_x);
-        changed |= inspector.mut_f64("eye_axis_rot_y", &mut self.eye_axis_rot_y);
-        changed
+pub const AXIS_X: ParameterId<EyeControl, f64> =
+    ParameterId::for_node("eye.axis-x", |n| &mut n.config.eye_axis_rot_x);
+pub const AXIS_Y: ParameterId<EyeControl, f64> =
+    ParameterId::for_node("eye.axis-y", |n| &mut n.config.eye_axis_rot_y);
+impl Parameters for EyeControl {
+    fn parameters() -> &'static [ParameterDescriptor] {
+        static P: OnceLock<Vec<ParameterDescriptor>> = OnceLock::new();
+        P.get_or_init(|| vec![AXIS_X.descriptor(), AXIS_Y.descriptor()])
     }
 }
 
@@ -55,10 +58,6 @@ impl Node for EyeControl {
         _original_image: &mut Option<Texture>,
     ) -> NodeSlots {
         slots.to_passthrough()
-    }
-
-    fn inspect_config(&mut self, inspector: &dyn Inspector) -> bool {
-        inspect_node_config(inspector, self.name(), &mut self.config)
     }
 
     fn configure(&mut self) -> NodeChanges {

@@ -38,7 +38,7 @@ import java.util.Locale
 fun CatalogPanel(model: SimulatorViewModel, controller: SimulatorController, modifier: Modifier) {
     Column(modifier) {
         Articles(model)
-        Profiles(model)
+        Presets(model)
         SettingsPane(model, controller, Modifier.weight(1f))
     }
 }
@@ -58,34 +58,34 @@ private fun Articles(model: SimulatorViewModel) {
 }
 
 @Composable
-private fun Profiles(model: SimulatorViewModel) {
+private fun Presets(model: SimulatorViewModel) {
     val catalog = rememberCatalog()
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        catalog.profiles.forEach { profile ->
+        catalog.presets.forEach { preset ->
             FilterChip(
-                profile.id in model.activeProfiles,
+                preset.id in model.activePresets,
                 {
-                    if (profile.id !in model.activeProfiles) model.activeProfiles += profile.id
-                    else if (profile.values.keys.any { it in model.overrides }) model.pendingProfileRemoval = profile.id
-                    else model.activeProfiles -= profile.id
+                    if (preset.id !in model.activePresets) model.activePresets += preset.id
+                    else if (preset.values.keys.any { it in model.overrides }) model.pendingPresetRemoval = preset.id
+                    else model.activePresets -= preset.id
                 },
-                { Text(profile.label) },
+                { Text(preset.label) },
             )
         }
         if (model.overrides.isNotEmpty()) {
             AssistChip({ model.overrides = emptyMap() }, { Text(stringResource(R.string.reset_manual_changes)) }, leadingIcon = { Icon(Icons.Default.RestartAlt, null) })
         }
     }
-    model.pendingProfileRemoval?.let { id ->
-        catalog.profiles.firstOrNull { it.id == id }?.let { profile ->
+    model.pendingPresetRemoval?.let { id ->
+        catalog.presets.firstOrNull { it.id == id }?.let { preset ->
             AlertDialog(
-                onDismissRequest = { model.pendingProfileRemoval = null },
-                title = { Text(stringResource(R.string.remove_profile, profile.label)) },
-                text = { Text(stringResource(R.string.profile_affects_manual_changes)) },
-                confirmButton = { TextButton({ model.activeProfiles -= id; model.pendingProfileRemoval = null }) { Text(stringResource(R.string.keep_overrides)) } },
+                onDismissRequest = { model.pendingPresetRemoval = null },
+                title = { Text(stringResource(R.string.remove_preset, preset.label)) },
+                text = { Text(stringResource(R.string.preset_affects_manual_changes)) },
+                confirmButton = { TextButton({ model.activePresets -= id; model.pendingPresetRemoval = null }) { Text(stringResource(R.string.keep_overrides)) } },
                 dismissButton = { Row {
-                    TextButton({ model.activeProfiles -= id; model.overrides -= profile.values.keys; model.pendingProfileRemoval = null }) { Text(stringResource(R.string.discard_affected_overrides)) }
-                    TextButton({ model.pendingProfileRemoval = null }) { Text(stringResource(R.string.cancel)) }
+                    TextButton({ model.activePresets -= id; model.overrides -= preset.values.keys; model.pendingPresetRemoval = null }) { Text(stringResource(R.string.discard_affected_overrides)) }
+                    TextButton({ model.pendingPresetRemoval = null }) { Text(stringResource(R.string.cancel)) }
                 } },
             )
         }
@@ -95,8 +95,8 @@ private fun Profiles(model: SimulatorViewModel) {
 @Composable
 private fun SettingsPane(model: SimulatorViewModel, controller: SimulatorController, modifier: Modifier) {
     val catalog = rememberCatalog()
-    val effectiveJson = remember(model.activeProfiles, model.overrides) {
-        SimulatorBridge.composeSettings(Locale.getDefault().toLanguageTag(), JSONArray(model.activeProfiles.toList()).toString(), JSONObject(model.overrides).toString())
+    val effectiveJson = remember(model.activePresets, model.overrides) {
+        SimulatorBridge.composeSettings(Locale.getDefault().toLanguageTag(), JSONArray(model.activePresets.toList()).toString(), JSONObject(model.overrides).toString())
     }
     val effective = remember(effectiveJson) { JSONObject(effectiveJson).toMap() }
     LaunchedEffect(effectiveJson) { delay(100); controller.postSettings(effectiveJson) }
@@ -105,15 +105,15 @@ private fun SettingsPane(model: SimulatorViewModel, controller: SimulatorControl
         Spacer(Modifier.height(16.dp))
     }
     model.articleId?.let { id -> catalog.articles.firstOrNull { it.id == id }?.let { ArticleSheet(it, model) } }
-    model.pendingDemoProfiles?.let { profiles ->
+    model.pendingDemoPresets?.let { presets ->
         AlertDialog(
-            onDismissRequest = { model.pendingDemoProfiles = null },
+            onDismissRequest = { model.pendingDemoPresets = null },
             title = { Text(stringResource(R.string.apply_demonstration)) },
             text = { Text(stringResource(R.string.apply_demonstration_message)) },
-            confirmButton = { Button({ model.activeProfiles = profiles; model.overrides = emptyMap(); model.pendingDemoProfiles = null }) { Text(stringResource(R.string.replace_current_simulation)) } },
+            confirmButton = { Button({ model.activePresets = presets; model.overrides = emptyMap(); model.pendingDemoPresets = null }) { Text(stringResource(R.string.replace_current_simulation)) } },
             dismissButton = { Row {
-                TextButton({ model.activeProfiles += profiles; model.pendingDemoProfiles = null }) { Text(stringResource(R.string.add_profiles)) }
-                TextButton({ model.pendingDemoProfiles = null }) { Text(stringResource(R.string.cancel)) }
+                TextButton({ model.activePresets += presets; model.pendingDemoPresets = null }) { Text(stringResource(R.string.add_presets)) }
+                TextButton({ model.pendingDemoPresets = null }) { Text(stringResource(R.string.cancel)) }
             } },
         )
     }
@@ -122,44 +122,44 @@ private fun SettingsPane(model: SimulatorViewModel, controller: SimulatorControl
 @Composable
 private fun GroupCard(group: UiGroup, model: SimulatorViewModel, effective: Map<String, Any>) {
     val open = model.expanded[group.id] ?: true
-    val enabled = group.parameters.firstOrNull { it.kind == "boolean" }
+    val enabled = group.settings.firstOrNull { it.kind == "boolean" }
     Card { Column {
         Row(Modifier.fillMaxWidth().clickable { model.expanded[group.id] = !open }.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(group.title, style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.weight(1f))
-            enabled?.let { parameter -> Switch(effective[parameter.key] as? Boolean ?: false, { model.overrides += parameter.key to it }) }
+            enabled?.let { setting -> Switch(effective[setting.id] as? Boolean ?: false, { model.overrides += setting.id to it }) }
             Icon(if (open) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null)
         }
-        if (open) group.parameters.filterNot { it === enabled }.forEach { SettingRow(it, model, effective) }
+        if (open) group.settings.filterNot { it === enabled }.forEach { SettingRow(it, model, effective) }
     } }
 }
 
 @Composable
-private fun SettingRow(parameter: UiParameter, model: SimulatorViewModel, effective: Map<String, Any>) {
-    val value = effective[parameter.key] ?: parameter.default
+private fun SettingRow(setting: UiSetting, model: SimulatorViewModel, effective: Map<String, Any>) {
+    val value = effective[setting.id] ?: setting.default
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-            Text(parameter.label)
-            if (parameter.key in model.overrides) IconButton({ model.overrides -= parameter.key }, Modifier.size(36.dp)) { Icon(Icons.Default.RestartAlt, stringResource(R.string.reset)) }
+            Text(setting.label)
+            if (setting.id in model.overrides) IconButton({ model.overrides -= setting.id }, Modifier.size(36.dp)) { Icon(Icons.Default.RestartAlt, stringResource(R.string.reset)) }
         }
-        when (parameter.kind) {
-            "boolean" -> Switch(value as? Boolean ?: false, { model.overrides += parameter.key to it })
-            "number" -> NumericControl(value as Number, parameter) { model.overrides += parameter.key to it }
-            "choice" -> Row { parameter.choices.forEach { choice -> FilterChip(choice.value == (value as Number).toInt(), { model.overrides += parameter.key to choice.value }, { Text(choice.label) }) } }
+        when (setting.kind) {
+            "boolean" -> Switch(value as? Boolean ?: false, { model.overrides += setting.id to it })
+            "number" -> NumericControl(value as Number, setting) { model.overrides += setting.id to it }
+            "choice" -> Row { setting.choices.forEach { choice -> FilterChip(choice.value == (value as Number).toInt(), { model.overrides += setting.id to choice.value }, { Text(choice.label) }) } }
             else -> Text("$value")
         }
     }
 }
 
 @Composable
-private fun NumericControl(value: Number, parameter: UiParameter, change: (Double) -> Unit) {
+private fun NumericControl(value: Number, setting: UiSetting, change: (Double) -> Unit) {
     val focusManager = LocalFocusManager.current
     var text by remember(value) { mutableStateOf(value.toString()) }
-    fun commit() { text.toDoubleOrNull()?.let { change(it.coerceIn(parameter.min ?: -Double.MAX_VALUE, parameter.max ?: Double.MAX_VALUE)) } }
+    fun commit() { text.toDoubleOrNull()?.let { change(it.coerceIn(setting.min ?: -Double.MAX_VALUE, setting.max ?: Double.MAX_VALUE)) } }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        IconButton({ change((value.toDouble() - parameter.step).coerceAtLeast(parameter.min ?: -Double.MAX_VALUE)) }) { Icon(Icons.Default.Remove, null) }
-        OutlinedTextField(text, { text = it }, Modifier.width(104.dp), singleLine = true, suffix = { parameter.unit?.let { Text(it) } }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { commit(); focusManager.clearFocus() }))
-        IconButton({ change((value.toDouble() + parameter.step).coerceAtMost(parameter.max ?: Double.MAX_VALUE)) }) { Icon(Icons.Default.Add, null) }
+        IconButton({ change((value.toDouble() - setting.step).coerceAtLeast(setting.min ?: -Double.MAX_VALUE)) }) { Icon(Icons.Default.Remove, null) }
+        OutlinedTextField(text, { text = it }, Modifier.width(104.dp), singleLine = true, suffix = { setting.unit?.let { Text(it) } }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { commit(); focusManager.clearFocus() }))
+        IconButton({ change((value.toDouble() + setting.step).coerceAtMost(setting.max ?: Double.MAX_VALUE)) }) { Icon(Icons.Default.Add, null) }
     }
 }
 
@@ -173,7 +173,7 @@ private fun ArticleSheet(article: UiArticle, model: SimulatorViewModel) {
         Column(Modifier.fillMaxWidth().padding(24.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(article.title, style = MaterialTheme.typography.headlineSmall)
             HtmlArticle(article.contentPath)
-            article.demonstrations.forEach { (label, profiles) -> Button({ model.pendingDemoProfiles = profiles; model.articleId = null }) { Text(label) } }
+            article.demonstrations.forEach { (label, presets) -> Button({ model.pendingDemoPresets = presets; model.articleId = null }) { Text(label) } }
             Spacer(Modifier.height(24.dp))
         }
     }

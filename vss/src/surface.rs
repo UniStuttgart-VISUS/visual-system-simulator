@@ -203,6 +203,13 @@ impl<'window> Surface<'window> {
     }
 
     pub fn draw(&self) -> bool {
+        self.draw_with(|_, _, _| {})
+    }
+
+    pub fn draw_with(
+        &self,
+        mut render_overlay: impl FnMut(&RenderContext, &mut wgpu::CommandEncoder, &wgpu::TextureView),
+    ) -> bool {
         let output = match self.get_current_texture() {
             CurrentSurfaceTexture::Success(output) | CurrentSurfaceTexture::Suboptimal(output) => {
                 output
@@ -237,6 +244,11 @@ impl<'window> Surface<'window> {
         };
 
         self.render_context.render(&mut encoder, &render_texture);
+        render_overlay(
+            &self.render_context,
+            &mut encoder,
+            render_texture.view.as_ref(),
+        );
 
         self.render_context
             .queue()

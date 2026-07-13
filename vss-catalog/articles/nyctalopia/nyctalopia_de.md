@@ -5,7 +5,7 @@ title: Nyctalopia (Nachtblindheit)
 demonstrations:
   - id: night-blindness
     label: Nachtblindheit simulieren
-    profiles: [night-blindness]
+    presets: [night-blindness]
 ---
 
 ## Ursachen und Entstehung

@@ -5,7 +5,7 @@ title: Dyschromatopsie (Farbfehlsichtigkeit)
 demonstrations:
   - id: protanopia
     label: Protanopie simulieren
-    profiles: [protanopia]
+    presets: [protanopia]
 ---
 
 Es gibt 3 arten der Farbfehlsichtigkeiten: 

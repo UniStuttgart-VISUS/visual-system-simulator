@@ -1,0 +1,79 @@
+groups:
+  cataract: Katarakt
+  color: Farbsehen
+  glaucoma: Glaukom
+  achromatopsia: Achromatopsie
+  nyctalopia: Nachtblindheit
+  macular: Makuladegeneration
+  eye: Auge
+  retina: Retina
+  pose: Blick
+settings:
+  enabled: Aktiv
+  blur: Unschärfe
+  contrast_loss: Kontrastverlust
+  strength: Stärke
+  type: Typ
+  field_loss: Gesichtsfeldverlust
+  intensity: Intensität
+  simple_model: Einfaches Modell
+  severity: Schweregrad
+  advanced_model: Erweitertes Modell
+  radius: Radius
+  axis_x: Achse X
+  axis_y: Achse Y
+  center_distance: Mittelpunktabstand
+  refraction: Refraktion
+  refraction_power: Brechkraft
+  presbyopia: Alterssichtigkeit
+  near_point: Nahpunkt
+  astigmatism: Astigmatismus
+  astigmatism_angle: Astigmatismuswinkel
+  color_deficiency: Farbsehschwäche
+  color_deficiency_type: Art der Farbsehschwäche
+  color_deficiency_intensity: Stärke der Farbsehschwäche
+  receptor_density: Rezeptordichte
+  retina_map_pos_x: Retinakarte +X
+  retina_map_neg_x: Retinakarte -X
+  retina_map_pos_y: Retinakarte +Y
+  retina_map_neg_y: Retinakarte -Y
+  retina_map_pos_z: Retinakarte +Z
+  retina_map_neg_z: Retinakarte -Z
+  gaze: Blickrichtung
+  view: Ansicht
+  cataract:
+    enabled_help: Kataraktsimulation ein- oder ausschalten.
+    blur_help: Stärke der Lichtstreuung.
+    contrast_help: Verringerung des Bildkontrasts.
+  color:
+    enabled_help: Farbsehschwäche simulieren.
+    strength_help: Mischstärke des Effekts.
+    type_help: Betroffener Rezeptortyp.
+choices:
+  red: Rot
+  green: Grün
+  blue: Blau
+  monochrome: Monochrom
+presets:
+  cataract_light: Leichte Katarakt
+  cataract_strong: Starke Katarakt
+  protanopia: Protanopie
+  glaucoma_moderate: Mittleres Glaukom
+  achromatopsia: Achromatopsie
+  night_blindness: Nachtblindheit
+  macular_moderate: Mittlere Makuladegeneration
+diagnostics:
+  expected_object: Ein Objekt wurde erwartet
+  unknown_configuration_field: Unbekanntes Konfigurationsfeld
+  unsupported_configuration_format: "Nicht unterstütztes Konfigurationsformat; erwartet werden die Abschnitte `both`, `left` oder `right`"
+  invalid_json: "Ungültiges JSON: %{error}"
+  error_count: "Die Konfiguration enthält %{count} Fehler."
+  error: Fehler
+  source: Quelle
+  path: Pfad
+  configuration_file_not_found: "Konfigurationsdatei nicht gefunden: %{path}"
+  failed_to_parse_configuration: "Konfiguration %{path} konnte nicht gelesen werden: %{error}"
+  unknown_setting: "Unbekannte Einstellung `%{id}`"
+  matrix_not_supported: Matrixkonfigurationen werden noch nicht unterstützt
+  invalid_setting_value: "Ungültiger Wert für Einstellung `%{id}`"
+  setting_node_missing: "Einstellung `%{id}` wurde ignoriert, weil ihr Knoten im Ablauf fehlt"

@@ -1,4 +1,5 @@
 use super::*;
+use std::sync::OnceLock;
 
 #[repr(C)]
 #[derive(Copy, Clone, PartialEq)]
@@ -44,14 +45,25 @@ impl Default for PeacockConfig {
     }
 }
 
-impl NodeConfig for PeacockConfig {
-    fn inspect(&mut self, inspector: &dyn Inspector) -> bool {
-        let mut changed = false;
-        changed |= inspector.mut_bool("peacock_cb_onoff", &mut self.peacock_cb_onoff);
-        changed |= inspector.mut_f32("peacock_cb_strength", &mut self.peacock_cb_strength);
-        changed |= inspector.mut_i32("peacock_cb_type", &mut self.peacock_cb_type);
-        changed |= inspector.mut_bool("track_error", &mut self.track_error);
-        changed
+pub const ENABLED: ParameterId<PeacockCB, bool> =
+    ParameterId::for_node("color.enabled", |n| &mut n.config.peacock_cb_onoff);
+pub const STRENGTH: ParameterId<PeacockCB, f32> =
+    ParameterId::for_node("color.strength", |n| &mut n.config.peacock_cb_strength);
+pub const TYPE: ParameterId<PeacockCB, i32> =
+    ParameterId::for_node("color.type", |n| &mut n.config.peacock_cb_type);
+pub const TRACK_ERROR: ParameterId<PeacockCB, bool> =
+    ParameterId::for_node("peacock.track-error", |n| &mut n.config.track_error);
+impl Parameters for PeacockCB {
+    fn parameters() -> &'static [ParameterDescriptor] {
+        static P: OnceLock<Vec<ParameterDescriptor>> = OnceLock::new();
+        P.get_or_init(|| {
+            vec![
+                ENABLED.descriptor(),
+                STRENGTH.descriptor(),
+                TYPE.descriptor(),
+                TRACK_ERROR.descriptor(),
+            ]
+        })
     }
 }
 
@@ -161,10 +173,6 @@ impl Node for PeacockCB {
         self.targets = slots.as_all_colors_target();
 
         slots
-    }
-
-    fn inspect_config(&mut self, inspector: &dyn Inspector) -> bool {
-        inspect_node_config(inspector, self.name(), &mut self.config)
     }
 
     fn configure(&mut self) -> NodeChanges {

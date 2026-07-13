@@ -7,6 +7,10 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use tempfile::NamedTempFile;
 use vss::*;
+use vss_catalog::{
+    compile_parameter_patch, resolve_asset_reference, validate_settings, ConfigDocument,
+    ConfigValue, Diagnostic,
+};
 
 type EndpointNodes = (Box<dyn Node>, Option<Box<dyn Node>>);
 
@@ -229,7 +233,6 @@ pub(crate) struct FlowRequest {
     pub(crate) input: String,
     pub(crate) output: Option<PathBuf>,
     pub(crate) force: bool,
-    pub(crate) show_gui: bool,
     pub(crate) render_resolution: RenderResolution,
     pub(crate) view_port: ViewPort,
 }
@@ -269,7 +272,7 @@ pub(crate) fn build_flow(
 
     let graph_build_start = Instant::now();
     context.add_node(input_node, flow_index);
-    //TODO: when using OpenXR: context.add_node(Box::new(EyeControl::new(context)), flow_index);
+    context.add_node(Box::new(EyeControl::new(context)), flow_index);
     context.add_node(Box::new(Cataract::new(context)), flow_index);
     context.add_node(Box::new(Lens::new(context)), flow_index);
     context.add_node(Box::new(Retina::new(context)), flow_index);
@@ -281,9 +284,6 @@ pub(crate) fn build_flow(
     display.set_viewport(request.view_port);
     display.set_output_scale(OutputScale::default());
     context.add_node(Box::new(display), flow_index);
-    if request.show_gui {
-        context.add_node(Box::new(GuiOverlay::new(context)), flow_index);
-    }
 
     if let Some(output_node) = output_node {
         context.add_node(output_node, flow_index);
@@ -301,21 +301,61 @@ pub(crate) fn build_flow(
     })
 }
 
-fn validate_and_apply_simulator(
+fn compile_settings(
     flow: &Flow,
-    simulator: &BTreeMap<String, ConfigValue>,
-    apply: bool,
+    values: &BTreeMap<String, ConfigValue>,
+) -> Result<ParameterPatch, Vec<Diagnostic>> {
+    validate_settings(values)?;
+    compile_parameter_patch(flow, values, &resolve_asset_reference)
+}
+
+pub(crate) fn apply_desktop_values(
+    context: &RenderContext,
+    left: &serde_json::Map<String, serde_json::Value>,
+    right: &serde_json::Map<String, serde_json::Value>,
 ) -> (NodeChanges, Vec<Diagnostic>) {
-    let schema = schema_from_flow(flow);
-    let mut diagnostics = validate_simulator_values(simulator, &schema);
-    let mut result = NodeChanges::empty();
-    if apply && !diagnostics_have_errors(&diagnostics) {
-        let (apply_result, apply_diagnostics) =
-            apply_simulator_values(flow, simulator, &resolve_asset_reference);
-        result |= apply_result;
-        diagnostics.extend(apply_diagnostics);
+    let to_config_values = |values: &serde_json::Map<String, serde_json::Value>| {
+        values
+            .iter()
+            .map(|(key, value)| {
+                (
+                    key.clone(),
+                    ConfigValue {
+                        value: value.clone(),
+                        source: "desktop-ui".into(),
+                        path: key.clone(),
+                    },
+                )
+            })
+            .collect::<BTreeMap<_, _>>()
+    };
+    let left = to_config_values(left);
+    if let Err(diagnostics) = validate_settings(&left) {
+        return (NodeChanges::empty(), diagnostics);
     }
-    (result, diagnostics)
+    let right = to_config_values(right);
+    if let Err(diagnostics) = validate_settings(&right) {
+        return (NodeChanges::empty(), diagnostics);
+    }
+    if context.flows.is_empty() {
+        return (NodeChanges::empty(), Vec::new());
+    }
+    let mut patches = Vec::new();
+    for (index, flow) in context.flows.iter().enumerate() {
+        let values = if index == 0 { &left } else { &right };
+        match compile_parameter_patch(flow, values, &resolve_asset_reference) {
+            Ok(patch) => patches.push(patch),
+            Err(diagnostics) => return (NodeChanges::empty(), diagnostics),
+        }
+    }
+    let changes = context
+        .flows
+        .iter()
+        .zip(patches)
+        .fold(NodeChanges::empty(), |changes, (flow, patch)| {
+            changes | patch.apply(flow)
+        });
+    (changes, Vec::new())
 }
 
 pub(crate) fn finalize_flows(
@@ -328,7 +368,7 @@ pub(crate) fn finalize_flows(
     context.negociate_slots();
 
     let mut diagnostics = Vec::new();
-    let mut configure_result = NodeChanges::empty();
+    let mut patches = Vec::new();
     let mut configured_eyes = [false; 2];
     for (flow_index, flow) in context.flows.iter().enumerate() {
         let eye_index = eye_indices[flow_index];
@@ -337,23 +377,33 @@ pub(crate) fn finalize_flows(
         } else {
             config_document.effective_right()
         };
-        let (flow_result, flow_diagnostics) =
-            validate_and_apply_simulator(flow, &section.simulator_value_map(), true);
-        configure_result |= flow_result;
-        diagnostics.extend(flow_diagnostics);
+        match compile_settings(flow, &section.value_map()) {
+            Ok(patch) => patches.push(patch),
+            Err(mut errors) => diagnostics.append(&mut errors),
+        }
         configured_eyes[eye_index] = true;
     }
 
     if !configured_eyes[1] {
         if let Some(flow) = context.flows.first() {
-            let (_, flow_diagnostics) = validate_and_apply_simulator(
-                flow,
-                &config_document.effective_right().simulator_value_map(),
-                false,
-            );
-            diagnostics.extend(flow_diagnostics);
+            if let Err(mut errors) =
+                compile_settings(flow, &config_document.effective_right().value_map())
+            {
+                diagnostics.append(&mut errors);
+            }
         }
     }
+
+    if !diagnostics.is_empty() {
+        return diagnostics;
+    }
+    let configure_result = context
+        .flows
+        .iter()
+        .zip(patches)
+        .fold(NodeChanges::empty(), |changes, (flow, patch)| {
+            changes | patch.apply(flow)
+        });
 
     if configure_result.contains(NodeChanges::SLOTS) {
         context.negociate_slots();
@@ -361,23 +411,4 @@ pub(crate) fn finalize_flows(
     context.apply_changes(configure_result);
 
     diagnostics
-}
-
-fn resolve_asset_reference(source: &str, reference: &str) -> AssetId {
-    let reference_path = Path::new(reference);
-    if reference_path.is_absolute() {
-        return AssetId::from_str(reference);
-    }
-
-    let base_dir = Path::new(source).parent().and_then(|parent| {
-        if parent.as_os_str().is_empty() {
-            None
-        } else {
-            Some(parent)
-        }
-    });
-    let resolved = base_dir
-        .map(|base| base.join(reference_path))
-        .unwrap_or_else(|| PathBuf::from(reference));
-    AssetId::from_str(resolved.to_string_lossy().to_string())
 }

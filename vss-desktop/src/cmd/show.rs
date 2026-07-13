@@ -10,7 +10,7 @@ pub type OpenXrBackend = vss_openxr::Backend;
 #[derive(Debug, Default, clap::Args)]
 pub(crate) struct ShowArgs {
     #[arg(short = 'c', long = "config", value_name = "FILE")]
-    config: Option<PathBuf>,
+    config: Vec<PathBuf>,
 
     #[arg(
         long = "openxr",
@@ -32,7 +32,7 @@ pub(crate) struct ShowArgs {
 impl ShowArgs {
     fn into_config(self) -> ShowConfig {
         let mut common = CommonConfig {
-            base_config: self.config,
+            config_paths: self.config,
             ..CommonConfig::default()
         };
         if let Some(input) = self.input {
@@ -76,7 +76,7 @@ pub(crate) fn run(args: ShowArgs) -> Result<(), String> {
         config.common.inputs = vec![pick_input_file().ok_or("no input selected")?];
     }
     let diagnostics = refresh_flow_configs(&mut config.common).map_err(|err| err.to_string())?;
-    report_diagnostics(&diagnostics)?;
+    report_diagnostics(&diagnostics);
 
     if let Some(backend) = config.openxr.take() {
         return run_openxr(config, backend);
@@ -90,6 +90,7 @@ fn run_windowed(config: ShowConfig, event_loop: &mut EventLoop<()>) -> Result<()
     let failure: Arc<RwLock<Option<String>>> = Arc::new(RwLock::new(None));
 
     let left = config.common.config_document.effective_left();
+    let gui = crate::ui::DesktopGui::new(&config.common.config_document);
 
     let failure_init = failure.clone();
     let pose_input_size: Arc<RwLock<Option<[u32; 2]>>> = Arc::new(RwLock::new(None));
@@ -98,8 +99,8 @@ fn run_windowed(config: ShowConfig, event_loop: &mut EventLoop<()>) -> Result<()
     let window = WindowSurface::new(
         true,
         1,
-        left.pose.view.map(|view| (view[0] as f32, view[1] as f32)),
-        left.pose.gaze.map(|gaze| (gaze[0] as f32, gaze[1] as f32)),
+        config_point(&left, "view").map(|view| (view[0] as f32, view[1] as f32)),
+        config_point(&left, "gaze").map(|gaze| (gaze[0] as f32, gaze[1] as f32)),
         pose_input_size,
         move |surface| {
             let built = match build_flow(
@@ -109,7 +110,6 @@ fn run_windowed(config: ShowConfig, event_loop: &mut EventLoop<()>) -> Result<()
                     input: config.common.inputs[0].clone(),
                     output: None,
                     force: false,
-                    show_gui: true,
                     render_resolution: RenderResolution::Screen {
                         input_scale: 1.0,
                         output_scale: OutputScale::default(),
@@ -133,12 +133,11 @@ fn run_windowed(config: ShowConfig, event_loop: &mut EventLoop<()>) -> Result<()
                 *pose_input_size_init.write().unwrap() = Some(input_size);
             }
             let diagnostics = finalize_flows(surface, &config.common.config_document, &[0]);
-            if let Err(message) = report_diagnostics(&diagnostics) {
-                *failure_init.write().unwrap() = Some(message);
-            }
+            report_diagnostics(&diagnostics);
         },
         move || failure_poll.read().unwrap().is_some(),
-    );
+    )
+    .with_overlay(gui);
 
     window.run_app(event_loop).map_err(|err| err.to_string())?;
 
@@ -179,7 +178,6 @@ fn run_openxr(config: ShowConfig, backend: OpenXrBackend) -> Result<(), String> 
                         input: config.common.inputs[0].clone(),
                         output: None,
                         force: false,
-                        show_gui: true,
                         render_resolution: RenderResolution::Buffer { input_scale: 1.0 },
                         view_port: viewport,
                     },
@@ -196,15 +194,21 @@ fn run_openxr(config: ShowConfig, backend: OpenXrBackend) -> Result<(), String> 
                     .unwrap_or([view.viewport.width.max(1), view.viewport.height.max(1)]);
 
                 let mut eye = context.flows[view.view_index].eye_mut();
-                if let Some([x, y]) = effective_section.pose.view {
+                if let Some([x, y]) = config_point(&effective_section, "view") {
                     eye.view = pose_from_position((x as f32, y as f32), pose_size).0;
                 }
-                if let Some([x, y]) = effective_section.pose.gaze {
+                if let Some([x, y]) = config_point(&effective_section, "gaze") {
                     eye.gaze = pose_from_position((x as f32, y as f32), pose_size).1;
                 }
             }
             let diagnostics = finalize_flows(context, &config.common.config_document, &eye_indices);
-            report_diagnostics(&diagnostics)
+            report_diagnostics(&diagnostics);
+            Ok(())
         })
         .map_err(|err| err.to_string())
+}
+
+fn config_point(section: &vss_catalog::EffectiveSection, id: &str) -> Option<[f64; 2]> {
+    let values = section.values.get(id)?.value.as_array()?;
+    (values.len() == 2).then_some([values[0].as_f64()?, values[1].as_f64()?])
 }

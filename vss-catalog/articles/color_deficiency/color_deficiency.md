@@ -5,7 +5,7 @@ title: Dyschromatopsia
 demonstrations:
   - id: protanopia
     label: Simulate protanopia
-    profiles: [protanopia]
+    presets: [protanopia]
 ---
 
 
