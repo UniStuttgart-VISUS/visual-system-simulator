@@ -19,7 +19,7 @@ $androidDir = $scriptDir
 $repoDir = Split-Path -Parent $scriptDir
 $launchDir = (Get-Location).Path
 $apk = Join-Path $androidDir "app\build\outputs\apk\debug\app-debug.apk"
-$adbArgs = @(); if ($Device) { $adbArgs = @("-s", $Device) }
+$adbTargetArguments = $null
 
 $mediaTypes = @{
     ".jpg"  = @{ Kind = "image"; Mime = "image/jpeg" }
@@ -71,10 +71,32 @@ function Invoke-Native {
     return $output
 }
 
+function Get-AdbTargetArguments {
+    if ($null -ne $script:adbTargetArguments) { return $script:adbTargetArguments }
+
+    if ($Device) {
+        if ($Device -match "^emulator-") { throw "Android emulators are not supported; connect physical hardware." }
+        $script:adbTargetArguments = @("-s", $Device)
+        return $script:adbTargetArguments
+    }
+
+    $devices = @(Invoke-Native "Listing adb devices" { & adb devices } | ForEach-Object {
+        if ($_ -match "^(\S+)\s+device$" -and $Matches[1] -notmatch "^emulator-") {
+            $Matches[1]
+        }
+    })
+    if ($devices.Count -eq 0) { throw "No physical Android device is connected." }
+    if ($devices.Count -gt 1) { throw "Multiple physical Android devices are connected; use -Device <serial>." }
+
+    $script:adbTargetArguments = @("-s", $devices[0])
+    return $script:adbTargetArguments
+}
+
 function Invoke-Adb {
     param([string]$Description, [string[]]$Arguments, [switch]$AllowFailure)
-    if ($AllowFailure) { return & adb @adbArgs @Arguments 2>$null }
-    return Invoke-Native $Description { & adb @adbArgs @Arguments }
+    $targetArgs = @(Get-AdbTargetArguments)
+    if ($AllowFailure) { return & adb @targetArgs @Arguments 2>$null }
+    return Invoke-Native $Description { & adb @targetArgs @Arguments }
 }
 
 function Wait-Until {
@@ -177,11 +199,27 @@ function Push-LocalMediaForSharing {
         MimeType = $mediaInfo.Mime
     }
 }
-
 function Invoke-InstallAction {
     Write-Host "Building debug APK..."
-    Invoke-Native "Building debug APK" { & .\gradlew.bat --no-daemon assembleDebug } | Out-Null
+
+    if ($env:OS -eq "Windows_NT") {
+        Invoke-Native "Building debug APK" { & .\gradlew.bat --no-daemon assembleDebug } | Out-Null
+    }
+    else {
+        $previousJavaHome = $env:JAVA_HOME
+        $androidStudioJavaHome = "/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+        if (Test-Path $androidStudioJavaHome) { $env:JAVA_HOME = $androidStudioJavaHome }
+
+        try {
+            Invoke-Native "Building debug APK" { & /usr/bin/env bash ./gradlew --no-daemon assembleDebug } | Out-Null
+        }
+        finally {
+            $env:JAVA_HOME = $previousJavaHome
+        }
+    }
+
     if (!(Test-Path $apk)) { throw "APK not found: $apk" }
+
     Write-Host "Installing $apk..."
     Invoke-Adb "Installing debug APK" @("install", "-r", $apk) | Out-Null
 }

@@ -16,25 +16,25 @@ val rustTargets = listOf(
     RustTarget(
         abi = "armeabi-v7a",
         triple = "armv7-linux-androideabi",
-        linker = "armv7a-linux-androideabi31-clang.cmd",
+        linker = "armv7a-linux-androideabi31-clang",
         linkerEnvironmentVariable = "CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER",
     ),
     RustTarget(
         abi = "arm64-v8a",
         triple = "aarch64-linux-android",
-        linker = "aarch64-linux-android31-clang.cmd",
+        linker = "aarch64-linux-android31-clang",
         linkerEnvironmentVariable = "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER",
     ),
     RustTarget(
         abi = "x86",
         triple = "i686-linux-android",
-        linker = "i686-linux-android31-clang.cmd",
+        linker = "i686-linux-android31-clang",
         linkerEnvironmentVariable = "CARGO_TARGET_I686_LINUX_ANDROID_LINKER",
     ),
     RustTarget(
         abi = "x86_64",
         triple = "x86_64-linux-android",
-        linker = "x86_64-linux-android31-clang.cmd",
+        linker = "x86_64-linux-android31-clang",
         linkerEnvironmentVariable = "CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER",
     ),
 )
@@ -42,6 +42,14 @@ val rustTargets = listOf(
 val rustLibraryName = "libvss_android.so"
 val androidNdkVersion = "28.2.13676358"
 val debugRustAbi = providers.gradleProperty("rustDebugAbi").orElse("arm64-v8a").get()
+val hostOs = System.getProperty("os.name").lowercase()
+val ndkHostTag = when {
+    hostOs.contains("windows") -> "windows-x86_64"
+    hostOs.contains("mac") -> "darwin-x86_64"
+    hostOs.contains("linux") -> "linux-x86_64"
+    else -> error("Unsupported Android NDK host: ${System.getProperty("os.name")} ${System.getProperty("os.arch")}")
+}
+val ndkExecutableSuffix = if (hostOs.contains("windows")) ".cmd" else ""
 
 require(rustTargets.any { it.abi == debugRustAbi }) {
     "Unsupported rustDebugAbi '$debugRustAbi'. Expected one of: ${rustTargets.joinToString { it.abi }}"
@@ -147,7 +155,7 @@ androidComponents {
                 }
 
                 val linker = ndkDirectory.map {
-                    File(it, "toolchains/llvm/prebuilt/windows-x86_64/bin/${rustTarget.linker}")
+                    File(it, "toolchains/llvm/prebuilt/$ndkHostTag/bin/${rustTarget.linker}$ndkExecutableSuffix")
                 }
                 val linkerFile = linker.get()
                 environment(rustTarget.linkerEnvironmentVariable, linkerFile.absolutePath)
