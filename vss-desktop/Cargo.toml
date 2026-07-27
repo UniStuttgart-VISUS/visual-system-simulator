@@ -38,6 +38,15 @@ sys-locale = "0.3"
 rust-i18n = { workspace = true }
 winit = { workspace = true }
 
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_System_LibraryLoader",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
 [features]
 default = []
 video = ["ac_ffmpeg"]
+
+[build-dependencies]
+winresource = "0.1"

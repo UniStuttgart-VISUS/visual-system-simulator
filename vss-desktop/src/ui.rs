@@ -316,6 +316,28 @@ fn edit_value(ui: &mut egui::Ui, id: &str, control: &Control, value: &mut Value)
 
 impl WindowOverlay for DesktopGui {
     fn initialize(&mut self, window: &Arc<Window>, surface: &Surface) {
+        #[cfg(target_os = "windows")]
+        {
+            use windows_sys::Win32::{
+                System::LibraryLoader::GetModuleHandleW,
+                UI::WindowsAndMessaging::{
+                    LoadIconW, SendMessageW, ICON_BIG, ICON_SMALL, WM_SETICON,
+                },
+            };
+            use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+
+            let RawWindowHandle::Win32(handle) = window.window_handle().unwrap().as_raw() else {
+                unreachable!()
+            };
+            unsafe {
+                let icon = LoadIconW(GetModuleHandleW(std::ptr::null()), 1usize as *const u16);
+                assert!(!icon.is_null(), "failed to load Windows icon resource");
+                let hwnd = handle.hwnd.get() as *mut std::ffi::c_void;
+                SendMessageW(hwnd, WM_SETICON, ICON_BIG as usize, icon as isize);
+                SendMessageW(hwnd, WM_SETICON, ICON_SMALL as usize, icon as isize);
+            }
+        }
+
         let weak_window = Arc::downgrade(window);
         self.context.set_request_repaint_callback(move |_| {
             if let Some(window) = weak_window.upgrade() {
