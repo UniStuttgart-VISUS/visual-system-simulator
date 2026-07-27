@@ -136,7 +136,12 @@ impl<'window> Surface<'window> {
                 .request_device(&wgpu::DeviceDescriptor {
                     label: None,
                     required_features: wgpu::Features::empty(),
-                    required_limits: if cfg!(target_arch = "wasm32") {
+                    required_limits: if cfg!(target_os = "ios") {
+                        // Metal feature sets vary between iPhone generations. Requesting
+                        // wgpu's desktop defaults can exceed an otherwise capable adapter
+                        // (for example, 16 inter-stage variables where the device exposes 15).
+                        adapter.limits()
+                    } else if cfg!(target_arch = "wasm32") {
                         // WebGL does not support all features, thus disable some.
                         wgpu::Limits::downlevel_webgl2_defaults().using_resolution(adapter.limits())
                     } else {

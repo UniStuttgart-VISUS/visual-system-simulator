@@ -1,0 +1,5 @@
+// Shared defaults. CI uses these values because the optional local file is absent.
+PRODUCT_BUNDLE_IDENTIFIER = de.uni-stuttgart.visus.vss
+
+// Developer-specific signing settings. This file is intentionally ignored by Git.
+#include? "VSS.local.xcconfig"
