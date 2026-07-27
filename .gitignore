@@ -7,3 +7,7 @@ Cargo.lock
 
 # Visual Studio Code.
 .vscode/
+
+# Logo assets.
+/assets/logo/export/
+*.blend1

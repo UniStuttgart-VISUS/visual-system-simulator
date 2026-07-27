@@ -4,6 +4,20 @@ edition = "2018"
 version = "1.0.0"
 authors = ["The Visual System Simulator Developers"]
 license = "Apache-2.0"
+description = "Desktop application for the Visual System Simulator"
+repository = "https://github.com/UniStuttgart-VISUS/visual-system-simulator"
+
+[package.metadata.bundle]
+name = "Visual System Simulator"
+identifier = "de.uni-stuttgart.visus.vss"
+icon = [
+    "packaging/icons/windows/app.ico",
+    "packaging/icons/linux/hicolor/*x*/apps/vss.png",
+    "packaging/icons/macos/app.iconset/*.png",
+]
+category = "Education"
+short_description = "Simulates the visual system and visual impairments"
+
 [dependencies]
 wgpu = { workspace = true }
 vss = { path = "../vss" }

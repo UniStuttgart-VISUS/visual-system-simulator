@@ -11,9 +11,6 @@ Linux, and the web.
 - [OpenImageIO](https://openimageio.readthedocs.io/) with `oiiotool`
 - Write access to the staging and output directories
 
-On macOS, the system-provided `iconutil` is also needed to create the final
-`.icns` file.
-
 Verify the tools:
 
 ```powershell
@@ -26,18 +23,30 @@ oiiotool --version
 Run from this folder:
 
 ```powershell
-New-Item -ItemType Directory -Path .\export\staging -Force
-
-.\logo-export.ps1 `
-  -BlendFile .\logo.blend `
-  -StagingDirectory .\export\staging `
-  -OutputDirectory .\export\dist `
-  -BlenderCommand "C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"
+.\logo-export.ps1
 ```
 
 Blender and `oiiotool` are auto-detected when possible. For all parameters and
 defaults, run `Get-Help .\logo-export.ps1 -Full`.
-Existing output files may be overwritten; obsolete files are not removed.
+The script keeps `export/staging` and `export/dist` between runs. Existing files
+may be overwritten, but obsolete files are not removed. The complete export
+directory is ignored by Git; `logo-publish.ps1` copies only its explicit,
+curated file list into the platform projects.
+
+## Publish into the VSS repository
+
+The export directory is the artist-facing handoff and is not committed. In a
+VSS repository checkout, publish only the platform build inputs after exporting:
+
+```powershell
+.\scripts\logo-publish.ps1
+```
+
+The repository script reads `assets/logo/export/dist` by default. It copies the
+curated iOS, Android, web, Windows, Linux, and macOS assets into their platform
+projects and generates repository-specific metadata such as Android adaptive
+icon XML and the web manifest. It can run on Windows, Linux, or macOS. App
+builds therefore do not require Blender or OpenImageIO.
 
 ## Platform Requirements
 
@@ -46,14 +55,19 @@ Existing output files may be overwritten; obsolete files are not removed.
 - Adaptive icons use separate opaque background and transparent foreground
   layers at 108 × 108 dp.
 - Keep important artwork inside the centered 66 × 66 dp safe zone.
+- Android recommends a logo size between 48 × 48 and 66 × 66 dp inside the
+  108 × 108 dp layer canvas.
 - Do not pre-mask adaptive layers; the launcher applies its own mask.
-- Android 13/API 33 themed icons require a monochrome layer.
+- A custom monochrome layer controls themed icons on Android 13/API 33 and
+  later. Android 16 QPR2 can generate one when it is absent, but the result is
+  launcher-controlled.
 - Google Play requires an opaque 512 × 512, 32-bit sRGB PNG no larger than
   1024 KB, without rounded corners or an outer drop shadow.
 
-The current export uses the finished full-bleed icon as the adaptive
-background. A proper background-only Blender master is still required to avoid
-duplicating the foreground during launcher effects.
+The Blender compositor provides a dedicated background-only render, a
+safe-zone-scaled transparent foreground, and a white alpha silhouette for
+themed icons. The Google Play image remains the unmasked full-bleed design and
+is exported as fully opaque RGBA.
 
 Sources:
 [Adaptive icons](https://developer.android.com/develop/ui/compose/system/icon_design_adaptive),
@@ -65,13 +79,11 @@ Sources:
 - Background layers must be full-bleed and opaque; foreground layers may use
   transparency.
 - Provide suitable default and tinted/monochrome appearances when required.
-- Use Xcode asset catalogs or Icon Composer; use `iconutil` on macOS for
-  classic `.icns` files.
+- Use Xcode asset catalogs or Icon Composer; classic macOS packaging converts
+  the generated `.iconset` with `iconutil`.
 
-The export provides a default AppIcon, layer sources, and a classic macOS
-`.iconset`. It does not create a finished Icon Composer file or dark/tinted
-asset-catalog entries. Its Apple background currently has the same
-background-only limitation as Android.
+The export provides a default AppIcon and a classic macOS `.iconset`. It does
+not create a finished Icon Composer file or dark/tinted asset-catalog entries.
 
 Sources:
 [Apple App Icons](https://developer.apple.com/design/human-interface-guidelines/app-icons/),
@@ -107,7 +119,8 @@ Sources:
 ### Web and PWA
 
 - Favicons should include at least 16 × 16 and 32 × 32.
-- Installable Chromium-based PWAs need 192 × 192 and 512 × 512 icons.
+- Provide a 512 × 512 manifest icon; 192 × 192 remains useful for older
+  Chromium installability tooling and broad compatibility.
 - Maskable icons must be opaque and full-bleed, with important artwork inside
   the centered safe-zone circle whose radius is 40% of the image.
 - Use a 180 × 180 `apple-touch-icon` for iOS web clips.
@@ -117,4 +130,5 @@ Sources:
 Sources:
 [Web App Manifest](https://www.w3.org/TR/appmanifest/),
 [PWA manifest](https://web.dev/learn/pwa/web-app-manifest),
+[Chrome installability criteria](https://developer.chrome.com/blog/update-install-criteria),
 [Apple web clips](https://developer.apple.com/library/archive/documentation/AppleApplications/Reference/SafariWebContent/ConfiguringWebApplications/ConfiguringWebApplications.html)

@@ -1,6 +1,5 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)]
     [string] $BlendFile,
 
     [string] $StagingDirectory,
@@ -43,13 +42,22 @@ function Resize-Icon {
         [string] $Source,
         [string] $Destination,
         [int] $Size,
-        [switch] $Opaque
+        [switch] $Opaque,
+        [switch] $OpaqueRgba
     )
+
+    if ($Opaque -and $OpaqueRgba) {
+        throw "Opaque and OpaqueRgba are mutually exclusive."
+    }
 
     New-Directory (Split-Path -Parent $Destination)
     $arguments = @($Source, "--resize:filter=lanczos3", "${Size}x${Size}")
     if ($Opaque) {
         $arguments += @("--ch", "R,G,B")
+    } elseif ($OpaqueRgba) {
+        # Keep an explicit, fully opaque alpha channel. Google Play requires a
+        # 32-bit PNG even though every pixel must be opaque.
+        $arguments += @("--ch", "R,G,B,A=1.0")
     }
     $arguments += @("-d", "uint8", "--dither", "-o", $Destination)
     Invoke-Oiiotool $arguments
@@ -138,16 +146,9 @@ function Convert-Master {
     Invoke-Oiiotool $arguments
 }
 
-function Copy-BuildAsset {
-    param(
-        [string] $Source,
-        [string] $Destination
-    )
-
-    New-Directory (Split-Path -Parent $Destination)
-    Copy-Item -LiteralPath $Source -Destination $Destination -Force
+if ([string]::IsNullOrWhiteSpace($BlendFile)) {
+    $BlendFile = Join-Path $PSScriptRoot "logo.blend"
 }
-
 $blendPath = [System.IO.Path]::GetFullPath($BlendFile)
 if (-not (Test-Path -LiteralPath $blendPath -PathType Leaf)) {
     throw "Blend file does not exist: $blendPath"
@@ -157,12 +158,9 @@ $blendDirectory = Split-Path -Parent $blendPath
 $BaseName = "logo"
 
 if ([string]::IsNullOrWhiteSpace($StagingDirectory)) {
-    $StagingDirectory = Join-Path $blendDirectory "icon-export\staging"
+    $StagingDirectory = Join-Path $blendDirectory "export\staging"
 }
 $StagingDirectory = [System.IO.Path]::GetFullPath($StagingDirectory)
-if (-not (Test-Path -LiteralPath $StagingDirectory -PathType Container)) {
-    throw "Blender staging directory does not exist: $StagingDirectory"
-}
 
 # Blender's File Output node writes the compositor items as linear EXR.
 # oiiotool uses Blender's bundled OCIO config to apply the matching AgX
@@ -174,8 +172,6 @@ if ([string]::IsNullOrWhiteSpace($BlenderCommand)) {
     } else {
         $knownBlenderPaths = @(
             "C:\Program Files\Blender Foundation\Blender 5.2\blender.exe",
-            "C:\Program Files\Blender Foundation\Blender 5.1\blender.exe",
-            "C:\Program Files\Blender Foundation\Blender 5.0\blender.exe",
             "/Applications/Blender.app/Contents/MacOS/Blender"
         )
         $BlenderCommand = $knownBlenderPaths |
@@ -217,40 +213,48 @@ if (-not $OcioConfig -or -not (Test-Path -LiteralPath $OcioConfig -PathType Leaf
     throw "Blender's OpenColorIO configuration was not found beside '$BlenderCommand'."
 }
 
-# Rendering through Blender's compositor creates the four linear EXR masters.
+New-Directory $StagingDirectory
+
+# Rendering through Blender's compositor creates the six linear EXR masters.
 # Blender appends the frame number to File Output paths. oiiotool applies the
 # same Blender OCIO display/view transform and writes stable PNG master names.
-& $BlenderCommand --background $blendPath --render-frame 1
+& $BlenderCommand `
+    --background $blendPath `
+    --render-output (Join-Path $StagingDirectory "$BaseName-preview-") `
+    --render-frame 1
 if ($LASTEXITCODE -ne 0) {
     throw "Blender icon master render failed with exit code $LASTEXITCODE."
 }
 
 Convert-Master "fullbleed" -Opaque
-Convert-Master "freeform"
+Convert-Master "squircle"
+Convert-Master "background" -Opaque
 Convert-Master "foreground-color"
-Convert-Master "foreground-mono"
+Convert-Master "foreground-monochrome"
+Convert-Master "maskable" -Opaque
 
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
-    $OutputDirectory = Join-Path $blendDirectory "icon-export\dist"
+    $OutputDirectory = Join-Path $blendDirectory "export\dist"
 }
 $OutputDirectory = [System.IO.Path]::GetFullPath($OutputDirectory)
+$stagingPrefix = $StagingDirectory.TrimEnd("\", "/") + [System.IO.Path]::DirectorySeparatorChar
+$outputPrefix = $OutputDirectory.TrimEnd("\", "/") + [System.IO.Path]::DirectorySeparatorChar
+if ($OutputDirectory -eq $StagingDirectory -or
+    $OutputDirectory.StartsWith($stagingPrefix, [System.StringComparison]::OrdinalIgnoreCase) -or
+    $StagingDirectory.StartsWith($outputPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Staging and output directories must not overlap."
+}
 New-Directory $OutputDirectory
 
 $masterFullbleed = Join-Path $StagingDirectory "$BaseName-master-fullbleed.png"
-$masterFreeform = Join-Path $StagingDirectory "$BaseName-master-freeform.png"
+$masterSquircle = Join-Path $StagingDirectory "$BaseName-master-squircle.png"
+$masterBackground = Join-Path $StagingDirectory "$BaseName-master-background.png"
 $masterForegroundColor = Join-Path $StagingDirectory "$BaseName-master-foreground-color.png"
-$masterForegroundMono = Join-Path $StagingDirectory "$BaseName-master-foreground-mono.png"
-
-# Keep stable, exactly named master copies in the distribution tree.
-$masterOutput = Join-Path $OutputDirectory "masters"
-Copy-BuildAsset $masterFullbleed (Join-Path $masterOutput "$BaseName-master-fullbleed.png")
-Copy-BuildAsset $masterFreeform (Join-Path $masterOutput "$BaseName-master-freeform.png")
-Copy-BuildAsset $masterForegroundColor (Join-Path $masterOutput "$BaseName-master-foreground-color.png")
-Copy-BuildAsset $masterForegroundMono (Join-Path $masterOutput "$BaseName-master-foreground-mono.png")
+$masterForegroundMonochrome = Join-Path $StagingDirectory "$BaseName-master-foreground-monochrome.png"
+$masterMaskable = Join-Path $StagingDirectory "$BaseName-master-maskable.png"
 
 # Android ----------------------------------------------------------------------
 $androidRoot = Join-Path $OutputDirectory "android"
-$androidAssets = Join-Path $androidRoot "assets"
 $androidRes = Join-Path $androidRoot "res"
 
 $androidDensities = @(
@@ -265,63 +269,25 @@ foreach ($density in $androidDensities) {
     $densityName = [string]$density.Name
     $adaptiveSize = [int]$density.Adaptive
     $legacySize = [int]$density.Legacy
-    $assetForeground = Join-Path $androidAssets "$BaseName-android-foreground-color-$adaptiveSize.png"
-    $assetBackground = Join-Path $androidAssets "$BaseName-android-background-$adaptiveSize.png"
-    $assetMono = Join-Path $androidAssets "$BaseName-android-foreground-mono-$adaptiveSize.png"
-    $assetLegacy = Join-Path $androidAssets "$BaseName-android-legacy-$legacySize.png"
-
-    Resize-Icon $masterForegroundColor $assetForeground $adaptiveSize
-    Resize-Icon $masterFullbleed $assetBackground $adaptiveSize -Opaque
-    Resize-Icon $masterForegroundMono $assetMono $adaptiveSize
-    Resize-Icon $masterFreeform $assetLegacy $legacySize
-
     $mipmap = Join-Path $androidRes "mipmap-$densityName"
-    Copy-BuildAsset $assetForeground (Join-Path $mipmap "ic_launcher_foreground.png")
-    Copy-BuildAsset $assetBackground (Join-Path $mipmap "ic_launcher_background.png")
-    Copy-BuildAsset $assetMono (Join-Path $mipmap "ic_launcher_monochrome.png")
-    Copy-BuildAsset $assetLegacy (Join-Path $mipmap "ic_launcher.png")
-    Copy-BuildAsset $assetLegacy (Join-Path $mipmap "ic_launcher_round.png")
+    Resize-Icon $masterForegroundColor (Join-Path $mipmap "ic_launcher_foreground.png") $adaptiveSize
+    Resize-Icon $masterBackground (Join-Path $mipmap "ic_launcher_background.png") $adaptiveSize -Opaque
+    Resize-Icon $masterForegroundMonochrome (Join-Path $mipmap "ic_launcher_monochrome.png") $adaptiveSize
+    Resize-Icon $masterSquircle (Join-Path $mipmap "ic_launcher.png") $legacySize
 }
 
-Resize-Icon $masterFullbleed (Join-Path $androidAssets "$BaseName-android-playstore-512.png") 512 -Opaque
-
-$adaptiveV26 = @'
-<?xml version="1.0" encoding="utf-8"?>
-<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@mipmap/ic_launcher_background" />
-    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
-</adaptive-icon>
-'@
-
-$adaptiveV33 = @'
-<?xml version="1.0" encoding="utf-8"?>
-<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@mipmap/ic_launcher_background" />
-    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
-    <monochrome android:drawable="@mipmap/ic_launcher_monochrome" />
-</adaptive-icon>
-'@
-
-foreach ($variant in @(
-    @{ Directory = "mipmap-anydpi-v26"; Xml = $adaptiveV26 },
-    @{ Directory = "mipmap-anydpi-v33"; Xml = $adaptiveV33 }
-)) {
-    $directory = Join-Path $androidRes $variant.Directory
-    New-Directory $directory
-    Set-Content -LiteralPath (Join-Path $directory "ic_launcher.xml") -Value $variant.Xml -Encoding UTF8
-    Set-Content -LiteralPath (Join-Path $directory "ic_launcher_round.xml") -Value $variant.Xml -Encoding UTF8
-}
+Resize-Icon `
+    $masterFullbleed `
+    (Join-Path $androidRoot "play-store-icon-512.png") `
+    512 `
+    -OpaqueRgba
 
 # Apple / Xcode ----------------------------------------------------------------
-$appleRoot = Join-Path $OutputDirectory "apple"
-$appIconSet = Join-Path $appleRoot "AppIcon.appiconset"
-$iconComposerSources = Join-Path $appleRoot "IconComposerSources"
+$iosRoot = Join-Path $OutputDirectory "ios"
+$appIconSet = Join-Path $iosRoot "AppIcon.appiconset"
 
-$iosDefaultName = "$BaseName-apple-default-1024.png"
+$iosDefaultName = "app-icon-default-1024.png"
 Resize-Icon $masterFullbleed (Join-Path $appIconSet $iosDefaultName) 1024 -Opaque
-Resize-Icon $masterFullbleed (Join-Path $iconComposerSources "$BaseName-apple-background-1024.png") 1024 -Opaque
-Resize-Icon $masterForegroundColor (Join-Path $iconComposerSources "$BaseName-apple-foreground-color-1024.png") 1024
-Resize-Icon $masterForegroundMono (Join-Path $iconComposerSources "$BaseName-apple-foreground-mono-1024.png") 1024
 
 $appleContents = [ordered]@{
     images = @(
@@ -341,7 +307,8 @@ $appleContents | ConvertTo-Json -Depth 8 |
     Set-Content -LiteralPath (Join-Path $appIconSet "Contents.json") -Encoding UTF8
 
 # Legacy macOS iconset. Strict iconset names are required by iconutil.
-$macIconSet = Join-Path $appleRoot "$BaseName-macos-app.iconset"
+$macosRoot = Join-Path $OutputDirectory "macos"
+$macIconSet = Join-Path $macosRoot "app.iconset"
 $macEntries = @(
     @{ Name = "icon_16x16.png"; Size = 16 },
     @{ Name = "icon_16x16@2x.png"; Size = 32 },
@@ -354,120 +321,58 @@ $macEntries = @(
     @{ Name = "icon_512x512.png"; Size = 512 },
     @{ Name = "icon_512x512@2x.png"; Size = 1024 }
 )
-foreach ($entry in $macEntries) {
-    Resize-Icon $masterFreeform (Join-Path $macIconSet $entry.Name) ([int]$entry.Size)
+New-Directory $macIconSet
+New-Directory (Join-Path $StagingDirectory "macos")
+foreach ($size in ($macEntries.Size | Sort-Object -Unique)) {
+    Resize-Icon `
+        $masterSquircle `
+        (Join-Path $StagingDirectory "macos\icon-$size.png") `
+        $size
 }
-
-$runningOnMac = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
-    [System.Runtime.InteropServices.OSPlatform]::OSX
-)
-if ($runningOnMac -and (Get-Command "iconutil" -ErrorAction SilentlyContinue)) {
-    $icnsPath = Join-Path $appleRoot "$BaseName-macos-app.icns"
-    & iconutil --convert icns --output $icnsPath $macIconSet
-    if ($LASTEXITCODE -ne 0) {
-        throw "iconutil failed with exit code $LASTEXITCODE."
-    }
+foreach ($entry in $macEntries) {
+    Copy-Item `
+        -LiteralPath (Join-Path $StagingDirectory "macos\icon-$($entry.Size).png") `
+        -Destination (Join-Path $macIconSet $entry.Name)
 }
 
 # Windows ----------------------------------------------------------------------
 $windowsRoot = Join-Path $OutputDirectory "windows"
-$windowsAssets = Join-Path $windowsRoot "assets"
+$windowsStaging = Join-Path $StagingDirectory "windows"
 $windowsPngs = @()
-foreach ($size in @(16, 20, 24, 30, 32, 40, 48, 60, 64, 72, 80, 96, 128, 256)) {
-    $path = Join-Path $windowsAssets "$BaseName-windows-app-$size.png"
-    Resize-Icon $masterFreeform $path $size
+foreach ($size in @(16, 24, 32, 48, 256)) {
+    $path = Join-Path $windowsStaging "$BaseName-windows-app-$size.png"
+    Resize-Icon $masterSquircle $path $size
     $windowsPngs += $path
 }
-$windowsIco = Join-Path $windowsRoot "$BaseName-windows-app.ico"
+$windowsIco = Join-Path $windowsRoot "app.ico"
 Write-Ico $windowsPngs $windowsIco
 
 # Linux / freedesktop hicolor --------------------------------------------------
 $linuxRoot = Join-Path $OutputDirectory "linux"
-$linuxAssets = Join-Path $linuxRoot "assets"
 $hicolorRoot = Join-Path $linuxRoot "hicolor"
 foreach ($size in @(16, 24, 32, 48, 64, 128, 256, 512)) {
-    $asset = Join-Path $linuxAssets "$BaseName-linux-app-$size.png"
-    Resize-Icon $masterFreeform $asset $size
-    Copy-BuildAsset $asset (Join-Path $hicolorRoot "$($size)x$size\apps\$BaseName.png")
+    Resize-Icon $masterSquircle `
+        (Join-Path $hicolorRoot "$($size)x$size\apps\vss.png") `
+        $size
 }
 
 # Web --------------------------------------------------------------------------
 $webRoot = Join-Path $OutputDirectory "web"
+$webStaging = Join-Path $StagingDirectory "web"
 $faviconPngs = @()
 foreach ($size in @(16, 32, 48)) {
-    $path = Join-Path $webRoot "$BaseName-web-favicon-$size.png"
-    Resize-Icon $masterFreeform $path $size
+    $path = Join-Path $webStaging "favicon-$size.png"
+    Resize-Icon $masterSquircle $path $size
     $faviconPngs += $path
 }
-Write-Ico $faviconPngs (Join-Path $webRoot "$BaseName-web-favicon.ico")
+Write-Ico $faviconPngs (Join-Path $webRoot "favicon.ico")
+Copy-Item `
+    -LiteralPath (Join-Path $webStaging "favicon-32.png") `
+    -Destination (Join-Path $webRoot "favicon-32.png")
 
-Resize-Icon $masterFullbleed (Join-Path $webRoot "$BaseName-web-apple-touch-180.png") 180 -Opaque
-Resize-Icon $masterFreeform (Join-Path $webRoot "$BaseName-web-any-192.png") 192
-Resize-Icon $masterFreeform (Join-Path $webRoot "$BaseName-web-any-512.png") 512
-Resize-Icon $masterFullbleed (Join-Path $webRoot "$BaseName-web-maskable-512.png") 512 -Opaque
-
-$webManifest = [ordered]@{
-    icons = @(
-        [ordered]@{
-            src = "$BaseName-web-any-192.png"
-            sizes = "192x192"
-            type = "image/png"
-            purpose = "any"
-        },
-        [ordered]@{
-            src = "$BaseName-web-any-512.png"
-            sizes = "512x512"
-            type = "image/png"
-            purpose = "any"
-        },
-        [ordered]@{
-            src = "$BaseName-web-maskable-512.png"
-            sizes = "512x512"
-            type = "image/png"
-            purpose = "maskable"
-        }
-    )
-}
-$webManifest | ConvertTo-Json -Depth 8 |
-    Set-Content -LiteralPath (Join-Path $webRoot "$BaseName-web-manifest-icons.json") -Encoding UTF8
-
-$webHead = @"
-<link rel="icon" href="$BaseName-web-favicon.ico" sizes="any">
-<link rel="icon" type="image/png" href="$BaseName-web-favicon-32.png" sizes="32x32">
-<link rel="apple-touch-icon" href="$BaseName-web-apple-touch-180.png" sizes="180x180">
-"@
-Set-Content -LiteralPath (Join-Path $webRoot "$BaseName-web-head.html") -Value $webHead -Encoding UTF8
-
-# Machine-readable export inventory.
-$inventory = [ordered]@{
-    schema = 1
-    basename = $BaseName
-    blend_file = $blendPath
-    generated_utc = [DateTime]::UtcNow.ToString("o")
-    resampling = "OpenImageIO lanczos3"
-    color_management = [ordered]@{
-        config = $OcioConfig
-        display = $OcioDisplay
-        view = $OcioView
-        look = $OcioLook
-        exposure = $OcioExposure
-    }
-    output_directory = $OutputDirectory
-    macos_icns_generated = (Test-Path -LiteralPath (Join-Path $appleRoot "$BaseName-macos-app.icns"))
-    masters = [ordered]@{
-        fullbleed = $masterFullbleed
-        freeform = $masterFreeform
-        foreground_color = $masterForegroundColor
-        foreground_mono = $masterForegroundMono
-    }
-}
-$inventory | ConvertTo-Json -Depth 8 |
-    Set-Content -LiteralPath (Join-Path $OutputDirectory "$BaseName-icon-export.json") -Encoding UTF8
+Resize-Icon $masterFullbleed (Join-Path $webRoot "apple-touch-icon-180.png") 180 -Opaque
+Resize-Icon $masterSquircle (Join-Path $webRoot "icon-192.png") 192
+Resize-Icon $masterSquircle (Join-Path $webRoot "icon-512.png") 512
+Resize-Icon $masterMaskable (Join-Path $webRoot "icon-maskable-512.png") 512 -Opaque
 
 Write-Host "Icon export complete: $OutputDirectory"
-if (-not $runningOnMac) {
-    Write-Host "macOS .iconset generated. Run this script on macOS, or run iconutil there, to create the final .icns."
-}
-
-
-
