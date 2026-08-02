@@ -1,6 +1,6 @@
 package com.vss
 
-import androidx.compose.foundation.AndroidExternalSurface
+import androidx.compose.foundation.AndroidEmbeddedExternalSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -30,7 +30,7 @@ fun SimulatorPreview(
 ) {
     var sourceMenu by remember { mutableStateOf(false) }
     Box(modifier.background(Color.Black)) {
-        AndroidExternalSurface(Modifier.fillMaxSize()) {
+        AndroidEmbeddedExternalSurface(Modifier.fillMaxSize()) {
             onSurface { surface, width, height ->
                 controller.attach(surface, width, height)
                 model.sourceUri?.let { controller.startMedia(it, model.sourceMime) } ?: camera()

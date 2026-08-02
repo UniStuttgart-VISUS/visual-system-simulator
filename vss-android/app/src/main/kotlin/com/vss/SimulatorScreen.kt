@@ -9,7 +9,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -40,21 +39,37 @@ fun SimulatorScreen(
     var showFullscreenHint by remember { mutableStateOf(false) }
     LaunchedEffect(model.fullscreen) {
         if (model.fullscreen) bars.hide(WindowInsetsCompat.Type.systemBars()) else bars.show(WindowInsetsCompat.Type.systemBars())
-    }
-    BackHandler(model.fullscreen) { model.fullscreen = false }
-    if (model.fullscreen) {
-        LaunchedEffect(Unit) {
+        if (model.fullscreen) {
             showFullscreenHint = true
             delay(2500)
             showFullscreenHint = false
+        } else {
+            showFullscreenHint = false
         }
-        Box(Modifier.fillMaxSize()) {
-            SimulatorPreview(
-                model, controller, camera, media, settings,
-                Modifier.fillMaxSize().clickable { model.fullscreen = false },
-                showControls = false,
-            )
-            if (showFullscreenHint) {
+    }
+    BackHandler(model.fullscreen) { model.fullscreen = false }
+    Surface(Modifier.fillMaxSize()) {
+        BoxWithConstraints {
+            val wide = maxWidth >= 760.dp
+            val previewHeight = maxWidth / (16f / 9f)
+            val contentWidth = maxWidth - 36.dp
+            val widePreviewWidth = contentWidth * (1.7f / 2.7f)
+            val previewModifier = when {
+                model.fullscreen -> Modifier.fillMaxSize().clickable { model.fullscreen = false }
+                wide -> Modifier.offset(12.dp, 12.dp).width(widePreviewWidth).height(maxHeight - 24.dp)
+                else -> Modifier.fillMaxWidth().height(previewHeight)
+            }
+            val catalogModifier = when {
+                model.fullscreen -> Modifier.offset(y = maxHeight).fillMaxSize()
+                wide -> Modifier.offset(widePreviewWidth + 24.dp, 12.dp)
+                    .width(contentWidth - widePreviewWidth).height(maxHeight - 24.dp)
+                else -> Modifier.offset(y = previewHeight).fillMaxWidth().height(maxHeight - previewHeight)
+            }
+
+            SimulatorPreview(model, controller, camera, media, settings, previewModifier, !model.fullscreen)
+            CatalogPanel(model, controller, catalogModifier)
+
+            if (model.fullscreen && showFullscreenHint) {
                 Surface(
                     Modifier.align(Alignment.BottomCenter).padding(24.dp),
                     shape = MaterialTheme.shapes.large,
@@ -66,22 +81,6 @@ fun SimulatorScreen(
                         color = MaterialTheme.colorScheme.inverseOnSurface,
                     )
                 }
-            }
-        }
-        return
-    }
-
-    val wide = LocalConfiguration.current.screenWidthDp >= 760
-    Surface(Modifier.fillMaxSize()) {
-        if (wide) {
-            Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                SimulatorPreview(model, controller, camera, media, settings, Modifier.weight(1.7f).fillMaxHeight(), true)
-                CatalogPanel(model, controller, Modifier.widthIn(min = 360.dp).weight(1f))
-            }
-        } else {
-            Column {
-                SimulatorPreview(model, controller, camera, media, settings, Modifier.fillMaxWidth().aspectRatio(16f / 9f), true)
-                CatalogPanel(model, controller, Modifier.weight(1f))
             }
         }
     }
