@@ -5,13 +5,11 @@ enum MediaSource: Equatable { case camera, file(URL) }
 
 @MainActor @Observable final class SimulatorModel {
     var catalog: Catalog?
-    var activePresets = Set<String>() { didSet { refreshSettings() } }
-    var overrides: [String: JSONValue] = [:] { didSet { refreshSettings() } }
+    var session = SimulatorSession()
     var effective: [String: JSONValue] = [:]
     var expanded = Set<String>()
     var selectedArticle: CatalogArticle?
-    var pendingPresetRemoval: CatalogPreset?
-    var pendingDemo: CatalogDemonstration?
+    var viewedArticleID: String?
     var source: MediaSource = .camera
     var fullscreen = false
     var errorMessage: String?
@@ -24,28 +22,35 @@ enum MediaSource: Equatable { case camera, file(URL) }
         do {
             catalog = try SimulatorBridge.catalog(locale: localeTag)
             expanded = Set(catalog?.groups.map(\.id) ?? [])
+            if viewedArticleID == nil, let catalog {
+                let active = session.activePresets(in: catalog)
+                viewedArticleID = catalog.articles.first { article in
+                    article.demonstrations.contains { !$0.presets.allSatisfy { !active.contains($0) } }
+                }?.id ?? catalog.articles.first?.id
+            }
             refreshSettings()
         } catch { errorMessage = error.localizedDescription }
     }
-    func toggle(_ preset: CatalogPreset) {
-        if activePresets.contains(preset.id) {
-            if !Set(preset.values.keys).isDisjoint(with: overrides.keys) { pendingPresetRemoval = preset }
-            else { activePresets.remove(preset.id) }
-        } else { activePresets.insert(preset.id) }
+    func selectDemonstration(articleID: String, demonstrationID: String) {
+        guard let catalog else { return }
+        session = session.selectDemonstration(in: catalog, articleID: articleID, demonstrationID: demonstrationID)
+        refreshSettings()
     }
-    func remove(_ preset: CatalogPreset, discardAffected: Bool) {
-        activePresets.remove(preset.id)
-        if discardAffected { overrides = overrides.filter { !preset.values.keys.contains($0.key) } }
-        pendingPresetRemoval = nil
+    func edit(_ settingID: String, value: JSONValue) {
+        session = session.edit(settingID, value: value)
+        refreshSettings()
     }
-    func applyDemo(_ demo: CatalogDemonstration, replacing: Bool) {
-        if replacing { activePresets = Set(demo.presets); overrides = [:] }
-        else { activePresets.formUnion(demo.presets) }
-        pendingDemo = nil
+    func reset(_ settingID: String) {
+        session = session.reset(settingID)
+        refreshSettings()
+    }
+    func sourceArticle(for settingID: String) -> CatalogArticle? {
+        guard let catalog, let id = session.sourceArticleID(in: catalog, settingID: settingID) else { return nil }
+        return catalog.articles.first { $0.id == id }
     }
     func refreshSettings() {
-        guard catalog != nil else { return }
-        do { effective = try SimulatorBridge.compose(locale: localeTag, presets: activePresets, overrides: overrides) }
+        guard let catalog else { return }
+        do { effective = try SimulatorBridge.compose(locale: localeTag, presets: session.activePresets(in: catalog), overrides: session.manual) }
         catch { errorMessage = error.localizedDescription; return }
         postTask?.cancel()
         let settings = effective

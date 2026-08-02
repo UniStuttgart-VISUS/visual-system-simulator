@@ -51,9 +51,11 @@ struct CatalogArticle: Codable, Identifiable {
     let id: String
     let locale: String
     let title: String
+    let summary: String?
+    let image: String?
     let contentPath: String
     let demonstrations: [CatalogDemonstration]
-    enum CodingKeys: String, CodingKey { case id, locale, title, contentPath = "content_path", demonstrations }
+    enum CodingKeys: String, CodingKey { case id, locale, title, summary, image, contentPath = "content_path", demonstrations }
 }
 struct CatalogDemonstration: Codable, Identifiable { let id: String; let label: String; let presets: [String] }
 
@@ -65,6 +67,11 @@ enum UIStrings {
             "fullscreen": ("Full screen", "Vollbild"), "exitFullscreen": ("Tap to exit full screen", "Tippen beendet den Vollbildmodus"),
             "settings": ("Settings", "Einstellungen"), "articles": ("Articles", "Artikel"),
             "resetAll": ("Reset manual changes", "Manuelle Änderungen zurücksetzen"), "reset": ("Reset", "Zurücksetzen"),
+            "openArticle": ("Open article", "Artikel öffnen"),
+            "explainingArticle": ("Open explaining article", "Erklärenden Artikel öffnen"),
+            "activate": ("Activate", "Aktivieren"), "deactivate": ("Deactivate", "Deaktivieren"),
+            "articlePosition": ("Article position; active simulations are shown with thick segments", "Artikelposition; aktive Simulationen werden als dicke Segmente dargestellt"),
+            "of": ("of", "von"), "active": ("active", "aktiv"),
             "permissionTitle": ("Camera access needed", "Kamerazugriff erforderlich"),
             "permissionMessage": ("Allow camera access to use the live simulation, or choose a photo or video.", "Erlaube den Kamerazugriff für die Live-Simulation oder wähle ein Bild oder Video."),
             "tryAgain": ("Try again", "Erneut versuchen"), "openSettings": ("Open Settings", "Einstellungen öffnen"),

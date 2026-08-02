@@ -93,7 +93,8 @@ function Invoke-InstallAction {
     Write-Host "Building VSS for device $deviceId..."
     Invoke-Native "Building the iOS app" {
         & xcodebuild -project VSS.xcodeproj -scheme VSS -configuration Debug `
-            -destination "id=$deviceId" -derivedDataPath $derivedDataDir build
+            -destination "id=$deviceId" -derivedDataPath $derivedDataDir `
+            -allowProvisioningUpdates build
     } | Out-Null
 
     if (!(Test-Path $app -PathType Container)) { throw "App bundle not found: $app" }

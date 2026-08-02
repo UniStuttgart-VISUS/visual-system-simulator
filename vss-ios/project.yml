@@ -39,3 +39,10 @@ targets:
       - name: Build Rust core
         script: ./scripts/build-rust.sh
         basedOnDependencyAnalysis: false
+  VSSTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: VSS

@@ -41,20 +41,6 @@ struct SimulatorScreen: View {
         .alert(t("error"), isPresented: Binding(get: { model.errorMessage != nil || controller.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil; controller.errorMessage = nil } })) {
             Button(t("dismiss")) { model.errorMessage = nil; controller.errorMessage = nil }
         } message: { Text(model.errorMessage ?? controller.errorMessage ?? "") }
-        .alert(t("removePreset"), isPresented: Binding(get: { model.pendingPresetRemoval != nil }, set: { if !$0 { model.pendingPresetRemoval = nil } })) {
-            if let preset = model.pendingPresetRemoval {
-                Button(t("keepOverrides")) { model.remove(preset, discardAffected: false) }
-                Button(t("discardOverrides"), role: .destructive) { model.remove(preset, discardAffected: true) }
-            }
-            Button(t("cancel"), role: .cancel) { model.pendingPresetRemoval = nil }
-        } message: { Text(t("presetConflict")) }
-        .alert(t("applyDemo"), isPresented: Binding(get: { model.pendingDemo != nil }, set: { if !$0 { model.pendingDemo = nil } })) {
-            if let demo = model.pendingDemo {
-                Button(t("replace")) { model.applyDemo(demo, replacing: true) }
-                Button(t("add")) { model.applyDemo(demo, replacing: false) }
-            }
-            Button(t("cancel"), role: .cancel) { model.pendingDemo = nil }
-        } message: { Text(t("demoMessage")) }
     }
     private func activateSource() { switch model.source { case .camera: controller.startCamera(); case .file(let url): controller.startMedia(url) } }
 }
@@ -97,17 +83,159 @@ private struct CatalogPanel: View {
     @Bindable var model: SimulatorModel
     var body: some View {
         if let catalog = model.catalog {
-            VStack(spacing: 6) {
-                ScrollView(.horizontal, showsIndicators: false) { HStack {
-                    ForEach(catalog.articles) { article in Button(article.title, systemImage: "doc.text") { model.selectedArticle = article }.buttonStyle(.bordered) }
-                }.padding(.horizontal) }
-                ScrollView(.horizontal, showsIndicators: false) { HStack {
-                    ForEach(catalog.presets) { preset in Toggle(preset.label, isOn: Binding(get: { model.activePresets.contains(preset.id) }, set: { _ in model.toggle(preset) })).toggleStyle(.button) }
-                    if !model.overrides.isEmpty { Button(UIStrings.text("resetAll", locale: .current), systemImage: "arrow.counterclockwise") { model.overrides = [:] } }
-                }.padding(.horizontal) }
-                ScrollView { LazyVStack(spacing: 10) { ForEach(catalog.groups) { SettingsGroup(group: $0, model: model) } }.padding() }
+            ScrollView {
+                LazyVStack(spacing: 10) {
+                    ArticleIndex(catalog: catalog, model: model)
+                    ArticleGallery(catalog: catalog, model: model)
+                    ForEach(catalog.groups) { SettingsGroup(group: $0, model: model) }
+                }.padding(.vertical, 8)
             }
         } else { ProgressView(UIStrings.text("loading", locale: .current)) }
+    }
+}
+
+private struct ArticleGallery: View {
+    let catalog: Catalog
+    @Bindable var model: SimulatorModel
+
+    var body: some View {
+        GeometryReader { geometry in
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 10) {
+                    ForEach(Array(catalog.articles.enumerated()), id: \.element.id) { index, article in
+                        ArticleCard(article: article, index: index, count: catalog.articles.count, catalog: catalog, model: model)
+                            .frame(width: max(260, geometry.size.width * 0.88))
+                            .id(article.id)
+                    }
+                }
+                .scrollTargetLayout()
+                .padding(.horizontal, 12)
+            }
+            .scrollTargetBehavior(.viewAligned)
+            .scrollPosition(id: $model.viewedArticleID, anchor: .leading)
+        }
+        .frame(height: 260)
+    }
+}
+
+private struct ArticleCard: View {
+    let article: CatalogArticle
+    let index: Int
+    let count: Int
+    let catalog: Catalog
+    @Bindable var model: SimulatorModel
+
+    private var selected: CatalogDemonstration? {
+        article.demonstrations.first { $0.id == model.session.selectedDemonstrations[article.id] }
+    }
+    private var positionLabel: String {
+        "\(article.title), \(index + 1) \(UIStrings.text("of", locale: .current)) \(count)" + (selected.map { ", \($0.label) \(UIStrings.text("active", locale: .current))" } ?? "")
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button { model.selectedArticle = article } label: {
+                ZStack(alignment: .bottom) {
+                    GalleryImage(path: article.image)
+                    HStack(spacing: 8) {
+                        Text(article.title).font(.title2.weight(.semibold)).multilineTextAlignment(.leading).lineLimit(2)
+                        Spacer(minLength: 4)
+                        Image(systemName: "info.circle.fill").font(.title2)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16).padding(.vertical, 9)
+                    .background(.black.opacity(0.62))
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(positionLabel)
+            .accessibilityHint(UIStrings.text("openArticle", locale: .current))
+
+            if article.demonstrations.isEmpty {
+                Color.clear.frame(height: 64)
+            } else {
+                DemonstrationSegments(article: article, model: model)
+            }
+        }
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+}
+
+private struct GalleryImage: View {
+    let path: String?
+    var body: some View {
+        Group {
+            if let path,
+               let root = Bundle.main.resourceURL?.appendingPathComponent("articles", isDirectory: true),
+               let image = UIImage(contentsOfFile: root.appendingPathComponent(path).path) {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else {
+                ZStack {
+                    Color(uiColor: .secondarySystemBackground)
+                    Image(systemName: "doc.richtext").font(.system(size: 48)).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
+        .accessibilityHidden(true)
+    }
+}
+
+struct DemonstrationSegments: View {
+    let article: CatalogArticle
+    @Bindable var model: SimulatorModel
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(article.demonstrations) { demo in
+                let isSelected = model.session.selectedDemonstrations[article.id] == demo.id
+                Button {
+                    model.selectDemonstration(articleID: article.id, demonstrationID: demo.id)
+                } label: {
+                    Text(label(for: demo, selected: isSelected))
+                        .font(.subheadline.weight(.medium)).lineLimit(2)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(isSelected ? Color.accentColor : Color(uiColor: .tertiarySystemFill))
+                        .foregroundStyle(isSelected ? Color.white : Color.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+            }
+        }
+        .padding(.horizontal, 8).padding(.vertical, 6)
+        .frame(height: 64)
+    }
+
+    private func label(for demo: CatalogDemonstration, selected: Bool) -> String {
+        demo.label.caseInsensitiveCompare(article.title) == .orderedSame
+            ? UIStrings.text(selected ? "deactivate" : "activate", locale: .current)
+            : demo.label
+    }
+}
+
+private struct ArticleIndex: View {
+    let catalog: Catalog
+    @Bindable var model: SimulatorModel
+    private var activePresets: Set<String> { model.session.activePresets(in: catalog) }
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(catalog.articles) { article in
+                let current = article.id == model.viewedArticleID
+                let active = article.demonstrations.contains { demo in demo.presets.contains { activePresets.contains($0) } }
+                Capsule()
+                    .fill(active ? Color.accentColor : current ? Color.secondary : Color(uiColor: .separator))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: current ? 8 : active ? 6 : 3)
+            }
+        }
+        .frame(height: 8)
+        .padding(.horizontal, 12)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(UIStrings.text("articlePosition", locale: .current))
     }
 }
 
@@ -131,7 +259,13 @@ private struct SettingControl: View {
             HStack {
                 Text(setting.label)
                 Spacer()
-                if model.overrides[setting.id] != nil { Button { model.overrides.removeValue(forKey: setting.id) } label: { Image(systemName: "arrow.counterclockwise") }.accessibilityLabel(UIStrings.text("reset", locale: .current)) }
+                if model.session.manual[setting.id] != nil {
+                    Button { model.reset(setting.id) } label: { Image(systemName: "arrow.counterclockwise") }
+                        .accessibilityLabel(UIStrings.text("reset", locale: .current))
+                } else if let article = model.sourceArticle(for: setting.id) {
+                    Button { model.selectedArticle = article } label: { Image(systemName: "info.circle") }
+                        .accessibilityLabel(UIStrings.text("explainingArticle", locale: .current))
+                }
                 control
             }
             if !setting.help.isEmpty { Text(setting.help).font(.caption).foregroundStyle(.secondary) }
@@ -139,7 +273,7 @@ private struct SettingControl: View {
     }
     @ViewBuilder private var control: some View {
         switch setting.control.kind {
-        case "boolean": Toggle("", isOn: Binding(get: { value.bool ?? false }, set: { model.overrides[setting.id] = .bool($0) })).labelsHidden()
+        case "boolean": Toggle("", isOn: Binding(get: { value.bool ?? false }, set: { model.edit(setting.id, value: .bool($0)) })).labelsHidden()
         case "number":
             let number = value.number ?? 0, step = setting.control.step ?? 1
             HStack(spacing: 4) {
@@ -148,7 +282,7 @@ private struct SettingControl: View {
                 Button { setNumber(number + step) } label: { Image(systemName: "plus.circle") }
             }
         case "choice":
-            Picker(setting.label, selection: Binding(get: { Int(value.number ?? 0) }, set: { model.overrides[setting.id] = .number(Double($0)) })) {
+            Picker(setting.label, selection: Binding(get: { Int(value.number ?? 0) }, set: { model.edit(setting.id, value: .number(Double($0))) })) {
                 ForEach(setting.control.choices ?? []) { Text($0.label).tag($0.value) }
             }.labelsHidden().pickerStyle(.menu)
         default: Text(value.description).foregroundStyle(.secondary)
@@ -156,6 +290,6 @@ private struct SettingControl: View {
     }
     private func setNumber(_ number: Double) {
         let clamped = min(setting.control.max ?? Double.greatestFiniteMagnitude, max(setting.control.min ?? -Double.greatestFiniteMagnitude, number))
-        model.overrides[setting.id] = .number(setting.control.integer == true ? clamped.rounded() : clamped)
+        model.edit(setting.id, value: .number(setting.control.integer == true ? clamped.rounded() : clamped))
     }
 }
