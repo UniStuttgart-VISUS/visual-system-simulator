@@ -2,9 +2,10 @@
 id: macular-degeneration
 locale: de
 title: Makuladegeneration
+image: macular_degeneration/images/makuladegeneration-mittel.png
 demonstrations:
   - id: macular-moderate
-    label: Mittlere Makuladegeneration simulieren
+    label: Mittel
     presets: [macular-moderate]
 ---
 

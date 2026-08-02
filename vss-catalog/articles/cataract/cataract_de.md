@@ -1,13 +1,14 @@
 ---
 id: cataract
 locale: de
-title: Katarakt (Grauer Star)
+title: Katarakt
+image: cataract/images/katarakt-schwach.png
 demonstrations:
   - id: cataract-light
-    label: Leichte Katarakt simulieren
+    label: Schwach
     presets: [cataract-light]
   - id: cataract-strong
-    label: Starke Katarakt simulieren
+    label: Stark
     presets: [cataract-strong]
 ---
 

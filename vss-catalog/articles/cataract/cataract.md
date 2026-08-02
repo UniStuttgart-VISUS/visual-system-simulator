@@ -2,12 +2,13 @@
 id: cataract
 locale: en
 title: Cataract
+image: cataract/images/katarakt-schwach.png
 demonstrations:
   - id: cataract-light
-    label: Simulate mild cataract
+    label: Weak
     presets: [cataract-light]
   - id: cataract-strong
-    label: Simulate severe cataract
+    label: Strong
     presets: [cataract-strong]
 ---
 

@@ -1,4 +1,7 @@
 <resources>
+    <string name="activate">Activate</string>
+    <string name="deactivate">Deactivate</string>
+    <string name="open_article">Open article</string>
     <string name="app_name">VSS</string>
     <string name="app_full_name">Visual System Simulator</string>
     <string name="start_simulation">Start Simulation</string>

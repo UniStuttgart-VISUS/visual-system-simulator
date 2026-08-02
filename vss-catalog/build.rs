@@ -12,6 +12,10 @@ struct FrontMatter {
     locale: String,
     title: String,
     #[serde(default)]
+    summary: Option<String>,
+    #[serde(default)]
+    image: Option<String>,
+    #[serde(default)]
     demonstrations: Vec<Demonstration>,
 }
 
@@ -27,6 +31,8 @@ struct CompiledArticle {
     id: String,
     locale: String,
     title: String,
+    summary: Option<String>,
+    image: Option<String>,
     content_path: String,
     demonstrations: Vec<Demonstration>,
 }
@@ -34,6 +40,13 @@ struct CompiledArticle {
 fn main() {
     println!("cargo:rerun-if-changed=articles");
     let root = PathBuf::from("articles");
+    let index_path = root.join("index.toml");
+    let article_order: ArticleIndex = toml::from_str(
+        &fs::read_to_string(&index_path)
+            .unwrap_or_else(|err| panic!("Cannot read {}: {err}", index_path.display())),
+    )
+    .unwrap_or_else(|err| panic!("Invalid article index {}: {err}", index_path.display()));
+    validate_index_shape(&article_order.articles);
     let mut markdown = Vec::new();
     collect_markdown(&root, &mut markdown);
     markdown.sort();
@@ -99,10 +112,34 @@ fn main() {
             id: metadata.id,
             locale: metadata.locale,
             title: metadata.title,
+            summary: metadata.summary,
+            image: metadata.image,
             content_path,
             demonstrations: metadata.demonstrations,
         });
     }
+
+    let known_ids: BTreeSet<_> = articles.iter().map(|article| article.id.as_str()).collect();
+    let indexed_ids: BTreeSet<_> = article_order.articles.iter().map(String::as_str).collect();
+    let missing: Vec<_> = known_ids.difference(&indexed_ids).copied().collect();
+    let unknown: Vec<_> = indexed_ids.difference(&known_ids).copied().collect();
+    assert!(
+        missing.is_empty(),
+        "Article index is missing: {}",
+        missing.join(", ")
+    );
+    assert!(
+        unknown.is_empty(),
+        "Article index contains unknown ids: {}",
+        unknown.join(", ")
+    );
+    let positions: BTreeMap<_, _> = article_order
+        .articles
+        .iter()
+        .enumerate()
+        .map(|(position, id)| (id.as_str(), position))
+        .collect();
+    articles.sort_by_key(|article| (positions[article.id.as_str()], article.locale.clone()));
 
     for id in articles
         .iter()
@@ -122,6 +159,20 @@ fn main() {
         serde_json::to_vec(&articles).expect("articles serialize"),
     )
     .expect("articles.json is written");
+}
+
+#[derive(Debug, Deserialize)]
+struct ArticleIndex {
+    articles: Vec<String>,
+}
+
+fn validate_index_shape(ids: &[String]) {
+    let unique: BTreeSet<_> = ids.iter().collect();
+    assert_eq!(
+        unique.len(),
+        ids.len(),
+        "Article index contains duplicate ids"
+    );
 }
 
 fn write_if_changed(path: &Path, content: &[u8]) {

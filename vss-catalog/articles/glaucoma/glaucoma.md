@@ -2,9 +2,10 @@
 id: glaucoma
 locale: en
 title: Glaucoma
+image: glaucoma/images/glaukom-mittel.png
 demonstrations:
   - id: glaucoma-moderate
-    label: Simulate moderate glaucoma
+    label: Moderate
     presets: [glaucoma-moderate]
 ---
 

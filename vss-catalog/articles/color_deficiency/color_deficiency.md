@@ -1,10 +1,11 @@
 ---
 id: color-deficiency
 locale: en
-title: Dyschromatopsia
+title: Color deficiency
+image: color_deficiency/images/rotblindheit.png
 demonstrations:
   - id: protanopia
-    label: Simulate protanopia
+    label: Protanopia
     presets: [protanopia]
 ---
 

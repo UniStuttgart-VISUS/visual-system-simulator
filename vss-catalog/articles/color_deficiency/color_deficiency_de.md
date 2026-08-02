@@ -1,10 +1,11 @@
 ---
 id: color-deficiency
 locale: de
-title: Dyschromatopsie (Farbfehlsichtigkeit)
+title: Farbfehlsichtigkeit
+image: color_deficiency/images/rotblindheit.png
 demonstrations:
   - id: protanopia
-    label: Protanopie simulieren
+    label: Protanopie
     presets: [protanopia]
 ---
 

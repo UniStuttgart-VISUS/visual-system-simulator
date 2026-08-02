@@ -1,7 +1,8 @@
 ---
 id: ametropia
 locale: en
-title: Ametropia (Myopia, Hyperopia, respectively Short-/ Far-sightedness)
+title: Ametropia
+image: ametropia/images/kurzsichtigkeit-minus-2d.png
 ---
 
 ![Short-sightness](images/kurzsichtigkeit-minus-2d.png) 

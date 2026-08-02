@@ -1,10 +1,11 @@
 ---
 id: achromatopsia
 locale: en
-title: Achromatopsia (total color blindness)
+title: Achromatopsia
+image: achromatopsia/images/achromatopsie.png
 demonstrations:
   - id: achromatopsia
-    label: Simulate achromatopsia
+    label: Achromatopsia
     presets: [achromatopsia]
 ---
 

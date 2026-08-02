@@ -1,10 +1,11 @@
 ---
 id: glaucoma
 locale: de
-title: Glaukom (Grüner Star)
+title: Glaukom
+image: glaucoma/images/glaukom-mittel.png
 demonstrations:
   - id: glaucoma-moderate
-    label: Mittleres Glaukom simulieren
+    label: Mittel
     presets: [glaucoma-moderate]
 ---
 

@@ -1,4 +1,7 @@
 <resources>
+    <string name="activate">Aktivieren</string>
+    <string name="deactivate">Deaktivieren</string>
+    <string name="open_article">Artikel öffnen</string>
     <string name="start_simulation">Simulation starten</string>
     <string name="open_media">Bild oder Video öffnen</string>
     <string name="exit_fullscreen_hint">Tippen, um den Vollbildmodus zu beenden</string>

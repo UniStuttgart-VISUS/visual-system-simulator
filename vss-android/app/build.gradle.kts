@@ -115,6 +115,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
+    testImplementation("junit:junit:4.13.2")
 }
 
 val repositoryDirectory = layout.projectDirectory.dir("../..")

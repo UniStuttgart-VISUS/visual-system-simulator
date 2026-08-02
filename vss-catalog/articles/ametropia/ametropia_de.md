@@ -1,7 +1,8 @@
 ---
 id: ametropia
 locale: de
-title: Ametropie (Myopie, Hyperopie bzw. Kurz-/ Weitsichtigkeit)
+title: Ametropie
+image: ametropia/images/kurzsichtigkeit-minus-2d.png
 ---
 
 ![Kurzsichtigkeit](images/kurzsichtigkeit-minus-2d.png) 

@@ -1,10 +1,10 @@
 ---
 id: nyctalopia
 locale: en
-title: Nyctalopia (night-blindness)
+title: Night blindness
 demonstrations:
   - id: night-blindness
-    label: Simulate night blindness
+    label: Night blindness
     presets: [night-blindness]
 ---
 

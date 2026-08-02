@@ -1,7 +1,8 @@
 ---
 id: presbyopia
 locale: de
-title: Presbyopie (Alterssichtigkeit)
+title: Presbyopie
+image: presbyopia/images/alterssichtigkeit-60cm.png
 ---
 
 ![](images/alterssichtigkeit-60cm.png) 

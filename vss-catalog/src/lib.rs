@@ -84,6 +84,8 @@ pub struct Article {
     pub id: String,
     pub locale: String,
     pub title: String,
+    pub summary: Option<String>,
+    pub image: Option<String>,
     pub content_path: String,
     pub demonstrations: Vec<Demonstration>,
 }
@@ -432,10 +434,12 @@ pub fn catalog(locale: Locale) -> Catalog {
     let all_articles: Vec<Article> =
         serde_json::from_slice(include_bytes!(concat!(env!("OUT_DIR"), "/articles.json")))
             .expect("compiled articles are valid");
-    let article_ids: BTreeSet<String> = all_articles
-        .iter()
-        .map(|article| article.id.clone())
-        .collect();
+    let article_ids: Vec<String> = all_articles.iter().fold(Vec::new(), |mut ids, article| {
+        if !ids.contains(&article.id) {
+            ids.push(article.id.clone());
+        }
+        ids
+    });
     let articles: Vec<Article> = article_ids
         .into_iter()
         .filter_map(|id| {
@@ -463,10 +467,43 @@ pub fn catalog(locale: Locale) -> Catalog {
             }
         }
     }
+    validate_preset_ownership(&articles, &preset_ids).unwrap_or_else(|message| panic!("{message}"));
     Catalog {
         groups,
         presets,
         articles,
+    }
+}
+
+fn validate_preset_ownership(
+    articles: &[Article],
+    preset_ids: &BTreeSet<&str>,
+) -> Result<(), String> {
+    let mut owners = BTreeMap::<&str, &str>::new();
+    for article in articles {
+        for preset in article.demonstrations.iter().flat_map(|demo| &demo.presets) {
+            if let Some(owner) = owners.insert(preset.as_str(), article.id.as_str()) {
+                if owner != article.id {
+                    return Err(format!(
+                        "Preset '{preset}' belongs to both articles '{owner}' and '{}'",
+                        article.id
+                    ));
+                }
+            }
+        }
+    }
+    let unowned: Vec<_> = preset_ids
+        .iter()
+        .copied()
+        .filter(|id| !owners.contains_key(id))
+        .collect();
+    if unowned.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Presets without an article demonstration: {}",
+            unowned.join(", ")
+        ))
     }
 }
 
@@ -895,5 +932,60 @@ mod tests {
         assert!(html.contains("<h2>Ursachen und Entstehung</h2>"));
         assert!(html.contains("cataract/images/katarakt-schwach.png"));
         assert_eq!(cataract.demonstrations[0].presets, vec!["cataract-light"]);
+    }
+
+    #[test]
+    fn articles_follow_the_editorial_index_and_serialize_card_metadata() {
+        let contract: Value = serde_json::from_str(&contract_json(Locale::En)).unwrap();
+        let articles = contract["articles"].as_array().unwrap();
+        assert_eq!(
+            articles
+                .iter()
+                .map(|article| article["id"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            [
+                "ametropia",
+                "presbyopia",
+                "cataract",
+                "color-deficiency",
+                "achromatopsia",
+                "nyctalopia",
+                "glaucoma",
+                "macular-degeneration",
+            ]
+        );
+        assert!(articles
+            .iter()
+            .all(|article| article.get("summary").is_some()));
+        assert!(articles
+            .iter()
+            .all(|article| article.get("image").is_some()));
+    }
+
+    #[test]
+    fn preset_ownership_is_unique_across_articles_but_reuse_within_one_is_valid() {
+        let mut articles = catalog(Locale::En).articles;
+        let preset_ids = BTreeSet::from(["cataract-light"]);
+        let cataract = articles
+            .iter_mut()
+            .find(|article| article.id == "cataract")
+            .unwrap();
+        cataract
+            .demonstrations
+            .push(cataract.demonstrations[0].clone());
+        assert!(validate_preset_ownership(&articles, &preset_ids).is_ok());
+        articles
+            .iter_mut()
+            .find(|article| article.id == "glaucoma")
+            .unwrap()
+            .demonstrations
+            .push(Demonstration {
+                id: "duplicate-owner".into(),
+                label: "Duplicate".into(),
+                presets: vec!["cataract-light".into()],
+            });
+        assert!(validate_preset_ownership(&articles, &preset_ids)
+            .unwrap_err()
+            .contains("belongs to both articles"));
     }
 }

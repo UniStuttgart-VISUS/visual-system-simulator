@@ -1,0 +1,10 @@
+articles = [
+  "ametropia",
+  "presbyopia",
+  "cataract",
+  "color-deficiency",
+  "achromatopsia",
+  "nyctalopia",
+  "glaucoma",
+  "macular-degeneration",
+]
