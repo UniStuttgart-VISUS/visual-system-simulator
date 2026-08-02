@@ -9,7 +9,7 @@
   <key>CFBundleVersion</key><string>1</string>
   <key>CFBundleShortVersionString</key><string>1.0</string>
   <key>UILaunchScreen</key><dict/>
-  <key>NSCameraUsageDescription</key><string>Die Kamera liefert das Bild für die Simulation.</string>
+  <key>NSCameraUsageDescription</key><string>The camera provides the image for the simulation.</string>
   <key>CFBundleDocumentTypes</key><array><dict>
     <key>CFBundleTypeName</key><string>Image or video</string>
     <key>LSHandlerRank</key><string>Alternate</string>
