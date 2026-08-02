@@ -5,6 +5,6 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   base: './',
   plugins: [vue(), tailwindcss()],
-  test: { environment: 'jsdom', globals: true },
+  test: { environment: 'jsdom', globals: true, include: ['src/**/*.test.ts'] },
   build: { target: 'es2022' },
 })

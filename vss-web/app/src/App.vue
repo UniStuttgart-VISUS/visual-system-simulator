@@ -6,10 +6,12 @@ import { detectedLocale } from './i18n'
 import { flipRows, loadImage, loadVideo, type MediaSource } from './media'
 import { applyWebRetina } from './retinaFrame'
 import { compose, getCatalog, startSimulator } from './simulator'
+import { activePresets, editSetting, resetSetting, selectDemonstration, type SimulatorSession } from './simulatorSession'
 import type { Catalog, Value } from './types'
 
-const { t } = useI18n(); const catalog = ref<Catalog>(); const simulator = ref<Awaited<ReturnType<typeof startSimulator>>>(); const active = ref<string[]>([]); const overrides = ref<Record<string, Value>>({}); const state = ref<'loading'|'ready'|'unsupported'|'error'>('loading'); const mediaError = ref(''); const fullscreen = ref(false); const preview = ref<HTMLElement>(); let media: MediaSource | undefined; let objectUrl: string | undefined; let settingsTimer = 0; let resizeFrame = 0; let resizeObserver: ResizeObserver | undefined; let rgbd = false; let lastFrame: { pixels: Uint8Array; width: number; height: number } | undefined
-const effective = computed(() => catalog.value ? compose(detectedLocale, active.value, overrides.value) : {})
+const { t } = useI18n(); const catalog = ref<Catalog>(); const simulator = ref<Awaited<ReturnType<typeof startSimulator>>>(); const session = ref<SimulatorSession>({ selectedDemonstrations: {}, manual: {}, maskedFallback: {} }); const state = ref<'loading'|'ready'|'unsupported'|'error'>('loading'); const mediaError = ref(''); const fullscreen = ref(false); const preview = ref<HTMLElement>(); let media: MediaSource | undefined; let objectUrl: string | undefined; let settingsTimer = 0; let resizeFrame = 0; let resizeObserver: ResizeObserver | undefined; let rgbd = false; let lastFrame: { pixels: Uint8Array; width: number; height: number } | undefined
+const active = computed(() => catalog.value ? activePresets(session.value, catalog.value) : [])
+const effective = computed(() => catalog.value ? compose(detectedLocale, active.value, session.value.manual) : {})
 function upload(frame: { pixels: Uint8Array; width: number; height: number }) {
   const colorBytes = rgbd ? frame.width * Math.floor(frame.height / 2) * 4 : frame.pixels.length
   const pixels = frame.pixels.slice()
@@ -21,8 +23,9 @@ function submit(pixels: Uint8Array, width: number, height: number) { lastFrame =
 async function replaceMedia(file?: File) { mediaError.value = ''; media?.dispose(); if (objectUrl) URL.revokeObjectURL(objectUrl); const defaultImage = 'marketplace.rgbd.png'; rgbd = (file?.name ?? defaultImage).toLowerCase().includes('.rgbd.'); objectUrl = file ? URL.createObjectURL(file) : `./assets/${defaultImage}`; try { media = file?.type.startsWith('video/') ? await loadVideo(objectUrl, submit) : await loadImage(objectUrl, submit) } catch { mediaError.value = t('app.mediaError') } }
 async function initialize() { if (!('gpu' in navigator)) { state.value = 'unsupported'; return } try { simulator.value = await startSimulator('simulator-canvas'); catalog.value = getCatalog(detectedLocale); state.value = 'ready'; await nextTick(); await replaceMedia() } catch (error) { console.error(error); state.value = 'error' } }
 watch(effective, value => { clearTimeout(settingsTimer); settingsTimer = window.setTimeout(() => { try { simulator.value?.post_settings(JSON.stringify(value)); if (lastFrame) upload(lastFrame) } catch (error) { console.error(error); state.value = 'error' } }, 100) }, { deep: true })
-function setOverride(id: string, value: Value) { overrides.value = { ...overrides.value, [id]: value } }
-function reset(id?: string) { if (!id) overrides.value = {}; else { const next = { ...overrides.value }; delete next[id]; overrides.value = next } }
+function setOverride(id: string, value: Value) { session.value = editSetting(session.value, id, value) }
+function reset(id: string) { session.value = resetSetting(session.value, id) }
+function demonstrate(articleId: string, demonstrationId: string) { if (catalog.value) session.value = selectDemonstration(session.value, catalog.value, articleId, demonstrationId) }
 async function enterFullscreen() { try { await preview.value?.requestFullscreen() } catch { mediaError.value = t('app.initError') } }
 function fullscreenChange() { fullscreen.value = document.fullscreenElement === preview.value }
 function exitFullscreen() { if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined) }
@@ -46,6 +49,6 @@ onMounted(() => { document.addEventListener('fullscreenchange', fullscreenChange
       </div>
       <p v-if="mediaError && !fullscreen" class="media-error" role="alert">{{ mediaError }}</p>
     </section>
-    <aside v-if="catalog" class="panel"><CatalogPanel :catalog="catalog" :active="active" :overrides="overrides" :effective="effective" @presets="active=$event" @override="setOverride" @reset="reset" /></aside>
+    <aside v-if="catalog" class="panel"><CatalogPanel :catalog="catalog" :session="session" :effective="effective" @demonstration="demonstrate" @override="setOverride" @reset="reset" /></aside>
   </main>
 </template>
