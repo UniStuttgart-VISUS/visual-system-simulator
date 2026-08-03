@@ -1,5 +1,6 @@
 [workspace]
 resolver = "2"
+default-members = ["vss-desktop"]
 members = [
   "vss",
   "vss-desktop",
