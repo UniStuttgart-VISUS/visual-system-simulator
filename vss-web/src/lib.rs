@@ -278,7 +278,7 @@ pub fn compose_settings(
         catalog
             .presets
             .iter()
-            .position(|preset| preset.id == id)
+            .position(|preset| &preset.id == id)
             .unwrap_or(usize::MAX)
     });
     serde_json::to_string(&vss_catalog::compose(locale, &active, &manual))

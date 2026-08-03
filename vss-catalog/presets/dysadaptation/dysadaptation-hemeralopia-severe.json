@@ -1,0 +1,7 @@
+{
+  "both": {
+    "achromatopsia.enabled": true,
+    "achromatopsia.intensity": 100,
+    "achromatopsia.blur": 1.0
+  }
+}

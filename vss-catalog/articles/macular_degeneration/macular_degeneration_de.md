@@ -4,9 +4,12 @@ locale: de
 title: Makuladegeneration
 image: macular_degeneration/images/makuladegeneration-mittel.png
 demonstrations:
-  - id: macular-moderate
-    label: Mittel
-    presets: [macular-moderate]
+  - id: maculopathy-mild
+    label: Leichte Makuladegeneration
+    presets: [maculopathy-mild]
+  - id: maculopathy-severe
+    label: Starke Makuladegeneration
+    presets: [maculopathy-severe]
 ---
 
 ![](images/makuladegeneration-mittel.png) 

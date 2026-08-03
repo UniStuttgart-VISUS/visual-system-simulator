@@ -74,9 +74,15 @@ pub struct Choice {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Preset {
-    pub id: &'static str,
+    pub id: String,
     pub label: String,
-    pub values: BTreeMap<&'static str, Value>,
+    pub values: BTreeMap<String, Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CompiledPreset {
+    id: String,
+    values: BTreeMap<String, Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -367,69 +373,9 @@ pub fn catalog(locale: Locale) -> Catalog {
             settings: pose,
         },
     ];
-    let presets = vec![
-        layer(
-            "cataract-light",
-            tr("presets.cataract_light", locale),
-            [
-                ("cataract.enabled", json!(true)),
-                ("cataract.blur", json!(25.0)),
-                ("cataract.contrast", json!(20.0)),
-            ],
-        ),
-        layer(
-            "cataract-strong",
-            tr("presets.cataract_strong", locale),
-            [
-                ("cataract.enabled", json!(true)),
-                ("cataract.blur", json!(75.0)),
-                ("cataract.contrast", json!(65.0)),
-            ],
-        ),
-        layer(
-            "protanopia",
-            tr("presets.protanopia", locale),
-            [
-                ("color.enabled", json!(true)),
-                ("color.strength", json!(1.0)),
-                ("color.type", json!(0)),
-            ],
-        ),
-        layer(
-            "glaucoma-moderate",
-            tr("presets.glaucoma_moderate", locale),
-            [
-                ("glaucoma.enabled", json!(true)),
-                ("glaucoma.field", json!(55)),
-            ],
-        ),
-        layer(
-            "achromatopsia",
-            tr("presets.achromatopsia", locale),
-            [
-                ("achromatopsia.enabled", json!(true)),
-                ("achromatopsia.intensity", json!(100)),
-                ("achromatopsia.blur", json!(25.0)),
-            ],
-        ),
-        layer(
-            "night-blindness",
-            tr("presets.night_blindness", locale),
-            [
-                ("nyctalopia.enabled", json!(true)),
-                ("nyctalopia.intensity", json!(70)),
-            ],
-        ),
-        layer(
-            "macular-moderate",
-            tr("presets.macular_moderate", locale),
-            [
-                ("macular.enabled", json!(true)),
-                ("macular.simple", json!(true)),
-                ("macular.simple-intensity", json!(55)),
-            ],
-        ),
-    ];
+    let compiled_presets: Vec<CompiledPreset> =
+        serde_json::from_slice(include_bytes!(concat!(env!("OUT_DIR"), "/presets.json")))
+            .expect("compiled presets are valid");
     let requested_locale = if de { "de" } else { "en" };
     let all_articles: Vec<Article> =
         serde_json::from_slice(include_bytes!(concat!(env!("OUT_DIR"), "/articles.json")))
@@ -454,7 +400,24 @@ pub fn catalog(locale: Locale) -> Catalog {
                 .cloned()
         })
         .collect();
-    let preset_ids: BTreeSet<&str> = presets.iter().map(|preset| preset.id).collect();
+    let presets: Vec<Preset> = compiled_presets
+        .into_iter()
+        .map(|preset| {
+            let label = articles
+                .iter()
+                .flat_map(|article| &article.demonstrations)
+                .find(|demo| demo.presets.contains(&preset.id))
+                .unwrap_or_else(|| panic!("Preset '{}' has no localized demonstration", preset.id))
+                .label
+                .clone();
+            Preset {
+                id: preset.id,
+                label,
+                values: preset.values,
+            }
+        })
+        .collect();
+    let preset_ids: BTreeSet<&str> = presets.iter().map(|preset| preset.id.as_str()).collect();
     for article in &articles {
         for demonstration in &article.demonstrations {
             for preset in &demonstration.presets {
@@ -507,18 +470,6 @@ fn validate_preset_ownership(
     }
 }
 
-fn layer<const N: usize>(
-    id: &'static str,
-    label: String,
-    values: [(&'static str, Value); N],
-) -> Preset {
-    Preset {
-        id,
-        label,
-        values: values.into_iter().collect(),
-    }
-}
-
 fn boolean(id: &'static str, label: String) -> Setting {
     Setting {
         id,
@@ -560,9 +511,9 @@ pub fn compose(
         }
     }
     for layer in &catalog.presets {
-        if active.contains(layer.id) {
+        if active.contains(layer.id.as_str()) {
             for (k, v) in &layer.values {
-                result.insert((*k).into(), v.clone());
+                result.insert(k.clone(), v.clone());
             }
         }
     }
@@ -742,7 +693,7 @@ mod tests {
             catalog
                 .presets
                 .iter()
-                .map(|preset| preset.id)
+                .map(|preset| preset.id.as_str())
                 .collect::<BTreeSet<_>>()
                 .len(),
             catalog.presets.len()
@@ -767,13 +718,13 @@ mod tests {
                     .groups
                     .iter()
                     .flat_map(|group| &group.settings)
-                    .find(|setting| setting.id == *id)
+                    .find(|setting| setting.id == id.as_str())
                     .expect("preset setting exists");
                 assert!(
                     setting.control.accepts(value),
                     "invalid preset value for {id}"
                 );
-                assert!(ids.contains(id));
+                assert!(ids.contains(id.as_str()));
             }
         }
     }
@@ -806,12 +757,16 @@ mod tests {
         );
         assert_eq!(
             preset_ids,
-            catalog.presets.iter().map(|preset| preset.id).collect()
+            catalog
+                .presets
+                .iter()
+                .map(|preset| preset.id.as_str())
+                .collect()
         );
     }
 
     #[test]
-    fn all_asset_configs_use_valid_v2_settings() {
+    fn all_presets_use_valid_v2_settings() {
         fn visit(path: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
             for entry in std::fs::read_dir(path).unwrap() {
                 let path = entry.unwrap().path();
@@ -826,7 +781,7 @@ mod tests {
             }
         }
         let mut files = Vec::new();
-        visit(std::path::Path::new("../assets/configs"), &mut files);
+        visit(std::path::Path::new("presets"), &mut files);
         assert!(!files.is_empty());
         for path in files {
             let text = std::fs::read_to_string(&path).unwrap();
@@ -851,18 +806,18 @@ mod tests {
 
     #[test]
     fn later_presets_and_manual_values_win() {
-        let active = vec!["cataract-light".into(), "cataract-strong".into()];
+        let active = vec!["cataract-mild".into(), "cataract-severe".into()];
         let mut manual = Map::new();
         manual.insert("cataract.blur".into(), json!(10.0));
         let values = compose(Locale::En, &active, &manual);
         assert_eq!(values["cataract.blur"], json!(10.0));
-        assert_eq!(values["cataract.contrast"], json!(65.0));
+        assert_eq!(values["cataract.contrast"], json!(70.0));
     }
 
     #[test]
     fn preset_composition_is_independent_of_click_order() {
-        let forward = vec!["cataract-light".into(), "cataract-strong".into()];
-        let reverse = vec!["cataract-strong".into(), "cataract-light".into()];
+        let forward = vec!["cataract-mild".into(), "cataract-severe".into()];
+        let reverse = vec!["cataract-severe".into(), "cataract-mild".into()];
         assert_eq!(
             compose(Locale::En, &forward, &Map::new()),
             compose(Locale::En, &reverse, &Map::new())
@@ -920,8 +875,8 @@ mod tests {
     fn markdown_articles_are_compiled_and_localized() {
         let english = catalog(Locale::En);
         let german = catalog(Locale::De);
-        assert_eq!(english.articles.len(), 8);
-        assert_eq!(german.articles.len(), 8);
+        assert_eq!(english.articles.len(), 10);
+        assert_eq!(german.articles.len(), 10);
         let cataract = german
             .articles
             .iter()
@@ -931,7 +886,7 @@ mod tests {
         let html = std::fs::read_to_string("articles/cataract/cataract_de.html").unwrap();
         assert!(html.contains("<h2>Ursachen und Entstehung</h2>"));
         assert!(html.contains("cataract/images/katarakt-schwach.png"));
-        assert_eq!(cataract.demonstrations[0].presets, vec!["cataract-light"]);
+        assert_eq!(cataract.demonstrations[0].presets, vec!["cataract-mild"]);
     }
 
     #[test]
@@ -945,11 +900,13 @@ mod tests {
                 .collect::<Vec<_>>(),
             [
                 "ametropia",
+                "strabismus",
                 "presbyopia",
                 "cataract",
                 "color-deficiency",
                 "achromatopsia",
                 "nyctalopia",
+                "hemeralopia",
                 "glaucoma",
                 "macular-degeneration",
             ]
@@ -965,7 +922,7 @@ mod tests {
     #[test]
     fn preset_ownership_is_unique_across_articles_but_reuse_within_one_is_valid() {
         let mut articles = catalog(Locale::En).articles;
-        let preset_ids = BTreeSet::from(["cataract-light"]);
+        let preset_ids = BTreeSet::from(["cataract-mild"]);
         let cataract = articles
             .iter_mut()
             .find(|article| article.id == "cataract")
@@ -982,7 +939,7 @@ mod tests {
             .push(Demonstration {
                 id: "duplicate-owner".into(),
                 label: "Duplicate".into(),
-                presets: vec!["cataract-light".into()],
+                presets: vec!["cataract-mild".into()],
             });
         assert!(validate_preset_ownership(&articles, &preset_ids)
             .unwrap_err()

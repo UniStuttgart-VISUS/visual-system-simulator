@@ -1,8 +1,17 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.gradle.api.tasks.Sync
 
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+}
+
+val catalogPresetAssets = layout.buildDirectory.dir("generated/catalogPresetAssets")
+val syncCatalogPresetAssets by tasks.registering(Sync::class) {
+    from(layout.projectDirectory.dir("../../vss-catalog/presets")) {
+        include("**/*.png")
+    }
+    into(catalogPresetAssets.map { it.dir("presets") })
 }
 
 data class RustTarget(
@@ -92,6 +101,7 @@ android {
         getByName("main").assets.directories.add(
             layout.projectDirectory.dir("../../vss-catalog/articles").asFile.absolutePath,
         )
+        getByName("main").assets.directories.add(catalogPresetAssets.get().asFile.absolutePath)
         getByName("debug").jniLibs.directories.add(
             layout.buildDirectory.dir("rustJniLibs/debug-$debugRustAbi").get().asFile.absolutePath,
         )
@@ -174,6 +184,7 @@ androidComponents {
                 inputs.dir(repositoryDirectory.dir("vss-android/src"))
                 inputs.dir(repositoryDirectory.dir("vss-catalog/src"))
                 inputs.dir(repositoryDirectory.dir("vss-catalog/articles"))
+                inputs.dir(repositoryDirectory.dir("vss-catalog/presets"))
                 outputs.file(
                     repositoryDirectory.file(
                         "target/${rustTarget.triple}/$cargoProfile/$rustLibraryName",
@@ -205,7 +216,7 @@ androidComponents {
             dependsOn(includedTargets.map { copyTasksByTarget.getValue(it) })
         }
         tasks.matching { it.name == "merge${capitalizedVariantName}Assets" }.configureEach {
-            dependsOn(aggregateTask)
+            dependsOn(aggregateTask, syncCatalogPresetAssets)
         }
         tasks.matching { it.name == "merge${capitalizedVariantName}JniLibFolders" }.configureEach {
             dependsOn(aggregateTask)

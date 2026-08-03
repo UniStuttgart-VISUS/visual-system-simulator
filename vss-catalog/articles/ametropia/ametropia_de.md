@@ -3,6 +3,16 @@ id: ametropia
 locale: de
 title: Ametropie
 image: ametropia/images/kurzsichtigkeit-minus-2d.png
+demonstrations:
+  - id: ametropia-myopia-severe
+    label: Starke Myopie
+    presets: [ametropia-myopia-severe]
+  - id: ametropia-hyperopia-severe
+    label: Starke Hyperopie
+    presets: [ametropia-hyperopia-severe]
+  - id: ametropia-astigmatism-severe
+    label: Starker Astigmatismus
+    presets: [ametropia-astigmatism-severe]
 ---
 
 ![Kurzsichtigkeit](images/kurzsichtigkeit-minus-2d.png) 

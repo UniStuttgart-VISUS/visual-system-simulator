@@ -3,9 +3,12 @@ id: nyctalopia
 locale: de
 title: Nachtblindheit
 demonstrations:
-  - id: night-blindness
-    label: Nachtblindheit
-    presets: [night-blindness]
+  - id: dysadaptation-nyctalopia-severe
+    label: Starke Nachtblindheit
+    presets: [dysadaptation-nyctalopia-severe]
+  - id: dysadaptation-nyctalopia-severe-from-map
+    label: Starke Nachtblindheit (Retina-Karte)
+    presets: [dysadaptation-nyctalopia-severe-from-map]
 ---
 
 ## Ursachen und Entstehung

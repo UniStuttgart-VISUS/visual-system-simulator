@@ -54,14 +54,6 @@ choices:
   green: Green
   blue: Blue
   monochrome: Monochrome
-presets:
-  cataract_light: Mild cataract
-  cataract_strong: Severe cataract
-  protanopia: Protanopia
-  glaucoma_moderate: Moderate glaucoma
-  achromatopsia: Achromatopsia
-  night_blindness: Night blindness
-  macular_moderate: Moderate macular degeneration
 diagnostics:
   expected_object: Expected an object
   unknown_configuration_field: Unknown configuration field

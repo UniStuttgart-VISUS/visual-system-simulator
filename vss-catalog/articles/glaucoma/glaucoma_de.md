@@ -4,9 +4,15 @@ locale: de
 title: Glaukom
 image: glaucoma/images/glaukom-mittel.png
 demonstrations:
-  - id: glaucoma-moderate
-    label: Mittel
-    presets: [glaucoma-moderate]
+  - id: glaucoma-mild
+    label: Leichtes Glaukom
+    presets: [glaucoma-mild]
+  - id: glaucoma-severe
+    label: Starkes Glaukom
+    presets: [glaucoma-severe]
+  - id: glaucoma-from-map
+    label: Glaukom (Retina-Karte)
+    presets: [glaucoma-from-map]
 ---
 
 ![](images/glaukom-mittel.png) 

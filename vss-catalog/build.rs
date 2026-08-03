@@ -1,5 +1,6 @@
 use comrak::{markdown_to_html, Options};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
     env, fs,
@@ -37,9 +38,30 @@ struct CompiledArticle {
     demonstrations: Vec<Demonstration>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PresetDocument {
+    #[serde(default)]
+    both: BTreeMap<String, Value>,
+    #[serde(default)]
+    left: BTreeMap<String, Value>,
+    #[serde(default)]
+    right: BTreeMap<String, Value>,
+}
+
+#[derive(Debug, Serialize)]
+struct CompiledPreset {
+    id: String,
+    values: BTreeMap<String, Value>,
+}
+
 fn main() {
     println!("cargo:rerun-if-changed=articles");
+    println!("cargo:rerun-if-changed=presets");
     let root = PathBuf::from("articles");
+    let preset_root = PathBuf::from("presets");
+    let presets = compile_presets(&preset_root);
+    let preset_ids: BTreeSet<_> = presets.iter().map(|preset| preset.id.as_str()).collect();
     let index_path = root.join("index.toml");
     let article_order: ArticleIndex = toml::from_str(
         &fs::read_to_string(&index_path)
@@ -53,7 +75,6 @@ fn main() {
 
     let mut articles = Vec::new();
     let mut variants = BTreeSet::new();
-    let mut demos_by_article: BTreeMap<String, BTreeMap<String, Vec<String>>> = BTreeMap::new();
     for path in markdown {
         let source = fs::read_to_string(&path)
             .unwrap_or_else(|err| panic!("Cannot read {}: {err}", path.display()));
@@ -74,18 +95,6 @@ fn main() {
             "Duplicate article locale in {}",
             path.display()
         );
-
-        let demo_shapes = demos_by_article.entry(metadata.id.clone()).or_default();
-        for demo in &metadata.demonstrations {
-            let shape = demo_shapes
-                .entry(demo.id.clone())
-                .or_insert_with(|| demo.presets.clone());
-            assert_eq!(
-                shape, &demo.presets,
-                "Demonstration '{}' differs between locales",
-                demo.id
-            );
-        }
 
         let asset_base = parent
             .file_name()
@@ -119,6 +128,22 @@ fn main() {
         });
     }
 
+    let mut article_shapes = BTreeMap::<String, Vec<(String, Vec<String>)>>::new();
+    for article in &articles {
+        let shape: Vec<(String, Vec<String>)> = article
+            .demonstrations
+            .iter()
+            .map(|demo| (demo.id.clone(), demo.presets.clone()))
+            .collect();
+        if let Some(existing) = article_shapes.insert(article.id.clone(), shape.clone()) {
+            assert_eq!(
+                existing, shape,
+                "Article '{}' has different demonstrations between locales",
+                article.id
+            );
+        }
+    }
+
     let known_ids: BTreeSet<_> = articles.iter().map(|article| article.id.as_str()).collect();
     let indexed_ids: BTreeSet<_> = article_order.articles.iter().map(String::as_str).collect();
     let missing: Vec<_> = known_ids.difference(&indexed_ids).copied().collect();
@@ -133,6 +158,7 @@ fn main() {
         "Article index contains unknown ids: {}",
         unknown.join(", ")
     );
+    validate_preset_references(&articles, &preset_ids);
     let positions: BTreeMap<_, _> = article_order
         .articles
         .iter()
@@ -159,6 +185,109 @@ fn main() {
         serde_json::to_vec(&articles).expect("articles serialize"),
     )
     .expect("articles.json is written");
+    let out = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR is set")).join("presets.json");
+    fs::write(
+        &out,
+        serde_json::to_vec(&presets).expect("presets serialize"),
+    )
+    .expect("presets.json is written");
+}
+
+fn compile_presets(root: &Path) -> Vec<CompiledPreset> {
+    let mut files = Vec::new();
+    collect_files(root, "json", &mut files);
+    files.sort();
+    assert!(!files.is_empty(), "No presets found in {}", root.display());
+    let mut ids = BTreeSet::new();
+    files
+        .into_iter()
+        .map(|path| {
+            let id = path
+                .file_stem()
+                .and_then(|value| value.to_str())
+                .expect("preset filename is UTF-8")
+                .to_owned();
+            assert!(ids.insert(id.clone()), "Duplicate preset id '{id}'");
+            let source = fs::read_to_string(&path)
+                .unwrap_or_else(|err| panic!("Cannot read {}: {err}", path.display()));
+            let document: PresetDocument = serde_json::from_str(&source)
+                .unwrap_or_else(|err| panic!("Invalid preset {}: {err}", path.display()));
+            assert!(
+                !document.both.is_empty()
+                    || !document.left.is_empty()
+                    || !document.right.is_empty(),
+                "Preset '{}' has no settings",
+                path.display()
+            );
+            let mut values = document.both;
+            values.extend(document.left);
+            rebase_preset_assets(&mut values, root, &path);
+            CompiledPreset { id, values }
+        })
+        .collect()
+}
+
+fn rebase_preset_assets(values: &mut BTreeMap<String, Value>, root: &Path, path: &Path) {
+    let parent = path.parent().expect("preset has parent");
+    let relative_parent = parent
+        .strip_prefix(root)
+        .expect("preset lives below preset root");
+    for (id, value) in values {
+        if id.starts_with("retina.map-") {
+            if let Some(reference) = value.as_str() {
+                let asset = parent.join(reference);
+                assert!(
+                    asset.is_file(),
+                    "Preset '{}' references missing asset '{}'",
+                    path.display(),
+                    asset.display()
+                );
+                *value = Value::String(
+                    Path::new("presets")
+                        .join(relative_parent)
+                        .join(reference)
+                        .to_string_lossy()
+                        .replace('\\', "/"),
+                );
+            }
+        }
+    }
+}
+
+fn validate_preset_references(articles: &[CompiledArticle], preset_ids: &BTreeSet<&str>) {
+    let mut owners = BTreeMap::<&str, &str>::new();
+    for article in articles {
+        assert!(
+            !article.demonstrations.is_empty(),
+            "Article '{}' has no demonstrations",
+            article.id
+        );
+        for preset in article.demonstrations.iter().flat_map(|demo| &demo.presets) {
+            assert!(
+                preset_ids.contains(preset.as_str()),
+                "Article '{}' references unknown preset '{}'",
+                article.id,
+                preset
+            );
+            if let Some(owner) = owners.insert(preset, article.id.as_str()) {
+                assert_eq!(
+                    owner, article.id,
+                    "Preset '{preset}' belongs to both articles '{owner}' and '{}'",
+                    article.id
+                );
+            }
+        }
+    }
+    let unowned: Vec<_> = preset_ids
+        .iter()
+        .copied()
+        .filter(|id| !owners.contains_key(id))
+        .collect();
+    assert!(
+        unowned.is_empty(),
+        "Presets without an article demonstration: {}",
+        unowned.join(", ")
+    );
 }
 
 #[derive(Debug, Deserialize)]
@@ -182,17 +311,21 @@ fn write_if_changed(path: &Path, content: &[u8]) {
     }
 }
 
-fn collect_markdown(dir: &Path, output: &mut Vec<PathBuf>) {
+fn collect_files(dir: &Path, extension: &str, output: &mut Vec<PathBuf>) {
     for entry in
         fs::read_dir(dir).unwrap_or_else(|err| panic!("Cannot read {}: {err}", dir.display()))
     {
         let path = entry.expect("directory entry is readable").path();
         if path.is_dir() {
-            collect_markdown(&path, output);
-        } else if path.extension().and_then(|value| value.to_str()) == Some("md") {
+            collect_files(&path, extension, output);
+        } else if path.extension().and_then(|value| value.to_str()) == Some(extension) {
             output.push(path);
         }
     }
+}
+
+fn collect_markdown(dir: &Path, output: &mut Vec<PathBuf>) {
+    collect_files(dir, "md", output);
 }
 
 fn split_front_matter<'a>(source: &'a str, path: &Path) -> (&'a str, &'a str) {

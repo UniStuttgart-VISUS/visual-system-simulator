@@ -1,0 +1,12 @@
+{
+  "both": {
+    "glaucoma.enabled": true,
+    "glaucoma.field": 80,
+    "retina.map-pos-x": "glaucoma.retina_pos_x.png",
+    "retina.map-neg-x": "glaucoma.retina_neg_x.png",
+    "retina.map-pos-y": "glaucoma.retina_pos_y.png",
+    "retina.map-neg-y": "glaucoma.retina_neg_y.png",
+    "retina.map-pos-z": "glaucoma.retina_pos_z.png",
+    "retina.map-neg-z": "glaucoma.retina_neg_z.png"
+  }
+}

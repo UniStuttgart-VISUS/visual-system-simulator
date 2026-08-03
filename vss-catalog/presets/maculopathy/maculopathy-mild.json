@@ -1,0 +1,7 @@
+{
+  "both": {
+    "macular.enabled": true,
+    "macular.simple": true,
+    "macular.simple-intensity": 25
+  }
+}

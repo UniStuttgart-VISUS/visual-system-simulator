@@ -4,9 +4,12 @@ locale: en
 title: Achromatopsia
 image: achromatopsia/images/achromatopsie.png
 demonstrations:
-  - id: achromatopsia
-    label: Achromatopsia
-    presets: [achromatopsia]
+  - id: dyschromatopsia-achromatopsia-retina
+    label: Achromatopsia (retina model)
+    presets: [dyschromatopsia-achromatopsia-retina]
+  - id: dyschromatopsia-monochromacy-peacock
+    label: Monochromacy (Peacock model)
+    presets: [dyschromatopsia-monochromacy-peacock]
 ---
 
 ![](images/achromatopsie.png) 

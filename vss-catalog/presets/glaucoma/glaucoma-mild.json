@@ -1,0 +1,6 @@
+{
+  "both": {
+    "glaucoma.enabled": true,
+    "glaucoma.field": 30
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "both": {
+    "retina.map-pos-x": "nyctalopia.retina_pos_x.png",
+    "retina.map-neg-x": "nyctalopia.retina_neg_x.png",
+    "retina.map-pos-y": "nyctalopia.retina_pos_y.png",
+    "retina.map-neg-y": "nyctalopia.retina_neg_y.png",
+    "retina.map-pos-z": "nyctalopia.retina_pos_z.png",
+    "retina.map-neg-z": "nyctalopia.retina_neg_z.png"
+  }
+}

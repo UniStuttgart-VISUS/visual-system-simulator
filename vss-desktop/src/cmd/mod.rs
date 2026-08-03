@@ -75,3 +75,42 @@ pub(crate) fn run() -> Result<(), String> {
         Command::Show(args) => show::run(args),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vss_catalog::{parse_config_str, validate_settings};
+
+    #[test]
+    fn bundled_configs_use_valid_settings() {
+        let paths: Vec<_> = fs::read_dir("configs")
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| {
+                path.extension()
+                    .is_some_and(|extension| extension == "json")
+            })
+            .collect();
+        assert!(!paths.is_empty());
+
+        for path in paths {
+            let text = fs::read_to_string(&path).unwrap();
+            let (document, diagnostics) = parse_config_str(&path.to_string_lossy(), &text).unwrap();
+            assert!(
+                diagnostics.is_empty(),
+                "{}: {}",
+                path.display(),
+                diagnostics_to_string(&diagnostics)
+            );
+            for section in [document.effective_left(), document.effective_right()] {
+                validate_settings(&section.value_map()).unwrap_or_else(|diagnostics| {
+                    panic!(
+                        "{}: {}",
+                        path.display(),
+                        diagnostics_to_string(&diagnostics)
+                    )
+                });
+            }
+        }
+    }
+}

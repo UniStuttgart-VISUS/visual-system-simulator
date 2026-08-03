@@ -15,7 +15,7 @@ targets:
       Release: Config/VSS.xcconfig
     sources:
       - path: App
-      - path: ../assets/configs
+      - path: ../vss-catalog/presets
         type: folder
         buildPhase: resources
       - path: ../vss-catalog/articles

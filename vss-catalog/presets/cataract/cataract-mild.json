@@ -1,0 +1,7 @@
+{
+  "both": {
+    "cataract.enabled": true,
+    "cataract.blur": 30,
+    "cataract.contrast": 30
+  }
+}

@@ -83,7 +83,11 @@ impl LayerState {
         if target != Target::Both {
             let local = self.layer(target);
             for preset in &local.presets {
-                if let Some(preset) = catalog(self.locale).presets.iter().find(|p| p.id == preset) {
+                if let Some(preset) = catalog(self.locale)
+                    .presets
+                    .iter()
+                    .find(|candidate| candidate.id == *preset)
+                {
                     result.extend(
                         preset
                             .values
@@ -164,12 +168,12 @@ impl DesktopGui {
                         .show(ui, |ui| {
                             let active = &mut self.layers.layer_mut(target).presets;
                             for preset in &catalog.presets {
-                                let mut enabled = active.iter().any(|id| id == preset.id);
+                                let mut enabled = active.iter().any(|id| id == &preset.id);
                                 if ui.checkbox(&mut enabled, preset.label.as_str()).changed() {
                                     if enabled {
                                         active.push(preset.id.to_owned());
                                     } else {
-                                        active.retain(|id| id != preset.id);
+                                        active.retain(|id| id != &preset.id);
                                     }
                                     self.dirty = true;
                                 }
@@ -497,19 +501,19 @@ mod tests {
                 first
                     .values
                     .keys()
-                    .find(|key| second.values.contains_key(**key))
-                    .map(|key| (first, second, *key))
+                    .find(|key| second.values.contains_key(*key))
+                    .map(|key| (first, second, key.clone()))
             })
         }) else {
             return;
         };
-        state.both.presets = vec![first.id.into(), second.id.into()];
-        assert_eq!(
-            state.effective_values(Target::Both)[key],
-            second.values[key]
-        );
-        state.both.manual.insert(key.into(), json!(42.0));
-        assert_eq!(state.effective_values(Target::Both)[key], json!(42.0));
+        state.both.presets = vec![first.id.clone(), second.id.clone()];
+        let mut expected = Map::new();
+        expected.insert(key.clone(), second.values[&key].clone());
+        vss_catalog::normalize(Locale::En, &mut expected);
+        assert_eq!(state.effective_values(Target::Both)[&key], expected[&key]);
+        state.both.manual.insert(key.clone(), json!(42.0));
+        assert_eq!(state.effective_values(Target::Both)[&key], json!(42.0));
     }
 
     #[test]

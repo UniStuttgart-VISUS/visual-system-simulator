@@ -1,0 +1,10 @@
+{
+  "left": {
+    "eye.axis-y": 0.05,
+    "eye.center-distance": -10
+  },
+  "right": {
+    "eye.axis-y": -0.05,
+    "eye.center-distance": 10
+  }
+}

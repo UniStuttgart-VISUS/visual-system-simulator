@@ -42,7 +42,7 @@ $ids = @{
     retina_map_neg_z_path = 'retina.map-neg-z'
 }
 
-Get-ChildItem "$PSScriptRoot/../assets/configs" -Filter *.json -Recurse | ForEach-Object {
+Get-ChildItem "$PSScriptRoot/../vss-desktop/configs" -Filter *.json -Recurse | ForEach-Object {
     $document = Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json -AsHashtable
     $result = [ordered]@{}
     foreach ($eye in @('both', 'left', 'right')) {

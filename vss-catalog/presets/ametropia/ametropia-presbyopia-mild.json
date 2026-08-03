@@ -1,0 +1,6 @@
+{
+  "both": {
+    "eye.presbyopia-enabled": true,
+    "eye.near-point": 600
+  }
+}

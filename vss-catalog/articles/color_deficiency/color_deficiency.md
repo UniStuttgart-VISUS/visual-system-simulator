@@ -4,9 +4,42 @@ locale: en
 title: Color deficiency
 image: color_deficiency/images/rotblindheit.png
 demonstrations:
-  - id: protanopia
-    label: Protanopia
-    presets: [protanopia]
+  - id: dyschromatopsia-protanomaly-retina
+    label: Protanomaly (retina model)
+    presets: [dyschromatopsia-protanomaly-retina]
+  - id: dyschromatopsia-protanomaly-peacock
+    label: Protanomaly (Peacock model)
+    presets: [dyschromatopsia-protanomaly-peacock]
+  - id: dyschromatopsia-protanopia-retina
+    label: Protanopia (retina model)
+    presets: [dyschromatopsia-protanopia-retina]
+  - id: dyschromatopsia-protanopia-peacock
+    label: Protanopia (Peacock model)
+    presets: [dyschromatopsia-protanopia-peacock]
+  - id: dyschromatopsia-deuteranomaly-retina
+    label: Deuteranomaly (retina model)
+    presets: [dyschromatopsia-deuteranomaly-retina]
+  - id: dyschromatopsia-deuteranomaly-peacock
+    label: Deuteranomaly (Peacock model)
+    presets: [dyschromatopsia-deuteranomaly-peacock]
+  - id: dyschromatopsia-deuteranopia-retina
+    label: Deuteranopia (retina model)
+    presets: [dyschromatopsia-deuteranopia-retina]
+  - id: dyschromatopsia-deuteranopia-peacock
+    label: Deuteranopia (Peacock model)
+    presets: [dyschromatopsia-deuteranopia-peacock]
+  - id: dyschromatopsia-tritanomaly-retina
+    label: Tritanomaly (retina model)
+    presets: [dyschromatopsia-tritanomaly-retina]
+  - id: dyschromatopsia-tritanomaly-peacock
+    label: Tritanomaly (Peacock model)
+    presets: [dyschromatopsia-tritanomaly-peacock]
+  - id: dyschromatopsia-tritanopia-retina
+    label: Tritanopia (retina model)
+    presets: [dyschromatopsia-tritanopia-retina]
+  - id: dyschromatopsia-tritanopia-peacock
+    label: Tritanopia (Peacock model)
+    presets: [dyschromatopsia-tritanopia-peacock]
 ---
 
 

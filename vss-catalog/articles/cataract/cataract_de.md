@@ -4,12 +4,12 @@ locale: de
 title: Katarakt
 image: cataract/images/katarakt-schwach.png
 demonstrations:
-  - id: cataract-light
-    label: Schwach
-    presets: [cataract-light]
-  - id: cataract-strong
-    label: Stark
-    presets: [cataract-strong]
+  - id: cataract-mild
+    label: Leichte Katarakt
+    presets: [cataract-mild]
+  - id: cataract-severe
+    label: Starke Katarakt
+    presets: [cataract-severe]
 ---
 
 ![](images/katarakt-schwach.png) 

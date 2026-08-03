@@ -66,7 +66,7 @@ Examples:
 - `cargo run -p vss-desktop -- show assets/cube.color.png`
 - `cargo run -p vss-desktop -- show --openxr=auto assets/cube.color.png`
 - `cargo run -p vss-desktop -- render --output '{dirname}/{stem}.vss.{extension}' 'assets/*.png'`
-- `cargo run -p vss-desktop -- render --config 'assets/configs/impairments/**/*.json' assets/marketplace.png`
+- `cargo run -p vss-desktop -- render --config 'vss-catalog/presets/**/*.json' assets/marketplace.png`
 
 The render command accepts repeated configuration files and configuration glob patterns. The default
 output name includes the config stem, or `vss` when no config is supplied. Custom output patterns can
@@ -110,6 +110,11 @@ Install Rust, `wasm-pack`, Node.js 22 or newer, and npm 11. From `vss-web/app`, 
 Dependency lifecycle scripts are disabled, and npm requires releases to be at least seven days old. There are currently no lifecycle-script or package-age exceptions. Any future exception must be narrowly documented here.
 
 ## <a name="Configuration"></a>Configuration
+
+The canonical impairment presets live in `vss-catalog/presets`. They are sparse `both`/`left`/`right`
+configuration layers and can be passed directly to `vss-desktop --config`. Article demonstrations refer
+to these files by filename; the `vss-catalog` build fails when a preset has no article, an article has no
+preset, a reference is unknown, locale assignments differ, or a referenced map asset is missing.
 
 TODO: document missing parameters
 

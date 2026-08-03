@@ -3,6 +3,10 @@ id: presbyopia
 locale: de
 title: Presbyopie
 image: presbyopia/images/alterssichtigkeit-60cm.png
+demonstrations:
+  - id: ametropia-presbyopia-mild
+    label: Leichte Presbyopie
+    presets: [ametropia-presbyopia-mild]
 ---
 
 ![](images/alterssichtigkeit-60cm.png) 
