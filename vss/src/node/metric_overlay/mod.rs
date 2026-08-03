@@ -70,8 +70,8 @@ struct VisualizationType {
     pub color_map_type: ColorMapType,
 }
 
-pub struct VisOverlay {
-    config: VisOverlayConfig,
+pub struct MetricOverlay {
+    config: MetricOverlayConfig,
     hive_rot: Matrix4<f32>,
     pipeline: wgpu::RenderPipeline,
     uniforms: ShaderUniforms<Uniforms>,
@@ -87,13 +87,13 @@ pub struct VisOverlay {
     bees_visible: bool,
 }
 
-pub struct VisOverlayConfig {
+pub struct MetricOverlayConfig {
     eye_idx: i32,
     vis_type: VisualizationType,
     heat_scale: f32,
 }
 
-impl Default for VisOverlayConfig {
+impl Default for MetricOverlayConfig {
     fn default() -> Self {
         Self {
             eye_idx: 0,
@@ -103,20 +103,20 @@ impl Default for VisOverlayConfig {
     }
 }
 
-pub const EYE: ParameterId<VisOverlay, i32> =
-    ParameterId::for_node("vis-overlay.eye", |n| &mut n.config.eye_idx);
-pub const HEAT_SCALE: ParameterId<VisOverlay, f32> =
-    ParameterId::for_node("vis-overlay.heat-scale", |n| &mut n.config.heat_scale);
-pub const BASE_IMAGE: ParameterId<VisOverlay, i32> =
-    ParameterId::with_setter("vis-overlay.base-image", |n, v| {
+pub const EYE: ParameterId<MetricOverlay, i32> =
+    ParameterId::for_node("metric-overlay.eye", |n| &mut n.config.eye_idx);
+pub const HEAT_SCALE: ParameterId<MetricOverlay, f32> =
+    ParameterId::for_node("metric-overlay.heat-scale", |n| &mut n.config.heat_scale);
+pub const BASE_IMAGE: ParameterId<MetricOverlay, i32> =
+    ParameterId::with_setter("metric-overlay.base-image", |n, v| {
         set_enum(
             &mut n.config.vis_type.base_image,
             v,
             &[BaseImage::Output, BaseImage::Original, BaseImage::Ganglion],
         )
     });
-pub const MIX_TYPE: ParameterId<VisOverlay, i32> =
-    ParameterId::with_setter("vis-overlay.mix-type", |n, v| {
+pub const MIX_TYPE: ParameterId<MetricOverlay, i32> =
+    ParameterId::with_setter("metric-overlay.mix-type", |n, v| {
         set_enum(
             &mut n.config.vis_type.mix_type,
             v,
@@ -127,8 +127,8 @@ pub const MIX_TYPE: ParameterId<VisOverlay, i32> =
             ],
         )
     });
-pub const COLOR_MAP: ParameterId<VisOverlay, i32> =
-    ParameterId::with_setter("vis-overlay.color-map", |n, v| {
+pub const COLOR_MAP: ParameterId<MetricOverlay, i32> =
+    ParameterId::with_setter("metric-overlay.color-map", |n, v| {
         set_enum(
             &mut n.config.vis_type.color_map_type,
             v,
@@ -139,8 +139,8 @@ pub const COLOR_MAP: ParameterId<VisOverlay, i32> =
             ],
         )
     });
-pub const COLOR_FUNCTION: ParameterId<VisOverlay, i32> =
-    ParameterId::with_setter("vis-overlay.color-function", |n, v| {
+pub const COLOR_FUNCTION: ParameterId<MetricOverlay, i32> =
+    ParameterId::with_setter("metric-overlay.color-function", |n, v| {
         set_enum(
             &mut n.config.vis_type.combination_function,
             v,
@@ -166,7 +166,7 @@ fn set_enum<T: Copy + PartialEq>(target: &mut T, value: i32, values: &[T]) -> bo
         true
     }
 }
-impl Parameters for VisOverlay {
+impl Parameters for MetricOverlay {
     fn parameters() -> &'static [ParameterDescriptor] {
         static P: OnceLock<Vec<ParameterDescriptor>> = OnceLock::new();
         P.get_or_init(|| {
@@ -182,7 +182,7 @@ impl Parameters for VisOverlay {
     }
 }
 
-impl VisOverlay {
+impl MetricOverlay {
     pub fn new(context: &RenderContext) -> Self {
         let device = context.device();
         let queue = context.queue();
@@ -209,21 +209,21 @@ impl VisOverlay {
         );
 
         let (sources_bind_group_layout, sources_bind_group) =
-            create_color_sources_bind_group(device, queue, "VisOverlayNode");
+            create_color_sources_bind_group(device, queue, "MetricOverlayNode");
 
         let original_tex =
-            placeholder_texture(device, queue, Some("VisOverlayNode s_original")).unwrap();
+            placeholder_texture(device, queue, Some("MetricOverlayNode s_original")).unwrap();
         let (original_bind_group_layout, original_bind_group) =
             original_tex.create_bind_group(device);
 
         let render_target = RenderTexture::empty_color_with_format(
             device,
             context.output_format(),
-            Some("VisOverlayNode render_target"),
+            Some("MetricOverlayNode render_target"),
         );
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("VisOverlayNode Shader"),
+            label: Some("MetricOverlayNode Shader"),
             source: wgpu::ShaderSource::Wgsl(
                 concat!(
                     include_str!("../common.wgsl"),
@@ -245,11 +245,11 @@ impl VisOverlay {
             ],
             &[blended_color_state(context.output_format())],
             None,
-            Some("VisOverlayNode Render Pipeline"),
+            Some("MetricOverlayNode Render Pipeline"),
         );
 
-        VisOverlay {
-            config: VisOverlayConfig::default(),
+        MetricOverlay {
+            config: MetricOverlayConfig::default(),
             hive_rot: Matrix4::from_angle_x(Rad(0.0)),
             pipeline,
             uniforms,
@@ -266,9 +266,9 @@ impl VisOverlay {
     }
 }
 
-impl Node for VisOverlay {
+impl Node for MetricOverlay {
     fn name(&self) -> &'static str {
-        "VisOverlay"
+        "MetricOverlay"
     }
 
     fn negociate_slots(
@@ -279,7 +279,7 @@ impl Node for VisOverlay {
     ) -> NodeSlots {
         let slots = slots
             .to_color_metrics_input(context)
-            .to_color_output(context, "VisOverlayNode");
+            .to_color_output(context, "MetricOverlayNode");
         let device = context.device();
         let queue = context.queue();
 
@@ -338,7 +338,7 @@ impl Node for VisOverlay {
         self.uniforms.upload(context.queue());
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("VisOverlayNode render_pass"),
+            label: Some("MetricOverlayNode render_pass"),
             color_attachments: &[screen
                 .unwrap_or(&self.render_target)
                 .to_color_attachment(Some(CLEAR_COLOR))],

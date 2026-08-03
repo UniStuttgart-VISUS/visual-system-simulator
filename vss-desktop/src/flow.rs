@@ -278,7 +278,7 @@ pub(crate) fn build_flow(
     context.add_node(Box::new(Retina::new(context)), flow_index);
     context.add_node(Box::new(PeacockCB::new(context)), flow_index);
     context.add_node(Box::new(VarianceMeasure::new(context)), flow_index);
-    context.add_node(Box::new(VisOverlay::new(context)), flow_index);
+    context.add_node(Box::new(MetricOverlay::new(context)), flow_index);
 
     let mut display = Display::new(context);
     display.set_viewport(request.view_port);

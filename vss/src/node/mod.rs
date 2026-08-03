@@ -5,12 +5,12 @@ pub mod cataract;
 mod display;
 pub mod eye_control;
 pub mod lens;
+pub mod metric_overlay;
 pub mod peacock;
 pub mod retina;
 mod rgb_buffer;
 mod slot;
 pub mod variance;
-pub mod vis_overlay;
 mod yuv_buffer;
 
 use wgpu::util::DeviceExt;
@@ -28,12 +28,12 @@ pub use self::cataract::{Cataract, CataractConfig};
 pub use self::display::*;
 pub use self::eye_control::{EyeControl, EyeControlConfig};
 pub use self::lens::{Lens, LensConfig};
+pub use self::metric_overlay::{MetricOverlay, MetricOverlayConfig};
 pub use self::peacock::{PeacockCB, PeacockConfig};
 pub use self::retina::{Retina, RetinaConfig};
 pub use self::rgb_buffer::*;
 pub use self::slot::*;
 pub use self::variance::{VarianceConfig, VarianceMeasure};
-pub use self::vis_overlay::{VisOverlay, VisOverlayConfig};
 pub use self::yuv_buffer::*;
 
 use super::*;

@@ -1,6 +1,7 @@
 use crate::{
-    cataract::Cataract, eye_control::EyeControl, lens::Lens, peacock::PeacockCB, retina::Retina,
-    variance::VarianceMeasure, vis_overlay::VisOverlay, AssetId, Flow, Node, NodeChanges,
+    cataract::Cataract, eye_control::EyeControl, lens::Lens, metric_overlay::MetricOverlay,
+    peacock::PeacockCB, retina::Retina, variance::VarianceMeasure, AssetId, Flow, Node,
+    NodeChanges,
 };
 use cgmath::Matrix4;
 use std::{
@@ -350,7 +351,7 @@ pub fn registry() -> &'static [ParameterDescriptor] {
         result.extend_from_slice(Lens::parameters());
         result.extend_from_slice(Retina::parameters());
         result.extend_from_slice(VarianceMeasure::parameters());
-        result.extend_from_slice(VisOverlay::parameters());
+        result.extend_from_slice(MetricOverlay::parameters());
         result.sort_by_key(ParameterDescriptor::id);
         assert!(
             result.windows(2).all(|pair| pair[0].id != pair[1].id),
