@@ -1,5 +1,7 @@
 use super::{refresh_flow_configs, report_diagnostics, CommonConfig};
-use crate::flow::{build_flow, finalize_flows, FlowRequest};
+use crate::flow::{
+    build_flow, build_shared_rgb_flow, build_shared_video_flow, finalize_flows, FlowRequest,
+};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use vss::*;
@@ -55,7 +57,7 @@ fn parse_openxr_backend(value: &str) -> Result<OpenXrBackend, String> {
     OpenXrBackend::parse(value).map_err(|err| err.to_string())
 }
 
-fn pick_input_file() -> Option<String> {
+pub(crate) fn pick_input_file() -> Option<String> {
     let mut dialog = rfd::FileDialog::new();
     if let Ok(current_dir) = std::env::current_dir() {
         dialog = dialog.set_directory(current_dir);
@@ -90,15 +92,14 @@ fn run_windowed(config: ShowConfig, event_loop: &mut EventLoop<()>) -> Result<()
     let failure: Arc<RwLock<Option<String>>> = Arc::new(RwLock::new(None));
 
     let left = config.common.config_document.effective_left();
-    let gui = crate::ui::DesktopGui::new(&config.common.config_document);
-
     let failure_init = failure.clone();
     let pose_input_size: Arc<RwLock<Option<[u32; 2]>>> = Arc::new(RwLock::new(None));
+    let gui = crate::ui::DesktopGui::new(&config.common.config_document, pose_input_size.clone());
     let pose_input_size_init = pose_input_size.clone();
     let failure_poll = failure.clone();
     let window = WindowSurface::new(
         true,
-        1,
+        2,
         config_point(&left, "view").map(|view| (view[0] as f32, view[1] as f32)),
         config_point(&left, "gaze").map(|gaze| (gaze[0] as f32, gaze[1] as f32)),
         pose_input_size,
@@ -132,7 +133,34 @@ fn run_windowed(config: ShowConfig, event_loop: &mut EventLoop<()>) -> Result<()
             if let Some(input_size) = built.input_size {
                 *pose_input_size_init.write().unwrap() = Some(input_size);
             }
-            let diagnostics = finalize_flows(surface, &config.common.config_document, &[0]);
+            let right_request = FlowRequest {
+                input: config.common.inputs[0].clone(),
+                output: None,
+                force: false,
+                render_resolution: RenderResolution::Screen {
+                    input_scale: 1.0,
+                    output_scale: OutputScale::default(),
+                },
+                view_port: ViewPort {
+                    x: 0.5,
+                    y: 0.0,
+                    width: 0.5,
+                    height: 1.0,
+                    absolute_viewport: false,
+                },
+            };
+            let right = if let Some(shared_video) = built.shared_video.clone() {
+                build_shared_video_flow(surface, 1, right_request, shared_video)
+            } else if let Some(shared_rgb) = built.shared_rgb.clone() {
+                build_shared_rgb_flow(surface, 1, right_request, shared_rgb)
+            } else {
+                build_flow(surface, 1, right_request)
+            };
+            if let Err(err) = right {
+                *failure_init.write().unwrap() = Some(err.to_string());
+                return;
+            }
+            let diagnostics = finalize_flows(surface, &config.common.config_document, &[0, 1]);
             report_diagnostics(&diagnostics);
         },
         move || failure_poll.read().unwrap().is_some(),

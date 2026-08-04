@@ -1,20 +1,17 @@
 package com.vss
 
+import android.content.pm.ActivityInfo
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
-import kotlinx.coroutines.delay
 
 @Composable
 fun VssTheme(content: @Composable () -> Unit) {
@@ -36,16 +33,15 @@ fun SimulatorScreen(
 ) {
     val activity = LocalContext.current as ComponentActivity
     val bars = remember(activity) { WindowCompat.getInsetsController(activity.window, activity.window.decorView) }
-    var showFullscreenHint by remember { mutableStateOf(false) }
     LaunchedEffect(model.fullscreen) {
         if (model.fullscreen) bars.hide(WindowInsetsCompat.Type.systemBars()) else bars.show(WindowInsetsCompat.Type.systemBars())
-        if (model.fullscreen) {
-            showFullscreenHint = true
-            delay(2500)
-            showFullscreenHint = false
-        } else {
-            showFullscreenHint = false
-        }
+    }
+    val requestLandscape = model.fullscreen && model.simulator.eyeMode == EyeMode.BOTH
+    DisposableEffect(activity, requestLandscape) {
+        if (!requestLandscape) return@DisposableEffect onDispose { }
+        val previous = activity.requestedOrientation
+        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        onDispose { activity.requestedOrientation = previous }
     }
     BackHandler(model.fullscreen) { model.fullscreen = false }
     Surface(Modifier.fillMaxSize()) {
@@ -55,7 +51,7 @@ fun SimulatorScreen(
             val contentWidth = maxWidth - 36.dp
             val widePreviewWidth = contentWidth * (1.7f / 2.7f)
             val previewModifier = when {
-                model.fullscreen -> Modifier.fillMaxSize().clickable { model.fullscreen = false }
+                model.fullscreen -> Modifier.fillMaxSize()
                 wide -> Modifier.offset(12.dp, 12.dp).width(widePreviewWidth).height(maxHeight - 24.dp)
                 else -> Modifier.fillMaxWidth().height(previewHeight)
             }
@@ -68,20 +64,6 @@ fun SimulatorScreen(
 
             SimulatorPreview(model, controller, camera, media, settings, previewModifier, !model.fullscreen)
             CatalogPanel(model, controller, catalogModifier)
-
-            if (model.fullscreen && showFullscreenHint) {
-                Surface(
-                    Modifier.align(Alignment.BottomCenter).padding(24.dp),
-                    shape = MaterialTheme.shapes.large,
-                    color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.9f),
-                ) {
-                    Text(
-                        stringResource(R.string.exit_fullscreen_hint),
-                        Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-                        color = MaterialTheme.colorScheme.inverseOnSurface,
-                    )
-                }
-            }
         }
     }
 }

@@ -39,9 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.text.HtmlCompat
 import com.vss.simulator.SimulatorBridge
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
-import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Locale
 
@@ -57,11 +55,11 @@ fun CatalogPanel(model: SimulatorViewModel, controller: SimulatorController, mod
     }
     val galleryState = rememberLazyListState(initialFirstVisibleItemIndex = initialArticle)
     val verticalState = rememberScrollState()
-    val effectiveJson = remember(activePresets, model.simulator.manual) {
-        SimulatorBridge.composeSettings(Locale.getDefault().toLanguageTag(), JSONArray(activePresets.toList()).toString(), JSONObject(model.simulator.manual).toString())
-    }
-    val effective = remember(effectiveJson) { JSONObject(effectiveJson).toMap() }
-    LaunchedEffect(effectiveJson) { delay(100); controller.postSettings(effectiveJson) }
+    val effective = model.simulator.editableValues(catalog)
+    val leftJson = remember(model.simulator) { JSONObject(model.simulator.effectiveValues(catalog, EyeMode.LEFT)).toString() }
+    val rightJson = remember(model.simulator) { JSONObject(model.simulator.effectiveValues(catalog, EyeMode.RIGHT)).toString() }
+    LaunchedEffect(leftJson, rightJson) { controller.postSettings(leftJson, rightJson) }
+    LaunchedEffect(model.simulator.eyeMode) { controller.setEyeMode(model.simulator.eyeMode) }
     LaunchedEffect(galleryState) {
         snapshotFlow {
             val layout = galleryState.layoutInfo
@@ -94,7 +92,7 @@ fun CatalogPanel(model: SimulatorViewModel, controller: SimulatorController, mod
 
 @Composable
 private fun ArticleCard(article: UiArticle, index: Int, catalog: UiCatalog, model: SimulatorViewModel, modifier: Modifier) {
-    val selected = article.demonstrations.firstOrNull { it.id == model.simulator.selectedDemonstrations[article.id] }
+    val selected = article.demonstrations.firstOrNull { it.id == model.simulator.selectedDemonstration(article.id) }
     val description = buildString {
         append("${article.title}, ${index + 1} of ${catalog.articles.size}")
         selected?.let { append(", ${it.label} active") }
@@ -140,7 +138,7 @@ private fun GalleryImage(article: UiArticle, modifier: Modifier = Modifier) {
 private fun DemonstrationSegments(article: UiArticle, catalog: UiCatalog, model: SimulatorViewModel) {
     Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         article.demonstrations.forEach { demo ->
-            val selected = model.simulator.selectedDemonstrations[article.id] == demo.id
+            val selected = model.simulator.selectedDemonstration(article.id) == demo.id
             val label = if (demo.label.equals(article.title, ignoreCase = true)) {
                 stringResource(if (selected) R.string.deactivate else R.string.activate)
             } else demo.label
@@ -189,7 +187,7 @@ private fun SettingRow(setting: UiSetting, catalog: UiCatalog, model: SimulatorV
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(setting.label, Modifier.weight(1f))
         when {
-            setting.id in model.simulator.manual -> IconButton({ model.simulator = model.simulator.reset(setting.id) }, Modifier.size(40.dp)) { Icon(Icons.Default.RestartAlt, stringResource(R.string.reset)) }
+            setting.id in model.simulator.currentLayer().manual -> IconButton({ model.simulator = model.simulator.reset(setting.id, catalog) }, Modifier.size(40.dp)) { Icon(Icons.Default.RestartAlt, stringResource(R.string.reset)) }
             sourceArticle != null -> IconButton({ model.articleId = sourceArticle }, Modifier.size(40.dp)) { Icon(Icons.Default.Info, "Open explaining article") }
         }
         when (setting.kind) {
@@ -232,7 +230,7 @@ private fun ArticleSheet(article: UiArticle, catalog: UiCatalog, model: Simulato
                 HorizontalDivider()
                 Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     article.demonstrations.forEach { demo -> FilterChip(
-                        selected = model.simulator.selectedDemonstrations[article.id] == demo.id,
+                        selected = model.simulator.selectedDemonstration(article.id) == demo.id,
                         onClick = { model.simulator = model.simulator.selectDemonstration(catalog, article.id, demo.id); model.articleId = null },
                         label = { Text(demo.label) }, modifier = Modifier.weight(1f),
                     ) }

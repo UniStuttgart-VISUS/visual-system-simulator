@@ -248,6 +248,17 @@ impl<'window> Surface<'window> {
             label: "surface render texture".to_string(),
         };
 
+        {
+            let _clear = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Surface black clear"),
+                color_attachments: &[render_texture.to_color_attachment(Some(wgpu::Color::BLACK))],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+        }
+
         self.render_context.render(&mut encoder, &render_texture);
         render_overlay(
             &self.render_context,

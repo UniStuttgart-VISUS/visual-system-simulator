@@ -33,6 +33,12 @@ object SimulatorBridge {
     private external fun nativeResize(width: Int, height: Int)
 
     @JvmStatic
+    private external fun nativeSetEyeMode(eyeMode: String)
+
+    @JvmStatic
+    private external fun nativeSemanticInput(kind: String, x: Float, y: Float)
+
+    @JvmStatic
     private external fun nativeDraw()
 
     @JvmStatic
@@ -48,7 +54,7 @@ object SimulatorBridge {
     private external fun nativePostRgba(width: Int, height: Int, pixels: ByteBuffer)
 
     @JvmStatic
-    private external fun nativePostSettings(jsonString: String)
+    private external fun nativePostSettings(leftJson: String, rightJson: String)
 
     @JvmStatic
     private external fun nativeCatalog(locale: String): String
@@ -80,6 +86,16 @@ object SimulatorBridge {
         nativeResize(width, height)
     }
 
+    fun setEyeMode(eyeMode: String) {
+        assert(libraryLoaded) { "Native library not loaded" }
+        nativeSetEyeMode(eyeMode)
+    }
+
+    fun semanticInput(kind: String, x: Float = 0f, y: Float = 0f) {
+        assert(libraryLoaded) { "Native library not loaded" }
+        nativeSemanticInput(kind, x, y)
+    }
+
     fun draw() {
         assert(libraryLoaded) { "Native library not loaded" }
         nativeDraw()
@@ -101,10 +117,10 @@ object SimulatorBridge {
         nativePostRgba(width, height, pixels)
     }
 
-    fun postSettings(jsonString: String) {
+    fun postSettings(leftJson: String, rightJson: String) {
         assert(libraryLoaded) { "Native library not loaded" }
-        Log.v(LOG_TAG, "Posting simulator settings: $jsonString")
-        nativePostSettings(jsonString)
+        Log.v(LOG_TAG, "Posting simulator settings: left=$leftJson right=$rightJson")
+        nativePostSettings(leftJson, rightJson)
     }
 
     fun catalog(locale: String): String {

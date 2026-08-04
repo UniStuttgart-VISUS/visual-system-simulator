@@ -1,5 +1,6 @@
 use std::rc::Rc;
 use std::sync::{Arc, RwLock};
+use std::time::{Duration, Instant};
 
 use cgmath::{Matrix4, Rad, SquareMatrix, Vector3, Vector4};
 use vss::*;
@@ -50,9 +51,9 @@ pub struct WindowSurface {
     static_gaze: Option<(f32, f32)>,
     pose_input_size: Arc<RwLock<Option<[u32; 2]>>>,
     mouse: MouseInput,
-
-    override_gaze: bool,
-    override_view: bool,
+    pose: IntentionalPose,
+    previous_cursor: Option<(f32, f32)>,
+    last_primary_click: Option<(Instant, (f32, f32))>,
     canvas_parent: Option<String>,
 }
 
@@ -102,8 +103,9 @@ impl WindowSurface {
                 left_button: false,
                 right_button: false,
             },
-            override_view: false,
-            override_gaze: false,
+            pose: IntentionalPose::default(),
+            previous_cursor: None,
+            last_primary_click: None,
             canvas_parent: None,
         }
     }
@@ -141,33 +143,27 @@ impl WindowSurface {
     fn update_input(&self) {
         let surface = self.surface.clone().unwrap();
         let mut changes = NodeChanges::empty();
-        for f in surface.flows.iter() {
+        for (flow_index, f) in surface.flows.iter().enumerate() {
+            if !surface.flow_is_active(flow_index) {
+                continue;
+            }
             let pose_size = self
                 .pose_input_size
                 .read()
                 .unwrap()
                 .unwrap_or([surface.width(), surface.height()]);
-            let view_position = self.static_view.or(if self.override_view {
-                Some(self.mouse.position)
-            } else {
-                None
-            });
-            let gaze_position = self.static_gaze.or(if self.override_gaze {
-                Some(self.mouse.position)
-            } else {
-                None
-            });
-
             {
                 let mut eye = f.eye_mut();
-
-                if let Some(position) = view_position {
-                    eye.view = pose_from_position(position, pose_size).0;
-                }
-
-                if let Some(position) = gaze_position {
-                    eye.gaze = pose_from_position(position, pose_size).1;
-                }
+                let base_view = self
+                    .static_view
+                    .map(|position| pose_from_position(position, pose_size).0)
+                    .unwrap_or_else(Matrix4::identity);
+                eye.view = self.pose.view_matrix(base_view);
+                let base_gaze = self
+                    .static_gaze
+                    .map(|position| pose_from_position(position, pose_size).1)
+                    .unwrap_or_else(Vector3::unit_z);
+                eye.gaze = self.pose.gaze_vector(base_gaze);
             }
 
             changes |= f.input(&self.mouse);
@@ -273,15 +269,31 @@ impl ApplicationHandler for WindowSurface {
             }
             WindowEvent::CursorMoved { position, .. } => {
                 if self.active && !response.consumed {
-                    self.mouse.position = (position.x as f32, position.y as f32);
-                    self.request_output();
+                    let position = (position.x as f32, position.y as f32);
+                    if let Some(previous) = self.previous_cursor {
+                        let surface = self.surface.as_ref().unwrap();
+                        let delta = [
+                            (position.0 - previous.0) / surface.width().max(1) as f32,
+                            (position.1 - previous.1) / surface.height().max(1) as f32,
+                        ];
+                        if self.mouse.left_button {
+                            self.pose.apply(SemanticInput::GazeDelta(delta));
+                            self.request_output();
+                        }
+                        if self.mouse.right_button {
+                            self.pose.apply(SemanticInput::ViewDelta(delta));
+                            self.request_output();
+                        }
+                    }
+                    self.mouse.position = position;
+                    self.previous_cursor = Some(position);
                 }
             }
             WindowEvent::CursorLeft { .. } => {
                 if self.active {
-                    self.override_view = false;
-                    self.override_gaze = false;
-                    //XXX: reset gaze?
+                    self.previous_cursor = None;
+                    self.mouse.left_button = false;
+                    self.mouse.right_button = false;
                     self.request_output();
                 }
             }
@@ -292,11 +304,9 @@ impl ApplicationHandler for WindowSurface {
                 {
                     match button {
                         MouseButton::Left => {
-                            self.override_view = false;
                             self.mouse.left_button = false;
                         }
                         MouseButton::Right => {
-                            self.override_gaze = false;
                             self.mouse.right_button = false;
                         }
                         _ => {}
@@ -305,11 +315,24 @@ impl ApplicationHandler for WindowSurface {
                 } else if self.active && simulation_input_allowed(response.consumed) {
                     match button {
                         MouseButton::Left => {
-                            self.override_view = state == ElementState::Pressed;
                             self.mouse.left_button = state == ElementState::Pressed;
+                            if state == ElementState::Pressed {
+                                let now = Instant::now();
+                                let double_click =
+                                    self.last_primary_click.is_some_and(|(then, position)| {
+                                        now.duration_since(then) <= Duration::from_millis(500)
+                                            && (position.0 - self.mouse.position.0).abs() <= 4.0
+                                            && (position.1 - self.mouse.position.1).abs() <= 4.0
+                                    });
+                                if double_click {
+                                    self.pose.apply(SemanticInput::ResetPose);
+                                    self.last_primary_click = None;
+                                } else {
+                                    self.last_primary_click = Some((now, self.mouse.position));
+                                }
+                            }
                         }
                         MouseButton::Right => {
-                            self.override_gaze = state == ElementState::Pressed;
                             self.mouse.right_button = state == ElementState::Pressed;
                         }
                         _ => {}
@@ -392,6 +415,28 @@ mod tests {
         assert!(!is_exit_event(false, false));
         assert!(is_exit_event(true, false));
         assert!(closes_window(&WindowEvent::CloseRequested));
+    }
+
+    #[test]
+    fn semantic_pose_deltas_use_full_preview_sensitivity_wrap_clamp_and_reset() {
+        let near = |actual: f32, expected: f32| {
+            assert!((actual - expected).abs() < 0.001, "{actual} != {expected}")
+        };
+        let mut pose = IntentionalPose::default();
+        pose.apply(SemanticInput::GazeDelta([1.0, -1.0]));
+        near(pose.gaze_yaw_degrees(), -180.0);
+        near(pose.gaze_pitch_degrees(), 89.0);
+
+        pose.apply(SemanticInput::ViewDelta([0.5, 0.5]));
+        near(pose.view_yaw_degrees(), 90.0);
+        near(pose.view_pitch_degrees(), -45.0);
+
+        pose.apply(SemanticInput::ViewDelta([2.0, -10.0]));
+        near(pose.view_yaw_degrees(), 90.0);
+        near(pose.view_pitch_degrees(), 89.0);
+
+        pose.apply(SemanticInput::ResetPose);
+        assert_eq!(pose, IntentionalPose::default());
     }
 }
 

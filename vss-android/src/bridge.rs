@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use log::*;
 
 use jni::objects::{JByteBuffer, JClass, JObject, JString};
-use jni::sys::jint;
+use jni::sys::{jfloat, jint};
 use jni::{EnvUnowned, Outcome};
 
 use ndk_sys;
@@ -21,7 +21,7 @@ use raw_window_handle::*;
 
 use vss::*;
 
-use crate::node::frame::{Frame, FrameNode, HardwareBufferFrame};
+use crate::node::frame::{oriented_size, Frame, FrameNode, HardwareBufferFrame, SharedFrame};
 use vss_catalog::Locale;
 
 struct AndroidHandle(RawWindowHandle);
@@ -45,17 +45,18 @@ impl HasDisplayHandle for AndroidHandle {
 
 struct Bridge {
     pub surface: Surface<'static>,
-    pub current_size: [i32; 2],
-    pub new_size: [i32; 2],
+    pub current_layout: [i32; 3],
+    pub new_layout: [i32; 3],
+    pub pose: IntentionalPose,
 }
 
 unsafe impl Send for Bridge {}
 
 lazy_static::lazy_static! {
     static ref BRIDGE : Mutex<Option<Bridge>> = Mutex::new(None);
-    static ref PENDING_FRAME: Arc<Mutex<Option<Frame>>> = Arc::new(Mutex::new(None));
-    static ref PENDING_FRAME_SIZE: Mutex<Option<[i32; 2]>> = Mutex::new(None);
-    static ref PENDING_SETTINGS: Mutex<Option<String>> = Mutex::new(None);
+    static ref SHARED_FRAME: Arc<Mutex<SharedFrame>> = Arc::new(Mutex::new(SharedFrame::default()));
+    static ref PENDING_FRAME_LAYOUT: Mutex<Option<[i32; 3]>> = Mutex::new(None);
+    static ref PENDING_SETTINGS: Mutex<Option<(String, String)>> = Mutex::new(None);
 }
 
 #[no_mangle]
@@ -145,40 +146,42 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeCreate<'loca
         AndroidNdkWindowHandle::new(NonNull::new(window.ptr().as_ptr() as *mut c_void).unwrap());
     let handle = AndroidHandle(RawWindowHandle::AndroidNdk(window_handle));
     let size = [window.width() as u32, window.height() as u32];
-    let mut surface = vss::Surface::new(size, handle, 1);
+    let mut surface = vss::Surface::new(size, handle, 2);
     surface.set_asset_loader(asset_loader);
 
-    build_flow(&mut surface, PENDING_FRAME.clone());
+    build_flow(&mut surface, 0, SHARED_FRAME.clone());
+    build_flow(&mut surface, 1, SHARED_FRAME.clone());
+    surface.negociate_slots();
+    surface.set_eye_mode(EyeMode::Left);
 
     *guard = Some(Bridge {
         surface,
-        current_size: [1, 1],
-        new_size: [1, 1],
+        current_layout: [1, 1, 0],
+        new_layout: [1, 1, 0],
+        pose: IntentionalPose::default(),
     });
 }
 
-fn build_flow(surface: &mut Surface, pending_frame: Arc<Mutex<Option<Frame>>>) {
-    let node = FrameNode::new(surface, pending_frame);
-    surface.add_node(Box::new(node), 0);
+fn build_flow(surface: &mut Surface, flow_index: usize, shared_frame: Arc<Mutex<SharedFrame>>) {
+    let node = FrameNode::new(surface, shared_frame);
+    surface.add_node(Box::new(node), flow_index);
 
     // Visual system passes.
     let node = Cataract::new(surface);
-    surface.add_node(Box::new(node), 0);
+    surface.add_node(Box::new(node), flow_index);
     let node = EyeControl::new(surface);
-    surface.add_node(Box::new(node), 0);
+    surface.add_node(Box::new(node), flow_index);
     let node = Lens::new(surface);
-    surface.add_node(Box::new(node), 0);
+    surface.add_node(Box::new(node), flow_index);
     let node = Retina::new(surface);
-    surface.add_node(Box::new(node), 0);
+    surface.add_node(Box::new(node), flow_index);
     let node = PeacockCB::new(surface);
-    surface.add_node(Box::new(node), 0);
+    surface.add_node(Box::new(node), flow_index);
 
     // Display node.
     let mut node = Display::new(surface);
     node.set_output_scale(OutputScale::Fill);
-    surface.add_node(Box::new(node), 0);
-
-    surface.negociate_slots();
+    surface.add_node(Box::new(node), flow_index);
 }
 
 #[no_mangle]
@@ -203,8 +206,13 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostHardware
         return;
     };
 
-    *PENDING_FRAME.lock().unwrap() = Some(Frame::Hardware(frame));
-    *PENDING_FRAME_SIZE.lock().unwrap() = Some([width, height]);
+    SHARED_FRAME.lock().unwrap().publish(Frame::Hardware(frame));
+    let size = oriented_size(width as u32, height as u32, rotation_degrees);
+    *PENDING_FRAME_LAYOUT.lock().unwrap() = Some([
+        size[0] as i32,
+        size[1] as i32,
+        rotation_degrees.rem_euclid(360),
+    ]);
 }
 
 #[no_mangle]
@@ -243,8 +251,8 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostRgba<'lo
         width: width as u32,
         height: height as u32,
     });
-    *PENDING_FRAME.lock().unwrap() = Some(frame);
-    *PENDING_FRAME_SIZE.lock().unwrap() = Some([width, height]);
+    SHARED_FRAME.lock().unwrap().publish(frame);
+    *PENDING_FRAME_LAYOUT.lock().unwrap() = Some([width, height, 0]);
 }
 
 #[no_mangle]
@@ -253,8 +261,8 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDestroy(
     _class: JClass,
 ) {
     let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
-    *PENDING_FRAME.lock().unwrap() = None;
-    *PENDING_FRAME_SIZE.lock().unwrap() = None;
+    *SHARED_FRAME.lock().unwrap() = SharedFrame::default();
+    *PENDING_FRAME_LAYOUT.lock().unwrap() = None;
     *PENDING_SETTINGS.lock().unwrap() = None;
     *guard = None;
 }
@@ -278,25 +286,23 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDraw(
 ) {
     let mut guard: MutexGuard<'_, Option<Bridge>> = BRIDGE.lock().unwrap();
     let bridge = (*guard).as_mut().expect("Bridge should be created");
-    if let Some(size) = PENDING_FRAME_SIZE.lock().unwrap().take() {
-        bridge.new_size = size;
+    if let Some(layout) = PENDING_FRAME_LAYOUT.lock().unwrap().take() {
+        bridge.new_layout = layout;
     }
-    if let Some(json_string) = PENDING_SETTINGS.lock().unwrap().take() {
-        apply_settings(bridge, &json_string);
+    if let Some((left, right)) = PENDING_SETTINGS.lock().unwrap().take() {
+        apply_settings(bridge, &left, &right);
     }
     // Fake input event for uploading and perspetive computation.
     for flow in bridge.surface.flows.iter() {
         let changes = flow.input(&MouseInput::default());
         bridge.surface.apply_changes(changes);
     }
-    if (bridge.new_size[0] != bridge.current_size[0])
-        || (bridge.new_size[1] != bridge.current_size[1])
-    {
+    if bridge.new_layout != bridge.current_layout {
         debug!(
-            "Buffer sizes do not match, old({}, {}), new({}, {})",
-            bridge.current_size[0], bridge.current_size[1], bridge.new_size[0], bridge.new_size[1]
+            "Frame layout changed, old={:?}, new={:?}",
+            bridge.current_layout, bridge.new_layout
         );
-        bridge.current_size = bridge.new_size;
+        bridge.current_layout = bridge.new_layout;
         bridge.surface.negociate_slots();
     }
     bridge.surface.draw();
@@ -306,74 +312,128 @@ pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeDraw(
 pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativePostSettings<'local>(
     mut env: EnvUnowned<'local>,
     _class: JClass,
-    json_string: JString<'local>,
+    left_json: JString<'local>,
+    right_json: JString<'local>,
 ) {
-    let json_string: String = match env
-        .with_env_no_catch(|env| -> jni::errors::Result<_> { json_string.try_to_string(env) })
+    let (left_json, right_json): (String, String) = match env
+        .with_env_no_catch(|env| -> jni::errors::Result<_> {
+            Ok((
+                left_json.try_to_string(env)?,
+                right_json.try_to_string(env)?,
+            ))
+        })
         .into_outcome()
     {
-        Outcome::Ok(json_string) => json_string,
+        Outcome::Ok(json) => json,
         Outcome::Err(err) => panic!("{}", err),
         Outcome::Panic(payload) => panic::resume_unwind(payload),
     };
 
-    let json_string = match serde_json::from_str::<serde_json::Value>(&json_string) {
-        Ok(value @ serde_json::Value::Object(_)) => value.to_string(),
-        Ok(_) => {
-            error!("Settings must be a JSON object");
-            return;
-        }
-        Err(err) => {
-            error!("Invalid settings JSON: {}", err);
+    if compile_settings_json(&left_json).is_err() || compile_settings_json(&right_json).is_err() {
+        error!("Settings for both eyes must be valid JSON objects");
+        return;
+    }
+    *PENDING_SETTINGS.lock().unwrap() = Some((left_json, right_json));
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeSetEyeMode<'local>(
+    mut env: EnvUnowned<'local>,
+    _class: JClass,
+    eye_mode: JString<'local>,
+) {
+    let eye_mode = match env
+        .with_env_no_catch(|env| -> jni::errors::Result<String> { eye_mode.try_to_string(env) })
+        .into_outcome()
+    {
+        Outcome::Ok(value) => value,
+        Outcome::Err(err) => panic!("{}", err),
+        Outcome::Panic(payload) => panic::resume_unwind(payload),
+    };
+    let mode = match eye_mode.as_str() {
+        "left" => EyeMode::Left,
+        "both" => EyeMode::Both,
+        "right" => EyeMode::Right,
+        _ => {
+            error!("Eye mode must be left, both, or right");
             return;
         }
     };
-    *PENDING_SETTINGS.lock().unwrap() = Some(json_string);
+    let mut guard = BRIDGE.lock().unwrap();
+    guard
+        .as_mut()
+        .expect("Bridge should be created")
+        .surface
+        .set_eye_mode(mode);
 }
 
-fn apply_settings(bridge: &mut Bridge, json_string: &str) {
+#[no_mangle]
+pub extern "system" fn Java_com_vss_simulator_SimulatorBridge_nativeSemanticInput<'local>(
+    mut env: EnvUnowned<'local>,
+    _class: JClass,
+    kind: JString<'local>,
+    x: jfloat,
+    y: jfloat,
+) {
+    let kind = match env
+        .with_env_no_catch(|env| -> jni::errors::Result<String> { kind.try_to_string(env) })
+        .into_outcome()
+    {
+        Outcome::Ok(value) => value,
+        Outcome::Err(err) => panic!("{}", err),
+        Outcome::Panic(payload) => panic::resume_unwind(payload),
+    };
+    let input = match kind.as_str() {
+        "gaze_delta" => SemanticInput::GazeDelta([x, y]),
+        "view_delta" => SemanticInput::ViewDelta([x, y]),
+        "reset_pose" => SemanticInput::ResetPose,
+        _ => {
+            error!("Unknown semantic input");
+            return;
+        }
+    };
+    let mut guard = BRIDGE.lock().unwrap();
+    let bridge = guard.as_mut().expect("Bridge should be created");
+    bridge.pose.apply(input);
+    bridge.pose.apply_to_flows(&bridge.surface.flows);
+    bridge.surface.apply_changes(NodeChanges::OUTPUT);
+}
+
+fn compile_settings_json(
+    json: &str,
+) -> Result<serde_json::Map<String, serde_json::Value>, serde_json::Error> {
+    serde_json::from_str(json)
+}
+
+fn compile_settings(flow: &Flow, json: &str) -> Result<ParameterPatch, String> {
     let values =
-        match serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(json_string) {
-            Ok(values) => values,
-            Err(err) => {
-                error!("Invalid settings JSON: {err}");
-                return;
-            }
-        };
+        compile_settings_json(json).map_err(|err| format!("Invalid settings JSON: {err}"))?;
     let root = serde_json::json!({ "both": values });
     let (document, diagnostics) = vss_catalog::parse_config_value("android", &root);
     if !diagnostics.is_empty() {
-        error!("{}", vss_catalog::diagnostics_to_string(&diagnostics));
-        return;
+        return Err(vss_catalog::diagnostics_to_string(&diagnostics));
     }
     let settings = document.effective_left().value_map();
-    let engine = match vss_catalog::validate_settings(&settings) {
-        Ok(()) => settings,
-        Err(diagnostics) => {
-            error!("{}", vss_catalog::diagnostics_to_string(&diagnostics));
+    vss_catalog::validate_settings(&settings)
+        .map_err(|diagnostics| vss_catalog::diagnostics_to_string(&diagnostics))?;
+    vss_catalog::compile_parameter_patch(flow, &settings, &|_, reference| {
+        AssetId::from_str(reference)
+    })
+    .map_err(|diagnostics| vss_catalog::diagnostics_to_string(&diagnostics))
+}
+
+fn apply_settings(bridge: &mut Bridge, left: &str, right: &str) {
+    let patches = compile_settings(&bridge.surface.flows[0], left).and_then(|left| {
+        compile_settings(&bridge.surface.flows[1], right).map(|right| (left, right))
+    });
+    let (left, right) = match patches {
+        Ok(patches) => patches,
+        Err(err) => {
+            error!("{err}");
             return;
         }
     };
-    let mut patches = Vec::new();
-    for flow in &bridge.surface.flows {
-        match vss_catalog::compile_parameter_patch(flow, &engine, &|_, reference| {
-            AssetId::from_str(reference)
-        }) {
-            Ok(patch) => patches.push(patch),
-            Err(diagnostics) => {
-                error!("{}", vss_catalog::diagnostics_to_string(&diagnostics));
-                return;
-            }
-        }
-    }
-    let changes = bridge
-        .surface
-        .flows
-        .iter()
-        .zip(patches)
-        .fold(NodeChanges::empty(), |changes, (flow, patch)| {
-            changes | patch.apply(flow)
-        });
+    let changes = left.apply(&bridge.surface.flows[0]) | right.apply(&bridge.surface.flows[1]);
     if changes.contains(NodeChanges::SLOTS) {
         bridge.surface.negociate_slots();
     }

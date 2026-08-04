@@ -46,7 +46,15 @@ struct CatalogControl: Codable {
     let choices: [CatalogChoice]?
 }
 struct CatalogChoice: Codable, Identifiable { let value: Int; let label: String; var id: Int { value } }
-struct CatalogPreset: Codable, Identifiable { let id: String; let label: String; let values: [String: JSONValue] }
+struct CatalogPreset: Codable, Identifiable {
+    let id: String
+    let label: String
+    let both: [String: JSONValue]
+    let left: [String: JSONValue]
+    let right: [String: JSONValue]
+
+    var valuesForLeft: [String: JSONValue] { both.isEmpty ? left : both }
+}
 struct CatalogArticle: Codable, Identifiable {
     let id: String
     let locale: String
@@ -64,7 +72,8 @@ enum UIStrings {
         let de = locale.language.languageCode?.identifier == "de"
         let values: [String: (String, String)] = [
             "camera": ("Camera", "Kamera"), "media": ("Photo / video", "Bild / Video"),
-            "fullscreen": ("Full screen", "Vollbild"), "exitFullscreen": ("Tap to exit full screen", "Tippen beendet den Vollbildmodus"),
+            "fullscreen": ("Full screen", "Vollbild"),
+            "left": ("Left", "Links"), "both": ("Both", "Beide"), "right": ("Right", "Rechts"),
             "settings": ("Settings", "Einstellungen"), "articles": ("Articles", "Artikel"),
             "resetAll": ("Reset manual changes", "Manuelle Änderungen zurücksetzen"), "reset": ("Reset", "Zurücksetzen"),
             "openArticle": ("Open article", "Artikel öffnen"),

@@ -23,76 +23,152 @@ data class UiCatalog(val groups: List<UiGroup>, val presets: List<UiPreset>, val
 data class UiGroup(val id: String, val title: String, val settings: List<UiSetting>)
 data class UiChoice(val value: Int, val label: String)
 data class UiSetting(val id: String, val label: String, val kind: String, val default: Any, val step: Double, val min: Double?, val max: Double?, val unit: String?, val choices: List<UiChoice>)
-data class UiPreset(val id: String, val label: String, val values: Map<String, Any>)
+data class UiPreset(
+    val id: String,
+    val label: String,
+    val both: Map<String, Any>,
+    val left: Map<String, Any>,
+    val right: Map<String, Any>,
+)
 data class UiArticle(val id: String, val title: String, val summary: String?, val image: String?, val contentPath: String, val demonstrations: List<UiDemonstration>)
 data class UiDemonstration(val id: String, val label: String, val presets: Set<String>)
 
-data class SimulatorSession(
+enum class EyeMode { LEFT, BOTH, RIGHT }
+
+data class SessionLayer(
     val selectedDemonstrations: Map<String, String> = emptyMap(),
     val manual: Map<String, Any> = emptyMap(),
     val maskedFallback: Map<String, Any> = emptyMap(),
+    val maskedByBoth: Set<String> = emptySet(),
+)
+
+data class SimulatorSession(
+    val eyeMode: EyeMode = EyeMode.LEFT,
+    val layers: Map<EyeMode, SessionLayer> = EyeMode.entries.associateWith { SessionLayer() },
 ) {
-    fun activePresets(catalog: UiCatalog): Set<String> = catalog.articles.flatMap { article ->
-        article.demonstrations.firstOrNull { it.id == selectedDemonstrations[article.id] }?.presets.orEmpty()
-    }.toSet()
+    fun withEyeMode(mode: EyeMode) = copy(eyeMode = mode)
+    fun currentLayer() = layer(eyeMode)
+    fun selectedDemonstration(articleId: String): String? = when (eyeMode) {
+        EyeMode.LEFT, EyeMode.RIGHT -> currentLayer().selectedDemonstrations[articleId]
+        EyeMode.BOTH -> layer(EyeMode.BOTH).selectedDemonstrations[articleId]
+            ?: layer(EyeMode.LEFT).selectedDemonstrations[articleId]
+            ?: layer(EyeMode.RIGHT).selectedDemonstrations[articleId]
+    }
+
+    fun activePresets(catalog: UiCatalog): Set<String> {
+        if (eyeMode != EyeMode.BOTH) return layerPresets(currentLayer(), catalog)
+        val shared = layerPresets(layer(EyeMode.BOTH), catalog)
+        val intrinsic = (layerPresets(layer(EyeMode.LEFT), catalog) + layerPresets(layer(EyeMode.RIGHT), catalog))
+            .filter { catalog.preset(it).isIntrinsic() }
+        return shared + intrinsic
+    }
 
     fun selectDemonstration(catalog: UiCatalog, articleId: String, demonstrationId: String): SimulatorSession {
-        val article = catalog.articles.first { it.id == articleId }
-        val selected = article.demonstrations.first { it.id == demonstrationId }
-        val beforePresets = activePresets(catalog)
-        val nextSelections = selectedDemonstrations.toMutableMap()
-        if (nextSelections[articleId] == demonstrationId) {
-            nextSelections.remove(articleId)
-        } else {
-            val selectedValues = selected.presets.flatMap { id -> catalog.preset(id).values.entries }
-                .associate { it.key to it.value }
-            catalog.articles.forEach { otherArticle ->
-                val other = otherArticle.demonstrations.firstOrNull { it.id == nextSelections[otherArticle.id] }
-                if (other != null && otherArticle.id != articleId && demonstrationsConflict(catalog, selectedValues, other)) {
-                    nextSelections.remove(otherArticle.id)
-                }
-            }
-            nextSelections[articleId] = demonstrationId
+        val article = catalog.articles.firstOrNull { it.id == articleId } ?: return this
+        val selected = article.demonstrations.firstOrNull { it.id == demonstrationId } ?: return this
+        val presets = selected.presets.map(catalog::preset)
+        val intrinsic = presets.any(UiPreset::isIntrinsic)
+        val targets = if (intrinsic) listOf(EyeMode.LEFT, EyeMode.RIGHT).filter { target ->
+            presets.any { it.values(target).isNotEmpty() }
+        } else listOf(eyeMode)
+        val enabled = !targets.all { layer(it).selectedDemonstrations[articleId] == demonstrationId }
+        var next = this
+        targets.forEach { target ->
+            next = next.withLayer(target, transitionLayer(next.layer(target), catalog, target, articleId, selected, enabled))
+            if (target != EyeMode.BOTH && enabled) next = next.mask(listOf(target), demonstrationValues(catalog, selected, target).keys, false)
         }
-        val next = copy(selectedDemonstrations = nextSelections)
-        return cascadePresetTransition(catalog, beforePresets, next.activePresets(catalog), next)
+        if (EyeMode.BOTH in targets) {
+            val changed = demonstrationValues(catalog, selected, EyeMode.BOTH).keys
+            next = if (enabled) next.mask(listOf(EyeMode.LEFT, EyeMode.RIGHT), changed, true)
+            else next.mask(listOf(EyeMode.LEFT, EyeMode.RIGHT), changed.filterNot { it in next.sharedSettings(catalog) }, false)
+        }
+        return if (intrinsic && enabled) next.copy(eyeMode = EyeMode.BOTH) else next
     }
 
-    fun edit(settingId: String, value: Any) = copy(manual = manual + (settingId to value))
-    fun reset(settingId: String) = copy(manual = manual - settingId)
+    fun edit(settingId: String, value: Any): SimulatorSession {
+        val target = eyeMode
+        var next = withLayer(target, currentLayer().copy(manual = currentLayer().manual + (settingId to value)))
+        next = if (target == EyeMode.BOTH) next.mask(listOf(EyeMode.LEFT, EyeMode.RIGHT), listOf(settingId), true)
+        else next.mask(listOf(target), listOf(settingId), false)
+        return next
+    }
+
+    fun reset(settingId: String, catalog: UiCatalog? = null): SimulatorSession {
+        var next = withLayer(eyeMode, currentLayer().copy(manual = currentLayer().manual - settingId))
+        if (eyeMode == EyeMode.BOTH && (catalog == null || settingId !in next.sharedSettings(catalog))) {
+            next = next.mask(listOf(EyeMode.LEFT, EyeMode.RIGHT), listOf(settingId), false)
+        }
+        return next
+    }
+
+    fun effectiveValues(catalog: UiCatalog, eye: EyeMode): Map<String, Any> {
+        require(eye != EyeMode.BOTH)
+        val result = catalog.groups.flatMap { it.settings }.associate { it.id to it.default }.toMutableMap()
+        applyLayer(result, layer(EyeMode.BOTH), catalog, EyeMode.BOTH)
+        applyLayer(result, layer(eye), catalog, eye)
+        return result
+    }
+
+    fun editableValues(catalog: UiCatalog): Map<String, Any> {
+        if (eyeMode != EyeMode.BOTH) return effectiveValues(catalog, eyeMode)
+        val result = catalog.groups.flatMap { it.settings }.associate { it.id to it.default }.toMutableMap()
+        applyLayer(result, layer(EyeMode.BOTH), catalog, EyeMode.BOTH)
+        return result
+    }
 
     fun sourceArticle(catalog: UiCatalog, settingId: String): String? {
-        if (settingId in manual) return null
-        val active = activePresets(catalog)
-        val preset = catalog.presets.firstOrNull { it.id in active && settingId in it.values } ?: return null
-        return catalog.articles.firstOrNull { article ->
-            article.demonstrations.any { preset.id in it.presets }
-        }?.id
+        val layer = currentLayer()
+        if (settingId in layer.manual) return null
+        val owner = catalog.presets.firstOrNull { it.id in layerPresets(layer, catalog) && settingId in it.values(eyeMode) } ?: return null
+        return catalog.articles.firstOrNull { article -> article.demonstrations.any { owner.id in it.presets } }?.id
     }
+
+    private fun layer(mode: EyeMode) = layers.getValue(mode)
+    private fun withLayer(mode: EyeMode, layer: SessionLayer) = copy(layers = layers + (mode to layer))
+    private fun mask(targets: List<EyeMode>, settings: Iterable<String>, masked: Boolean): SimulatorSession {
+        var next = this
+        targets.forEach { target ->
+            val layer = next.layer(target)
+            next = next.withLayer(target, layer.copy(maskedByBoth = if (masked) layer.maskedByBoth + settings else layer.maskedByBoth - settings.toSet()))
+        }
+        return next
+    }
+    private fun sharedSettings(catalog: UiCatalog) = layer(EyeMode.BOTH).manual.keys + settingsForPresets(catalog, EyeMode.BOTH, layerPresets(layer(EyeMode.BOTH), catalog))
 }
 
 private fun UiCatalog.preset(id: String) = presets.first { it.id == id }
-
-private fun demonstrationsConflict(catalog: UiCatalog, selectedValues: Map<String, Any>, other: UiDemonstration): Boolean =
-    other.presets.flatMap { catalog.preset(it).values.entries }.any { (setting, value) ->
-        selectedValues[setting]?.let { it != value } == true
-    }
-
-private fun cascadePresetTransition(catalog: UiCatalog, before: Set<String>, after: Set<String>, state: SimulatorSession): SimulatorSession {
-    val beforeSettings = before.flatMap { catalog.preset(it).values.keys }.toSet()
-    val afterSettings = after.flatMap { catalog.preset(it).values.keys }.toSet()
-    val manual = state.manual.toMutableMap()
-    val fallback = state.maskedFallback.toMutableMap()
-    (beforeSettings + afterSettings).forEach { setting ->
-        when {
-            setting !in beforeSettings && setting in afterSettings -> manual.remove(setting)?.let { fallback[setting] = it }
-            setting in beforeSettings && setting in afterSettings -> manual.remove(setting)?.let { fallback[setting] = it }
-            setting in beforeSettings && setting !in afterSettings -> {
-                if (setting in manual) fallback.remove(setting) else fallback.remove(setting)?.let { manual[setting] = it }
-            }
+private fun UiPreset.isIntrinsic() = left.isNotEmpty() || right.isNotEmpty()
+private fun UiPreset.values(target: EyeMode) = if (both.isNotEmpty()) both else when (target) { EyeMode.LEFT -> left; EyeMode.RIGHT -> right; EyeMode.BOTH -> emptyMap() }
+private fun layerPresets(layer: SessionLayer, catalog: UiCatalog) = catalog.articles.flatMap { article ->
+    article.demonstrations.firstOrNull { it.id == layer.selectedDemonstrations[article.id] }?.presets.orEmpty()
+}.toSet()
+private fun demonstrationValues(catalog: UiCatalog, demo: UiDemonstration, target: EyeMode) = demo.presets.flatMap { catalog.preset(it).values(target).entries }.associate { it.key to it.value }
+private fun transitionLayer(layer: SessionLayer, catalog: UiCatalog, target: EyeMode, articleId: String, selected: UiDemonstration, enabled: Boolean): SessionLayer {
+    val before = layerPresets(layer, catalog)
+    val selections = layer.selectedDemonstrations.toMutableMap()
+    if (!enabled) selections.remove(articleId) else {
+        val values = demonstrationValues(catalog, selected, target)
+        catalog.articles.forEach { article ->
+            val other = article.demonstrations.firstOrNull { it.id == selections[article.id] }
+            if (article.id != articleId && other != null && demonstrationValues(catalog, other, target).any { (key, value) -> values[key]?.let { it != value } == true }) selections.remove(article.id)
         }
+        selections[articleId] = selected.id
     }
-    return state.copy(manual = manual, maskedFallback = fallback)
+    return cascadePresetTransition(catalog, target, before, layerPresets(layer.copy(selectedDemonstrations = selections), catalog), layer.copy(selectedDemonstrations = selections))
+}
+private fun settingsForPresets(catalog: UiCatalog, target: EyeMode, presets: Set<String>) = presets.flatMap { catalog.preset(it).values(target).keys }.toSet()
+private fun cascadePresetTransition(catalog: UiCatalog, target: EyeMode, before: Set<String>, after: Set<String>, layer: SessionLayer): SessionLayer {
+    val beforeSettings = settingsForPresets(catalog, target, before); val afterSettings = settingsForPresets(catalog, target, after)
+    val manual = layer.manual.toMutableMap(); val fallback = layer.maskedFallback.toMutableMap()
+    (beforeSettings + afterSettings).forEach { setting ->
+        if (setting in afterSettings) manual.remove(setting)?.let { fallback[setting] = it }
+        else if (setting in beforeSettings) { if (setting in manual) fallback.remove(setting) else fallback.remove(setting)?.let { manual[setting] = it } }
+    }
+    return layer.copy(manual = manual, maskedFallback = fallback)
+}
+private fun applyLayer(result: MutableMap<String, Any>, layer: SessionLayer, catalog: UiCatalog, target: EyeMode) {
+    catalog.presets.filter { it.id in layerPresets(layer, catalog) }.forEach { preset -> preset.values(target).filterKeys { it !in layer.maskedByBoth }.forEach(result::put) }
+    layer.manual.filterKeys { it !in layer.maskedByBoth }.forEach(result::put)
 }
 
 fun parseCatalog(json: String): UiCatalog {
@@ -121,8 +197,14 @@ fun parseCatalog(json: String): UiCatalog {
     val presets = root.getJSONArray("presets").let { presets ->
         (0 until presets.length()).map { i ->
             val preset = presets.getJSONObject(i)
-            val values = preset.getJSONObject("values")
-            UiPreset(preset.getString("id"), preset.getString("label"), values.keys().asSequence().associateWith(values::get))
+            fun section(name: String) = preset.getJSONObject(name).toMap()
+            UiPreset(
+                preset.getString("id"),
+                preset.getString("label"),
+                section("both"),
+                section("left"),
+                section("right"),
+            )
         }
     }
     val articles = root.getJSONArray("articles").let { articles ->

@@ -6,7 +6,9 @@ import Metal
 @_silgen_name("vss_resize") private func nativeResize(_ width: UInt32, _ height: UInt32)
 @_silgen_name("vss_draw") private func nativeDraw()
 @_silgen_name("vss_post_camera_frame") private func nativePostFrame(_ y: UnsafeMutableRawPointer, _ uv: UnsafeMutableRawPointer, _ depth: UnsafeMutableRawPointer?, _ width: UInt32, _ height: UInt32, _ depthWidth: UInt32, _ depthHeight: UInt32, _ rotation: Int32, _ fullRange: Bool)
-@_silgen_name("vss_post_settings") private func nativePostSettings(_ json: UnsafePointer<CChar>) -> Bool
+@_silgen_name("vss_post_settings") private func nativePostSettings(_ left: UnsafePointer<CChar>, _ right: UnsafePointer<CChar>) -> Bool
+@_silgen_name("vss_set_eye_mode") private func nativeSetEyeMode(_ value: UnsafePointer<CChar>) -> Bool
+@_silgen_name("vss_semantic_input") private func nativeSemanticInput(_ kind: UnsafePointer<CChar>, _ x: Float, _ y: Float) -> Bool
 @_silgen_name("vss_catalog_json") private func nativeCatalog(_ locale: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>?
 @_silgen_name("vss_compose_settings") private func nativeCompose(_ locale: UnsafePointer<CChar>, _ presets: UnsafePointer<CChar>, _ overrides: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>?
 @_silgen_name("vss_string_free") private func nativeStringFree(_ value: UnsafeMutablePointer<CChar>)
@@ -48,11 +50,13 @@ enum SimulatorBridge {
         guard let data = text.data(using: .utf8) else { throw SimulatorBridgeError.invalidJSON("compose") }
         return try JSONDecoder().decode([String: JSONValue].self, from: data)
     }
-    static func post(settings: [String: JSONValue]) throws {
-        let data = try JSONEncoder().encode(settings)
-        guard let json = String(data: data, encoding: .utf8) else { throw SimulatorBridgeError.invalidJSON("settings") }
-        guard json.withCString(nativePostSettings) else { throw SimulatorBridgeError.rejectedSettings }
+    static func post(left: [String: JSONValue], right: [String: JSONValue]) throws {
+        let leftData = try JSONEncoder().encode(left), rightData = try JSONEncoder().encode(right)
+        guard let leftJSON = String(data: leftData, encoding: .utf8), let rightJSON = String(data: rightData, encoding: .utf8) else { throw SimulatorBridgeError.invalidJSON("settings") }
+        guard leftJSON.withCString({ left in rightJSON.withCString { nativePostSettings(left, $0) } }) else { throw SimulatorBridgeError.rejectedSettings }
     }
+    static func setEyeMode(_ mode: EyeMode) throws { guard mode.rawValue.withCString(nativeSetEyeMode) else { throw SimulatorBridgeError.unavailable("eye mode") } }
+    static func semanticInput(_ kind: String, x: Float = 0, y: Float = 0) { _ = kind.withCString { nativeSemanticInput($0, x, y) } }
     private static func ownedString(operation: String, _ body: () -> UnsafeMutablePointer<CChar>?) throws -> String {
         guard let pointer = body() else { throw SimulatorBridgeError.unavailable(operation) }
         defer { nativeStringFree(pointer) }

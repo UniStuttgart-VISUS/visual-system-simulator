@@ -15,8 +15,11 @@ struct SimulatorScreen: View {
         GeometryReader { geometry in
             if model.fullscreen {
                 Preview(model: model, controller: controller, importing: $importing, controls: false)
-                    .ignoresSafeArea().contentShape(Rectangle()).onTapGesture { model.fullscreen = false }
-                    .overlay(alignment: .bottom) { Text(t("exitFullscreen")).padding(10).background(.ultraThinMaterial, in: Capsule()).padding() }
+                    .ignoresSafeArea()
+                    .overlay(alignment: .topLeading) {
+                        Button { model.fullscreen = false } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }
+                            .buttonStyle(.borderedProminent).padding()
+                    }
             } else if geometry.size.width >= 760 {
                 HStack(spacing: 12) {
                     Preview(model: model, controller: controller, importing: $importing, controls: true).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -33,6 +36,7 @@ struct SimulatorScreen: View {
         .onDisappear { controller.stopSources() }
         .onOpenURL { url in model.source = .file(url); controller.startMedia(url) }
         .onChange(of: scenePhase) { _, phase in if phase == .active { activateSource() } else { controller.stopSources() } }
+        .onChange(of: model.fullscreen && model.session.eyeMode == .both, initial: true) { _, locked in requestLandscape(locked) }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.image, .movie]) { result in
             do { let url = try result.get(); model.source = .file(url); controller.startMedia(url) }
             catch { model.errorMessage = error.localizedDescription }
@@ -43,6 +47,10 @@ struct SimulatorScreen: View {
         } message: { Text(model.errorMessage ?? controller.errorMessage ?? "") }
     }
     private func activateSource() { switch model.source { case .camera: controller.startCamera(); case .file(let url): controller.startMedia(url) } }
+    private func requestLandscape(_ locked: Bool) {
+        guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: locked ? .landscape : .all))
+    }
 }
 
 private struct Preview: View {
@@ -71,11 +79,49 @@ private struct Preview: View {
                         Button(UIStrings.text("camera", locale: .current), systemImage: "camera") { model.source = .camera; controller.startCamera() }
                         Button(UIStrings.text("media", locale: .current), systemImage: "photo.on.rectangle") { importing = true }
                     } label: { Image(systemName: "photo.on.rectangle").frame(width: 44, height: 44) }
-                    Spacer()
+                    Spacer(minLength: 8)
+                    EyeModeSelector(model: model)
+                    Spacer(minLength: 8)
                     Button { model.fullscreen = true } label: { Image(systemName: "arrow.up.left.and.arrow.down.right").frame(width: 44, height: 44) }
                 }.buttonStyle(.borderedProminent).padding().frame(maxHeight: .infinity, alignment: .bottom)
             }
         }.clipped()
+    }
+}
+
+private struct EyeModeSelector: View {
+    @Bindable var model: SimulatorModel
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(EyeMode.allCases, id: \.self) { mode in
+                let selected = model.session.eyeMode == mode
+                Button { model.setEyeMode(mode) } label: {
+                    EyeModeArtwork(mode: mode).frame(width: 32, height: 22).frame(minWidth: 48, minHeight: 44)
+                }
+                .buttonStyle(.bordered)
+                .tint(selected ? .accentColor : .secondary)
+                .accessibilityLabel(UIStrings.text(mode.rawValue, locale: .current))
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+    }
+}
+
+private struct EyeModeArtwork: View {
+    let mode: EyeMode
+    var body: some View {
+        Canvas { context, size in
+            let color = Color.primary, sx = size.width / 32, sy = size.height / 22
+            var viewer = Path()
+            viewer.move(to: CGPoint(x: 3 * sx, y: 8.5 * sy)); viewer.addLine(to: CGPoint(x: 6 * sx, y: 5 * sy)); viewer.addLine(to: CGPoint(x: 26 * sx, y: 5 * sy)); viewer.addLine(to: CGPoint(x: 29 * sx, y: 8.5 * sy)); viewer.addLine(to: CGPoint(x: 29 * sx, y: 16.5 * sy)); viewer.addLine(to: CGPoint(x: 26 * sx, y: 19 * sy)); viewer.addLine(to: CGPoint(x: 6 * sx, y: 19 * sy)); viewer.addLine(to: CGPoint(x: 3 * sx, y: 16.5 * sy)); viewer.closeSubpath()
+            context.stroke(viewer, with: .color(color.opacity(0.72)), lineWidth: 1.8 * min(sx, sy))
+            for (index, x) in [11.0, 21.0].enumerated() {
+                let active = mode == .both || (mode == .left && index == 0) || (mode == .right && index == 1)
+                let radius = 4 * min(sx, sy), center = CGPoint(x: x * sx, y: 12 * sy)
+                let lens = Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
+                if active { context.fill(lens, with: .color(color)) } else { context.stroke(lens, with: .color(color.opacity(0.35)), lineWidth: 1.8 * min(sx, sy)) }
+            }
+        }
     }
 }
 
@@ -126,7 +172,7 @@ private struct ArticleCard: View {
     @Bindable var model: SimulatorModel
 
     private var selected: CatalogDemonstration? {
-        article.demonstrations.first { $0.id == model.session.selectedDemonstrations[article.id] }
+        article.demonstrations.first { $0.id == model.session.selectedDemonstration(articleID: article.id) }
     }
     private var positionLabel: String {
         "\(article.title), \(index + 1) \(UIStrings.text("of", locale: .current)) \(count)" + (selected.map { ", \($0.label) \(UIStrings.text("active", locale: .current))" } ?? "")
@@ -190,7 +236,7 @@ struct DemonstrationSegments: View {
     var body: some View {
         HStack(spacing: 4) {
             ForEach(article.demonstrations) { demo in
-                let isSelected = model.session.selectedDemonstrations[article.id] == demo.id
+                let isSelected = model.session.selectedDemonstration(articleID: article.id) == demo.id
                 Button {
                     model.selectDemonstration(articleID: article.id, demonstrationID: demo.id)
                 } label: {
@@ -259,7 +305,7 @@ private struct SettingControl: View {
             HStack {
                 Text(setting.label)
                 Spacer()
-                if model.session.manual[setting.id] != nil {
+                if model.session.currentLayer().manual[setting.id] != nil {
                     Button { model.reset(setting.id) } label: { Image(systemName: "arrow.counterclockwise") }
                         .accessibilityLabel(UIStrings.text("reset", locale: .current))
                 } else if let article = model.sourceArticle(for: setting.id) {

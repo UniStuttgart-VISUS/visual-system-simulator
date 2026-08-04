@@ -99,7 +99,7 @@ struct ArticleSheet: View {
                     Divider()
                     HStack(spacing: 4) {
                         ForEach(article.demonstrations) { demo in
-                            let selected = model.session.selectedDemonstrations[article.id] == demo.id
+                            let selected = model.session.selectedDemonstration(articleID: article.id) == demo.id
                             Button {
                                 model.selectDemonstration(articleID: article.id, demonstrationID: demo.id)
                                 dismiss()

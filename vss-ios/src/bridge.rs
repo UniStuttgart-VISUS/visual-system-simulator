@@ -10,7 +10,7 @@ use raw_window_handle::{
 use vss::*;
 use vss_catalog::Locale;
 
-use crate::frame::{CameraFrame, FrameNode};
+use crate::frame::{CameraFrame, FrameNode, SharedFrame};
 
 struct UIKitHandle(RawWindowHandle);
 unsafe impl Send for UIKitHandle {}
@@ -33,12 +33,16 @@ impl HasDisplayHandle for UIKitHandle {
 struct Bridge {
     surface: Surface<'static>,
     frame_size: [u32; 2],
+    pose: IntentionalPose,
 }
 unsafe impl Send for Bridge {}
 
 static BRIDGE: Mutex<Option<Bridge>> = Mutex::new(None);
-static PENDING_FRAME: Mutex<Option<CameraFrame>> = Mutex::new(None);
-static PENDING_SETTINGS: Mutex<Option<String>> = Mutex::new(None);
+static SHARED_FRAME: Mutex<SharedFrame> = Mutex::new(SharedFrame {
+    generation: 0,
+    frame: None,
+});
+static PENDING_SETTINGS: Mutex<Option<(String, String)>> = Mutex::new(None);
 
 #[no_mangle]
 pub unsafe extern "C" fn vss_create(
@@ -58,39 +62,43 @@ pub unsafe extern "C" fn vss_create(
         NonNull::new_unchecked(view),
     )));
     let size = [width.max(1), height.max(1)];
-    let mut surface = Surface::new(size, handle, 1);
+    let mut surface = Surface::new(size, handle, 2);
     surface.set_asset_loader(move |id: &AssetId| {
         let path = std::path::Path::new(&root).join(id.raw());
         std::fs::read(&path)
             .map(Cursor::new)
             .map_err(|e| format!("Cannot read {}: {e}", path.display()))
     });
-    let node = FrameNode::new(&surface, &PENDING_FRAME);
-    surface.add_node(Box::new(node), 0);
-    let node = Cataract::new(&surface);
-    surface.add_node(Box::new(node), 0);
-    let node = EyeControl::new(&surface);
-    surface.add_node(Box::new(node), 0);
-    let node = Lens::new(&surface);
-    surface.add_node(Box::new(node), 0);
-    let node = Retina::new(&surface);
-    surface.add_node(Box::new(node), 0);
-    let node = PeacockCB::new(&surface);
-    surface.add_node(Box::new(node), 0);
-    let mut display = Display::new(&surface);
-    display.set_output_scale(OutputScale::Fill);
-    surface.add_node(Box::new(display), 0);
+    for flow_index in 0..2 {
+        let node = FrameNode::new(&surface, &SHARED_FRAME);
+        surface.add_node(Box::new(node), flow_index);
+        let node = Cataract::new(&surface);
+        surface.add_node(Box::new(node), flow_index);
+        let node = EyeControl::new(&surface);
+        surface.add_node(Box::new(node), flow_index);
+        let node = Lens::new(&surface);
+        surface.add_node(Box::new(node), flow_index);
+        let node = Retina::new(&surface);
+        surface.add_node(Box::new(node), flow_index);
+        let node = PeacockCB::new(&surface);
+        surface.add_node(Box::new(node), flow_index);
+        let mut display = Display::new(&surface);
+        display.set_output_scale(OutputScale::Fill);
+        surface.add_node(Box::new(display), flow_index);
+    }
     surface.negociate_slots();
+    surface.set_eye_mode(EyeMode::Left);
     *BRIDGE.lock().unwrap() = Some(Bridge {
         surface,
         frame_size: [1, 1],
+        pose: IntentionalPose::default(),
     });
     true
 }
 
 #[no_mangle]
 pub extern "C" fn vss_destroy() {
-    *PENDING_FRAME.lock().unwrap() = None;
+    *SHARED_FRAME.lock().unwrap() = SharedFrame::default();
     *BRIDGE.lock().unwrap() = None;
 }
 #[no_mangle]
@@ -124,7 +132,7 @@ pub unsafe extern "C" fn vss_post_camera_frame(
         rotation,
         full_range,
     ) {
-        *PENDING_FRAME.lock().unwrap() = Some(frame);
+        SHARED_FRAME.lock().unwrap().publish(frame);
     }
 }
 
@@ -135,9 +143,10 @@ pub extern "C" fn vss_draw() {
     // Drop the frame lock before slot negotiation. FrameNode reads the same
     // mutex while selecting the camera render-target dimensions.
     let pending_size = {
-        PENDING_FRAME
+        SHARED_FRAME
             .lock()
             .unwrap()
+            .frame
             .as_ref()
             .map(CameraFrame::output_size)
     };
@@ -147,8 +156,8 @@ pub extern "C" fn vss_draw() {
             b.surface.negociate_slots();
         }
     }
-    if let Some(json) = PENDING_SETTINGS.lock().unwrap().take() {
-        apply_settings(b, &json);
+    if let Some((left, right)) = PENDING_SETTINGS.lock().unwrap().take() {
+        apply_settings(b, &left, &right);
     }
     for flow in &b.surface.flows {
         let changes = flow.input(&MouseInput::default());
@@ -158,55 +167,96 @@ pub extern "C" fn vss_draw() {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn vss_post_settings(json: *const c_char) -> bool {
-    if json.is_null() {
+pub unsafe extern "C" fn vss_post_settings(left: *const c_char, right: *const c_char) -> bool {
+    if left.is_null() || right.is_null() {
         return false;
     }
-    let Ok(text) = CStr::from_ptr(json).to_str() else {
+    let (Ok(left), Ok(right)) = (
+        CStr::from_ptr(left).to_str(),
+        CStr::from_ptr(right).to_str(),
+    ) else {
         return false;
     };
-    if !matches!(
-        serde_json::from_str::<serde_json::Value>(text),
-        Ok(serde_json::Value::Object(_))
-    ) {
+    if [left, right].iter().any(|text| {
+        !matches!(
+            serde_json::from_str::<serde_json::Value>(text),
+            Ok(serde_json::Value::Object(_))
+        )
+    }) {
         return false;
     }
-    *PENDING_SETTINGS.lock().unwrap() = Some(text.to_owned());
+    *PENDING_SETTINGS.lock().unwrap() = Some((left.to_owned(), right.to_owned()));
     true
 }
 
-fn apply_settings(bridge: &mut Bridge, json: &str) {
+fn compile_settings(flow: &Flow, json: &str) -> Option<ParameterPatch> {
     let Ok(values) = serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(json)
     else {
-        return;
+        return None;
     };
     let (doc, diagnostics) =
         vss_catalog::parse_config_value("ios", &serde_json::json!({"both": values}));
     if !diagnostics.is_empty() {
-        return;
+        return None;
     }
     let settings = doc.effective_left().value_map();
     if vss_catalog::validate_settings(&settings).is_err() {
-        return;
+        return None;
     }
-    let patches: Result<Vec<_>, _> = bridge
-        .surface
-        .flows
-        .iter()
-        .map(|flow| {
-            vss_catalog::compile_parameter_patch(flow, &settings, &|_, r| AssetId::from_str(r))
-        })
-        .collect();
-    let Ok(patches) = patches else { return };
-    let changes = bridge
-        .surface
-        .flows
-        .iter()
-        .zip(patches)
-        .fold(NodeChanges::empty(), |c, (f, p)| c | p.apply(f));
+    vss_catalog::compile_parameter_patch(flow, &settings, &|_, r| AssetId::from_str(r)).ok()
+}
+
+fn apply_settings(bridge: &mut Bridge, left: &str, right: &str) {
+    let (Some(left), Some(right)) = (
+        compile_settings(&bridge.surface.flows[0], left),
+        compile_settings(&bridge.surface.flows[1], right),
+    ) else {
+        return;
+    };
+    let changes = left.apply(&bridge.surface.flows[0]) | right.apply(&bridge.surface.flows[1]);
     if changes.contains(NodeChanges::SLOTS) {
         bridge.surface.negociate_slots();
     }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn vss_set_eye_mode(value: *const c_char) -> bool {
+    if value.is_null() {
+        return false;
+    }
+    let mode = match CStr::from_ptr(value).to_str() {
+        Ok("left") => EyeMode::Left,
+        Ok("both") => EyeMode::Both,
+        Ok("right") => EyeMode::Right,
+        _ => return false,
+    };
+    let mut bridge = BRIDGE.lock().unwrap();
+    let Some(bridge) = bridge.as_mut() else {
+        return false;
+    };
+    bridge.surface.set_eye_mode(mode);
+    true
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn vss_semantic_input(kind: *const c_char, x: f32, y: f32) -> bool {
+    if kind.is_null() {
+        return false;
+    }
+    let input = match CStr::from_ptr(kind).to_str() {
+        Ok("gaze_delta") => SemanticInput::GazeDelta([x, y]),
+        Ok("view_delta") => SemanticInput::ViewDelta([x, y]),
+        Ok("reset_pose") => SemanticInput::ResetPose,
+        _ => return false,
+    };
+    let mut bridge = BRIDGE.lock().unwrap();
+    let Some(bridge) = bridge.as_mut() else {
+        return false;
+    };
+    bridge.pose.apply(input);
+    bridge.pose.apply_to_flows(&bridge.surface.flows);
+    bridge.surface.apply_changes(NodeChanges::OUTPUT);
+    true
 }
 
 #[no_mangle]

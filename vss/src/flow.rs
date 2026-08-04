@@ -79,7 +79,7 @@ impl Flow {
         self.nodes.borrow_mut().push(node);
     }
 
-    pub fn replace_node(&mut self, index: usize, node: Box<dyn Node>) {
+    pub fn replace_node(&self, index: usize, node: Box<dyn Node>) {
         self.nodes.borrow_mut()[index] = node;
     }
 

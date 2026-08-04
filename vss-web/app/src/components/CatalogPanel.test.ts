@@ -2,15 +2,15 @@ import { fireEvent, render, waitFor } from '@testing-library/vue'
 import { createI18n } from 'vue-i18n'
 import CatalogPanel from './CatalogPanel.vue'
 import { messages } from '../i18n'
-import type { SimulatorSession } from '../simulatorSession'
+import { createSession, editSetting, selectDemonstration } from '../simulatorSession'
 import type { Catalog } from '../types'
 
 const catalog: Catalog = {
   groups: [{ id: 'g', title: 'Group', settings: [{ id: 'g.on', label: 'Enabled', help: '', default: false, control: { kind: 'boolean' } }] }],
-  presets: [{ id: 'p', label: 'Preset', values: { 'g.on': true } }],
+  presets: [{ id: 'p', label: 'Preset', both: { 'g.on': true }, left: {}, right: {} }],
   articles: [{ id: 'a', title: 'Article', summary: 'A useful summary.', content_path: 'a.html', demonstrations: [{ id: 'd', label: 'Try it', presets: ['p'] }] }],
 }
-const empty: SimulatorSession = { selectedDemonstrations: {}, manual: {}, maskedFallback: {} }
+const empty = createSession()
 const global = { plugins: [createI18n({ legacy: false, locale: 'en', messages })] }
 
 test('selects a card demonstration directly without a decision dialog', async () => {
@@ -43,11 +43,11 @@ test('opens an article and selecting its demonstration closes it', async () => {
 })
 
 test('offers article provenance for preset values and reset for manual values', async () => {
-  const active: SimulatorSession = { ...empty, selectedDemonstrations: { a: 'd' } }
+  const active = selectDemonstration(empty, catalog, 'a', 'd')
   const view = render(CatalogPanel, { props: { catalog, session: active, effective: { 'g.on': true } }, global })
   expect(view.getByRole('button', { name: 'Learn why Enabled is set' })).toBeTruthy()
 
-  await view.rerender({ catalog, session: { ...active, manual: { 'g.on': false } }, effective: { 'g.on': false } })
+  await view.rerender({ catalog, session: editSetting(active, 'g.on', false), effective: { 'g.on': false } })
   await fireEvent.click(view.getByRole('button', { name: 'Reset Enabled' }))
   expect(view.emitted().reset?.[0]).toEqual(['g.on'])
 })

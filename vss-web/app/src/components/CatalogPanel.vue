@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { activePresets, sourceArticle, type SimulatorSession } from '../simulatorSession'
+import { activePresets, currentLayer, selectedDemonstration as selectedDemonstrationId, sourceArticle, type SimulatorSession } from '../simulatorSession'
 import type { Article, Catalog, Setting, Value } from '../types'
 import UiDialog from './UiDialog.vue'
 
@@ -18,7 +18,7 @@ const failedImages = ref(new Set<string>())
 const active = computed(() => new Set(activePresets(props.session, props.catalog)))
 
 function selectedDemonstration(value: Article) {
-  return value.demonstrations.find(item => item.id === props.session.selectedDemonstrations[value.id])
+  return value.demonstrations.find(item => item.id === selectedDemonstrationId(props.session, value.id))
 }
 
 function articleLabel(value: Article, index: number) {
@@ -32,7 +32,7 @@ function articleLabel(value: Article, index: number) {
 
 function demonstrationLabel(value: Article, demonstrationId: string, label: string) {
   if (label.toLocaleLowerCase() !== value.title.toLocaleLowerCase()) return label
-  return props.session.selectedDemonstrations[value.id] === demonstrationId ? t('app.deactivate') : t('app.activate')
+  return selectedDemonstrationId(props.session, value.id) === demonstrationId ? t('app.deactivate') : t('app.activate')
 }
 
 function select(value: Article, demonstrationId: string, closeArticle = false) {
@@ -122,8 +122,8 @@ function pointPart(setting: Setting, index: number, raw: string) {
           <button
             v-for="demonstration in item.demonstrations"
             :key="demonstration.id"
-            :class="{ selected: session.selectedDemonstrations[item.id] === demonstration.id }"
-            :aria-pressed="session.selectedDemonstrations[item.id] === demonstration.id"
+            :class="{ selected: selectedDemonstrationId(session, item.id) === demonstration.id }"
+            :aria-pressed="selectedDemonstrationId(session, item.id) === demonstration.id"
             @click="select(item, demonstration.id)"
           >{{ demonstrationLabel(item, demonstration.id, demonstration.label) }}</button>
         </div>
@@ -136,7 +136,7 @@ function pointPart(setting: Setting, index: number, raw: string) {
       <header @click="expanded.has(group.id) ? expanded.delete(group.id) : expanded.add(group.id)"><button class="group-title" :aria-expanded="expanded.has(group.id)">{{ group.title }}</button><span aria-hidden="true">{{ expanded.has(group.id) ? '−' : '+' }}</span></header>
       <div v-if="expanded.has(group.id)" class="setting-list"><div v-for="setting in group.settings.filter(item => item.control.kind !== 'text')" :key="setting.id" class="setting-row">
         <label :for="setting.id">{{ setting.label }} <small v-if="setting.unit">{{ setting.unit }}</small></label>
-        <button v-if="setting.id in session.manual" class="setting-action" :aria-label="t('app.resetSetting', { setting: setting.label })" @click="emit('reset', setting.id)">↶</button>
+        <button v-if="setting.id in currentLayer(session).manual" class="setting-action" :aria-label="t('app.resetSetting', { setting: setting.label })" @click="emit('reset', setting.id)">↶</button>
         <button v-else-if="sourceArticle(session, catalog, setting.id)" class="setting-action" :aria-label="t('app.settingSource', { setting: setting.label })" @click="openArticle(catalog.articles.find(item => item.id === sourceArticle(session, catalog, setting.id))!)">ⓘ</button>
         <input v-if="setting.control.kind === 'boolean'" :id="setting.id" class="toggle" type="checkbox" :checked="Boolean(effective[setting.id])" @change="emit('override', setting.id, ($event.target as HTMLInputElement).checked)">
         <input v-else-if="setting.control.kind === 'number'" :id="setting.id" type="number" :value="effective[setting.id]" :min="setting.control.min ?? undefined" :max="setting.control.max ?? undefined" :step="setting.control.step" @change="setNumber(setting, ($event.target as HTMLInputElement).value)">
@@ -158,8 +158,8 @@ function pointPart(setting: Setting, index: number, raw: string) {
         <button
           v-for="demonstration in article.demonstrations"
           :key="demonstration.id"
-          :class="{ selected: session.selectedDemonstrations[article.id] === demonstration.id }"
-          :aria-pressed="session.selectedDemonstrations[article.id] === demonstration.id"
+          :class="{ selected: selectedDemonstrationId(session, article.id) === demonstration.id }"
+          :aria-pressed="selectedDemonstrationId(session, article.id) === demonstration.id"
           @click="select(article, demonstration.id, true)"
         >{{ demonstrationLabel(article, demonstration.id, demonstration.label) }}</button>
       </div>

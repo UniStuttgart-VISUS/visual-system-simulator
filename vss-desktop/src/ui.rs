@@ -1,14 +1,17 @@
 use egui::{ComboBox, Context};
 use egui_wgpu::{Renderer, RendererOptions, ScreenDescriptor};
 use serde_json::{Map, Value};
-use std::sync::Arc;
-use vss::Surface;
+use std::{
+    collections::BTreeSet,
+    sync::{Arc, RwLock},
+};
+use vss::{EyeMode, Surface};
 use vss_catalog::{catalog, compose, ConfigDocument, ConfigSection, Control, Diagnostic, Locale};
 use vss_winit::{EventResponse, WindowOverlay};
 use winit::{
     event::{ElementState, WindowEvent},
     keyboard::{Key, NamedKey},
-    window::Window,
+    window::{Fullscreen, Window},
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -22,6 +25,7 @@ enum Target {
 struct Layer {
     presets: Vec<String>,
     manual: Map<String, Value>,
+    masked: BTreeSet<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -48,6 +52,7 @@ impl LayerState {
                         .map(|value| (setting.id.to_owned(), value.value.clone()))
                 })
                 .collect(),
+            masked: BTreeSet::new(),
         };
         Self {
             locale,
@@ -88,21 +93,116 @@ impl LayerState {
                     .iter()
                     .find(|candidate| candidate.id == *preset)
                 {
+                    let values = if !preset.both.is_empty() {
+                        &preset.both
+                    } else {
+                        match target {
+                            Target::Left => &preset.left,
+                            Target::Right => &preset.right,
+                            Target::Both => unreachable!(),
+                        }
+                    };
                     result.extend(
-                        preset
-                            .values
+                        values
                             .iter()
+                            .filter(|(key, _)| !local.masked.contains(*key))
                             .map(|(key, value)| ((*key).to_owned(), value.clone())),
                     );
                 }
             }
-            result.extend(local.manual.clone());
+            result.extend(
+                local
+                    .manual
+                    .iter()
+                    .filter(|(key, _)| !local.masked.contains(*key))
+                    .map(|(key, value)| (key.clone(), value.clone())),
+            );
         }
         result
     }
 
+    fn set_manual(&mut self, target: Target, setting_id: &str, value: Value) {
+        self.layer_mut(target)
+            .manual
+            .insert(setting_id.to_owned(), value);
+        match target {
+            Target::Both => {
+                self.left.masked.insert(setting_id.to_owned());
+                self.right.masked.insert(setting_id.to_owned());
+            }
+            Target::Left | Target::Right => {
+                self.layer_mut(target).masked.remove(setting_id);
+            }
+        }
+    }
+
+    fn reset_setting(&mut self, target: Target, setting_id: &str) {
+        self.layer_mut(target).manual.remove(setting_id);
+        if target == Target::Both {
+            self.left.masked.remove(setting_id);
+            self.right.masked.remove(setting_id);
+        }
+    }
+
     fn reset(&mut self, target: Target) {
         *self.layer_mut(target) = Layer::default();
+    }
+
+    fn preset_enabled(&self, target: Target, preset_id: &str) -> bool {
+        let catalog = catalog(self.locale);
+        let Some(preset) = catalog.presets.iter().find(|preset| preset.id == preset_id) else {
+            return false;
+        };
+        if !preset.both.is_empty() {
+            self.layer(target).presets.iter().any(|id| id == preset_id)
+        } else {
+            (preset.left.is_empty() || self.left.presets.iter().any(|id| id == preset_id))
+                && (preset.right.is_empty() || self.right.presets.iter().any(|id| id == preset_id))
+        }
+    }
+
+    fn set_preset_enabled(&mut self, target: Target, preset_id: &str, enabled: bool) -> Target {
+        let catalog = catalog(self.locale);
+        let Some(preset) = catalog.presets.iter().find(|preset| preset.id == preset_id) else {
+            return target;
+        };
+        let authored_left = !preset.left.is_empty();
+        let authored_right = !preset.right.is_empty();
+        let targets: &[Target] = if !preset.both.is_empty() {
+            std::slice::from_ref(&target)
+        } else {
+            match (authored_left, authored_right) {
+                (true, true) => &[Target::Left, Target::Right],
+                (true, false) => &[Target::Left],
+                (false, true) => &[Target::Right],
+                (false, false) => unreachable!("catalog rejects empty presets"),
+            }
+        };
+        for &layer_target in targets {
+            let presets = &mut self.layer_mut(layer_target).presets;
+            if enabled {
+                if !presets.iter().any(|id| id == preset_id) {
+                    presets.push(preset_id.to_owned());
+                }
+            } else {
+                presets.retain(|id| id != preset_id);
+            }
+        }
+        if enabled && (authored_left || authored_right) {
+            Target::Both
+        } else {
+            target
+        }
+    }
+}
+
+impl Target {
+    fn eye_mode(self) -> EyeMode {
+        match self {
+            Self::Left => EyeMode::Left,
+            Self::Both => EyeMode::Both,
+            Self::Right => EyeMode::Right,
+        }
     }
 }
 
@@ -118,16 +218,28 @@ pub(crate) struct DesktopGui {
     dirty: bool,
     diagnostics: Vec<Diagnostic>,
     visible: bool,
+    fullscreen: bool,
+    pending_open: bool,
+    media_error: Option<String>,
+    pose_input_size: Arc<RwLock<Option<[u32; 2]>>>,
 }
 
 impl DesktopGui {
-    pub(crate) fn new(document: &ConfigDocument) -> Self {
+    pub(crate) fn new(
+        document: &ConfigDocument,
+        pose_input_size: Arc<RwLock<Option<[u32; 2]>>>,
+    ) -> Self {
         let system_locale = sys_locale::get_locale().unwrap_or_else(|| "en".into());
         let locale = Locale::from_tag(&system_locale);
         rust_i18n::set_locale(match locale {
             Locale::De => "de",
             Locale::En => "en",
         });
+        let target = if document.left.values.is_empty() && document.right.values.is_empty() {
+            Target::Left
+        } else {
+            Target::Both
+        };
         Self {
             context: Context::default(),
             state: None,
@@ -139,14 +251,18 @@ impl DesktopGui {
                 pixels_per_point: 1.0,
             },
             layers: LayerState::from_document(locale, document),
-            target: Target::Both,
+            target,
             dirty: true,
             diagnostics: Vec::new(),
             visible: true,
+            fullscreen: false,
+            pending_open: false,
+            media_error: None,
+            pose_input_size,
         }
     }
 
-    fn ui(&mut self, root_ui: &mut egui::Ui) {
+    fn ui(&mut self, root_ui: &mut egui::Ui, window: &Window) {
         let locale = self.layers.locale;
         let catalog = catalog(locale);
         let target = self.target;
@@ -157,24 +273,45 @@ impl DesktopGui {
             .show_inside(root_ui, |ui| {
                 ui.add(egui::Label::new(t!("panel.hide_hint")).selectable(false));
                 ui.horizontal(|ui| {
-                    ui.selectable_value(&mut self.target, Target::Both, t!("eyes.both"));
                     ui.selectable_value(&mut self.target, Target::Left, t!("eyes.left"));
+                    ui.selectable_value(&mut self.target, Target::Both, t!("eyes.both"));
                     ui.selectable_value(&mut self.target, Target::Right, t!("eyes.right"));
                 });
+                ui.horizontal(|ui| {
+                    if ui.button(t!("output.open_file")).clicked() {
+                        self.pending_open = true;
+                    }
+                    if ui
+                        .button(if self.fullscreen {
+                            t!("output.exit_fullscreen")
+                        } else {
+                            t!("output.fullscreen")
+                        })
+                        .clicked()
+                    {
+                        self.fullscreen = !self.fullscreen;
+                        window.set_fullscreen(
+                            self.fullscreen.then_some(Fullscreen::Borderless(None)),
+                        );
+                        window.request_redraw();
+                    }
+                });
+                if let Some(error) = &self.media_error {
+                    ui.colored_label(
+                        egui::Color32::YELLOW,
+                        format!("{}: {error}", t!("output.media_error")),
+                    );
+                }
                 ui.style_mut().spacing.scroll = egui::style::ScrollStyle::solid();
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     egui::CollapsingHeader::new(t!("presets.title"))
                         .default_open(true)
                         .show(ui, |ui| {
-                            let active = &mut self.layers.layer_mut(target).presets;
                             for preset in &catalog.presets {
-                                let mut enabled = active.iter().any(|id| id == &preset.id);
+                                let mut enabled = self.layers.preset_enabled(target, &preset.id);
                                 if ui.checkbox(&mut enabled, preset.label.as_str()).changed() {
-                                    if enabled {
-                                        active.push(preset.id.to_owned());
-                                    } else {
-                                        active.retain(|id| id != &preset.id);
-                                    }
+                                    self.target =
+                                        self.layers.set_preset_enabled(target, &preset.id, enabled);
                                     self.dirty = true;
                                 }
                             }
@@ -209,7 +346,7 @@ impl DesktopGui {
                                                 .on_hover_text(t!("settings.reset_value"))
                                                 .clicked()
                                         {
-                                            self.layers.layer_mut(target).manual.remove(setting.id);
+                                            self.layers.reset_setting(target, setting.id);
                                             self.dirty = true;
                                         }
                                         let changed = ui
@@ -226,10 +363,7 @@ impl DesktopGui {
                                             )
                                             .inner;
                                         if changed {
-                                            self.layers
-                                                .layer_mut(target)
-                                                .manual
-                                                .insert(setting.id.to_owned(), value);
+                                            self.layers.set_manual(target, setting.id, value);
                                             self.dirty = true;
                                         }
                                         if inherited {
@@ -367,9 +501,23 @@ impl WindowOverlay for DesktopGui {
         if matches!(event, WindowEvent::KeyboardInput { event, .. }
             if event.state == ElementState::Pressed
                 && !event.repeat
-                && event.logical_key == Key::Named(NamedKey::Escape))
+                && event.logical_key == Key::Named(NamedKey::Tab))
         {
             self.visible = !self.visible;
+            window.request_redraw();
+            return EventResponse {
+                consumed: true,
+                repaint: true,
+            };
+        }
+        if self.fullscreen
+            && matches!(event, WindowEvent::KeyboardInput { event, .. }
+                if event.state == ElementState::Pressed
+                    && !event.repeat
+                    && event.logical_key == Key::Named(NamedKey::Escape))
+        {
+            self.fullscreen = false;
+            window.set_fullscreen(None);
             window.request_redraw();
             return EventResponse {
                 consumed: true,
@@ -384,6 +532,8 @@ impl WindowOverlay for DesktopGui {
     }
 
     fn prepare(&mut self, window: &Window, surface: &Surface) {
+        self.fullscreen = window.fullscreen().is_some();
+        surface.set_eye_mode(self.target.eye_mode());
         if self.dirty {
             let left = self.layers.effective_values(Target::Left);
             let right = self.layers.effective_values(Target::Right);
@@ -396,9 +546,24 @@ impl WindowOverlay for DesktopGui {
         let context = self.context.clone();
         let output = context.run_ui(input, |ui| {
             if self.visible {
-                self.ui(ui);
+                self.ui(ui, window);
             }
         });
+        if std::mem::take(&mut self.pending_open) {
+            if let Some(input) = crate::cmd::pick_input_file() {
+                match crate::flow::create_runtime_inputs(surface, &input) {
+                    Ok(inputs) => {
+                        surface.replace_node(0, inputs.left, 0);
+                        surface.replace_node(0, inputs.right, 1);
+                        *self.pose_input_size.write().unwrap() = inputs.input_size;
+                        surface.negociate_slots();
+                        surface.apply_changes(vss::NodeChanges::OUTPUT);
+                        self.media_error = None;
+                    }
+                    Err(error) => self.media_error = Some(error.to_string()),
+                }
+            }
+        }
         self.state
             .as_mut()
             .unwrap()
@@ -499,9 +664,9 @@ mod tests {
         let Some((first, second, key)) = presets.iter().enumerate().find_map(|(i, first)| {
             presets.iter().skip(i + 1).find_map(|second| {
                 first
-                    .values
+                    .both
                     .keys()
-                    .find(|key| second.values.contains_key(*key))
+                    .find(|key| second.both.contains_key(*key))
                     .map(|key| (first, second, key.clone()))
             })
         }) else {
@@ -509,7 +674,7 @@ mod tests {
         };
         state.both.presets = vec![first.id.clone(), second.id.clone()];
         let mut expected = Map::new();
-        expected.insert(key.clone(), second.values[&key].clone());
+        expected.insert(key.clone(), second.both[&key].clone());
         vss_catalog::normalize(Locale::En, &mut expected);
         assert_eq!(state.effective_values(Target::Both)[&key], expected[&key]);
         state.both.manual.insert(key.clone(), json!(42.0));
@@ -530,5 +695,61 @@ mod tests {
         state.reset(Target::Left);
         assert!(state.left.manual.is_empty());
         assert!(!state.both.manual.is_empty());
+    }
+
+    #[test]
+    fn intrinsic_preset_selects_both_then_symmetric_preset_targets_the_visible_eye() {
+        let mut state = state();
+        let mode = state.set_preset_enabled(Target::Left, "strabismus-esotropia-mild", true);
+        assert_eq!(mode, Target::Both);
+        assert_eq!(
+            state.effective_values(Target::Left)["eye.axis-y"],
+            json!(0.05)
+        );
+        assert_eq!(
+            state.effective_values(Target::Right)["eye.axis-y"],
+            json!(-0.05)
+        );
+
+        let mode = state.set_preset_enabled(Target::Left, "cataract-mild", true);
+        assert_eq!(mode, Target::Left);
+        assert!(state.left.presets.contains(&"cataract-mild".to_owned()));
+        assert!(!state.right.presets.contains(&"cataract-mild".to_owned()));
+        assert_eq!(
+            state.effective_values(Target::Right)["eye.axis-y"],
+            json!(-0.05)
+        );
+    }
+
+    #[test]
+    fn both_manual_edit_masks_only_matching_eye_values_and_reset_reveals_them() {
+        let mut state = state();
+        state.set_manual(Target::Left, "cataract.blur", json!(20.0));
+        state.set_manual(Target::Right, "cataract.blur", json!(30.0));
+        state.set_manual(Target::Right, "eye.axis-y", json!(-0.05));
+
+        state.set_manual(Target::Both, "cataract.blur", json!(10.0));
+        assert_eq!(
+            state.effective_values(Target::Left)["cataract.blur"],
+            json!(10.0)
+        );
+        assert_eq!(
+            state.effective_values(Target::Right)["cataract.blur"],
+            json!(10.0)
+        );
+        assert_eq!(
+            state.effective_values(Target::Right)["eye.axis-y"],
+            json!(-0.05)
+        );
+
+        state.reset_setting(Target::Both, "cataract.blur");
+        assert_eq!(
+            state.effective_values(Target::Left)["cataract.blur"],
+            json!(20.0)
+        );
+        assert_eq!(
+            state.effective_values(Target::Right)["cataract.blur"],
+            json!(30.0)
+        );
     }
 }

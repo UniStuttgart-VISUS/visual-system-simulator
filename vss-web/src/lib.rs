@@ -1,5 +1,9 @@
 #![cfg(target_arch = "wasm32")]
-use std::sync::mpsc::{self, Receiver, SyncSender};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    sync::mpsc::{self, Receiver, SyncSender},
+};
 use vss::{RgbBuffer, UploadRgbBuffer, *};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -7,16 +11,25 @@ use wasm_bindgen::JsCast;
 struct UploadStream {
     upload: UploadRgbBuffer,
     frame_receiver: Receiver<(RgbBuffer, RgbInputFlags)>,
+    shared: Rc<RefCell<SharedFrame>>,
+}
+
+#[derive(Default)]
+struct SharedFrame {
+    generation: u64,
+    frame: Option<(Rc<RgbBuffer>, u32)>,
 }
 
 impl UploadStream {
     fn new(
         context: &RenderContext,
         frame_receiver: Receiver<(RgbBuffer, RgbInputFlags)>,
+        shared: Rc<RefCell<SharedFrame>>,
     ) -> Self {
         UploadStream {
             upload: UploadRgbBuffer::new(context),
             frame_receiver,
+            shared,
         }
     }
 }
@@ -30,8 +43,13 @@ impl Node for UploadStream {
         //XXX: web stream frame polling here. might not be the right place in the long term.
         let mut changes = NodeChanges::empty();
         if let Ok((buffer, flags)) = self.frame_receiver.try_recv() {
+            let buffer = Rc::new(buffer);
+            let flag_bits = flags.bits();
             self.upload.set_flags(flags);
             self.upload.upload_buffer(&buffer);
+            let mut shared = self.shared.borrow_mut();
+            shared.generation += 1;
+            shared.frame = Some((buffer, flag_bits));
             changes |= NodeChanges::SLOTS;
         }
         let (eye, input_changes) = Node::input(&mut self.upload, eye, mouse);
@@ -61,29 +79,90 @@ impl Node for UploadStream {
     }
 }
 
-fn build_flow(
-    surface: &mut Surface,
-    frame_receiver: Receiver<(RgbBuffer, RgbInputFlags)>,
-) {
-    // Input node.
-    let node = UploadStream::new(surface, frame_receiver);
-    surface.add_node(Box::new(node), 0);
+struct UploadSharedStream {
+    upload: UploadRgbBuffer,
+    shared: Rc<RefCell<SharedFrame>>,
+    generation: u64,
+}
+
+impl UploadSharedStream {
+    fn new(context: &RenderContext, shared: Rc<RefCell<SharedFrame>>) -> Self {
+        Self {
+            upload: UploadRgbBuffer::new(context),
+            shared,
+            generation: 0,
+        }
+    }
+
+    fn synchronize(&mut self) -> bool {
+        let shared = self.shared.borrow();
+        if shared.generation == self.generation {
+            return false;
+        }
+        let Some((buffer, flag_bits)) = &shared.frame else {
+            return false;
+        };
+        self.upload
+            .set_flags(RgbInputFlags::from_bits_retain(*flag_bits));
+        self.upload.upload_buffer(buffer);
+        self.generation = shared.generation;
+        true
+    }
+}
+
+impl Node for UploadSharedStream {
+    fn name(&self) -> &'static str {
+        "UploadSharedStream"
+    }
+
+    fn input(&mut self, eye: &EyeInput, mouse: &MouseInput) -> (EyeInput, NodeChanges) {
+        let changed = self.synchronize();
+        let (eye, changes) = Node::input(&mut self.upload, eye, mouse);
+        (
+            eye,
+            (changes | NodeChanges::from_output_slots(changed, false)).normalized(),
+        )
+    }
+
+    fn negociate_slots(
+        &mut self,
+        context: &RenderContext,
+        slots: NodeSlots,
+        original_image: &mut Option<Texture>,
+    ) -> NodeSlots {
+        self.synchronize();
+        Node::negociate_slots(&mut self.upload, context, slots, original_image)
+    }
+
+    fn render(
+        &mut self,
+        context: &RenderContext,
+        encoder: &mut wgpu::CommandEncoder,
+        screen: Option<&RenderTexture>,
+    ) {
+        self.synchronize();
+        Node::render(&mut self.upload, context, encoder, screen)
+    }
+}
+
+fn build_flow(surface: &mut Surface, flow_index: usize, input: Box<dyn Node>) {
+    surface.add_node(input, flow_index);
 
     let node = Cataract::new(surface);
-    surface.add_node(Box::new(node), 0);
+    surface.add_node(Box::new(node), flow_index);
     let node = EyeControl::new(surface);
-    surface.add_node(Box::new(node), 0);
+    surface.add_node(Box::new(node), flow_index);
     let node = Lens::new(surface);
-    surface.add_node(Box::new(node), 0);
+    surface.add_node(Box::new(node), flow_index);
     let node = Retina::new(surface);
-    surface.add_node(Box::new(node), 0);
+    surface.add_node(Box::new(node), flow_index);
     let node = PeacockCB::new(surface);
-    surface.add_node(Box::new(node), 0);
+    surface.add_node(Box::new(node), flow_index);
 
     // Display node.
     let mut node = Display::new(surface);
     node.set_output_scale(OutputScale::Fill);
-    surface.add_node(Box::new(node), 0);
+    surface.add_node(Box::new(node), flow_index);
 }
 
 #[wasm_bindgen]
@@ -91,6 +170,7 @@ pub struct Simulator {
     frame_sender: SyncSender<(RgbBuffer, RgbInputFlags)>,
     surface: Surface<'static>,
     canvas: web_sys::HtmlCanvasElement,
+    pose: IntentionalPose,
 }
 
 #[wasm_bindgen]
@@ -148,13 +228,19 @@ impl Simulator {
             .await
             .map_err(|err| JsError::new(&format!("Cannot create WebGPU device: {err}")))?;
         let mut surface =
-            Surface::with_existing([width, height], 1, gpu_surface, adapter, device, queue).await;
-        build_flow(&mut surface, rx);
+            Surface::with_existing([width, height], 2, gpu_surface, adapter, device, queue).await;
+        let shared = Rc::new(RefCell::new(SharedFrame::default()));
+        let left = UploadStream::new(&surface, rx, shared.clone());
+        let right = UploadSharedStream::new(&surface, shared);
+        build_flow(&mut surface, 0, Box::new(left));
+        build_flow(&mut surface, 1, Box::new(right));
         surface.negociate_slots();
+        surface.set_eye_mode(EyeMode::Left);
         Ok(Simulator {
             frame_sender: tx,
             surface,
             canvas,
+            pose: IntentionalPose::default(),
         })
     }
 
@@ -186,15 +272,36 @@ impl Simulator {
         Ok(())
     }
 
-    pub fn post_settings(&mut self, settings: &str) -> Result<(), JsError> {
-        let value: serde_json::Value = serde_json::from_str(settings)
-            .map_err(|err| JsError::new(&format!("Invalid settings JSON: {err}")))?;
-        if !value.is_object() {
-            return Err(JsError::new("Settings must be a JSON object"));
-        }
+    pub fn post_settings(&mut self, left: &str, right: &str) -> Result<(), JsError> {
         let changes =
-            apply_settings(&self.surface, &value.to_string()).map_err(|err| JsError::new(&err))?;
+            apply_settings(&self.surface, left, right).map_err(|err| JsError::new(&err))?;
         self.surface.apply_changes(changes);
+        self.render();
+        Ok(())
+    }
+
+    pub fn set_eye_mode(&mut self, eye_mode: &str) -> Result<(), JsError> {
+        let mode = match eye_mode {
+            "left" => EyeMode::Left,
+            "both" => EyeMode::Both,
+            "right" => EyeMode::Right,
+            _ => return Err(JsError::new("Eye mode must be left, both, or right")),
+        };
+        self.surface.set_eye_mode(mode);
+        self.render();
+        Ok(())
+    }
+
+    pub fn semantic_input(&mut self, kind: &str, x: f32, y: f32) -> Result<(), JsError> {
+        let input = match kind {
+            "gaze_delta" => SemanticInput::GazeDelta([x, y]),
+            "view_delta" => SemanticInput::ViewDelta([x, y]),
+            "reset_pose" => SemanticInput::ResetPose,
+            _ => return Err(JsError::new("Unknown semantic input")),
+        };
+        self.pose.apply(input);
+        self.pose.apply_to_flows(&self.surface.flows);
+        self.surface.apply_changes(NodeChanges::OUTPUT);
         self.render();
         Ok(())
     }
@@ -235,7 +342,7 @@ impl Simulator {
     }
 }
 
-fn apply_settings(surface: &Surface, json: &str) -> Result<NodeChanges, String> {
+fn compile_settings(flow: &Flow, json: &str) -> Result<ParameterPatch, String> {
     let values = serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(json)
         .map_err(|err| format!("Invalid settings JSON: {err}"))?;
     let root = serde_json::json!({ "both": values });
@@ -246,15 +353,16 @@ fn apply_settings(surface: &Surface, json: &str) -> Result<NodeChanges, String> 
     let settings = document.effective_left().value_map();
     vss_catalog::validate_settings(&settings)
         .map_err(|diagnostics| vss_catalog::diagnostics_to_string(&diagnostics))?;
-    let mut changes = NodeChanges::empty();
-    for flow in &surface.flows {
-        let patch = vss_catalog::compile_parameter_patch(flow, &settings, &|_, reference| {
-            AssetId::from_str(reference)
-        })
-        .map_err(|diagnostics| vss_catalog::diagnostics_to_string(&diagnostics))?;
-        changes |= patch.apply(flow);
-    }
-    Ok(changes)
+    vss_catalog::compile_parameter_patch(flow, &settings, &|_, reference| {
+        AssetId::from_str(reference)
+    })
+    .map_err(|diagnostics| vss_catalog::diagnostics_to_string(&diagnostics))
+}
+
+fn apply_settings(surface: &Surface, left: &str, right: &str) -> Result<NodeChanges, String> {
+    let left = compile_settings(&surface.flows[0], left)?;
+    let right = compile_settings(&surface.flows[1], right)?;
+    Ok(left.apply(&surface.flows[0]) | right.apply(&surface.flows[1]))
 }
 
 #[wasm_bindgen]

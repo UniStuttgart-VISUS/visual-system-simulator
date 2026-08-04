@@ -6,13 +6,15 @@
     <string name="app_full_name">Visual System Simulator</string>
     <string name="start_simulation">Start Simulation</string>
     <string name="open_media">Open Image or Video</string>
-    <string name="exit_fullscreen_hint">Tap to exit fullscreen</string>
     <string name="camera_required">Camera access is required for live preview</string>
     <string name="allow_camera">Allow camera</string>
     <string name="app_settings">App settings</string>
     <string name="choose_source">Choose source</string>
     <string name="camera">Camera</string>
     <string name="enter_fullscreen">Enter fullscreen</string>
+    <string name="left_eye">Left</string>
+    <string name="both_eyes">Both</string>
+    <string name="right_eye">Right</string>
     <string name="reset_manual_changes">Reset manual changes</string>
     <string name="remove_preset">Remove %1$s?</string>
     <string name="preset_affects_manual_changes">This preset affects manually changed settings.</string>

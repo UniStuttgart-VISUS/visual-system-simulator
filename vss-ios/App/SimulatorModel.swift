@@ -33,15 +33,24 @@ enum MediaSource: Equatable { case camera, file(URL) }
     }
     func selectDemonstration(articleID: String, demonstrationID: String) {
         guard let catalog else { return }
+        let previousMode = session.eyeMode
         session = session.selectDemonstration(in: catalog, articleID: articleID, demonstrationID: demonstrationID)
+        if session.eyeMode != previousMode {
+            do { try controller?.setEyeMode(session.eyeMode) } catch { errorMessage = error.localizedDescription }
+        }
         refreshSettings()
     }
     func edit(_ settingID: String, value: JSONValue) {
         session = session.edit(settingID, value: value)
         refreshSettings()
     }
+    func setEyeMode(_ mode: EyeMode) {
+        session = session.withEyeMode(mode)
+        do { try controller?.setEyeMode(mode) } catch { errorMessage = error.localizedDescription }
+        refreshSettings()
+    }
     func reset(_ settingID: String) {
-        session = session.reset(settingID)
+        session = session.reset(settingID, in: catalog)
         refreshSettings()
     }
     func sourceArticle(for settingID: String) -> CatalogArticle? {
@@ -50,14 +59,14 @@ enum MediaSource: Equatable { case camera, file(URL) }
     }
     func refreshSettings() {
         guard let catalog else { return }
-        do { effective = try SimulatorBridge.compose(locale: localeTag, presets: session.activePresets(in: catalog), overrides: session.manual) }
-        catch { errorMessage = error.localizedDescription; return }
+        effective = session.editableValues(in: catalog)
         postTask?.cancel()
-        let settings = effective
+        let left = session.effectiveValues(in: catalog, for: .left)
+        let right = session.effectiveValues(in: catalog, for: .right)
         postTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(100))
             guard !Task.isCancelled else { return }
-            do { try self?.controller?.post(settings: settings) } catch { self?.errorMessage = error.localizedDescription }
+            do { try self?.controller?.post(left: left, right: right) } catch { self?.errorMessage = error.localizedDescription }
         }
     }
 }

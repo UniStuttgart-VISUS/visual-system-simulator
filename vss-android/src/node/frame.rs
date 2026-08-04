@@ -25,6 +25,19 @@ pub enum Frame {
     Rgba(RgbBuffer),
 }
 
+#[derive(Default)]
+pub struct SharedFrame {
+    generation: u64,
+    frame: Option<Frame>,
+}
+
+impl SharedFrame {
+    pub fn publish(&mut self, frame: Frame) {
+        self.generation = self.generation.wrapping_add(1);
+        self.frame = Some(frame);
+    }
+}
+
 pub struct HardwareBufferFrame {
     buffer: HardwareBufferRef,
     width: u32,
@@ -81,10 +94,14 @@ impl HardwareBufferFrame {
     }
 
     fn output_size(&self) -> [u32; 2] {
-        match self.rotation_degrees {
-            90 | 270 => [self.height.max(1), self.width.max(1)],
-            _ => [self.width.max(1), self.height.max(1)],
-        }
+        oriented_size(self.width, self.height, self.rotation_degrees)
+    }
+}
+
+pub fn oriented_size(width: u32, height: u32, rotation_degrees: i32) -> [u32; 2] {
+    match normalize_rotation_degrees(rotation_degrees) {
+        90 | 270 => [height.max(1), width.max(1)],
+        _ => [width.max(1), height.max(1)],
     }
 }
 
@@ -1069,7 +1086,8 @@ impl Drop for HardwareBufferRef {
 }
 
 pub struct FrameNode {
-    pending_frame: Arc<Mutex<Option<Frame>>>,
+    shared_frame: Arc<Mutex<SharedFrame>>,
+    generation: u64,
     targets: ColorDepthTargets,
     output_size: [u32; 2],
     frame_count: u64,
@@ -1079,9 +1097,10 @@ pub struct FrameNode {
 }
 
 impl FrameNode {
-    pub fn new(context: &RenderContext, pending_frame: Arc<Mutex<Option<Frame>>>) -> Self {
+    pub fn new(context: &RenderContext, shared_frame: Arc<Mutex<SharedFrame>>) -> Self {
         Self {
-            pending_frame,
+            shared_frame,
+            generation: 0,
             targets: ColorDepthTargets::new(context.device(), "FrameNode"),
             output_size: [1, 1],
             frame_count: 0,
@@ -1092,9 +1111,14 @@ impl FrameNode {
     }
 
     fn receive_latest_frame(&mut self) -> bool {
-        let Some(frame) = self.pending_frame.lock().unwrap().take() else {
+        let shared = self.shared_frame.lock().unwrap();
+        if shared.generation == self.generation {
+            return false;
+        }
+        let Some(frame) = shared.frame.as_ref() else {
             return false;
         };
+        self.generation = shared.generation;
 
         if let Frame::Rgba(buffer) = frame {
             warn!(
@@ -1124,7 +1148,7 @@ impl FrameNode {
         // A quarter turn also swaps the logical extent; keeping the sensor
         // extent here would stretch the rotated image into the old aspect ratio.
         self.output_size = frame.output_size();
-        self.renderer.queue_frame(frame);
+        self.renderer.queue_frame(frame.clone());
         true
     }
 }

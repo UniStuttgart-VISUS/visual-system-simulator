@@ -2,20 +2,42 @@ import AVFoundation
 import MetalKit
 import Observation
 import SwiftUI
+import UIKit
 
 struct SimulatorView: UIViewRepresentable {
     let controller: SimulatorController
+    func makeCoordinator() -> Coordinator { Coordinator(controller: controller) }
     func makeUIView(context: Context) -> MTKView {
         let view = MTKView(frame: .zero, device: MTLCreateSystemDefaultDevice())
         view.framebufferOnly = true; view.colorPixelFormat = .bgra8Unorm; view.enableSetNeedsDisplay = false
         view.preferredFramesPerSecond = 60; view.delegate = controller
         controller.attach(view)
+        context.coordinator.install(on: view)
         return view
     }
     func updateUIView(_ view: MTKView, context: Context) { controller.resize(view.drawableSize, for: view) }
-    static func dismantleUIView(_ view: MTKView, coordinator: ()) {
+    static func dismantleUIView(_ view: MTKView, coordinator: Coordinator) {
         (view.delegate as? SimulatorController)?.detach(view)
         view.delegate = nil
+    }
+
+    final class Coordinator: NSObject {
+        let controller: SimulatorController
+        init(controller: SimulatorController) { self.controller = controller }
+        func install(on view: UIView) {
+            let gaze = UIPanGestureRecognizer(target: self, action: #selector(gaze(_:))); gaze.minimumNumberOfTouches = 1; gaze.maximumNumberOfTouches = 1
+            let camera = UIPanGestureRecognizer(target: self, action: #selector(camera(_:))); camera.minimumNumberOfTouches = 2; camera.maximumNumberOfTouches = 2
+            let reset = UITapGestureRecognizer(target: self, action: #selector(resetPose)); reset.numberOfTouchesRequired = 1; reset.numberOfTapsRequired = 2
+            view.addGestureRecognizer(gaze); view.addGestureRecognizer(camera); view.addGestureRecognizer(reset)
+        }
+        @objc private func gaze(_ gesture: UIPanGestureRecognizer) { post(gesture, kind: "gaze_delta") }
+        @objc private func camera(_ gesture: UIPanGestureRecognizer) { post(gesture, kind: "view_delta") }
+        @objc private func resetPose() { SimulatorBridge.semanticInput("reset_pose") }
+        private func post(_ gesture: UIPanGestureRecognizer, kind: String) {
+            guard let view = gesture.view else { return }
+            let delta = gesture.translation(in: view); gesture.setTranslation(.zero, in: view)
+            SimulatorBridge.semanticInput(kind, x: Float(delta.x / max(1, view.bounds.width)), y: Float(delta.y / max(1, view.bounds.height)))
+        }
     }
 }
 
@@ -46,7 +68,8 @@ struct SimulatorView: UIViewRepresentable {
     func startCamera() { media.stop(); camera.start() }
     func startMedia(_ url: URL) { camera.stop(); media.start(url: url) }
     func stopSources() { camera.stop(); media.stop() }
-    func post(settings: [String: JSONValue]) throws { try SimulatorBridge.post(settings: settings) }
+    func post(left: [String: JSONValue], right: [String: JSONValue]) throws { try SimulatorBridge.post(left: left, right: right) }
+    func setEyeMode(_ mode: EyeMode) throws { try SimulatorBridge.setEyeMode(mode) }
     func detach(_ view: MTKView) {
         guard attachedView === view else { return }
         if attached { SimulatorBridge.destroy() }

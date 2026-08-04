@@ -1,9 +1,14 @@
 panel:
-  hide_hint: "Drücke [Esc], um das Panel auszublenden"
+  hide_hint: "Drücke [Tab], um das Panel auszublenden"
 eyes:
   both: "Beide Augen"
   left: "Linkes Auge"
   right: "Rechtes Auge"
+output:
+  open_file: "Medien öffnen"
+  fullscreen: "Vollbild"
+  exit_fullscreen: "Vollbild beenden"
+  media_error: "Medium konnte nicht geöffnet werden"
 presets:
   title: "Presets"
   reset_layer: "Layer zurücksetzen"

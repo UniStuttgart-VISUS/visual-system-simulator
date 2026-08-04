@@ -16,7 +16,6 @@ use std::convert::TryFrom;
 #[cfg(feature = "video")]
 use std::fs::File;
 use std::path::Path;
-#[cfg(feature = "video")]
 use std::sync::{Arc, RwLock};
 
 use vss::*;
@@ -47,8 +46,9 @@ pub struct UploadVideo {
     next_pts: f32,
     #[cfg(feature = "video")]
     next_timestamp: ac_ffmpeg::time::Timestamp,
-    next_buffer: RgbBuffer,
+    next_buffer: Arc<RgbBuffer>,
     input_size: Option<[u32; 2]>,
+    shared_frame: Option<SharedVideoFrames>,
     #[cfg(feature = "video")]
     demuxer: Option<DemuxerWithStreamInfo<File>>,
     #[cfg(feature = "video")]
@@ -65,6 +65,15 @@ pub struct UploadVideo {
     frame_time_base: ac_ffmpeg::time::TimeBase,
 }
 
+#[derive(Clone)]
+pub struct SharedVideoFrames(Arc<RwLock<SharedVideoFrame>>);
+
+struct SharedVideoFrame {
+    generation: u64,
+    buffer: Arc<RgbBuffer>,
+    input_size: Option<[u32; 2]>,
+}
+
 impl UploadVideo {
     pub fn new(context: &RenderContext) -> Self {
         let uploader = UploadRgbBuffer::new(context);
@@ -74,8 +83,9 @@ impl UploadVideo {
             next_pts: -1.0,
             #[cfg(feature = "video")]
             next_timestamp: ac_ffmpeg::time::Timestamp::from_micros(0),
-            next_buffer: RgbBuffer::default(),
+            next_buffer: Arc::new(RgbBuffer::default()),
             input_size: None,
+            shared_frame: None,
             #[cfg(feature = "video")]
             demuxer: None,
             #[cfg(feature = "video")]
@@ -91,6 +101,16 @@ impl UploadVideo {
             #[cfg(feature = "video")]
             frame_time_base: ac_ffmpeg::time::TimeBase::new(1, 30),
         }
+    }
+
+    pub fn share_frames(&mut self) -> SharedVideoFrames {
+        let shared = SharedVideoFrames(Arc::new(RwLock::new(SharedVideoFrame {
+            generation: 0,
+            buffer: self.next_buffer.clone(),
+            input_size: self.input_size,
+        })));
+        self.shared_frame = Some(shared.clone());
+        shared
     }
 
     pub fn has_video_extension<P>(path: P) -> bool
@@ -270,17 +290,16 @@ impl UploadVideo {
 
         self.next_pts = pts;
 
-        // Test if we have to invalidate the buffer.
-        if self.next_buffer.width != width || self.next_buffer.height != height {
-            // Reallocate and copy.
-            self.next_buffer = RgbBuffer {
-                pixels_rgb: plane0.data().into(),
-                width,
-                height,
-            }
-        } else {
-            // Copy.
-            self.next_buffer.pixels_rgb.copy_from_slice(plane0.data());
+        self.next_buffer = Arc::new(RgbBuffer {
+            pixels_rgb: plane0.data().into(),
+            width,
+            height,
+        });
+        if let Some(shared) = &self.shared_frame {
+            let mut frame = shared.0.write().unwrap();
+            frame.generation += 1;
+            frame.buffer = self.next_buffer.clone();
+            frame.input_size = Some([width, height]);
         }
     }
 
@@ -335,6 +354,79 @@ impl UploadVideo {
 
     pub fn input_size(&self) -> Option<[u32; 2]> {
         self.input_size.or_else(|| self.uploader.input_size())
+    }
+}
+
+pub struct UploadSharedVideo {
+    uploader: UploadRgbBuffer,
+    shared: SharedVideoFrames,
+    uploaded_generation: u64,
+}
+
+impl UploadSharedVideo {
+    pub fn new(context: &RenderContext, shared: SharedVideoFrames) -> Self {
+        Self {
+            uploader: UploadRgbBuffer::new(context),
+            shared,
+            uploaded_generation: 0,
+        }
+    }
+
+    pub fn set_flags(&mut self, flags: RgbInputFlags) {
+        self.uploader.set_flags(flags);
+    }
+
+    pub fn input_size(&self) -> Option<[u32; 2]> {
+        self.shared.0.read().unwrap().input_size
+    }
+
+    fn synchronize(&mut self) -> bool {
+        let frame = self.shared.0.read().unwrap();
+        if frame.generation == self.uploaded_generation || frame.buffer.width == 0 {
+            return false;
+        }
+        self.uploader.upload_buffer(&frame.buffer);
+        self.uploaded_generation = frame.generation;
+        true
+    }
+}
+
+impl Node for UploadSharedVideo {
+    fn name(&self) -> &'static str {
+        "UploadSharedVideo"
+    }
+
+    fn negociate_slots(
+        &mut self,
+        context: &RenderContext,
+        slots: NodeSlots,
+        original_image: &mut Option<Texture>,
+    ) -> NodeSlots {
+        self.synchronize();
+        Node::negociate_slots(&mut self.uploader, context, slots, original_image)
+    }
+
+    fn input(&mut self, eye: &EyeInput, mouse: &MouseInput) -> (EyeInput, NodeChanges) {
+        let changed = self.synchronize();
+        let (eye, changes) = Node::input(&mut self.uploader, eye, mouse);
+        (
+            eye,
+            (changes | NodeChanges::from_output_slots(changed, false)).normalized(),
+        )
+    }
+
+    fn render(
+        &mut self,
+        context: &RenderContext,
+        encoder: &mut wgpu::CommandEncoder,
+        screen: Option<&RenderTexture>,
+    ) {
+        self.synchronize();
+        Node::render(&mut self.uploader, context, encoder, screen)
+    }
+
+    fn post_render(&mut self, context: &RenderContext) {
+        Node::post_render(&mut self.uploader, context);
     }
 }
 

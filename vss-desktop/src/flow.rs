@@ -55,6 +55,50 @@ struct Endpoints {
     output_completion: Option<std::sync::mpsc::Receiver<Result<(), String>>>,
     output_processed: Arc<RwLock<bool>>,
     output_failure: Arc<RwLock<Option<String>>>,
+    shared_video: Option<SharedVideoFrames>,
+    shared_rgb: Option<Arc<RgbBuffer>>,
+}
+
+pub(crate) struct RuntimeInputs {
+    pub(crate) left: Box<dyn Node>,
+    pub(crate) right: Box<dyn Node>,
+    pub(crate) input_size: Option<[u32; 2]>,
+}
+
+pub(crate) fn create_runtime_inputs(
+    context: &RenderContext,
+    input: &str,
+) -> Result<RuntimeInputs, FlowError> {
+    let render_resolution = RenderResolution::Screen {
+        input_scale: 1.0,
+        output_scale: OutputScale::default(),
+    };
+    let endpoints = create_endpoints(context, input, None, false, render_resolution)?;
+    let right: Box<dyn Node> = if let Some(shared) = endpoints.shared_video {
+        let mut node = UploadSharedVideo::new(context, shared);
+        node.set_flags(RgbInputFlags::from_extension(input));
+        Box::new(node)
+    } else if let Some(shared) = endpoints.shared_rgb {
+        let mut node = UploadRgbBuffer::new(context);
+        node.upload_buffer(&shared);
+        node.set_flags(RgbInputFlags::from_extension(input) | RgbInputFlags::VERTICALLY_FLIPPED);
+        node.set_render_resolution(RenderResolution::Screen {
+            input_scale: 1.0,
+            output_scale: OutputScale::default(),
+        });
+        Box::new(node)
+    } else {
+        return Err(FlowError {
+            input: input.to_owned(),
+            stage: FlowStage::Decode,
+            message: "input cannot be shared between eye flows".into(),
+        });
+    };
+    Ok(RuntimeInputs {
+        left: endpoints.nodes.0,
+        right,
+        input_size: endpoints.input_size,
+    })
 }
 
 fn create_endpoints(
@@ -68,18 +112,22 @@ fn create_endpoints(
     let output_failure = Arc::new(RwLock::new(None));
     if UploadRgbBuffer::has_image_extension(input) {
         let input_path = Path::new(input);
-        let mut input_node = UploadRgbBuffer::new(context);
-        input_node
-            .upload_image(load_input_bytes(input_path).map_err(|message| FlowError {
-                input: input.to_string(),
-                stage: FlowStage::Decode,
-                message,
+        let buffer = Arc::new(
+            UploadRgbBuffer::decode_image(load_input_bytes(input_path).map_err(|message| {
+                FlowError {
+                    input: input.to_string(),
+                    stage: FlowStage::Decode,
+                    message,
+                }
             })?)
             .map_err(|message| FlowError {
                 input: input.to_string(),
                 stage: FlowStage::Decode,
                 message,
-            })?;
+            })?,
+        );
+        let mut input_node = UploadRgbBuffer::new(context);
+        input_node.upload_buffer(&buffer);
         input_node
             .set_flags(RgbInputFlags::from_extension(input) | RgbInputFlags::VERTICALLY_FLIPPED);
         input_node.set_render_resolution(render_resolution);
@@ -118,6 +166,8 @@ fn create_endpoints(
             output_completion,
             output_processed: input_processed,
             output_failure,
+            shared_video: None,
+            shared_rgb: Some(buffer),
         })
     } else if UploadVideo::has_video_extension(input) {
         let mut input_node = UploadVideo::new(context);
@@ -127,6 +177,7 @@ fn create_endpoints(
             stage: FlowStage::Decode,
             message: message.to_string(),
         })?;
+        let shared_video = Some(input_node.share_frames());
         #[cfg(feature = "video")]
         let batch_state = if output.is_some() {
             Some(
@@ -164,6 +215,8 @@ fn create_endpoints(
             output_completion: None,
             output_processed: input_processed,
             output_failure,
+            shared_video,
+            shared_rgb: None,
         })
     } else {
         Err(FlowError {
@@ -245,6 +298,8 @@ pub(crate) struct BuiltFlow {
     pub(crate) output_completion: Option<std::sync::mpsc::Receiver<Result<(), String>>>,
     pub(crate) output_processed: Arc<RwLock<bool>>,
     pub(crate) output_failure: Arc<RwLock<Option<String>>>,
+    pub(crate) shared_video: Option<SharedVideoFrames>,
+    pub(crate) shared_rgb: Option<Arc<RgbBuffer>>,
 }
 
 pub(crate) fn build_flow(
@@ -252,14 +307,78 @@ pub(crate) fn build_flow(
     flow_index: usize,
     request: FlowRequest,
 ) -> Result<BuiltFlow, FlowError> {
+    build_flow_internal(context, flow_index, request, None, None)
+}
+
+pub(crate) fn build_shared_video_flow(
+    context: &mut RenderContext,
+    flow_index: usize,
+    request: FlowRequest,
+    shared_video: SharedVideoFrames,
+) -> Result<BuiltFlow, FlowError> {
+    build_flow_internal(context, flow_index, request, Some(shared_video), None)
+}
+
+pub(crate) fn build_shared_rgb_flow(
+    context: &mut RenderContext,
+    flow_index: usize,
+    request: FlowRequest,
+    shared_rgb: Arc<RgbBuffer>,
+) -> Result<BuiltFlow, FlowError> {
+    build_flow_internal(context, flow_index, request, None, Some(shared_rgb))
+}
+
+fn build_flow_internal(
+    context: &mut RenderContext,
+    flow_index: usize,
+    request: FlowRequest,
+    shared_video: Option<SharedVideoFrames>,
+    shared_rgb: Option<Arc<RgbBuffer>>,
+) -> Result<BuiltFlow, FlowError> {
     let endpoint_setup_start = Instant::now();
-    let endpoints = create_endpoints(
-        context,
-        &request.input,
-        request.output,
-        request.force,
-        request.render_resolution,
-    )?;
+    let endpoints = if let Some(shared_video) = shared_video {
+        let output_processed = Arc::new(RwLock::new(false));
+        let output_failure = Arc::new(RwLock::new(None));
+        let mut input = UploadSharedVideo::new(context, shared_video);
+        input.set_flags(RgbInputFlags::from_extension(&request.input));
+        Endpoints {
+            input_size: input.input_size(),
+            nodes: (Box::new(input), None),
+            render_once: false,
+            output_completion: None,
+            output_processed,
+            output_failure,
+            shared_video: None,
+            shared_rgb: None,
+        }
+    } else if let Some(shared_rgb) = shared_rgb {
+        let output_processed = Arc::new(RwLock::new(false));
+        let output_failure = Arc::new(RwLock::new(None));
+        let mut input = UploadRgbBuffer::new(context);
+        input.upload_buffer(&shared_rgb);
+        input.set_flags(
+            RgbInputFlags::from_extension(&request.input) | RgbInputFlags::VERTICALLY_FLIPPED,
+        );
+        input.set_render_resolution(request.render_resolution);
+        Endpoints {
+            input_size: Some([shared_rgb.width, shared_rgb.height]),
+            nodes: (Box::new(input), None),
+            render_once: true,
+            output_completion: None,
+            output_processed,
+            output_failure,
+            shared_video: None,
+            shared_rgb: None,
+        }
+    } else {
+        create_endpoints(
+            context,
+            &request.input,
+            request.output,
+            request.force,
+            request.render_resolution,
+        )?
+    };
     let endpoint_setup_time = endpoint_setup_start.elapsed();
     let Endpoints {
         nodes: (input_node, output_node),
@@ -268,6 +387,8 @@ pub(crate) fn build_flow(
         output_completion,
         output_processed,
         output_failure,
+        shared_video,
+        shared_rgb,
     } = endpoints;
 
     let graph_build_start = Instant::now();
@@ -298,6 +419,8 @@ pub(crate) fn build_flow(
         output_completion,
         output_processed,
         output_failure,
+        shared_video,
+        shared_rgb,
     })
 }
 

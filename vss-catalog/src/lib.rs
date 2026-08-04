@@ -6,6 +6,8 @@ use vss::registry;
 rust_i18n::i18n!("locales", fallback = "en");
 
 mod config;
+#[cfg(test)]
+mod preset_shape;
 pub use config::*;
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -76,13 +78,17 @@ pub struct Choice {
 pub struct Preset {
     pub id: String,
     pub label: String,
-    pub values: BTreeMap<String, Value>,
+    pub both: BTreeMap<String, Value>,
+    pub left: BTreeMap<String, Value>,
+    pub right: BTreeMap<String, Value>,
 }
 
 #[derive(Debug, Deserialize)]
 struct CompiledPreset {
     id: String,
-    values: BTreeMap<String, Value>,
+    both: BTreeMap<String, Value>,
+    left: BTreeMap<String, Value>,
+    right: BTreeMap<String, Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -413,7 +419,9 @@ pub fn catalog(locale: Locale) -> Catalog {
             Preset {
                 id: preset.id,
                 label,
-                values: preset.values,
+                both: preset.both,
+                left: preset.left,
+                right: preset.right,
             }
         })
         .collect();
@@ -512,7 +520,7 @@ pub fn compose(
     }
     for layer in &catalog.presets {
         if active.contains(layer.id.as_str()) {
-            for (k, v) in &layer.values {
+            for (k, v) in &layer.both {
                 result.insert(k.clone(), v.clone());
             }
         }
@@ -672,6 +680,32 @@ impl Control {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::preset_shape::validate_preset_shape;
+
+    #[test]
+    fn preset_shape_requires_exactly_one_authoring_family() {
+        assert!(validate_preset_shape(true, false, false).is_ok());
+        assert!(validate_preset_shape(false, true, false).is_ok());
+        assert!(validate_preset_shape(false, false, true).is_ok());
+        assert!(validate_preset_shape(false, true, true).is_ok());
+
+        assert_eq!(
+            validate_preset_shape(false, false, false),
+            Err("preset has no settings")
+        );
+        assert_eq!(
+            validate_preset_shape(true, true, false),
+            Err("preset mixes 'both' with eye-specific 'left' or 'right' settings")
+        );
+        assert_eq!(
+            validate_preset_shape(true, false, true),
+            Err("preset mixes 'both' with eye-specific 'left' or 'right' settings")
+        );
+        assert_eq!(
+            validate_preset_shape(true, true, true),
+            Err("preset mixes 'both' with eye-specific 'left' or 'right' settings")
+        );
+    }
 
     #[test]
     fn catalog_contract_is_consistent() {
@@ -713,7 +747,7 @@ mod tests {
             );
         }
         for preset in &catalog.presets {
-            for (id, value) in &preset.values {
+            for (id, value) in preset.both.iter().chain(&preset.left).chain(&preset.right) {
                 let setting = catalog
                     .groups
                     .iter()
@@ -763,6 +797,23 @@ mod tests {
                 .map(|preset| preset.id.as_str())
                 .collect()
         );
+    }
+
+    #[test]
+    fn exported_strabismus_preset_preserves_both_authored_eyes() {
+        let contract: Value = serde_json::from_str(&contract_json(Locale::En)).unwrap();
+        let preset = contract["presets"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|preset| preset["id"] == "strabismus-esotropia-mild")
+            .unwrap();
+
+        assert_eq!(preset["left"]["eye.axis-y"], json!(0.05));
+        assert_eq!(preset["left"]["eye.center-distance"], json!(-10));
+        assert_eq!(preset["right"]["eye.axis-y"], json!(-0.05));
+        assert_eq!(preset["right"]["eye.center-distance"], json!(10));
+        assert!(preset.get("values").is_none());
     }
 
     #[test]

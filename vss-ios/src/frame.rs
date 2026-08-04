@@ -23,6 +23,35 @@ pub struct CameraFrame {
 }
 unsafe impl Send for CameraFrame {}
 
+impl Clone for CameraFrame {
+    fn clone(&self) -> Self {
+        Self {
+            luma: unsafe { objc_retain(self.luma) },
+            chroma: unsafe { objc_retain(self.chroma) },
+            depth: self.depth.map(|value| unsafe { objc_retain(value) }),
+            width: self.width,
+            height: self.height,
+            depth_width: self.depth_width,
+            depth_height: self.depth_height,
+            rotation: self.rotation,
+            full_range: self.full_range,
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct SharedFrame {
+    pub generation: u64,
+    pub frame: Option<CameraFrame>,
+}
+
+impl SharedFrame {
+    pub fn publish(&mut self, frame: CameraFrame) {
+        self.generation = self.generation.wrapping_add(1);
+        self.frame = Some(frame);
+    }
+}
+
 impl CameraFrame {
     pub unsafe fn new(
         luma: *mut c_void,
@@ -82,7 +111,8 @@ impl Drop for CameraFrame {
 }
 
 pub struct FrameNode {
-    pending: &'static Mutex<Option<CameraFrame>>,
+    shared: &'static Mutex<SharedFrame>,
+    generation: u64,
     current: Option<ImportedFrame>,
     targets: ColorDepthTargets,
     output_size: [u32; 2],
@@ -93,7 +123,7 @@ pub struct FrameNode {
 }
 
 impl FrameNode {
-    pub fn new(context: &RenderContext, pending: &'static Mutex<Option<CameraFrame>>) -> Self {
+    pub fn new(context: &RenderContext, shared: &'static Mutex<SharedFrame>) -> Self {
         let device = context.device();
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("iOS camera planes"),
@@ -174,7 +204,8 @@ impl FrameNode {
             &[0, 0],
         );
         Self {
-            pending,
+            shared,
+            generation: 0,
             current: None,
             targets: ColorDepthTargets::new(device, "iOSFrameNode"),
             output_size: [1, 1],
@@ -185,11 +216,16 @@ impl FrameNode {
         }
     }
     fn receive(&mut self, context: &RenderContext) -> bool {
-        let Some(frame) = self.pending.lock().unwrap().take() else {
+        let shared = self.shared.lock().unwrap();
+        if shared.generation == self.generation {
+            return false;
+        }
+        let Some(frame) = shared.frame.as_ref() else {
             return false;
         };
+        self.generation = shared.generation;
         self.output_size = frame.output_size();
-        match unsafe { ImportedFrame::new(context, frame) } {
+        match unsafe { ImportedFrame::new(context, frame.clone()) } {
             Ok(imported) => self.current = Some(imported),
             Err(e) => log::error!("Metal camera import failed: {e}"),
         }
@@ -211,9 +247,10 @@ impl Node for FrameNode {
         // Read its dimensions here so the camera conversion target is not left at
         // the 1x1 placeholder size.
         if let Some(size) = self
-            .pending
+            .shared
             .lock()
             .unwrap()
+            .frame
             .as_ref()
             .map(CameraFrame::output_size)
         {
@@ -279,7 +316,7 @@ impl Node for FrameNode {
 }
 impl FrameNode {
     fn receive_dummy(&self) -> bool {
-        self.pending.lock().unwrap().is_some()
+        self.shared.lock().unwrap().generation != self.generation
     }
 }
 

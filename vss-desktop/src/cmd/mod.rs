@@ -1,5 +1,6 @@
 mod render;
 mod show;
+pub(crate) use show::pick_input_file;
 
 use clap::{Parser, Subcommand};
 use std::error::Error;

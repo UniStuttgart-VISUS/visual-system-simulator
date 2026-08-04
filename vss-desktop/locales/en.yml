@@ -1,9 +1,14 @@
 panel:
-  hide_hint: "Press [Esc] to hide panel"
+  hide_hint: "Press [Tab] to hide panel"
 eyes:
   both: "Both eyes"
   left: "Left eye"
   right: "Right eye"
+output:
+  open_file: "Open media"
+  fullscreen: "Fullscreen"
+  exit_fullscreen: "Exit fullscreen"
+  media_error: "Could not open media"
 presets:
   title: "Presets"
   reset_layer: "Reset layer"

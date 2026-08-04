@@ -7,6 +7,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[path = "src/preset_shape.rs"]
+mod preset_shape;
+use preset_shape::validate_preset_shape;
+
 #[derive(Debug, Deserialize)]
 struct FrontMatter {
     id: String,
@@ -52,7 +56,9 @@ struct PresetDocument {
 #[derive(Debug, Serialize)]
 struct CompiledPreset {
     id: String,
-    values: BTreeMap<String, Value>,
+    both: BTreeMap<String, Value>,
+    left: BTreeMap<String, Value>,
+    right: BTreeMap<String, Value>,
 }
 
 fn main() {
@@ -212,17 +218,26 @@ fn compile_presets(root: &Path) -> Vec<CompiledPreset> {
                 .unwrap_or_else(|err| panic!("Cannot read {}: {err}", path.display()));
             let document: PresetDocument = serde_json::from_str(&source)
                 .unwrap_or_else(|err| panic!("Invalid preset {}: {err}", path.display()));
-            assert!(
-                !document.both.is_empty()
-                    || !document.left.is_empty()
-                    || !document.right.is_empty(),
-                "Preset '{}' has no settings",
-                path.display()
-            );
-            let mut values = document.both;
-            values.extend(document.left);
-            rebase_preset_assets(&mut values, root, &path);
-            CompiledPreset { id, values }
+            validate_preset_shape(
+                !document.both.is_empty(),
+                !document.left.is_empty(),
+                !document.right.is_empty(),
+            )
+            .unwrap_or_else(|message| panic!("Preset '{}': {message}", path.display()));
+            let PresetDocument {
+                mut both,
+                mut left,
+                mut right,
+            } = document;
+            rebase_preset_assets(&mut both, root, &path);
+            rebase_preset_assets(&mut left, root, &path);
+            rebase_preset_assets(&mut right, root, &path);
+            CompiledPreset {
+                id,
+                both,
+                left,
+                right,
+            }
         })
         .collect()
 }
