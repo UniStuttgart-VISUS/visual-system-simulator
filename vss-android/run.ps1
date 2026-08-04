@@ -12,7 +12,7 @@ $ValidActions = @("install", "start", "camera", "share", "screenshot")
 $TapX = 861; $TapY = 2043
 $MediaStoreTimeoutSec = 30
 $RenderTimeoutSec = 20
-$StartSettleSeconds = 3
+$StartSettleSeconds = 10
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $androidDir = $scriptDir
