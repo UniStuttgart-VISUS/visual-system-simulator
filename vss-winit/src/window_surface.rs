@@ -418,22 +418,22 @@ mod tests {
     }
 
     #[test]
-    fn semantic_pose_deltas_use_full_preview_sensitivity_wrap_clamp_and_reset() {
+    fn semantic_pose_deltas_follow_drag_direction_wrap_clamp_and_reset() {
         let near = |actual: f32, expected: f32| {
             assert!((actual - expected).abs() < 0.001, "{actual} != {expected}")
         };
         let mut pose = IntentionalPose::default();
         pose.apply(SemanticInput::GazeDelta([1.0, -1.0]));
         near(pose.gaze_yaw_degrees(), -180.0);
-        near(pose.gaze_pitch_degrees(), 89.0);
+        near(pose.gaze_pitch_degrees(), -89.0);
 
         pose.apply(SemanticInput::ViewDelta([0.5, 0.5]));
         near(pose.view_yaw_degrees(), 90.0);
-        near(pose.view_pitch_degrees(), -45.0);
+        near(pose.view_pitch_degrees(), 45.0);
 
         pose.apply(SemanticInput::ViewDelta([2.0, -10.0]));
         near(pose.view_yaw_degrees(), 90.0);
-        near(pose.view_pitch_degrees(), 89.0);
+        near(pose.view_pitch_degrees(), -89.0);
 
         pose.apply(SemanticInput::ResetPose);
         assert_eq!(pose, IntentionalPose::default());

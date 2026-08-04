@@ -72,7 +72,7 @@ fn apply_pose_delta(yaw: &mut f32, pitch: &mut f32, delta: [f32; 2]) {
         .rem_euclid(std::f32::consts::TAU)
         - std::f32::consts::PI;
     let limit = 89.0_f32.to_radians();
-    *pitch = (*pitch - delta[1] * std::f32::consts::FRAC_PI_2).clamp(-limit, limit);
+    *pitch = (*pitch + delta[1] * std::f32::consts::FRAC_PI_2).clamp(-limit, limit);
 }
 
 #[cfg(test)]
@@ -80,20 +80,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn normalized_deltas_wrap_clamp_and_reset() {
+    fn screen_space_deltas_follow_drag_direction_wrap_clamp_and_reset() {
         let near = |actual: f32, expected: f32| {
             assert!((actual - expected).abs() < 0.001, "{actual} != {expected}")
         };
         let mut pose = IntentionalPose::default();
         pose.apply(SemanticInput::GazeDelta([1.0, -1.0]));
         near(pose.gaze_yaw_degrees(), -180.0);
-        near(pose.gaze_pitch_degrees(), 89.0);
+        near(pose.gaze_pitch_degrees(), -89.0);
         pose.apply(SemanticInput::ViewDelta([0.5, 0.5]));
         near(pose.view_yaw_degrees(), 90.0);
-        near(pose.view_pitch_degrees(), -45.0);
+        near(pose.view_pitch_degrees(), 45.0);
         pose.apply(SemanticInput::ViewDelta([2.0, -10.0]));
         near(pose.view_yaw_degrees(), 90.0);
-        near(pose.view_pitch_degrees(), 89.0);
+        near(pose.view_pitch_degrees(), -89.0);
         pose.apply(SemanticInput::ResetPose);
         assert_eq!(pose, IntentionalPose::default());
     }
