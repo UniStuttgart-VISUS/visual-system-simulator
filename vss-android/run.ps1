@@ -6,9 +6,8 @@ param(
     [string]$Media = ""
 )
 
-$ErrorActionPreference = "Stop"
+. "$PSScriptRoot/../scripts/run-common.ps1"
 
-$ValidActions = @("install", "start", "camera", "share", "screenshot")
 $TapX = 861; $TapY = 2043
 $MediaStoreTimeoutSec = 30
 $RenderTimeoutSec = 20
@@ -36,6 +35,7 @@ function Show-Usage {
 Usage: .\run.ps1 <action> [<action> ...] [options]
 
 Actions (run in the order given, any combination):
+  verify      Run JVM tests and compile the debug app, including Rust/JNI.
   install     Build and install the debug APK.
   start       Open com.vss/.MainActivity.
   camera      Start live camera simulation (tap the start button).
@@ -45,6 +45,7 @@ Actions (run in the order given, any combination):
               After 'camera'/'share': waits for a rendered frame.
 
 Examples:
+  .\run.ps1 verify
   .\run.ps1 install start
   .\run.ps1 install start camera screenshot
   .\run.ps1 install start share screenshot -Media assets\marketplace.png
@@ -55,24 +56,10 @@ Options:
 "@
 }
 
-if ($Actions.Count -eq 0) { Show-Usage; exit 0 }
-foreach ($action in $Actions) {
-    if ($ValidActions -notcontains $action) {
-        Write-Host "Unknown action: $action"
-        Show-Usage
-        exit 1
-    }
-}
-
-function Invoke-Native {
-    param([string]$Description, [scriptblock]$Command)
-    $output = & $Command
-    if ($LASTEXITCODE -ne 0) { throw "$Description failed with exit code $LASTEXITCODE" }
-    return $output
-}
-
 function Get-AdbTargetArguments {
     if ($null -ne $script:adbTargetArguments) { return $script:adbTargetArguments }
+
+    Assert-Tool "adb"
 
     if ($Device) {
         if ($Device -match "^emulator-") { throw "Android emulators are not supported; connect physical hardware." }
@@ -202,8 +189,19 @@ function Push-LocalMediaForSharing {
 function Invoke-InstallAction {
     Write-Host "Building debug APK..."
 
+    Invoke-Gradle @("assembleDebug")
+
+    if (!(Test-Path $apk)) { throw "APK not found: $apk" }
+
+    Write-Host "Installing $apk..."
+    Invoke-Adb "Installing debug APK" @("install", "-r", $apk) | Out-Null
+}
+
+function Invoke-Gradle {
+    param([string[]]$Tasks)
+
     if ($env:OS -eq "Windows_NT") {
-        Invoke-Native "Building debug APK" { & .\gradlew.bat --no-daemon assembleDebug } | Out-Null
+        Invoke-Native "Running Gradle" { & .\gradlew.bat --no-daemon @Tasks }
     }
     else {
         $previousJavaHome = $env:JAVA_HOME
@@ -211,17 +209,17 @@ function Invoke-InstallAction {
         if (Test-Path $androidStudioJavaHome) { $env:JAVA_HOME = $androidStudioJavaHome }
 
         try {
-            Invoke-Native "Building debug APK" { & /usr/bin/env bash ./gradlew --no-daemon assembleDebug } | Out-Null
+            Invoke-Native "Running Gradle" { & /usr/bin/env bash ./gradlew --no-daemon @Tasks }
         }
         finally {
             $env:JAVA_HOME = $previousJavaHome
         }
     }
+}
 
-    if (!(Test-Path $apk)) { throw "APK not found: $apk" }
-
-    Write-Host "Installing $apk..."
-    Invoke-Adb "Installing debug APK" @("install", "-r", $apk) | Out-Null
+function Invoke-VerifyAction {
+    Write-Host "Running Android unit tests and compiling the debug app..."
+    Invoke-Gradle @("testDebugUnitTest", "assembleDebug")
 }
 
 function Invoke-Start {
@@ -268,20 +266,14 @@ function Invoke-ScreenshotAction {
     Save-Screenshot
 }
 
-Push-Location $androidDir
-try {
-    $lastAppAction = $null
-    foreach ($action in $Actions) {
-        switch ($action) {
-            "install" { Invoke-InstallAction }
-            "start" { Invoke-Start; $lastAppAction = "start" }
-            "camera" { Invoke-CameraAction; $lastAppAction = "camera" }
-            "share" { Invoke-ShareAction; $lastAppAction = "share" }
-            "screenshot" { Invoke-ScreenshotAction -LastAppAction $lastAppAction }
-        }
-    }
-    Write-Host "Done."
+$state = @{ LastAppAction = $null }
+$handlers = [ordered]@{
+    verify = { Invoke-VerifyAction }
+    install = { Invoke-InstallAction }
+    start = { Invoke-Start; $state.LastAppAction = "start" }
+    camera = { Invoke-CameraAction; $state.LastAppAction = "camera" }
+    share = { Invoke-ShareAction; $state.LastAppAction = "share" }
+    screenshot = { Invoke-ScreenshotAction -LastAppAction $state.LastAppAction }
 }
-finally {
-    Pop-Location
-}
+
+Invoke-VssActions -Actions $Actions -Handlers $handlers -Usage { Show-Usage } -WorkingDirectory $androidDir

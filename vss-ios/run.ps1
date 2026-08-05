@@ -5,9 +5,8 @@ param(
     [string[]]$Actions = @()
 )
 
-$ErrorActionPreference = "Stop"
+. "$PSScriptRoot/../scripts/run-common.ps1"
 
-$ValidActions = @("install", "start")
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $iosDir = $scriptDir
 $derivedDataDir = Join-Path $iosDir "build/DerivedData"
@@ -19,10 +18,12 @@ function Show-Usage {
 Usage: ./run.ps1 <action> [<action> ...] [options]
 
 Actions (run in the order given, any combination):
+  verify      Compile the app for a physical iOS target without signing.
   install     Build and install the debug app on a physical iOS device.
   start       Stop an existing instance and launch the app.
 
 Examples:
+  ./run.ps1 verify
   ./run.ps1 install
   ./run.ps1 install start
 
@@ -32,26 +33,19 @@ Options:
 "@
 }
 
-if ($Actions.Count -eq 0) { Show-Usage; exit 0 }
-foreach ($action in $Actions) {
-    if ($ValidActions -notcontains $action) {
-        Write-Host "Unknown action: $action"
-        Show-Usage
-        exit 1
+function Initialize-XcodeProject {
+    if (Get-Command "xcodegen" -ErrorAction SilentlyContinue) {
+        Invoke-Native "Generating the Xcode project" { & xcodegen generate --spec project.yml }
+        return
     }
-}
-
-function Invoke-Native {
-    param([string]$Description, [scriptblock]$Command)
-    $output = & $Command
-    if ($LASTEXITCODE -ne 0) {
-        $output | ForEach-Object { Write-Host $_ }
-        throw "$Description failed with exit code $LASTEXITCODE"
+    if (!(Test-Path "VSS.xcodeproj" -PathType Container)) {
+        throw "VSS.xcodeproj is missing and xcodegen is not installed."
     }
-    return $output
 }
 
 function Get-PhysicalDevices {
+    Initialize-XcodeProject
+    Assert-Tool "xcodebuild"
     $destinations = Invoke-Native "Listing Xcode destinations" {
         & xcodebuild -project VSS.xcodeproj -scheme VSS -showdestinations
     }
@@ -105,6 +99,17 @@ function Invoke-InstallAction {
     } | Out-Null
 }
 
+function Invoke-VerifyAction {
+    Initialize-XcodeProject
+    Assert-Tool "xcodebuild"
+    Write-Host "Compiling VSS for a physical iOS target without signing..."
+    Invoke-Native "Verifying the iOS app" {
+        & xcodebuild -project VSS.xcodeproj -scheme VSS -configuration Debug `
+            -destination "generic/platform=iOS" -derivedDataPath $derivedDataDir `
+            CODE_SIGNING_ALLOWED=NO build
+    } | Out-Null
+}
+
 function Invoke-StartAction {
     $deviceId = Get-DeviceIdentifier
     if (!(Test-Path $app -PathType Container)) {
@@ -114,21 +119,16 @@ function Invoke-StartAction {
     if ($LASTEXITCODE -ne 0 -or !$bundleIdentifier) { throw "Cannot read the app bundle identifier from $app" }
 
     Write-Host "Starting $bundleIdentifier on device $deviceId..."
+    Assert-Tool "xcrun"
     Invoke-Native "Starting the iOS app" {
         & xcrun devicectl device process launch --device $deviceId --terminate-existing $bundleIdentifier
     } | Out-Null
 }
 
-Push-Location $iosDir
-try {
-    foreach ($action in $Actions) {
-        switch ($action) {
-            "install" { Invoke-InstallAction }
-            "start" { Invoke-StartAction }
-        }
-    }
-    Write-Host "Done."
+$handlers = [ordered]@{
+    verify = { Invoke-VerifyAction }
+    install = { Invoke-InstallAction }
+    start = { Invoke-StartAction }
 }
-finally {
-    Pop-Location
-}
+
+Invoke-VssActions -Actions $Actions -Handlers $handlers -Usage { Show-Usage } -WorkingDirectory $iosDir

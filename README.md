@@ -38,8 +38,9 @@ The simulation models physical aspects of light (scattering, refraction, etc.) a
 
 ### Option 2: source builds
 - Clone this repository
-- Make sure you have Rust installed (e.g. using [rustup](https://rustup.rs/))
-- For the impatient: `cargo run` (see `Desktop App` below)
+- Make sure PowerShell and the target platform's development tools are installed
+- Use `./run.ps1 <android|desktop|ios|web> <action>` from the repository root
+- Run `./run.ps1 <target>` for target-specific actions and prerequisites
 - Optional: [Desktop build](#Desktop_Build)
 - Optional: [Android build](#Android_Build)
 - Optional: [Web build](#Web_Build)
@@ -59,14 +60,14 @@ The desktop app has a command-line interface with two subcommands:
 - `show` starts the interactive simulation
 - `render` renders a batch of one or more inputs non-interactively
 
-You can inspect the available flags with `cargo run -p vss-desktop -- --help`. Configs may be supplied using `--config` or using sidecar files, e.g., `cube.color.png.vss.json`.
+You can inspect the available flags with `./run.ps1 desktop start --help`. Configs may be supplied using `--config` or using sidecar files, e.g., `cube.color.png.vss.json`.
 
 Examples:
 
-- `cargo run -p vss-desktop -- show assets/cube.color.png`
-- `cargo run -p vss-desktop -- show --openxr=auto assets/cube.color.png`
-- `cargo run -p vss-desktop -- render --output '{dirname}/{stem}.vss.{extension}' 'assets/*.png'`
-- `cargo run -p vss-desktop -- render --config 'vss-catalog/presets/**/*.json' assets/marketplace.png`
+- `./run.ps1 desktop start show ../assets/cube.color.png`
+- `./run.ps1 desktop start show --openxr=auto ../assets/cube.color.png`
+- `./run.ps1 desktop start render --output '{dirname}/{stem}.vss.{extension}' '../assets/*.png'`
+- `./run.ps1 desktop start render --config '../vss-catalog/presets/**/*.json' ../assets/marketplace.png`
 
 The render command accepts repeated configuration files and configuration glob patterns. The default
 output name includes the config stem, or `vss` when no config is supplied. Custom output patterns can
@@ -74,7 +75,7 @@ use `{config}`, for example `--output 'output/{config}/{stem}.{extension}'`.
 
 ### <a name="Desktop_Build"></a>Building from Source
 
-Again, you need to have Rust installed. Then run `cargo build --release`. You can find the binaries in `target/release`.
+Install Rust using [rustup](https://rustup.rs/), then use `./run.ps1 desktop start`. Run `./run.ps1 desktop verify` for the native desktop test suite.
 
 ### Enabling Video Support
 
@@ -95,9 +96,7 @@ If you have a head mount such as Google Cardboard, you can turn on the "Splitscr
 
 First, make sure the `android-sdk`, `ndk`, and `ndk-bundle` are installed. This can be done and verified using [Android Studio](https://developer.android.com/studio/). Probably, you want to install the JDK as well. If you get errors while building, you might have to adjust some environment variables (`JAVA_HOME`, `ANDROID_HOME`, and `PATH`) and accept licenses (`sdkmanager --licenses`) - and yes, Java developer environments are the apex of shit.
 
-If you got everything right, you can go to `vss-android` and run `gradlew build`.
-
-TODO: describe build steps here, where to find the APK and what to do with it.
+Use `./run.ps1 android install start` with a physical device connected. `./run.ps1 android verify` runs the JVM tests and compiles the debug app, including its Rust/JNI library, without requiring a device.
 
 ## <a name="Web"></a>Web App
 
@@ -105,7 +104,7 @@ The static Vue application runs the Rust/WGPU simulator locally in current Chrom
 
 ### <a name="Web_Build"></a> Building from Source
 
-Install Rust, `wasm-pack`, Node.js 22 or newer, and npm 11. From `vss-web/app`, run `npm ci` and then use `npm run dev`, `npm run build`, or `npm test`. Each entry point builds the WASM package automatically. The static output is in `vss-web/app/dist`; relative asset URLs allow hosting below a URL subpath.
+Install Rust, `wasm-pack`, Node.js 22 or newer, and npm 11. Use `./run.ps1 web watch start` for development and `./run.ps1 web verify` for missing dependency installation, tests, and the production build. The static output is in `vss-web/app/dist`; relative asset URLs allow hosting below a URL subpath.
 
 Dependency lifecycle scripts are disabled, and npm requires releases to be at least seven days old. There are currently no lifecycle-script or package-age exceptions. Any future exception must be narrowly documented here.
 
